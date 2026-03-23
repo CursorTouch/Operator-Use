@@ -38,11 +38,30 @@ When in doubt, open against `dev`.
 git clone https://github.com/CursorTouch/Operator-Use.git
 cd Operator-Use
 
-# Install with dev dependencies
+# Install with dev dependencies (recommended)
+uv sync --all-extras
+
+# Or with pip
 pip install -e ".[dev]"
 
 # Copy and fill in your environment variables
-cp .config.example.json ~/.operator/config.json
+cp .config.example.json ~/.operator-use/config.json
+```
+
+---
+
+## Running Tests
+
+```bash
+uv run pytest tests/ -q
+```
+
+Tests cover the bus, session, agent, orchestrator, tools, cron, config, gateway, skills, plugins, and more. All tests run without real API keys or platform-specific OS features.
+
+To run a specific test file:
+
+```bash
+uv run pytest tests/test_agent.py -v
 ```
 
 ---
@@ -58,6 +77,21 @@ cp .config.example.json ~/.operator/config.json
   ruff check .
   ruff format .
   ```
+
+---
+
+## CI/CD
+
+Every push and pull request to `main` or `dev` runs:
+- Linting (`ruff check`)
+- Full test suite on Python 3.12 and 3.13
+
+Releases are published to PyPI automatically when a version tag is pushed:
+
+```bash
+git tag v0.2.8
+git push origin v0.2.8
+```
 
 ---
 
@@ -83,6 +117,7 @@ cp .config.example.json ~/.operator/config.json
 - Write a clear description of what changed and why
 - Reference any related issues
 - Ensure your branch is up to date with the target branch before opening a PR
+- CI must pass before merging
 
 ---
 

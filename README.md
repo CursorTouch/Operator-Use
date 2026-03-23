@@ -46,6 +46,7 @@ Inspired by [nanobot](https://github.com/HKUDS/nanobot) and [OpenClaw](https://g
 - [Contributing](#contributing)
 - [Security](#security)
 - [Citation](#citation)
+- [Star History](#star-history)
 - [License](#license)
 
 ---
@@ -371,6 +372,12 @@ If you use Operator-Use in your research or project, please cite it as:
 
 ---
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=CursorTouch/Operator-Use&type=Date)](https://star-history.com/#CursorTouch/Operator-Use&Date)
+
+---
+
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
