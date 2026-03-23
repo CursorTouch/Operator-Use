@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from operator_use.cli.tui import print_banner, print_start, select, text_input, confirm, print_end, console
+from operator_use.cli.tui import print_banner, print_start, select, text_input, confirm, print_end, print_end_first_install, console
 
 # --- Registry Data ---
 
@@ -451,7 +451,7 @@ def run_first_install():
         heartbeat_llm_model=heartbeat_llm_model,
         api_keys_dict=api_keys_dict,
     )
-    print_end()
+    print_end_first_install()
 
 
 def run_initial_setup():

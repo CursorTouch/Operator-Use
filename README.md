@@ -53,29 +53,33 @@ Inspired by [nanobot](https://github.com/HKUDS/nanobot) and [OpenClaw](https://g
 
 ## 📦 Install
 
-**With uvx** (no install needed):
+**Try it instantly** (no install needed — runs setup on first launch):
 
 ```bash
-uvx operator-use onboard
+uvx operator-use
 ```
 
-**With uv** (installs globally):
+**Install permanently** (then just type `operator` every time):
 
 ```bash
 uv tool install operator-use
-operator onboard
+operator
 ```
 
-**From PyPI**:
+**With pip**:
 
 ```bash
 pip install operator-use
-operator onboard
+operator
 ```
+
+> First run automatically launches the setup wizard. After that, `operator` starts your agent directly.
 
 ### Update
 
 ```bash
+uv tool upgrade operator-use
+# or
 pip install -U operator-use
 ```
 
