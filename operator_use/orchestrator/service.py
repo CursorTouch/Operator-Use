@@ -17,7 +17,6 @@ from operator_use.messages import AIMessage, HumanMessage, ImageMessage
 if TYPE_CHECKING:
     from operator_use.agent.service import Agent
     from operator_use.providers.base import BaseSTT, BaseTTS
-    from operator_use.computer.windows.watchdog.service import WatchDog
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +95,6 @@ class Orchestrator:
         streaming: bool = True,
         gateway=None,
         cron=None,
-        watchdog: "WatchDog | None" = None,
     ):
         self.bus = bus
         self.agents = agents
@@ -107,11 +105,8 @@ class Orchestrator:
         self.streaming = streaming
         self.gateway = gateway
         self.cron = cron
-        self.watchdog = watchdog
         self._running = False
 
-        if watchdog is not None:
-            watchdog.start()
         self._pending_replies: dict[str, asyncio.Future[str]] = {}
 
     # ------------------------------------------------------------------
@@ -352,8 +347,6 @@ class Orchestrator:
     async def close(self) -> None:
         """Stop the orchestrator and release background resources."""
         self._running = False
-        if self.watchdog is not None:
-            self.watchdog.stop()
 
     # ------------------------------------------------------------------
     # Main loop
