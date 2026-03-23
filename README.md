@@ -43,6 +43,9 @@ Inspired by [nanobot](https://github.com/HKUDS/nanobot) and [OpenClaw](https://g
 - [Voice (STT / TTS)](#-voice-stt--tts)
 - [CLI Reference](#-cli-reference)
 - [Docker](#-docker)
+- [Contributing](#contributing)
+- [Security](#security)
+- [Citation](#citation)
 - [License](#license)
 
 ---
@@ -337,6 +340,34 @@ Exposed ports:
 | 1883 | MQTT (plain) |
 | 8883 | MQTT (TLS) |
 | 9222 | Chrome DevTools Protocol |
+
+---
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for branch strategy, dev setup, code style, and PR guidelines.
+
+---
+
+## Security
+
+To report a vulnerability, please follow the steps in [SECURITY.md](SECURITY.md). Do not open a public issue for security concerns.
+
+---
+
+## Citation
+
+If you use Operator-Use in your research or project, please cite it as:
+
+```bibtex
+@software{operator_use_2026,
+  author    = {CursorTouch},
+  title     = {Operator-Use: An AI Agent That Operates Your Computer},
+  year      = {2026},
+  url       = {https://github.com/CursorTouch/Operator-Use},
+  license   = {MIT}
+}
+```
 
 ---
 
