@@ -23,9 +23,9 @@ app = typer.Typer(
 )
 
 @app.callback()
-def default(ctx: typer.Context):
+def default(ctx: typer.Context, verbose: bool = typer.Option(False, "--verbose", "-v", help="Show logs in console", is_eager=False)):
     if ctx.invoked_subcommand is None:
-        gateway()
+        gateway(verbose=verbose)
 
 @app.command("help")
 def help_cmd(ctx: typer.Context):
@@ -35,6 +35,7 @@ def help_cmd(ctx: typer.Context):
     table.add_column("Command", style="bold cyan", no_wrap=True)
     table.add_column("Description")
     table.add_row("operator", "Start the agent (default)")
+    table.add_row("operator -v / --verbose", "Start the agent and show logs in console")
     table.add_row("operator gateway", "Start the agent with gateway channels")
     table.add_row("operator agent", "Chat directly with the agent in the terminal")
     table.add_row("operator onboard", "Interactive setup wizard")
@@ -80,13 +81,13 @@ def onboard():
         print(f"Error: Unable to start configuration UI. Missing dependencies? ({e})")
 
 @app.command("gateway")
-def gateway():
+def gateway(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show logs in console")):
     """Start the agent with gateway channels (auto-onboards on first run if no config exists)."""
     if not (USERDATA_DIR / "config.json").exists():
         from operator_use.cli import setup
         setup.run_first_install()
     from operator_use.cli.start import run
-    run()
+    run(verbose=verbose)
 
 @app.command("status")
 def status():

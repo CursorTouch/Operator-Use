@@ -39,16 +39,15 @@ def _print_startup(lines: list[tuple[str, str]], title_suffix: str = "") -> None
         _row(label, value)
 
 
-def setup_logging(userdata_dir: Path) -> None:
+def setup_logging(userdata_dir: Path, verbose: bool = False) -> None:
     log_file = userdata_dir / "operator.log"
     userdata_dir.mkdir(parents=True, exist_ok=True)
 
     fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     datefmt = "%H:%M:%S"
-    handlers = [
-        logging.StreamHandler(),
-        logging.FileHandler(log_file, encoding="utf-8"),
-    ]
+    handlers: list[logging.Handler] = [logging.FileHandler(log_file, encoding="utf-8")]
+    if verbose:
+        handlers.append(logging.StreamHandler())
 
     logging.basicConfig(level=logging.WARNING, format=fmt, datefmt=datefmt, handlers=handlers)
     logging.getLogger("operator_use").setLevel(logging.INFO)
@@ -275,7 +274,8 @@ def copy_templates_to_workspace(user_data_dir: Path, workspace: Path) -> None:
 async def main():
     from operator_use.paths import get_userdata_dir
     USERDATA_DIR = get_userdata_dir()
-    setup_logging(USERDATA_DIR)
+    verbose = os.getenv("OPERATOR_VERBOSE", "").lower() in ("1", "true", "yes")
+    setup_logging(USERDATA_DIR, verbose=verbose)
 
     try:
         config = load_config(USERDATA_DIR)
@@ -552,7 +552,7 @@ async def main():
 RESTART_EXIT_CODE = 75
 
 
-def run() -> None:
+def run(verbose: bool = False) -> None:
     """Supervisor/worker restart pattern.
 
     If IS_WORKER=1 is set, this is the worker — run main() directly and exit.
@@ -570,7 +570,7 @@ def run() -> None:
         asyncio.run(main())
         sys.exit(0)
 
-    worker_env = {**os.environ, "IS_WORKER": "1"}
+    worker_env = {**os.environ, "IS_WORKER": "1", "OPERATOR_VERBOSE": "1" if verbose else "0"}
     while True:
         result = subprocess.run([sys.executable, "-m", "operator_use"] + sys.argv[1:], env=worker_env)
         if result.returncode == RESTART_EXIT_CODE:
