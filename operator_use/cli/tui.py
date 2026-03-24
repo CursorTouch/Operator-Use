@@ -6,6 +6,20 @@ from InquirerPy.enum import INQUIRERPY_KEYBOARD_INTERRUPT
 from InquirerPy.utils import get_style
 from rich.console import Console
 
+
+def _configure_console_encoding() -> None:
+    """Prefer UTF-8 on Windows so Rich can render box-drawing characters."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8")
+            except Exception:
+                pass
+
+
+_configure_console_encoding()
 console = Console()
 BACK_SIGNAL = "__operator_back__"
 ESCAPE_FLUSH_TIMEOUT_SECONDS = 0.01
