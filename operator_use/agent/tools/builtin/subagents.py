@@ -59,12 +59,12 @@ async def subagents(
     task_id: str | None = None,
     **kwargs,
 ) -> ToolResult:
-    subagent_store = kwargs.get("_subagent_store")
+    subagent_manager = kwargs.get("_subagent_manager")
     channel = kwargs.get("_channel")
     chat_id = kwargs.get("_chat_id")
     account_id = kwargs.get("_account_id", "")
 
-    if not subagent_store:
+    if not subagent_manager:
         return ToolResult.error_result("Subagent store not available (internal error)")
 
     match action:
@@ -74,7 +74,7 @@ async def subagents(
                 return ToolResult.error_result("Provide task description to create a subagent")
             if channel is None or chat_id is None:
                 return ToolResult.error_result("Channel context not available (internal error)")
-            tid = await subagent_store.ainvoke(task, label, channel, chat_id, account_id)
+            tid = await subagent_manager.ainvoke(task, label, channel, chat_id, account_id)
             display = label or task[:60]
             return ToolResult.success_result(
                 f"Subagent created (task_id={tid}  label='{display}')\n"
@@ -83,7 +83,7 @@ async def subagents(
             )
 
         case "list":
-            records = subagent_store.list_all()
+            records = subagent_manager.list_all()
             if not records:
                 return ToolResult.success_result("No subagents have been created yet.")
 
@@ -114,10 +114,10 @@ async def subagents(
         case "cancel":
             if not task_id:
                 return ToolResult.error_result("Provide task_id to cancel")
-            cancelled = subagent_store.cancel(task_id)
+            cancelled = subagent_manager.cancel(task_id)
             if cancelled:
                 return ToolResult.success_result(f"Subagent {task_id} cancelled.")
-            record = subagent_store.get_record(task_id)
+            record = subagent_manager.get_record(task_id)
             if record:
                 return ToolResult.error_result(f"Subagent {task_id} is not running (status={record.status})")
             return ToolResult.error_result(f"No subagent found with task_id='{task_id}'")

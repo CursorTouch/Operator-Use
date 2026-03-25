@@ -76,7 +76,7 @@ class Agent:
         self.cron = cron
         self.gateway = gateway
         self.bus = bus
-        self.subagent_store = SubagentManager(llm=llm, bus=bus)
+        self.subagent_manager = SubagentManager(llm=llm, bus=bus)
         self.process_store = ProcessStore()
         self.hooks = Hooks()
 
@@ -89,7 +89,7 @@ class Agent:
         self.tool_register.set_extension("_bus", self.bus)
         self.tool_register.set_extension("_gateway", self.gateway)
         self.tool_register.set_extension("_cron", self.cron)
-        self.tool_register.set_extension("_subagent_store", self.subagent_store)
+        self.tool_register.set_extension("_subagent_manager", self.subagent_manager)
         self.tool_register.set_extension("_process_store", self.process_store)
         self.tool_register.set_extension("_acp_registry", acp_registry or {})
         self.tool_register.set_extension("_llm", self.llm)
