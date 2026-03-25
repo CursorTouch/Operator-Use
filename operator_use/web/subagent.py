@@ -8,7 +8,7 @@ from operator_use.tools import Tool, ToolResult
 
 class BrowserTask(BaseModel):
     task: str = Field(..., description="Full description of the browser automation task to perform.")
-    keep_open: bool = Field(default=True, description="Keep the browser open after the task completes. Defaults to True. Set to False only when the task is fully done and the user no longer needs the browser (e.g. scraping data, downloading a file).")
+    keep_open: bool = Field(default=True, description="Keep the browser open after the task completes. Always True by default — only set to False when the user explicitly asks to close the browser after the task.")
     use_user_session: bool = Field(default=False, description="Use the user's real browser profile (cookies, logins). Set to True when the task requires the user to already be logged in. Defaults to False (clean isolated profile).")
 from operator_use.agent.tools import ToolRegistry
 from operator_use.messages import SystemMessage, HumanMessage, ToolMessage
@@ -90,7 +90,8 @@ key findings or results, and any URLs or sources referenced.\
     description=(
         "Delegate a browser automation task to an isolated agent with its own context window. "
         "Describe the full task — the agent handles all browser interactions and returns a clean result. "
-        "Set keep_open=False only when the browser is no longer needed after the task (e.g. data scraping, file download). "
+        "The browser stays open after the task by default so the user can see the result. "
+        "Only set keep_open=False when the user explicitly asks to close the browser after the task. "
         "Set use_user_session=True when the task needs the user's existing logins or cookies."
     ),
     model=BrowserTask,
