@@ -85,7 +85,6 @@ LLM_CLASS_MAP = {
     "cerebras": "ChatCerebras",
     "open_router": "ChatOpenRouter",
     "azure_openai": "ChatAzureOpenAI",
-    "litellm": "ChatLiteLLM",
     "vllm": "ChatVLLM",
     "deepseek": "ChatDeepSeek",
     "codex": "ChatCodex",

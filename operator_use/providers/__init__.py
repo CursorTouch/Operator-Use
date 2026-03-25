@@ -26,7 +26,6 @@ from operator_use.providers.mistral import ChatMistral
 from operator_use.providers.cerebras import ChatCerebras
 from operator_use.providers.open_router import ChatOpenRouter
 from operator_use.providers.azure_openai import ChatAzureOpenAI
-from operator_use.providers.litellm import ChatLiteLLM
 from operator_use.providers.vllm import ChatVLLM
 from operator_use.providers.nvidia import ChatNvidia
 from operator_use.providers.deepseek import ChatDeepSeek
@@ -114,7 +113,6 @@ __all__ = [
     "ChatCerebras",
     "ChatOpenRouter",
     "ChatAzureOpenAI",
-    "ChatLiteLLM",
     "ChatVLLM",
     "ChatNvidia",
     "ChatDeepSeek",

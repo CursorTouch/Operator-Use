@@ -13,7 +13,6 @@ dependencies = [
     "groq>=0.29.0",
     "mistralai==1.9.11",
     "cerebras-cloud-sdk>=1.50.1",
-    "litellm>=1.72.0",
     "pillow>=11.2.1",
     "python-telegram-bot>=22.0",
     "slack-bolt>=1.18.0",
