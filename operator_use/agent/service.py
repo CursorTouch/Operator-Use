@@ -84,6 +84,8 @@ class Agent:
         if exclude_tools:
             self.tool_register.unregister_tools(exclude_tools)
 
+        self.context.skills.register_history_hook(self.hooks)
+
         # Set stable tool extensions (don't change per message)
         self.tool_register.set_extension("_workspace", self.workspace)
         self.tool_register.set_extension("_bus", self.bus)

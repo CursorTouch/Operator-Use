@@ -8,6 +8,7 @@ from platform import machine, system, python_version
 
 from operator_use.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
 from operator_use.agent.skills import Skills
+from operator_use.agent.memory import Memory
 
 BOOTSTRAP_FILENAMES = ["SOUL.md", "USER.md", "CODE.md", "AGENTS.md"]
 
@@ -19,6 +20,7 @@ class Context:
         self.workspace = workspace
         self.codebase = Path(operator_use.__file__).resolve().parent.parent
         self.skills = Skills(self.workspace)
+        self.memory = Memory(self.workspace)
         self._plugin_prompt_sections: list[str] = []
 
     def register_plugin_prompt(self, section: str) -> None:
@@ -70,7 +72,7 @@ Where you store your memory, skills and notes.
  - Soul (Your personality and goals): {workspace_path}/SOUL.md
  - User (User Profile and preferences): {workspace_path}/USER.md
  - Memory (Long Term Memory): {workspace_path}/memory/MEMORY.md
- - Daily notes: {workspace_path}/memory/YYYY-MM-DD.md
+ - Daily Log (append during sessions): {workspace_path}/memory/YYYY-MM-DD.md
  - Heartbeat tasks (periodic tasks you need to perform): {workspace_path}/HEARTBEAT.md
  - Custom Skills (Skills you can use to enhance your capabilities): {workspace_path}/skills/{{skill-name}}/SKILL.md
 
@@ -116,6 +118,8 @@ You have access to the following skills to enhance your capabilities, to use a s
 Available Skills:
 {skills_summary}
 ''')
+        if memory_context := self.memory.get_memory_context():
+            parts.append(memory_context)
         if self._plugin_prompt_sections:
             parts.extend(self._plugin_prompt_sections)
         parts.append(self.get_respond_behavior(is_voice=is_voice))

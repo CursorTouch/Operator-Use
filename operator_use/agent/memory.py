@@ -5,7 +5,11 @@ from pathlib import Path
 class Memory:
     def __init__(self, workspace: Path) -> None:
         self.workspace = workspace
-        self.memory_file = workspace / "memory" / "MEMORY.md"
+        self.memory_dir = workspace / "memory"
+        self.memory_file = self.memory_dir / "MEMORY.md"
+
+    def _daily_log_path(self, date: str) -> Path:
+        return self.memory_dir / f"{date}.md"
 
     def read_memory(self) -> str:
         if not self.memory_file.exists():
@@ -13,10 +17,11 @@ class Memory:
         return self.memory_file.read_text(encoding="utf-8")
 
     def write_memory(self, memory: str) -> None:
+        self.memory_dir.mkdir(parents=True, exist_ok=True)
         self.memory_file.write_text(memory, encoding="utf-8")
 
-    def _read_summary(self, date: str) -> str:
-        path = self.workspace / "memory" / date / "summary.md"
+    def read_daily_log(self, date: str) -> str:
+        path = self._daily_log_path(date)
         if not path.exists():
             return ""
         return path.read_text(encoding="utf-8")
@@ -31,9 +36,9 @@ class Memory:
         today = datetime.now().strftime("%Y-%m-%d")
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
         for date, label in [(today, "Today"), (yesterday, "Yesterday")]:
-            summary = self._read_summary(date)
-            if summary:
-                sections.append(f"### {label}'s Summary ({date})\n\n{summary}")
+            log = self.read_daily_log(date)
+            if log:
+                sections.append(f"### {label}'s Log ({date})\n\n{log}")
 
         if not sections:
             return None

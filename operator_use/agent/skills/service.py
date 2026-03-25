@@ -1,6 +1,8 @@
 from pathlib import Path
+import difflib
 import logging
 import re
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,54 @@ class Skills:
 
                 return metadata_dict
         return {}
+
+    def snapshot(self, skill_path: Path) -> None:
+        """Save a timestamped snapshot + diff of skill content before it is overwritten."""
+        if not skill_path.exists():
+            return
+        current = skill_path.read_text(encoding="utf-8")
+        history_dir = skill_path.parent / ".history"
+        history_dir.mkdir(exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+
+        # Diff against the most recent snapshot (before saving the new one)
+        existing = sorted(history_dir.glob("*.md"))
+        if existing:
+            prev_content = existing[-1].read_text(encoding="utf-8")
+            diff_lines = list(difflib.unified_diff(
+                prev_content.splitlines(keepends=True),
+                current.splitlines(keepends=True),
+                fromfile=existing[-1].name,
+                tofile=f"{timestamp}.md",
+            ))
+            if diff_lines:
+                (history_dir / f"{timestamp}.diff").write_text("".join(diff_lines), encoding="utf-8")
+
+        # Full snapshot
+        (history_dir / f"{timestamp}.md").write_text(current, encoding="utf-8")
+        logger.info(f"Skill snapshot saved | skill={skill_path.parent.name} timestamp={timestamp}")
+
+    def register_history_hook(self, hooks) -> None:
+        """Register a BEFORE_TOOL_CALL hook that snapshots skills before write_file/edit_file."""
+        from operator_use.agent.hooks.events import HookEvent
+
+        workspace = self.workspace
+
+        async def _skill_history(ctx) -> None:
+            if ctx.tool_call.name not in ("write_file", "edit_file"):
+                return
+            path_param = ctx.tool_call.params.get("path", "")
+            if not path_param:
+                return
+            p = Path(path_param)
+            if not p.is_absolute():
+                p = workspace / p
+            # Match pattern: .../skills/{name}/SKILL.md
+            if p.name == "SKILL.md" and p.parent.parent.name == "skills":
+                self.snapshot(p)
+
+        hooks.register(HookEvent.BEFORE_TOOL_CALL, _skill_history)
 
     def build_skills_summary(self)->str:
         lines=[]

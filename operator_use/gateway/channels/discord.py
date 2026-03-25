@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from dataclasses import field
 from pathlib import Path
 from typing import Optional
 
@@ -25,7 +24,7 @@ from operator_use.bus.views import (
     TextPart,
     text_from_parts,
 )
-from operator_use.gateway.channels.config import Config
+from operator_use.gateway.channels.config import DiscordConfig
 from operator_use.gateway.channels.base import BaseChannel
 
 
@@ -55,14 +54,6 @@ def _split_message(content: str, max_len: int = MAX_MESSAGE_LEN) -> list[str]:
         chunks.append(content[:pos])
         content = content[pos:].lstrip()
     return chunks
-
-
-class DiscordConfig(Config):
-    """Discord API configuration."""
-
-    token: str = ""
-    allow_from: list[str] = field(default_factory=list)
-    media_dir: Optional[str] = None
 
 
 class DiscordChannel(BaseChannel):
