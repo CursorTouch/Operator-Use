@@ -6,15 +6,17 @@ This folder is home. Treat it that way.
 
 Before doing anything else, every session:
 
-1. Read `SOUL.md` — this is who you are
-2. Read `USER.md` — this is who you're helping
-3. Read `memory/MEMORY.md` — already injected as context, but re-read if you need deeper detail
-4. If you're about to touch code — read `CODE.md` first
+1. `RULES.md` is already loaded — these are your hard constraints, always active
+2. Read `SOUL.md` — this is who you are
+3. Read `USER.md` — this is who you're helping
+4. Read `memory/MEMORY.md` — already injected as context, but re-read if you need deeper detail
+5. If you're about to touch code — read `CODE.md` first
 
 Don't ask permission. Just do it.
 
 ## Workspace Files
 
+- **RULES.md** — Hard constraints. Non-negotiable. Loaded first, always enforced.
 - **SOUL.md** — Who you are (personality, values, continuity)
 - **USER.md** — Who you're helping (name, timezone, preferences)
 - **CODE.md** — Your codebase summary (architecture, flows, how to improve yourself)
@@ -22,6 +24,8 @@ Don't ask permission. Just do it.
 - **memory/MEMORY.md** — Curated long-term memory. Promoted from daily logs during heartbeat.
 - **memory/YYYY-MM-DD.md** — Daily append-only log. Write here during sessions whenever you learn something, make a mistake, or solve something non-trivial.
 - **skills/{name}/SKILL.md** — Custom skills. Read the SKILL.md to use a skill.
+- **knowledge/** — Persistent reference documents. Listed in your context at startup — read selectively when relevant.
+- **tools/*.py** — Custom Python tool scripts. Auto-loaded and registered at agent startup.
 
 ## Codebase Self-Awareness
 
@@ -184,6 +188,104 @@ Periodically scan your skills folder and recent memory. Do all of these:
 
 3. **Consolidate** — Can any two skills be merged? Can one be split into two more focused ones?
 
+## Knowledge — Building and Using
+
+`knowledge/` is your reference library for persistent factual documents — stable, domain-specific, reusable across sessions. Not episodic (that's memory), not procedural (that's skills). Just facts you'd otherwise have to re-discover every time.
+
+### When to create a knowledge file
+
+- You find yourself re-reading the same external documentation repeatedly
+- There's domain-specific terminology, schemas, or rules you need to reference
+- A user gives you company/project context that's factual (not a preference or memory)
+- A skill's `references/` folder is getting too broad — extract to shared knowledge
+
+### Folder structure
+
+Each topic is a directory with a `context.md` inside. Group related topics under a parent directory.
+
+```
+knowledge/
+├── products/
+│   ├── pricing/
+│   │   └── context.md
+│   └── features/
+│       └── context.md
+├── policies/
+│   ├── refunds/
+│   │   └── context.md
+│   └── sla/
+│       └── context.md
+└── support/
+    └── context.md
+```
+
+The index shown in your context at startup:
+
+```
+**policies/**
+  - policies/refunds — 30-day window, submit via ticket portal
+  - policies/sla — 99.9% uptime, 1hr critical response time
+
+**products/**
+  - products/features — Starter: core tools. Pro: integrations + API access.
+  - products/pricing — Starter $49/mo, Pro $149/mo, Enterprise custom
+
+- support — Chat & email support, Mon-Fri 9–6 PST
+```
+
+Read files on demand when the task calls for it — not all of them every session.
+
+### During heartbeat
+
+Periodically scan `knowledge/` for:
+- Files that are stale or no longer accurate — update or delete them
+- Repeated re-discovery patterns in recent sessions — that's a missing knowledge file
+
+### Knowledge vs Memory vs Skills
+
+| | Memory | Knowledge | Skills |
+|---|---|---|---|
+| **What** | What happened | Facts and references | How to do things |
+| **Changes** | Grows every session | Stable, updated rarely | Improves with use |
+| **Format** | Diary/log | Reference doc | Procedural guide |
+| **Loaded** | Always (auto-injected) | Index always, content on demand | Index always, content on demand |
+
+---
+
+## Custom Tools — Building and Using
+
+`tools/` lets you extend your own capabilities by writing Python tool scripts. They're auto-loaded at startup — no code changes, no restarts needed for new agents.
+
+### Format
+
+```python
+# workspace/tools/my_tool.py
+from operator_use.tools.service import Tool, ToolResult
+from pydantic import BaseModel
+
+class MyParams(BaseModel):
+    input: str
+
+@Tool(name="my_tool", description="What this tool does", model=MyParams)
+def my_tool(input: str) -> ToolResult:
+    result = do_something(input)
+    return ToolResult.success_result(result)
+```
+
+### Rules
+
+- One file per tool (or multiple tools per file if they're closely related)
+- Tool names must be unique — conflicts with builtin tools are skipped with a warning
+- Async tools are supported: `async def my_tool(...)` works too
+- If a tool errors on load, it's skipped and logged — it won't crash the agent
+
+### When to build a tool vs a skill
+
+- **Tool** — when you need to execute deterministic code (API calls, file transforms, system ops)
+- **Skill** — when you need to encode a multi-step workflow or domain knowledge for yourself
+
+---
+
 ## Heartbeat vs Cron
 
 **Use heartbeat when:**
@@ -267,13 +369,6 @@ One reaction per message. Don't overdo it.
 - **Discord / Slack:** Avoid markdown tables — use bullet lists instead
 - **Discord links:** Wrap in `<>` to suppress embeds: `<https://example.com>`
 - **Voice replies:** Plain text only. No markdown. Keep it short and conversational.
-
-## Safety
-
-- Don't exfiltrate private data. Ever.
-- Don't run destructive commands without asking. Prefer `trash` over `rm` where possible.
-- External actions (email, public posts, anything leaving the machine) — ask first.
-- Internal actions (reading, organizing, automating on-device) — be bold.
 
 ## Make It Yours
 

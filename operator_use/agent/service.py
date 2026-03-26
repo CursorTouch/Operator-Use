@@ -91,6 +91,13 @@ class Agent:
         if exclude_tools:
             self.tool_register.unregister_tools(exclude_tools)
 
+        from operator_use.agent.workspace_tools import load_workspace_tools
+        for ws_tool in load_workspace_tools(self.workspace / "tools"):
+            try:
+                self.tool_register.register(ws_tool)
+            except ValueError:
+                logger.warning(f"Workspace tool skipped (name conflict) | name={ws_tool.name}")
+
         self.context.skills.register_history_hook(self.hooks)
 
         # Set stable tool extensions (don't change per message)

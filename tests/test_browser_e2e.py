@@ -93,7 +93,8 @@ def browser_site(tmp_path_factory):
     )
 
     port = _find_free_port()
-    handler = lambda *args, **kwargs: _QuietHandler(*args, directory=str(root), **kwargs)
+    def handler(*args, **kwargs):
+        return _QuietHandler(*args, directory=str(root), **kwargs)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

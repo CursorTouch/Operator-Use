@@ -1,5 +1,5 @@
 from operator_use.web.browser.config import BrowserConfig, BROWSER_ARGS
-from operator_use.web.browser.events import BrowserEvent, NavigationSettledEvent, NavigationStartedEvent, StateInvalidatedEvent
+from operator_use.web.browser.events import BrowserEvent, NavigationSettledEvent, NavigationStartedEvent
 from operator_use.web.browser.page import Page
 from operator_use.web.browser.session import Session
 from operator_use.web.browser.views import BrowserState, Tab
@@ -14,7 +14,6 @@ import tempfile
 import asyncio
 import httpx
 import sys
-import base64
 import json
 import random
 import re

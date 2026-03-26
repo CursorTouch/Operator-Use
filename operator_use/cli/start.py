@@ -289,6 +289,8 @@ def copy_templates_to_workspace(user_data_dir: Path, workspace: Path) -> None:
         return
 
     (workspace / "skills").mkdir(parents=True, exist_ok=True)
+    (workspace / "knowledge").mkdir(parents=True, exist_ok=True)
+    (workspace / "tools").mkdir(parents=True, exist_ok=True)
 
     for src in template_dir.iterdir():
         if src.is_file():

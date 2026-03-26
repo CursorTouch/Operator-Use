@@ -10,8 +10,9 @@ from platform import machine, system, python_version
 from operator_use.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
 from operator_use.agent.skills import Skills
 from operator_use.agent.memory import Memory
+from operator_use.agent.knowledge import Knowledge
 
-BOOTSTRAP_FILENAMES = ["SOUL.md", "USER.md", "CODE.md", "AGENTS.md"]
+BOOTSTRAP_FILENAMES = ["RULES.md", "SOUL.md", "USER.md", "CODE.md", "AGENTS.md"]
 
 
 class PromptMode(str, Enum):
@@ -28,6 +29,7 @@ class Context:
         self.codebase = Path(operator_use.__file__).resolve().parent.parent
         self.skills = Skills(self.workspace)
         self.memory = Memory(self.workspace)
+        self.knowledge = Knowledge(self.workspace)
         self._plugin_prompt_sections: list[str] = []
 
     def register_plugin_prompt(self, section: str) -> None:
@@ -75,6 +77,7 @@ Use the CODE.md file to update your codebase to improve your capabilities on dem
         return f"""## Workspace: {workspace_path}
 Where you store your memory, skills and notes.
 
+ - Hard Constraints (non-negotiable rules, always enforced): {workspace_path}/RULES.md
  - Agent Instructions: {workspace_path}/AGENTS.md
  - Soul (Your personality and goals): {workspace_path}/SOUL.md
  - User (User Profile and preferences): {workspace_path}/USER.md
@@ -82,6 +85,8 @@ Where you store your memory, skills and notes.
  - Daily Log (append during sessions): {workspace_path}/memory/YYYY-MM-DD.md
  - Heartbeat tasks (periodic tasks you need to perform): {workspace_path}/HEARTBEAT.md
  - Custom Skills (Skills you can use to enhance your capabilities): {workspace_path}/skills/{{skill-name}}/SKILL.md
+ - Knowledge (Persistent reference docs, read selectively): {workspace_path}/knowledge/
+ - Custom Tools (Python tool scripts, auto-loaded at startup): {workspace_path}/tools/
 
 When you need to remember something, write to {workspace_path}/memory/MEMORY.md
 """
@@ -145,6 +150,10 @@ Available Skills:
         if prompt_mode == PromptMode.FULL:
             if memory_context := self.memory.get_memory_context():
                 parts.append(memory_context)
+
+        if prompt_mode == PromptMode.FULL:
+            if knowledge_index := self.knowledge.build_knowledge_index():
+                parts.append(knowledge_index)
 
         if system_prompt:
             parts.append(f"## Task Context\n\n{system_prompt}")
