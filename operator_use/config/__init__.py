@@ -21,6 +21,7 @@ from operator_use.config.service import (
     HeartbeatConfig,
     ToolsConfig,
     SubagentConfig,
+    PluginConfig,
 )
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "HeartbeatConfig",
     "ToolsConfig",
     "SubagentConfig",
+    "PluginConfig",
 ]

@@ -96,24 +96,28 @@ def test_tts_config_defaults():
 # --- AgentDefinition ---
 
 def test_agent_definition_valid():
-    a = AgentDefinition(id="my-agent", description="General purpose manager", computer_use=False, browser_use=False)
+    a = AgentDefinition(id="my-agent", description="General purpose manager")
     assert a.id == "my-agent"
     assert a.description == "General purpose manager"
+    assert a.plugins == []
 
 
-def test_agent_definition_computer_use_only():
-    a = AgentDefinition(id="desk", computer_use=True, browser_use=False)
-    assert a.computer_use is True
+def test_agent_definition_with_browser_plugin():
+    from operator_use.config.service import PluginConfig
+    a = AgentDefinition(id="web", plugins=[PluginConfig(id="browser_use", enabled=True)])
+    assert any(p.id == "browser_use" and p.enabled for p in a.plugins)
 
 
-def test_agent_definition_browser_use_only():
-    a = AgentDefinition(id="web", computer_use=False, browser_use=True)
-    assert a.browser_use is True
+def test_agent_definition_with_computer_plugin():
+    from operator_use.config.service import PluginConfig
+    a = AgentDefinition(id="desk", plugins=[PluginConfig(id="computer_use", enabled=True)])
+    assert any(p.id == "computer_use" and p.enabled for p in a.plugins)
 
 
-def test_agent_definition_both_raises():
-    with pytest.raises(ValidationError, match="cannot both be enabled"):
-        AgentDefinition(id="bad", computer_use=True, browser_use=True)
+def test_agent_definition_plugin_disabled():
+    from operator_use.config.service import PluginConfig
+    a = AgentDefinition(id="op", plugins=[PluginConfig(id="browser_use", enabled=False)])
+    assert a.plugins[0].enabled is False
 
 
 def test_agent_definition_default_workspace_none():
@@ -168,7 +172,7 @@ def test_config_default_agent_none_when_empty():
 
 
 def test_config_default_agent_first():
-    c = Config(agents=AgentsConfig(list=[AgentDefinition(id="first"), AgentDefinition(id="second", browser_use=False)]))
+    c = Config(agents=AgentsConfig(list=[AgentDefinition(id="first"), AgentDefinition(id="second")]))
     assert c.default_agent.id == "first"
 
 
@@ -182,7 +186,7 @@ def test_load_config_no_file(tmp_path):
 def test_load_config_from_json(tmp_path):
     data = {
         "agents": {
-            "list": [{"id": "json-agent", "browser_use": False}]
+            "list": [{"id": "json-agent"}]
         }
     }
     (tmp_path / "config.json").write_text(json.dumps(data), encoding="utf-8")

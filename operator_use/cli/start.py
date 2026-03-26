@@ -172,10 +172,22 @@ def _resolve_agent_workspace(defn: AgentDefinition) -> Path:
 
 
 
+PLUGIN_REGISTRY: dict[str, type] = {}
+
+def _get_plugin_registry() -> dict[str, type]:
+    global PLUGIN_REGISTRY
+    if not PLUGIN_REGISTRY:
+        from operator_use.computer.plugin import ComputerPlugin
+        from operator_use.web.plugin import BrowserPlugin
+        PLUGIN_REGISTRY = {
+            "browser_use": BrowserPlugin,
+            "computer_use": ComputerPlugin,
+        }
+    return PLUGIN_REGISTRY
+
+
 def _build_agents(config: Config, cron, gateway, bus) -> dict[str, Agent]:
     """Instantiate one Agent per agent definition in config."""
-    from operator_use.computer.plugin import ComputerPlugin
-    from operator_use.web.plugin import BrowserPlugin
     from operator_use.agent.tools.builtin import resolve_tools
 
     defaults = config.agents.defaults
@@ -183,6 +195,8 @@ def _build_agents(config: Config, cron, gateway, bus) -> dict[str, Agent]:
 
     if not agent_defs:
         raise ValueError("No agents defined in config. Run 'operator onboard' to set up an agent.")
+
+    registry = _get_plugin_registry()
 
     agents = {}
     for defn in agent_defs:
@@ -194,10 +208,13 @@ def _build_agents(config: Config, cron, gateway, bus) -> dict[str, Agent]:
             raise ValueError(f"Agent '{defn.id}': failed to initialize LLM provider '{llm_conf.provider}'. Check the provider name and API key.")
         workspace = _resolve_agent_workspace(defn)
 
-        plugins = [
-            ComputerPlugin(enabled=bool(defn.computer_use)),
-            BrowserPlugin(enabled=bool(defn.browser_use)),
-        ]
+        plugins = []
+        for p in defn.plugins:
+            cls = registry.get(p.id)
+            if cls is not None:
+                plugins.append(cls(enabled=p.enabled))
+            else:
+                logger.warning("Unknown plugin id '%s' for agent '%s' — skipped.", p.id, defn.id)
 
         tools_cfg = defn.tools
         resolved_tools = resolve_tools(
@@ -496,12 +513,8 @@ async def main():
                 agent_channels.append("Twitch")
         ch_str = ", ".join(agent_channels) if agent_channels else "none"
 
-        caps = []
-        if defn.computer_use:
-            caps.append("computer")
-        if defn.browser_use:
-            caps.append("browser")
-        caps_str = ", ".join(caps) if caps else "none"
+        enabled_plugins = [p.id for p in defn.plugins if p.enabled]
+        caps_str = ", ".join(enabled_plugins) if enabled_plugins else "none"
 
         _console.print(f"│ [{_P}]{defn.id}[/{_P}]")
         _console.print(f"│   [{_M}]{'llm':<10}[/{_M}] [{_S}]{llm_str}[/{_S}]")

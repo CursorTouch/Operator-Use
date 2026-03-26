@@ -1,4 +1,4 @@
-"""Control Center tool: toggle computer_use / browser_use and restart."""
+"""Control Center tool: toggle plugins and restart."""
 
 import asyncio
 import json
@@ -79,6 +79,23 @@ def _get_agent_entry(data: dict, agent_id: Optional[str]) -> tuple[dict, int] | 
     return None, None
 
 
+def _set_plugin_enabled(entry: dict, plugin_id: str, enabled: bool) -> None:
+    """Update or insert a plugin entry in the agent's plugins list."""
+    plugins: list = entry.setdefault("plugins", [])
+    for p in plugins:
+        if p.get("id") == plugin_id:
+            p["enabled"] = enabled
+            return
+    plugins.append({"id": plugin_id, "enabled": enabled})
+
+
+def _get_plugin_enabled(entry: dict, plugin_id: str) -> bool:
+    for p in entry.get("plugins", []):
+        if p.get("id") == plugin_id:
+            return bool(p.get("enabled", True))
+    return False
+
+
 async def _do_restart():
     os.system("cls" if os.name == "nt" else "clear")
     frames = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]
@@ -95,7 +112,7 @@ async def _do_restart():
     name="control_center",
     description=(
         "Control Center for Operator capabilities.\n\n"
-        "Dynamically toggle computer_use (GUI automation) and browser_use (Browser automation via CDP)."
+        "Dynamically toggle computer_use (GUI automation) and browser_use (Browser automation via CDP). "
         "They are mutually exclusive — enabling one "
         "immediately disables the other, registers the relevant tools into the agent, "
         "and connects the state (desktop or browser) into the LLM context. "
@@ -124,18 +141,13 @@ async def control_center(
     if entry is None:
         return ToolResult.error_result("No agents found in config.json. Run 'operator onboard' first.")
 
-    # Normalise stored keys to camelCase
-    for old, new in [("computer_use", "computerUse"), ("browser_use", "browserUse")]:
-        if old in entry and new not in entry:
-            entry[new] = entry.pop(old)
-
     agent = kwargs.get("_agent")
 
     changes = []
     if computer_use is not None:
-        entry["computerUse"] = computer_use
+        _set_plugin_enabled(entry, "computer_use", computer_use)
         if computer_use:
-            entry["browserUse"] = False
+            _set_plugin_enabled(entry, "browser_use", False)
             changes.append("computer_use=true, browser_use=false")
             if agent is not None:
                 await agent.enable_computer_use()
@@ -145,9 +157,9 @@ async def control_center(
                 await agent.disable_computer_use()
 
     if browser_use is not None:
-        entry["browserUse"] = browser_use
+        _set_plugin_enabled(entry, "browser_use", browser_use)
         if browser_use:
-            entry["computerUse"] = False
+            _set_plugin_enabled(entry, "computer_use", False)
             changes.append("browser_use=true, computer_use=false")
             if agent is not None:
                 await agent.enable_browser_use()
@@ -159,8 +171,8 @@ async def control_center(
     agents_list[idx] = entry
     _save_config_raw(data)
 
-    cu = entry.get("computerUse", False)
-    bu = entry.get("browserUse", True)
+    cu = _get_plugin_enabled(entry, "computer_use")
+    bu = _get_plugin_enabled(entry, "browser_use")
     status = (
         f"Agent: {entry.get('id', '?')}\n"
         f"  computer_use : {cu}\n"

@@ -156,6 +156,13 @@ class AgentDefaults(Base):
     subagent: SubagentConfig = Field(default_factory=SubagentConfig)
 
 
+class PluginConfig(Base):
+    """A plugin entry on an agent — id maps to a registered plugin class."""
+
+    id: str
+    enabled: bool = True
+
+
 class AgentDefinition(Base):
     """Individual agent definition."""
 
@@ -165,20 +172,10 @@ class AgentDefinition(Base):
     llm_config: Optional[LLMConfig] = None  # Overrides agents.defaults.llm_config
     max_tool_iterations: Optional[int] = None  # Overrides agents.defaults
     channels: Optional["ChannelsConfig"] = None  # Per-agent dedicated channel bots
-    computer_use: bool = False  # Enable desktop/computer-use (GUI automation)
-    browser_use: bool = True    # Enable browser-use (Chrome DevTools Protocol)
+    plugins: List[PluginConfig] = Field(default_factory=list)  # Ordered list of plugins
     tools: ToolsConfig = Field(default_factory=ToolsConfig)  # Tool profile + allow/deny
     prompt_mode: str = "full"   # Prompt mode: "full", "minimal", or "none"
     system_prompt: str = ""     # Freeform instructions appended to every system prompt call
-
-    @model_validator(mode="after")
-    def check_exclusive_use(self) -> "AgentDefinition":
-        if self.computer_use and self.browser_use:
-            raise ValueError(
-                f"Agent '{self.id}': computer_use and browser_use cannot both be enabled. "
-                "Choose one interaction mode per agent."
-            )
-        return self
 
 
 class AgentsConfig(Base):

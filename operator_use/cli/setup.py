@@ -234,7 +234,7 @@ from operator_use.config import (
     AgentDefaults, AgentsConfig, ProvidersConfig, ProviderConfig,
     ChannelsConfig, TelegramConfig, DiscordConfig, SlackConfig,
     AgentDefinition, ACPServerSettings, ACPAgentEntry, HeartbeatConfig,
-    ToolsConfig,
+    ToolsConfig, PluginConfig,
 )
 
 
@@ -301,8 +301,10 @@ def _save_config(
             if ch.get("slack_bot"):
                 agent_channels.slack = SlackConfig(enabled=True, bot_token=ch["slack_bot"], app_token=ch.get("slack_app", ""))
             defn_kwargs["channels"] = agent_channels
-        defn_kwargs["browser_use"] = bool(a.get("browser_use", True))
-        defn_kwargs["computer_use"] = bool(a.get("computer_use", False))
+        defn_kwargs["plugins"] = [
+            PluginConfig(id=p["id"], enabled=p.get("enabled", True))
+            for p in a.get("plugins", [])
+        ]
         defn_kwargs["prompt_mode"] = a.get("prompt_mode", "full")
         if a.get("system_prompt"):
             defn_kwargs["system_prompt"] = a["system_prompt"]
@@ -519,8 +521,7 @@ def run_initial_setup():
                 "slack_bot": _a_ch.get("slack", {}).get("botToken", "") or "",
                 "slack_app": _a_ch.get("slack", {}).get("appToken", "") or "",
             },
-            "browser_use":   bool(a.get("browserUse", a.get("browser_use", True))),
-            "computer_use":  bool(a.get("computerUse", a.get("computer_use", False))),
+            "plugins":       [{"id": p["id"], "enabled": p.get("enabled", True)} for p in (a.get("plugins") or [])],
             "prompt_mode":   a.get("promptMode", a.get("prompt_mode", "full")),
             "system_prompt": a.get("systemPrompt", a.get("system_prompt", "")),
             "tools_profile": _a_tools.get("profile", "full"),
@@ -533,7 +534,7 @@ def run_initial_setup():
         agent_defs.append({
             "id": "operator", "llm_provider_key": None, "llm_model": None,
             "channels": {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""},
-            "browser_use": True, "computer_use": False,
+            "plugins": [],
             "prompt_mode": "full", "system_prompt": "",
             "tools_profile": "full", "tools_allow": [], "tools_deny": [],
         })
@@ -569,10 +570,9 @@ def run_initial_setup():
                 configured_chs = [n for n in ("telegram", "discord", "slack") if ch.get(n) or ch.get(f"{n}_bot")]
                 ch_label = ", ".join(configured_chs) if configured_chs else "none"
 
-                browser_use = a.get("browser_use", True)
-                computer_use = a.get("computer_use", False)
-                bu_label = "enabled" if browser_use else "disabled"
-                cu_label = "enabled" if computer_use else "disabled"
+                plugins_list = a.get("plugins", [])
+                enabled_plugin_ids = [p["id"] for p in plugins_list if p.get("enabled", True)]
+                plugins_label = ", ".join(enabled_plugin_ids) if enabled_plugin_ids else "none"
                 pm_label = a.get("prompt_mode", "full")
                 sp_label = "set" if a.get("system_prompt") else "not set"
                 tools_profile = a.get("tools_profile", "full")
@@ -588,8 +588,7 @@ def run_initial_setup():
                     f"Rename         {a['id']}",
                     f"LLM            {a_llm_label}",
                     f"Channels       {ch_label}",
-                    f"Browser Use    {bu_label}",
-                    f"Computer Use   {cu_label}",
+                    f"Plugins        {plugins_label}",
                     f"Prompt Mode    {pm_label}",
                     f"System Prompt  {sp_label}",
                     f"Tools          {tools_label}",
@@ -662,21 +661,38 @@ def run_initial_setup():
                         except BackRequest:
                             continue
 
-                elif choice.startswith("Browser Use"):
-                    new_val = not agent_defs[idx].get("browser_use", True)
-                    if new_val and agent_defs[idx].get("computer_use", False):
-                        console.print("│")
-                        console.print("│  [yellow]Computer Use disabled — only one can be active.[/yellow]")
-                        agent_defs[idx]["computer_use"] = False
-                    agent_defs[idx]["browser_use"] = new_val
-
-                elif choice.startswith("Computer Use"):
-                    new_val = not agent_defs[idx].get("computer_use", False)
-                    if new_val and agent_defs[idx].get("browser_use", True):
-                        console.print("│")
-                        console.print("│  [yellow]Browser Use disabled — only one can be active.[/yellow]")
-                        agent_defs[idx]["browser_use"] = False
-                    agent_defs[idx]["computer_use"] = new_val
+                elif choice.startswith("Plugins"):
+                    AVAILABLE_PLUGINS = ["browser_use", "computer_use"]
+                    while True:
+                        try:
+                            _render_configure_screen()
+                            current_plugins: list[dict] = agent_defs[idx].get("plugins", [])
+                            plugin_choices = []
+                            for pid in AVAILABLE_PLUGINS:
+                                entry = next((p for p in current_plugins if p["id"] == pid), None)
+                                if entry:
+                                    state = "enabled" if entry.get("enabled", True) else "disabled"
+                                    plugin_choices.append(f"{pid}  {state}")
+                                else:
+                                    plugin_choices.append(f"{pid}  not added")
+                            plugin_choices.append("← Back")
+                            p_choice = select("Plugins:", plugin_choices)
+                            if p_choice.startswith("←"):
+                                break
+                            selected_id = p_choice.split()[0]
+                            entry = next((p for p in current_plugins if p["id"] == selected_id), None)
+                            if entry is None:
+                                current_plugins.append({"id": selected_id, "enabled": True})
+                                console.print(f"│  [green]{selected_id} added and enabled.[/green]")
+                            else:
+                                action = select(f"{selected_id}:", ["Toggle enabled/disabled", "Remove"])
+                                if action.startswith("Toggle"):
+                                    entry["enabled"] = not entry.get("enabled", True)
+                                elif action.startswith("Remove"):
+                                    current_plugins = [p for p in current_plugins if p["id"] != selected_id]
+                            agent_defs[idx]["plugins"] = current_plugins
+                        except BackRequest:
+                            break
 
                 elif choice.startswith("Prompt Mode"):
                     mode = select("Prompt mode:", ["full", "minimal", "none"])
@@ -755,8 +771,7 @@ def run_initial_setup():
                             "llm_provider_key": None,
                             "llm_model": None,
                             "channels": {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""},
-                            "browser_use": True,
-                            "computer_use": False,
+                            "plugins": [],
                             "prompt_mode": "full",
                             "system_prompt": "",
                             "tools_profile": "full",
