@@ -217,7 +217,8 @@ async def browser(
                     await browser._wait_for_page(timeout=5.0)
                     return ToolResult.success_result("Opened a new blank tab.")
                 case "close":
-                    if len(browser._browsers) <= 1:
+                    tabs = await browser.get_all_tabs()
+                    if len(tabs) <= 1:
                         return ToolResult.success_result("Cannot close the last remaining tab.")
                     await browser.close_tab()
                     return ToolResult.success_result("Closed current tab.")
@@ -243,6 +244,9 @@ async def browser(
             if not filenames:
                 return ToolResult.error_result("filenames is required for upload.")
             files = [str(Path(getcwd()) / "uploads" / fn) for fn in filenames]
+            missing = [path for path in files if not Path(path).exists()]
+            if missing:
+                return ToolResult.error_result(f"Upload files not found: {missing}")
             await page.set_file_input_at(x, y, files)
             return ToolResult.success_result(f"Uploaded {filenames} to element at ({x}, {y}).")
 
@@ -273,10 +277,10 @@ async def browser(
             folder_path = Path(browser.config.downloads_dir)
             async with httpx.AsyncClient() as client:
                 response = await client.get(url)
+                response.raise_for_status()
             path = folder_path / filename
             with open(path, "wb") as f:
-                async for chunk in response.aiter_bytes():
-                    f.write(chunk)
+                f.write(response.content)
             return ToolResult.success_result(f"Downloaded {filename} from {url} to {path}.")
 
         case _:

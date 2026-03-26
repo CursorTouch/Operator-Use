@@ -1,5 +1,8 @@
 from __future__ import annotations
+import logging
 from operator_use.web.watchdog.base import BaseWatchdog
+
+logger = logging.getLogger(__name__)
 
 
 class DialogWatchdog(BaseWatchdog):
@@ -17,7 +20,7 @@ class DialogWatchdog(BaseWatchdog):
             return
         dialog_type = event.get('type', '')
         message     = event.get('message', '')
-        print(f'[DialogWatchdog] Auto-dismissing {dialog_type}: "{message}"')
+        logger.info('Auto-dismissing %s dialog: %s', dialog_type, message)
         try:
             await self.session.send(
                 'Page.handleJavaScriptDialog',

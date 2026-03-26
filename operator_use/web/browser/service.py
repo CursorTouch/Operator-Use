@@ -712,10 +712,13 @@ class Browser:
 
         async def _fetch(tid, sid, info):
             try:
-                result = await self.send('Runtime.evaluate', {
-                    'expression': '({url: document.URL, title: document.title})',
-                    'returnByValue': True,
-                }, session_id=sid)
+                result = await asyncio.wait_for(
+                    self.send('Runtime.evaluate', {
+                        'expression': '({url: document.URL, title: document.title})',
+                        'returnByValue': True,
+                    }, session_id=sid),
+                    timeout=1.5,
+                )
                 live  = result.get('result', {}).get('value', {})
                 url   = live.get('url',   info.get('url', ''))
                 title = live.get('title', info.get('title', ''))
@@ -738,10 +741,13 @@ class Browser:
         sid  = self._sessions.get(tid, '')
         info = self._targets.get(tid, {})
         try:
-            result = await self.send('Runtime.evaluate', {
-                'expression': '({url: document.URL, title: document.title})',
-                'returnByValue': True,
-            }, session_id=sid)
+            result = await asyncio.wait_for(
+                self.send('Runtime.evaluate', {
+                    'expression': '({url: document.URL, title: document.title})',
+                    'returnByValue': True,
+                }, session_id=sid),
+                timeout=1.5,
+            )
             live  = result.get('result', {}).get('value', {})
             url   = live.get('url',   info.get('url', ''))
             title = live.get('title', info.get('title', ''))
