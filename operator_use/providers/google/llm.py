@@ -119,7 +119,11 @@ class ChatGoogle(BaseChatLLM):
                     model_parts.append(types.Part(thought=True, text=msg.thinking))
                 fc_part = types.Part.from_function_call(name=msg.name, args=msg.params)
                 if msg.thinking_signature:
-                    fc_part.thought_signature = msg.thinking_signature
+                    sig = msg.thinking_signature
+                    if isinstance(sig, str):
+                        import base64 as _b64
+                        sig = _b64.b64decode(sig)
+                    fc_part.thought_signature = sig
                 model_parts.append(fc_part)
                 raw_contents.append(types.Content(role="model", parts=model_parts))
 

@@ -1,6 +1,6 @@
 """Message models (BaseModel from views)."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from textwrap import shorten
 from typing import Any, Literal
 from io import BytesIO
@@ -156,6 +156,12 @@ class AIMessage(BaseMessage):
     usage: Usage | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @field_serializer("thinking_signature")
+    def _serialize_thinking_signature(self, v: str | bytes | None) -> str | None:
+        if isinstance(v, bytes):
+            return base64.b64encode(v).decode("ascii")
+        return v
+
     def to_dict(self) -> dict[str, Any]:
         d = super().to_dict()
         if self.metadata:
@@ -175,6 +181,12 @@ class ToolMessage(BaseMessage):
     params: dict = {}
     content: str | None = None
     usage: Usage | None = None
+
+    @field_serializer("thinking_signature")
+    def _serialize_thinking_signature(self, v: str | bytes | None) -> str | None:
+        if isinstance(v, bytes):
+            return base64.b64encode(v).decode("ascii")
+        return v
 
     def __repr__(self) -> str:
         return f"ToolMessage(name={self.name}, id={self.id}, params={self.params}, content={shorten(self.content or '', width=80, placeholder='...')}, thinking={shorten(str(self.thinking), width=50, placeholder='...')})"
