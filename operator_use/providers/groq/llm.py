@@ -18,9 +18,34 @@ class ChatGroq(BaseChatLLM):
 
     Groq provides ultra-fast inference for open-source models like:
     - Llama 3.3 70B
-    - Mixtral
-    - Gemma 2
+    - Llama 4 Scout
+    - GPT-OSS 120B/20B (reasoning)
+    - Qwen3 32B (reasoning)
+    - Kimi K2 (256K context)
     """
+
+    # Available models with context windows (tokens)
+    # Source: https://console.groq.com/docs/models
+    MODELS = {
+        # Production models
+        "llama-3.3-70b-versatile": 131072,                    # Llama 3.3 70B
+        "llama-3.1-8b-instant": 131072,                       # Llama 3.1 8B
+        "openai/gpt-oss-120b": 131072,                        # GPT-OSS 120B (reasoning)
+        "openai/gpt-oss-20b": 131072,                         # GPT-OSS 20B (reasoning)
+        "groq/compound": 131072,                              # Compound (agentic, web+code)
+        "groq/compound-mini": 131072,                         # Compound Mini (agentic)
+        # Preview models
+        "meta-llama/llama-4-scout-17b-16e-instruct": 131072,  # Llama 4 Scout
+        "qwen/qwen3-32b": 131072,                             # Qwen3 32B (reasoning)
+        "moonshotai/kimi-k2-instruct-0905": 262144,           # Kimi K2 (256K context)
+    }
+
+    # Models that support chain-of-thought reasoning
+    REASONING_PATTERNS = (
+        "gpt-oss",
+        "qwen3-32b",
+        "qwen/qwen3",
+    )
 
     def __init__(
         self,
@@ -72,10 +97,7 @@ class ChatGroq(BaseChatLLM):
 
     def _is_reasoning_model(self) -> bool:
         """Check if the model supports reasoning (gpt-oss, qwen3, etc.)."""
-        m = self._model.lower()
-        return any(
-            p in m for p in ("gpt-oss", "qwen3-32b", "qwen/qwen3")
-        )
+        return any(p in self._model for p in self.REASONING_PATTERNS)
 
 
     def _convert_messages(self, messages: List[BaseMessage]) -> List[dict]:
@@ -529,23 +551,7 @@ class ChatGroq(BaseChatLLM):
                 yield LLMStreamEvent(type=LLMStreamEventType.TEXT_END, usage=usage)
 
     def get_metadata(self) -> Metadata:
-        # Context windows vary by model
-        context_window = 131072  # Default
-
-        m = self._model.lower()
-        if "kimi-k2" in m:
-            context_window = 262144
-        elif "llama-4" in m or "llama4" in m:
-            context_window = 131072
-        elif "llama-3.3" in m or "llama-3.1" in m:
-            context_window = 131072
-        elif "gpt-oss" in m or "qwen3" in m:
-            context_window = 131072
-        elif "mixtral" in m:
-            context_window = 32768
-        elif "gemma" in m:
-            context_window = 8192
-
+        context_window = self.MODELS.get(self._model, 131072)
         return Metadata(
             name=self._model,
             context_window=context_window,

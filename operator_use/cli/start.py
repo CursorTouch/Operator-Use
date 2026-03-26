@@ -87,6 +87,7 @@ LLM_CLASS_MAP = {
     "azure_openai": "ChatAzureOpenAI",
     "vllm": "ChatVLLM",
     "deepseek": "ChatDeepSeek",
+    "grok": "ChatGrok",
     "codex": "ChatCodex",
     "claude_code": "ChatClaudeCode",
     "antigravity": "ChatAntigravity",

@@ -27,12 +27,38 @@ class ChatMistral(BaseChatLLM):
 
     Supports Mistral models including:
     - Mistral Large 3 (mistral-large-2512, 256k)
-    - Mistral Small 4 (mistral-small-2603, 256k)
+    - Mistral Small 4 (mistral-small-2603, 128k)
     - Mistral Medium 3.1 (mistral-medium-3.1, 131k)
-    - Magistral Medium/Small 1.2 (reasoning, 128k)
+    - Magistral Medium/Small 1.2 (reasoning, 40k)
     - Devstral 2 (code, devstral-2512, 256k)
+    - Codestral (codestral-2508, 256k)
     - Ministral 3/8/14B (edge, 128k)
     """
+
+    # Available models with context windows (tokens)
+    # Source: https://docs.mistral.ai/getting-started/models/
+    MODELS = {
+        # Flagship models
+        "mistral-large-2512": 256000,   # Mistral Large 3
+        "mistral-small-2603": 128000,   # Mistral Small 4 (hybrid instruct/reasoning/coding)
+        "mistral-medium-3.1": 131000,   # Mistral Medium 3.1
+        "mistral-small-2506": 128000,   # Mistral Small 3.2
+        # Reasoning models
+        "magistral-medium-2509": 40000, # Magistral Medium 1.2
+        "magistral-small-2509": 40000,  # Magistral Small 1.2
+        # Code models
+        "devstral-2512": 256000,        # Devstral 2 (code agents)
+        "codestral-2508": 256000,       # Codestral
+        # Edge models
+        "ministral-14b-2512": 128000,   # Ministral 14B
+        "ministral-8b-2512": 128000,    # Ministral 8B
+        "ministral-3b-2512": 128000,    # Ministral 3B
+    }
+
+    # Models that support chain-of-thought reasoning/thinking
+    REASONING_PATTERNS = (
+        "magistral",
+    )
 
     def __init__(
         self,
@@ -561,23 +587,7 @@ class ChatMistral(BaseChatLLM):
                 yield LLMStreamEvent(type=LLMStreamEventType.TEXT_END, usage=usage)
 
     def get_metadata(self) -> Metadata:
-        # Context windows vary by model
-        context_window = 128000  # Default
-
-        m = self._model.lower()
-        if "large-2512" in m or "small-2603" in m or "devstral-2512" in m:
-            context_window = 256000
-        elif "magistral" in m:
-            context_window = 128000
-        elif "ministral" in m or "small-2506" in m or "nemo" in m:
-            context_window = 128000
-        elif "large" in m:
-            context_window = 128000
-        elif "medium" in m:
-            context_window = 131000
-        elif "codestral" in m:
-            context_window = 256000
-
+        context_window = self.MODELS.get(self._model, 128000)
         return Metadata(
             name=self._model,
             context_window=context_window,

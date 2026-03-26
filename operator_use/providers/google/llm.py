@@ -14,7 +14,6 @@ from operator_use.providers.events import LLMEvent, LLMEventType, LLMStreamEvent
 
 logger = logging.getLogger(__name__)
 
-
 class ChatGoogle(BaseChatLLM):
     """
     Google Gemini LLM implementation following the BaseChatLLM protocol.
@@ -28,9 +27,24 @@ class ChatGoogle(BaseChatLLM):
     - Thinking models (Gemini 2.5 with extended thinking)
     """
 
+    # Available models with context windows (tokens)
+    # Source: https://ai.google.dev/gemini-api/docs/models
+    MODELS = {
+        # Gemini 3.x series (preview)
+        "gemini-3.1-pro-preview": 1048576,       # Gemini 3.1 Pro, thinking support
+        "gemini-3-flash-preview": 1048576,        # Gemini 3 Flash, thinking support
+        "gemini-3.1-flash-lite-preview": 1048576, # Gemini 3.1 Flash Lite, thinking support
+        # Gemini 2.5 series (GA)
+        "gemini-2.5-pro": 1048576,               # Gemini 2.5 Pro, thinking support
+        "gemini-2.5-flash": 1048576,             # Gemini 2.5 Flash, thinking support
+        "gemini-2.5-flash-lite": 1048576,        # Gemini 2.5 Flash Lite, thinking support
+        # Gemini 2.0 series (GA)
+        "gemini-2.0-flash": 1048576,             # Gemini 2.0 Flash, no thinking
+    }
+
     def __init__(
         self,
-        model: str = "gemini-3-flash",
+        model: str = "gemini-2.5-flash",
         api_key: Optional[str] = None,
         temperature: Optional[float] = None,
         thinking_budget: Optional[int] = None,
@@ -40,7 +54,7 @@ class ChatGoogle(BaseChatLLM):
         Initialize the Google Gemini LLM.
 
         Args:
-            model: The model name to use. Defaults to "gemini-2.5-flash".
+            model: The model name to use. Defaults to "gemini-2.5-flash" (GA). See ChatGoogle.MODELS for available options.
             api_key: Google API key. Falls back to GEMINI_API_KEY or GOOGLE_API_KEY env vars.
             temperature: Sampling temperature.
             thinking_budget: Token budget for extended thinking (Gemini 2.5 models).
@@ -566,17 +580,7 @@ class ChatGoogle(BaseChatLLM):
             yield LLMStreamEvent(type=LLMStreamEventType.TEXT_END, usage=usage)
 
     def get_metadata(self) -> Metadata:
-        context_window = 1048576  # Default for Gemini 2.x+ models (1M tokens)
-
-        if "1.0" in self._model:
-            context_window = 32768
-        elif "1.5" in self._model:
-            context_window = 1048576
-        elif "2.0" in self._model or "2.5" in self._model:
-            context_window = 1048576
-        elif "3." in self._model or self._model.startswith("gemini-3"):
-            context_window = 1048576
-
+        context_window = self.MODELS.get(self._model, 1048576)
         return Metadata(
             name=self._model,
             context_window=context_window,

@@ -229,6 +229,7 @@ class ProvidersConfig(Base):
     open_router: ProviderConfig = Field(default_factory=ProviderConfig)
     azure_openai: ProviderConfig = Field(default_factory=ProviderConfig)
     deepseek: ProviderConfig = Field(default_factory=ProviderConfig)
+    grok: ProviderConfig = Field(default_factory=ProviderConfig)
     sarvam: ProviderConfig = Field(default_factory=ProviderConfig)
     codex: ProviderConfig = Field(default_factory=ProviderConfig)
     claude_code: ProviderConfig = Field(default_factory=ProviderConfig)
