@@ -158,23 +158,31 @@ class BaseImage(Protocol):
         """The name of the image generation model being used."""
         ...
 
-    def generate(self, prompt: str, output_path: str, **kwargs) -> None:
-        """Generate an image from a text prompt and save it to a file.
+    def generate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+        """Generate or edit an image and save it to a file.
 
         Args:
-            prompt: The text description to generate an image from.
+            prompt: Text description of the image to generate or the edit to apply.
             output_path: Path where the generated image file will be saved.
-            **kwargs: Provider-specific parameters (size, quality, style, etc.).
+            images: Optional list of input image file paths. When provided, the
+                provider edits or uses these as references rather than generating
+                from scratch. Behaviour is provider-specific:
+                  - OpenAI gpt-image-1: up to 16 reference images
+                  - OpenAI dall-e-2: first image as source, second as mask (optional)
+                  - Google Imagen: first image as reference (Vertex AI required)
+                  - Together AI / fal.ai: first image used as img2img source
+            **kwargs: Provider-specific parameters (size, quality, style, strength, etc.).
         """
         ...
 
-    async def agenerate(self, prompt: str, output_path: str, **kwargs) -> None:
-        """Asynchronously generate an image from a text prompt and save it to a file.
+    async def agenerate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+        """Asynchronously generate or edit an image and save it to a file.
 
         Args:
-            prompt: The text description to generate an image from.
+            prompt: Text description of the image to generate or the edit to apply.
             output_path: Path where the generated image file will be saved.
-            **kwargs: Provider-specific parameters (size, quality, style, etc.).
+            images: Optional list of input image file paths. See generate() for details.
+            **kwargs: Provider-specific parameters (size, quality, style, strength, etc.).
         """
         ...
 
