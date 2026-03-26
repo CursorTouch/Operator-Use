@@ -453,6 +453,16 @@ async def main():
     cron = Cron(store_path=cron_store, on_job=on_job)
 
     agents = _build_agents(config, cron=cron, gateway=gateway, bus=bus)
+
+    async def _graceful_restart() -> None:
+        """Cancel all running asyncio tasks so main()'s finally block can run cleanly."""
+        for task in asyncio.all_tasks():
+            if task is not asyncio.current_task():
+                task.cancel()
+
+    for agent in agents.values():
+        agent.tool_register.set_extension("_graceful_restart_fn", _graceful_restart)
+
     router = _build_router(config)
 
     defaults = config.agents.defaults
@@ -597,8 +607,9 @@ def run(verbose: bool = False) -> None:
     import sys
 
     if os.getenv("IS_WORKER"):
+        from operator_use.agent.tools.builtin.control_center import requested_exit_code
         asyncio.run(main())
-        sys.exit(0)
+        sys.exit(requested_exit_code())
 
     worker_env = {**os.environ, "IS_WORKER": "1", "OPERATOR_VERBOSE": "1" if verbose else "0"}
     while True:

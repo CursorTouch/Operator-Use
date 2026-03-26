@@ -1,4 +1,12 @@
-"""Control Center tool: toggle plugins and restart."""
+"""Control Center tool: toggle plugins and restart.
+
+Security note
+-------------
+This tool gives the LLM direct control over process-level behaviour (plugin
+toggle, process restart).  In production deployments it should only be
+reachable from trusted channels.  All calls are audit-logged at WARNING level
+so they appear in the operator.log regardless of the configured log level.
+"""
 
 import asyncio
 import json
@@ -16,6 +24,15 @@ logger = logging.getLogger(__name__)
 
 CONFIG_PATH = get_userdata_dir() / "config.json"
 RESTART_FILE = get_userdata_dir() / "restart.json"
+
+# Set to 75 when a graceful restart is requested so the worker exits with the
+# right code after asyncio cleanup finishes (rather than calling os._exit).
+_requested_exit_code: int = 0
+
+
+def requested_exit_code() -> int:
+    """Return 75 if a restart was requested via control_center, else 0."""
+    return _requested_exit_code
 
 
 class ControlCenter(BaseModel):
@@ -96,7 +113,18 @@ def _get_plugin_enabled(entry: dict, plugin_id: str) -> bool:
     return False
 
 
-async def _do_restart():
+async def _do_restart(graceful_fn=None) -> None:
+    """Animate a restart countdown, then shut down gracefully or force-exit.
+
+    If *graceful_fn* is provided (injected by start.py via ``_graceful_restart_fn``
+    tool extension) it is awaited — this cancels the running asyncio tasks, lets
+    the ``finally`` block in ``main()`` run (gateway.stop, cron.stop, etc.), and
+    then the worker exits via ``sys.exit(requested_exit_code())``.
+
+    If *graceful_fn* is None (e.g. in tests or when not wired up), falls back to
+    ``os._exit(75)`` which skips cleanup but guarantees the process terminates.
+    """
+    global _requested_exit_code
     os.system("cls" if os.name == "nt" else "clear")
     frames = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]
     for i in range(20):
@@ -105,7 +133,11 @@ async def _do_restart():
         await asyncio.sleep(0.5)
     sys.stdout.write("\n")
     sys.stdout.flush()
-    os._exit(75)
+    _requested_exit_code = 75
+    if graceful_fn is not None:
+        await graceful_fn()
+    else:
+        os._exit(75)  # fallback: skips cleanup, but guarantees termination
 
 
 @Tool(
@@ -133,6 +165,10 @@ async def control_center(
     agent_id: Optional[str] = None,
     **kwargs,
 ) -> ToolResult:
+    caller_channel  = kwargs.get("_channel", "unknown")
+    caller_chat_id  = kwargs.get("_chat_id", "unknown")
+    caller_agent_id = kwargs.get("_agent_id", "unknown")
+
     data = _load_config_raw()
     agents_block = data.setdefault("agents", {})
     agents_list: list = agents_block.setdefault("list", [])
@@ -142,6 +178,7 @@ async def control_center(
         return ToolResult.error_result("No agents found in config.json. Run 'operator onboard' first.")
 
     agent = kwargs.get("_agent")
+    graceful_fn = kwargs.get("_graceful_restart_fn")
 
     changes = []
     if computer_use is not None:
@@ -184,6 +221,14 @@ async def control_center(
     else:
         msg = status
 
+    # Audit log — always emitted at WARNING so it appears in operator.log
+    logger.warning(
+        "control_center called | agent=%s channel=%s chat=%s | changes=[%s] restart=%s",
+        caller_agent_id, caller_channel, caller_chat_id,
+        ", ".join(changes) if changes else "none",
+        restart,
+    )
+
     if restart:
         if continue_with:
             channel = kwargs.get("_channel")
@@ -193,11 +238,11 @@ async def control_center(
             try:
                 RESTART_FILE.parent.mkdir(parents=True, exist_ok=True)
                 RESTART_FILE.write_text(json.dumps(restart_data), encoding="utf-8")
-                logger.info(f"Saved continuation → {RESTART_FILE}")
+                logger.info("Saved continuation → %s", RESTART_FILE)
             except Exception as e:
                 return ToolResult.error_result(f"Could not save restart continuation: {e}")
             msg += f"\nWill continue after restart: {continue_with[:100]}"
-        asyncio.ensure_future(_do_restart())
+        asyncio.ensure_future(_do_restart(graceful_fn=graceful_fn))
         return ToolResult.success_result(f"{msg}\nRestart initiated.", metadata={"stop_loop": True})
 
     return ToolResult.success_result(msg)

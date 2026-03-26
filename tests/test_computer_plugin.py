@@ -1,0 +1,211 @@
+"""Tests for ComputerPlugin — tool registration, prompt injection, hook wiring.
+
+Desktop and WatchDog initialisation (which requires platform accessibility
+frameworks) is avoided by creating plugins with enabled=False and manually
+setting _enabled=True where needed.
+"""
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+
+from operator_use.computer.plugin import ComputerPlugin, SYSTEM_PROMPT
+from operator_use.agent.tools.registry import ToolRegistry
+from operator_use.agent.hooks.service import Hooks
+from operator_use.agent.hooks.events import HookEvent
+
+
+# ---------------------------------------------------------------------------
+# get_system_prompt — gated on _enabled
+# ---------------------------------------------------------------------------
+
+def test_disabled_plugin_has_no_prompt():
+    assert ComputerPlugin(enabled=False).get_system_prompt() is None
+
+
+def test_enabled_plugin_returns_system_prompt():
+    plugin = ComputerPlugin(enabled=False)
+    plugin._enabled = True
+    prompt = plugin.get_system_prompt()
+    assert prompt is SYSTEM_PROMPT
+    assert "desktop" in prompt.lower()
+    assert "<perception>" in prompt
+    assert "<tool_use>" in prompt
+    assert "<execution_principles>" in prompt
+
+
+# ---------------------------------------------------------------------------
+# register_hooks — BEFORE_LLM_CALL + AFTER_TOOL_CALL, gated on _enabled
+# ---------------------------------------------------------------------------
+
+def test_disabled_plugin_registers_no_hooks():
+    plugin = ComputerPlugin(enabled=False)
+    hooks = Hooks()
+    plugin.register_hooks(hooks)
+    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
+
+
+def test_enabled_plugin_registers_both_hooks():
+    plugin = ComputerPlugin(enabled=False)
+    plugin._enabled = True
+    hooks = Hooks()
+    plugin.register_hooks(hooks)
+    assert plugin._state_hook in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    assert plugin._wait_for_ui_hook in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
+
+
+def test_unregister_hooks_removes_both():
+    plugin = ComputerPlugin(enabled=False)
+    plugin._enabled = True
+    hooks = Hooks()
+    plugin.register_hooks(hooks)
+    plugin.unregister_hooks(hooks)
+    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
+
+
+# ---------------------------------------------------------------------------
+# attach_prompt — gated on _enabled
+# ---------------------------------------------------------------------------
+
+def test_disabled_plugin_does_not_inject_prompt():
+    plugin = ComputerPlugin(enabled=False)
+    context = MagicMock()
+    plugin.attach_prompt(context)
+    context.register_plugin_prompt.assert_not_called()
+    assert plugin._context is context
+
+
+def test_enabled_plugin_injects_prompt():
+    plugin = ComputerPlugin(enabled=False)
+    plugin._enabled = True
+    context = MagicMock()
+    plugin.attach_prompt(context)
+    context.register_plugin_prompt.assert_called_once_with(SYSTEM_PROMPT)
+
+
+def test_detach_prompt_removes_injected_prompt():
+    plugin = ComputerPlugin(enabled=False)
+    plugin._enabled = True
+    context = MagicMock()
+    plugin.attach_prompt(context)
+    plugin.detach_prompt(context)
+    context.unregister_plugin_prompt.assert_called_once_with(SYSTEM_PROMPT)
+
+
+# ---------------------------------------------------------------------------
+# enable() / disable() — full lifecycle (no Desktop/WatchDog init)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_enable_registers_both_hooks_and_prompt():
+    plugin = ComputerPlugin(enabled=False)
+    hooks = Hooks()
+    plugin.register_hooks(hooks)
+    context = MagicMock()
+    plugin.attach_prompt(context)
+
+    await plugin.enable()
+
+    assert plugin._enabled is True
+    assert plugin._state_hook in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    assert plugin._wait_for_ui_hook in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
+    context.register_plugin_prompt.assert_called_once_with(SYSTEM_PROMPT)
+
+
+@pytest.mark.asyncio
+async def test_disable_unregisters_both_hooks_and_removes_prompt():
+    plugin = ComputerPlugin(enabled=False)
+    plugin._enabled = True
+    hooks = Hooks()
+    plugin.register_hooks(hooks)
+    context = MagicMock()
+    plugin.attach_prompt(context)
+
+    await plugin.disable()
+
+    assert plugin._enabled is False
+    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
+    context.unregister_plugin_prompt.assert_called_once_with(SYSTEM_PROMPT)
+
+
+@pytest.mark.asyncio
+async def test_enable_then_disable_leaves_no_hooks():
+    plugin = ComputerPlugin(enabled=False)
+    hooks = Hooks()
+    plugin.register_hooks(hooks)
+    context = MagicMock()
+    plugin.attach_prompt(context)
+
+    await plugin.enable()
+    await plugin.disable()
+
+    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
+
+
+# ---------------------------------------------------------------------------
+# _state_hook — gracefully handles desktop.get_state failures
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_state_hook_appends_desktop_state():
+    plugin = ComputerPlugin(enabled=False)
+    mock_state = MagicMock()
+    mock_state.to_string.return_value = "Active: Notepad | Elements: [button 'Save']"
+    plugin.desktop = MagicMock()
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    original_run = loop.run_in_executor
+    async def _fake_executor(exc, fn):
+        return fn()
+    plugin.desktop.get_state = MagicMock(return_value=mock_state)
+
+    ctx = MagicMock()
+    ctx.messages = []
+
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(loop, "run_in_executor", lambda exc, fn: asyncio.coroutine(lambda: fn())())
+        # Simpler: just patch run_in_executor at the asyncio level
+
+    # Direct call with mocked executor
+    from unittest.mock import patch
+    with patch("asyncio.get_event_loop") as mock_loop:
+        mock_loop.return_value.run_in_executor = AsyncMock(return_value=mock_state)
+        await plugin._state_hook(ctx)
+
+    assert len(ctx.messages) == 1
+    assert "Notepad" in ctx.messages[0].content
+
+
+@pytest.mark.asyncio
+async def test_state_hook_handles_exception_gracefully():
+    plugin = ComputerPlugin(enabled=False)
+    plugin.desktop = MagicMock()
+
+    ctx = MagicMock()
+    ctx.messages = []
+
+    from unittest.mock import patch
+    with patch("asyncio.get_event_loop") as mock_loop:
+        mock_loop.return_value.run_in_executor = AsyncMock(side_effect=RuntimeError("accessibility error"))
+        result = await plugin._state_hook(ctx)
+
+    assert result is ctx
+    assert ctx.messages == []  # no message appended on error
+
+
+# ---------------------------------------------------------------------------
+# _wait_for_ui_hook — watchdog not set → sleeps briefly
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_wait_for_ui_hook_no_watchdog_sleeps():
+    plugin = ComputerPlugin(enabled=False)
+    plugin.watchdog = None
+
+    ctx = MagicMock()
+    result = await plugin._wait_for_ui_hook(ctx)
+    assert result is ctx
