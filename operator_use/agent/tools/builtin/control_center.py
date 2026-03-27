@@ -234,11 +234,38 @@ async def control_center(
             channel = kwargs.get("_channel")
             chat_id = kwargs.get("_chat_id")
             account_id = kwargs.get("_account_id", "")
-            restart_data = {"task": continue_with, "channel": channel, "chat_id": chat_id, "account_id": account_id}
+            # Grab the active code-change session ID (if the agent edited any
+            # .py files this cycle) so the supervisor can revert those files
+            # if the new worker fails to start.
+            interceptor = kwargs.get("_interceptor")
+            improvement_session = interceptor.session_id if interceptor else None
+            # Generate diffs now while files are still in their new state so
+            # they're available for the LLM synthesis step on recovery.
+            if improvement_session and interceptor:
+                try:
+                    interceptor.generate_diffs()
+                except Exception:
+                    pass
+            # Carry the run_id forward so the supervisor knows this retry
+            # belongs to the same failure run and appends to the same log group.
+            run_id = kwargs.get("_run_id")
+            restart_data: dict = {
+                "task": continue_with,
+                "channel": channel,
+                "chat_id": chat_id,
+                "account_id": account_id,
+            }
+            if improvement_session:
+                restart_data["improvement_session"] = improvement_session
+            if run_id:
+                restart_data["run_id"] = run_id
             try:
                 RESTART_FILE.parent.mkdir(parents=True, exist_ok=True)
                 RESTART_FILE.write_text(json.dumps(restart_data), encoding="utf-8")
-                logger.info("Saved continuation → %s", RESTART_FILE)
+                logger.info(
+                    "Saved continuation → %s (improvement_session=%s)",
+                    RESTART_FILE, improvement_session,
+                )
             except Exception as e:
                 return ToolResult.error_result(f"Could not save restart continuation: {e}")
             msg += f"\nWill continue after restart: {continue_with[:100]}"

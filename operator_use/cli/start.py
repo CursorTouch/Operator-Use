@@ -360,6 +360,79 @@ def copy_templates_to_workspace(user_data_dir: Path, workspace: Path) -> None:
                     if not dest_file.exists():
                         shutil.copy2(f, dest_file)
 
+async def _build_recovery_message(
+    original_task: str,
+    improvement_session: str,
+    startup_error: str,
+    run_id: str,
+    agents: dict,
+    userdata: "Path",
+) -> str:
+    """Build the continuation message for a failed self-improvement attempt.
+
+    Loads diffs + recent log history, then asks the LLM to distill them into a
+    concise analysis.  Falls back to a plain structured message on any error so
+    the agent still gets useful context even if the synthesis call fails.
+    """
+    from operator_use.interceptor import load_session_diffs, InterceptorLog
+
+    diffs = load_session_diffs(improvement_session, userdata)
+    log_entries = InterceptorLog(userdata).get_for_run(run_id)
+
+    diff_text = "\n\n".join(
+        f"### {d['file']}\n```diff\n{d['diff'][:600]}\n```" for d in diffs
+    ) or "(no diffs recorded)"
+
+    log_text = "\n".join(
+        f"- Attempt {e['attempt']} ({e['timestamp'][:16]}) | "
+        f"files: {e['files_changed']} | error: {e['error_preview'][:120]}"
+        for e in log_entries
+    ) or "(no previous attempts)"
+
+    fallback = (
+        f"[SELF-IMPROVEMENT RECOVERY]\n\n"
+        f"Startup failed after your last code change. Files were automatically reverted.\n\n"
+        f"**Error:**\n```\n{startup_error[-1500:]}\n```\n\n"
+        f"**Changes you made (diffs):**\n{diff_text}\n\n"
+        f"**Previous attempt history:**\n{log_text}\n\n"
+        f"**Original task:**\n{original_task}\n\n"
+        f"Analyze the error, determine the root cause, and try a corrected approach."
+    )
+
+    # Attempt LLM synthesis to produce a cleaner, more actionable message.
+    if not agents:
+        return fallback
+    try:
+        agent = next(iter(agents.values()))
+        from operator_use.messages import HumanMessage
+        synthesis_prompt = (
+            f"An AI agent attempted to improve its own codebase but the change caused a startup failure.\n\n"
+            f"Error:\n{startup_error[-800:]}\n\n"
+            f"Diffs:\n{diff_text[:1200]}\n\n"
+            f"Previous attempts:\n{log_text}\n\n"
+            f"In 3-5 sentences, explain: what was attempted, what went wrong (root cause), "
+            f"and what a corrected approach should do differently."
+        )
+        event = await agent.llm.ainvoke(
+            messages=[HumanMessage(content=synthesis_prompt)],
+            tools=[],
+        )
+        synthesis = (event.content or "").strip()
+        if synthesis:
+            return (
+                f"[SELF-IMPROVEMENT RECOVERY]\n\n"
+                f"**Analysis:**\n{synthesis}\n\n"
+                f"**Full error:**\n```\n{startup_error[-1000:]}\n```\n\n"
+                f"**Diffs:**\n{diff_text}\n\n"
+                f"**Original task:**\n{original_task}\n\n"
+                f"Files have been reverted. Please try a corrected approach."
+            )
+    except Exception as exc:
+        logger.warning("_build_recovery_message: LLM synthesis failed (%s), using fallback", exc)
+
+    return fallback
+
+
 async def main():
     from operator_use.paths import get_userdata_dir
     USERDATA_DIR = get_userdata_dir()
@@ -380,7 +453,19 @@ async def main():
         copy_templates_to_workspace(USERDATA_DIR, workspace=_resolve_agent_workspace(defn))
 
     bus = Bus()
-    gateway = Gateway(bus=bus)
+    _startup_ok_file = USERDATA_DIR / "startup_ok.json"
+
+    def _on_gateway_ready() -> None:
+        """Called by the gateway the moment all channels are live.
+        Writing this file is the probe-passed signal — if the worker
+        exits before it appears, the supervisor knows startup failed."""
+        try:
+            _startup_ok_file.write_text("{}", encoding="utf-8")
+            logger.info("startup_ok.json written — probe passed")
+        except Exception as exc:
+            logger.warning("Could not write startup_ok.json: %s", exc)
+
+    gateway = Gateway(bus=bus, on_ready=_on_gateway_ready)
 
     # Wire per-agent channels — each agent owns its own bot token
     for defn in config.agents.list:
@@ -624,17 +709,39 @@ async def main():
             resume_channel = restart_data.get("channel")
             resume_chat_id = restart_data.get("chat_id")
             resume_account_id = restart_data.get("account_id", "")
+            improvement_session = restart_data.get("improvement_session")
+            startup_error = restart_data.get("startup_error")
+            original_task = restart_data.get("original_task", task)
+            run_id = restart_data.get("run_id")
+            # Inject run_id into all agents so control_center can carry it
+            # forward into the next restart.json if the agent retries.
+            if run_id:
+                for _agent in agents.values():
+                    _agent.tool_register.set_extension("_run_id", run_id)
             print(f"[restart] Continuation found (channel={resume_channel} chat_id={resume_chat_id}): {task[:80]}", flush=True)
             if task and resume_channel and resume_chat_id:
                 async def _dispatch_continuation():
                     await asyncio.sleep(10)
+                    final_task = task
+
+                    # Recovery path: build an informative message for the agent.
+                    if improvement_session and startup_error and run_id:
+                        final_task = await _build_recovery_message(
+                            original_task=original_task,
+                            improvement_session=improvement_session,
+                            startup_error=startup_error,
+                            run_id=run_id,
+                            agents=agents,
+                            userdata=USERDATA_DIR,
+                        )
+
                     print(f"[restart] Dispatching continuation to channel={resume_channel} chat_id={resume_chat_id}", flush=True)
                     await bus.publish_incoming(
                         IncomingMessage(
                             channel=resume_channel,
                             chat_id=resume_chat_id,
                             account_id=resume_account_id,
-                            parts=[TextPart(content=task)],
+                            parts=[TextPart(content=final_task)],
                             user_id="restart",
                         )
                     )
@@ -657,6 +764,115 @@ async def main():
 
 
 RESTART_EXIT_CODE = 75
+# Exit code written by the worker when asyncio.run(main()) raises an unhandled
+# exception — signals the supervisor that startup failed and recovery is needed.
+STARTUP_FAILURE_EXIT_CODE = 76
+
+
+def _attempt_startup_recovery(exit_code: int) -> bool:
+    """Called by the supervisor when the worker exits abnormally.
+
+    If ``restart.json`` contains an ``improvement_session`` (written by
+    control_center before a self-improvement restart), the agent made code
+    changes, restarted, and the new worker crashed before reading restart.json.
+
+    Steps:
+    1. Read ``startup_error.json`` written by the worker exception handler.
+    2. Call ``revert_session()`` to restore every snapshotted file from its
+       original content — no git required.
+    3. Append to ``self_improvement_log.jsonl`` so the agent can see the full
+       consecutive failure history on the next attempt.
+    4. Rewrite ``restart.json`` keeping the improvement_session and raw error
+       so the clean worker can run LLM synthesis before dispatching to agent.
+
+    Returns True if recovery was attempted (caller should restart),
+    False if this was an unrelated crash (caller should sys.exit).
+    """
+    import json as _json
+    from operator_use.paths import get_userdata_dir as _gud
+    from operator_use.interceptor import revert_session, InterceptorLog
+
+    userdata = _gud()
+    restart_file = userdata / "restart.json"
+    startup_ok_file = userdata / "startup_ok.json"
+    error_file = userdata / "startup_error.json"
+
+    if not restart_file.exists():
+        return False
+
+    # If startup_ok.json exists the worker proved it could start — the crash
+    # happened during normal runtime, not during startup.  Don't revert.
+    if startup_ok_file.exists():
+        return False
+
+    try:
+        restart_data = _json.loads(restart_file.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+
+    improvement_session = restart_data.get("improvement_session")
+    if not improvement_session:
+        # No startup proof AND no improvement session — unrelated crash.
+        return False
+
+    # Read captured traceback (may be absent for import-time crashes).
+    error_text = "(no traceback captured — likely an import or syntax error)"
+    if error_file.exists():
+        try:
+            err_data = _json.loads(error_file.read_text(encoding="utf-8"))
+            error_file.unlink()
+            error_text = err_data.get("error", error_text)
+        except Exception:
+            pass
+
+    print(
+        f"\n[supervisor] Self-improvement startup failure (exit={exit_code}, "
+        f"session={improvement_session}). Reverting files...",
+        flush=True,
+    )
+    print(f"[supervisor] Error:\n{error_text[-800:]}", flush=True)
+
+    # Restore files from snapshots.
+    reverted_files = revert_session(improvement_session, userdata)
+    if reverted_files:
+        print(f"[supervisor] Reverted {len(reverted_files)} file(s): "
+              f"{[__import__('pathlib').Path(p).name for p in reverted_files]}", flush=True)
+    else:
+        print("[supervisor] No snapshots found — files not reverted.", flush=True)
+
+    # Determine run_id: carry forward the existing one if this is a retry,
+    # otherwise generate a fresh one to mark the start of a new failure run.
+    original_task = restart_data.get("task", "")
+    run_id: str = restart_data.get("run_id") or f"R-{__import__('datetime').datetime.now().strftime('%Y%m%dT%H%M%S')}"
+    print(f"[supervisor] run_id={run_id}", flush=True)
+
+    # Append to consecutive failure log.
+    try:
+        InterceptorLog(userdata).append(
+            run_id=run_id,
+            task_preview=original_task,
+            session_id=improvement_session,
+            files_changed=reverted_files,
+            error_preview=error_text,
+            reverted_files=reverted_files,
+        )
+    except Exception as log_exc:
+        print(f"[supervisor] Could not write improvement log: {log_exc}", flush=True)
+
+    # Rewrite restart.json — keep improvement_session, run_id, and raw error for
+    # the LLM synthesis step that runs inside the clean worker's startup.
+    restart_data["original_task"] = original_task
+    restart_data["startup_error"] = error_text[-3000:]
+    restart_data["run_id"] = run_id
+    # task field left as-is so channel/chat_id dispatch still works
+
+    try:
+        restart_file.write_text(_json.dumps(restart_data), encoding="utf-8")
+        print("[supervisor] Recovery context saved to restart.json.", flush=True)
+    except Exception as e:
+        print(f"[supervisor] Could not save recovery context: {e}", flush=True)
+
+    return True
 
 
 def run(verbose: bool = False) -> None:
@@ -674,8 +890,28 @@ def run(verbose: bool = False) -> None:
     import sys
 
     if os.getenv("IS_WORKER"):
+        # Delete any startup proof left by the previous worker so this worker
+        # must earn its own — the on_ready callback writes it fresh once the
+        # gateway is live.
+        from operator_use.paths import get_userdata_dir as _gud
+        (_gud() / "startup_ok.json").unlink(missing_ok=True)
         from operator_use.agent.tools.builtin.control_center import requested_exit_code
-        asyncio.run(main())
+        try:
+            asyncio.run(main())
+        except Exception:
+            import json as _json
+            import traceback as _tb
+            from operator_use.paths import get_userdata_dir as _gud
+            _error_file = _gud() / "startup_error.json"
+            try:
+                _error_file.parent.mkdir(parents=True, exist_ok=True)
+                _error_file.write_text(
+                    _json.dumps({"error": _tb.format_exc()}),
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
+            sys.exit(STARTUP_FAILURE_EXIT_CODE)
         sys.exit(requested_exit_code())
 
     worker_env = {**os.environ, "IS_WORKER": "1", "OPERATOR_VERBOSE": "1" if verbose else "0"}
@@ -683,6 +919,9 @@ def run(verbose: bool = False) -> None:
         result = subprocess.run([sys.executable, "-m", "operator_use"] + sys.argv[1:], env=worker_env)
         if result.returncode == RESTART_EXIT_CODE:
             print("[supervisor] Restarting...", flush=True)
+            continue
+        if result.returncode != 0 and _attempt_startup_recovery(result.returncode):
+            print("[supervisor] Restarting after recovery...", flush=True)
             continue
         sys.exit(result.returncode)
 

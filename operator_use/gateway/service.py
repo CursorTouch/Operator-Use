@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import Callable, Optional
 
 from operator_use.bus import Bus
 from operator_use.gateway.channels.base import BaseChannel
@@ -18,11 +19,18 @@ class Gateway:
     - Gateway dispatches outgoing messages from the bus to the correct channel.
     """
 
-    def __init__(self, bus: Bus) -> None:
+    def __init__(
+        self,
+        bus: Bus,
+        on_ready: Optional[Callable] = None,
+        on_stop: Optional[Callable] = None,
+    ) -> None:
         self._bus = bus
         self._channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task[None] | None = None
         self._running = False
+        self.on_ready = on_ready  # fired once all channels are live
+        self.on_stop = on_stop    # fired after all channels have stopped
 
     def add_channel(self, channel: BaseChannel) -> None:
         """Register a channel. Uses account_id as suffix when present to support multiple bots of the same type."""
@@ -32,7 +40,11 @@ class Gateway:
         self._channels[key] = channel
 
     async def start(self) -> None:
-        """Start all channels and the outbound dispatcher."""
+        """Start all channels and the outbound dispatcher.
+
+        Fires ``self.on_ready`` (if set) once all channel tasks are scheduled
+        and the dispatcher is running — the exact moment the system is live.
+        """
         if self._running:
             return
         self._running = True
@@ -42,6 +54,11 @@ class Gateway:
         tasks = [asyncio.create_task(channel.start()) for channel in self._channels.values()]
         from rich.console import Console as _C
         _C().print(f"└ [#abb2bf]{'Gateway':<10}[/#abb2bf] [#61afef]started[/#61afef]")
+        if self.on_ready is not None:
+            try:
+                self.on_ready()
+            except Exception:
+                pass
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def stop(self) -> None:
@@ -63,6 +80,11 @@ class Gateway:
         self._channels.clear()
         from rich.console import Console as _C
         _C().print(f"└ [#abb2bf]{'Gateway':<10}[/#abb2bf] [#61afef]stopped[/#61afef]")
+        if self.on_stop is not None:
+            try:
+                self.on_stop()
+            except Exception:
+                pass
 
     async def _dispatch_loop(self) -> None:
         """Dispatch outgoing messages from bus to channels."""

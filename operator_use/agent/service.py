@@ -101,6 +101,7 @@ class Agent:
                 logger.warning(f"Workspace tool skipped (name conflict) | name={ws_tool.name}")
 
         self.context.skills.register_history_hook(self.hooks)
+        self.context.interceptor.register_history_hook(self.hooks)
 
         # Set stable tool extensions (don't change per message)
         self.tool_register.set_extension("_workspace", self.workspace)
@@ -115,6 +116,7 @@ class Agent:
         self.tool_register.set_extension("_search", search)
         self.tool_register.set_extension("_agent", self)
         self.tool_register.set_extension("_agent_id", self.agent_id)
+        self.tool_register.set_extension("_interceptor", self.context.interceptor)
 
         # Wire plugins
         self.plugins: "list[Plugin]" = plugins or []

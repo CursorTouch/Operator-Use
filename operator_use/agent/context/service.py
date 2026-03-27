@@ -11,6 +11,7 @@ from operator_use.messages import BaseMessage, SystemMessage, HumanMessage, AIMe
 from operator_use.agent.skills import Skills
 from operator_use.agent.memory import Memory
 from operator_use.agent.knowledge import Knowledge
+from operator_use.interceptor import RestartInterceptor
 
 BOOTSTRAP_FILENAMES = ["RULES.md", "SOUL.md", "USER.md", "CODE.md", "AGENTS.md"]
 
@@ -30,6 +31,11 @@ class Context:
         self.skills = Skills(self.workspace)
         self.memory = Memory(self.workspace)
         self.knowledge = Knowledge(self.workspace)
+        from operator_use.paths import get_userdata_dir
+        self.interceptor = RestartInterceptor(
+            userdata=get_userdata_dir(),
+            project_root=self.codebase,
+        )
         self._plugin_prompt_sections: list[str] = []
 
     def register_plugin_prompt(self, section: str) -> None:
