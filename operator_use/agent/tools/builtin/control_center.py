@@ -250,7 +250,7 @@ async def control_center(
             # belongs to the same failure run and appends to the same log group.
             run_id = kwargs.get("_run_id")
             restart_data: dict = {
-                "task": continue_with,
+                "resume_task": continue_with,
                 "channel": channel,
                 "chat_id": chat_id,
                 "account_id": account_id,
@@ -259,6 +259,16 @@ async def control_center(
                 restart_data["improvement_session"] = improvement_session
             if run_id:
                 restart_data["run_id"] = run_id
+                # Preserve deferred_task across self-correction retries so the
+                # clean worker can resume it once the fix succeeds.
+                try:
+                    if RESTART_FILE.exists():
+                        _prev = json.loads(RESTART_FILE.read_text(encoding="utf-8"))
+                        _orig = _prev.get("deferred_task")
+                        if _orig:
+                            restart_data["deferred_task"] = _orig
+                except Exception:
+                    pass
             try:
                 RESTART_FILE.parent.mkdir(parents=True, exist_ok=True)
                 RESTART_FILE.write_text(json.dumps(restart_data), encoding="utf-8")

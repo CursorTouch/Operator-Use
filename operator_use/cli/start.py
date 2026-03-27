@@ -361,7 +361,7 @@ def copy_templates_to_workspace(user_data_dir: Path, workspace: Path) -> None:
                         shutil.copy2(f, dest_file)
 
 async def _build_recovery_message(
-    original_task: str,
+    deferred_task: str,
     improvement_session: str,
     startup_error: str,
     run_id: str,
@@ -395,7 +395,7 @@ async def _build_recovery_message(
         f"**Error:**\n```\n{startup_error[-1500:]}\n```\n\n"
         f"**Changes you made (diffs):**\n{diff_text}\n\n"
         f"**Previous attempt history:**\n{log_text}\n\n"
-        f"**Original task:**\n{original_task}\n\n"
+        f"**Deferred task:**\n{deferred_task}\n\n"
         f"Analyze the error, determine the root cause, and try a corrected approach."
     )
 
@@ -424,7 +424,7 @@ async def _build_recovery_message(
                 f"**Analysis:**\n{synthesis}\n\n"
                 f"**Full error:**\n```\n{startup_error[-1000:]}\n```\n\n"
                 f"**Diffs:**\n{diff_text}\n\n"
-                f"**Original task:**\n{original_task}\n\n"
+                f"**Deferred task:**\n{deferred_task}\n\n"
                 f"Files have been reverted. Please try a corrected approach."
             )
     except Exception as exc:
@@ -453,17 +453,17 @@ async def main():
         copy_templates_to_workspace(USERDATA_DIR, workspace=_resolve_agent_workspace(defn))
 
     bus = Bus()
-    _startup_ok_file = USERDATA_DIR / "startup_ok.json"
+    _restart_file = USERDATA_DIR / "restart.json"
 
     def _on_gateway_ready() -> None:
         """Called by the gateway the moment all channels are live.
-        Writing this file is the probe-passed signal — if the worker
-        exits before it appears, the supervisor knows startup failed."""
+        Deleting restart.json is the startup-ok signal — its presence after
+        worker exit means the gateway never came up (startup failure)."""
         try:
-            _startup_ok_file.write_text("{}", encoding="utf-8")
-            logger.info("startup_ok.json written — probe passed")
+            _restart_file.unlink(missing_ok=True)
+            logger.info("restart.json deleted — startup probe passed")
         except Exception as exc:
-            logger.warning("Could not write startup_ok.json: %s", exc)
+            logger.warning("Could not delete restart.json in on_ready: %s", exc)
 
     gateway = Gateway(bus=bus, on_ready=_on_gateway_ready)
 
@@ -704,36 +704,39 @@ async def main():
         if restart_file.exists():
             import json as _json
             restart_data = _json.loads(restart_file.read_text(encoding="utf-8"))
-            restart_file.unlink()
-            task = restart_data.get("task", "")
+            resume_task = restart_data.get("resume_task", "")
             resume_channel = restart_data.get("channel")
             resume_chat_id = restart_data.get("chat_id")
             resume_account_id = restart_data.get("account_id", "")
             improvement_session = restart_data.get("improvement_session")
             startup_error = restart_data.get("startup_error")
-            original_task = restart_data.get("original_task", task)
+            deferred_task = restart_data.get("deferred_task", resume_task)
             run_id = restart_data.get("run_id")
             # Inject run_id into all agents so control_center can carry it
             # forward into the next restart.json if the agent retries.
             if run_id:
                 for _agent in agents.values():
                     _agent.tool_register.set_extension("_run_id", run_id)
-            print(f"[restart] Continuation found (channel={resume_channel} chat_id={resume_chat_id}): {task[:80]}", flush=True)
-            if task and resume_channel and resume_chat_id:
+            print(f"[restart] Continuation found (channel={resume_channel} chat_id={resume_chat_id}): {resume_task[:80]}", flush=True)
+            if resume_task and resume_channel and resume_chat_id:
                 async def _dispatch_continuation():
                     await asyncio.sleep(10)
-                    final_task = task
+                    final_task = resume_task
 
                     # Recovery path: build an informative message for the agent.
                     if improvement_session and startup_error and run_id:
                         final_task = await _build_recovery_message(
-                            original_task=original_task,
+                            deferred_task=deferred_task,
                             improvement_session=improvement_session,
                             startup_error=startup_error,
                             run_id=run_id,
                             agents=agents,
                             userdata=USERDATA_DIR,
                         )
+                    elif run_id and not startup_error and deferred_task and deferred_task != resume_task:
+                        # Successful restart after one or more recovery cycles —
+                        # resume the deferred task now that the fix succeeded.
+                        final_task = deferred_task
 
                     print(f"[restart] Dispatching continuation to channel={resume_channel} chat_id={resume_chat_id}", flush=True)
                     await bus.publish_incoming(
@@ -794,15 +797,10 @@ def _attempt_startup_recovery(exit_code: int) -> bool:
 
     userdata = _gud()
     restart_file = userdata / "restart.json"
-    startup_ok_file = userdata / "startup_ok.json"
     error_file = userdata / "startup_error.json"
 
+    # If restart.json is absent, on_ready already deleted it — worker started fine.
     if not restart_file.exists():
-        return False
-
-    # If startup_ok.json exists the worker proved it could start — the crash
-    # happened during normal runtime, not during startup.  Don't revert.
-    if startup_ok_file.exists():
         return False
 
     try:
@@ -842,7 +840,8 @@ def _attempt_startup_recovery(exit_code: int) -> bool:
 
     # Determine run_id: carry forward the existing one if this is a retry,
     # otherwise generate a fresh one to mark the start of a new failure run.
-    original_task = restart_data.get("task", "")
+    # Preserve deferred_task across retries — first cycle seeds it from resume_task.
+    deferred_task = restart_data.get("deferred_task") or restart_data.get("resume_task", "")
     run_id: str = restart_data.get("run_id") or f"R-{__import__('datetime').datetime.now().strftime('%Y%m%dT%H%M%S')}"
     print(f"[supervisor] run_id={run_id}", flush=True)
 
@@ -850,7 +849,7 @@ def _attempt_startup_recovery(exit_code: int) -> bool:
     try:
         InterceptorLog(userdata).append(
             run_id=run_id,
-            task_preview=original_task,
+            task_preview=deferred_task,
             session_id=improvement_session,
             files_changed=reverted_files,
             error_preview=error_text,
@@ -861,7 +860,7 @@ def _attempt_startup_recovery(exit_code: int) -> bool:
 
     # Rewrite restart.json — keep improvement_session, run_id, and raw error for
     # the LLM synthesis step that runs inside the clean worker's startup.
-    restart_data["original_task"] = original_task
+    restart_data["deferred_task"] = deferred_task
     restart_data["startup_error"] = error_text[-3000:]
     restart_data["run_id"] = run_id
     # task field left as-is so channel/chat_id dispatch still works
@@ -890,11 +889,6 @@ def run(verbose: bool = False) -> None:
     import sys
 
     if os.getenv("IS_WORKER"):
-        # Delete any startup proof left by the previous worker so this worker
-        # must earn its own — the on_ready callback writes it fresh once the
-        # gateway is live.
-        from operator_use.paths import get_userdata_dir as _gud
-        (_gud() / "startup_ok.json").unlink(missing_ok=True)
         from operator_use.agent.tools.builtin.control_center import requested_exit_code
         try:
             asyncio.run(main())
