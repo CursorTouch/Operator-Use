@@ -158,9 +158,9 @@ class TelegramChannel(BaseChannel):
     """Telegram channel using long-polling or webhook."""
 
     BOT_COMMANDS = [
-        BotCommand("start", "Start the bot"),
-        BotCommand("new", "Start a new conversation"),
-        BotCommand("stop", "Stop the current task"),
+        BotCommand("start", "Start a new session"),
+        BotCommand("stop", "Stop and save the current session"),
+        BotCommand("restart", "Reboot the entire system"),
         BotCommand("help", "Show available commands"),
     ]
 
@@ -280,7 +280,9 @@ class TelegramChannel(BaseChannel):
         self._app = builder.build()
 
         self._app.add_handler(CommandHandler("start", self._on_start))
-        self._app.add_handler(CommandHandler("new", self._on_new))
+        self._app.add_handler(CommandHandler("stop", self._on_stop))
+        self._app.add_handler(CommandHandler("restart", self._on_restart))
+        self._app.add_handler(CommandHandler("new", self._on_stop))  # /new kept as stop alias
         self._app.add_handler(MessageHandler(
             (
                 filters.TEXT|
@@ -848,7 +850,7 @@ class TelegramChannel(BaseChannel):
             logger.debug("Typing indicator stopped for %s: %s", chat_id, e)
 
     async def _on_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /start — welcome in DM, register group for setup-channels."""
+        """Handle /start — register group for setup-channels in groups, start session in DMs."""
         if not update.message or not update.effective_chat:
             return
         chat = update.effective_chat
@@ -870,14 +872,19 @@ class TelegramChannel(BaseChannel):
             except Exception as e:
                 logger.error("Failed to register group: %s", e)
         else:
-            user = update.effective_user
-            name = user.first_name if user else "there"
-            await update.message.reply_text(
-                f"Hi {name}! I'm your AI agent. Send me a message to get started."
+            thread_id = update.message.message_thread_id
+            chat_id = self._build_chat_id(str(chat.id), thread_id)
+            incoming = IncomingMessage(
+                channel=self.name,
+                chat_id=chat_id,
+                parts=[TextPart(content="/start")],
+                user_id=str(update.effective_user.id) if update.effective_user else "",
+                metadata={"_command": "start", "thread_id": thread_id},
             )
+            await self.receive(incoming)
 
-    async def _on_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /new — clear session and start fresh."""
+    async def _on_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /stop — archive the current session."""
         if not update.message or not update.effective_chat:
             return
         chat = update.effective_chat
@@ -886,9 +893,25 @@ class TelegramChannel(BaseChannel):
         incoming = IncomingMessage(
             channel=self.name,
             chat_id=chat_id,
-            parts=[TextPart(content="/new")],
+            parts=[TextPart(content="/stop")],
             user_id=str(update.effective_user.id) if update.effective_user else "",
-            metadata={"_command": "new", "thread_id": thread_id},
+            metadata={"_command": "stop", "thread_id": thread_id},
+        )
+        await self.receive(incoming)
+
+    async def _on_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /restart (and /new alias) — clear session history and start fresh."""
+        if not update.message or not update.effective_chat:
+            return
+        chat = update.effective_chat
+        thread_id = update.message.message_thread_id
+        chat_id = self._build_chat_id(str(chat.id), thread_id)
+        incoming = IncomingMessage(
+            channel=self.name,
+            chat_id=chat_id,
+            parts=[TextPart(content="/restart")],
+            user_id=str(update.effective_user.id) if update.effective_user else "",
+            metadata={"_command": "restart", "thread_id": thread_id},
         )
         await self.receive(incoming)
 

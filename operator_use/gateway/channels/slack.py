@@ -368,6 +368,20 @@ class SlackChannel(BaseChannel):
             "user_id": sender_id,
         }
 
+        # Session control commands
+        if text and text.strip().lower() in ("/start", "/stop", "/restart"):
+            command = text.strip()[1:].lower()
+            incoming = IncomingMessage(
+                channel=self.name,
+                chat_id=channel_id,
+                parts=[TextPart(content=text.strip())],
+                user_id=sender_id,
+                account_id=self._cfg("account_id") or "",
+                metadata={**metadata, "_command": command},
+            )
+            await self.receive(incoming)
+            return
+
         # Create incoming message
         incoming = IncomingMessage(
             channel=self.name,
@@ -446,6 +460,20 @@ class SlackChannel(BaseChannel):
                 "channel_id": channel_id,
                 "user_id": sender_id,
             }
+
+            # Session control commands
+            if text and text.strip().lower() in ("/start", "/stop", "/restart"):
+                command = text.strip()[1:].lower()
+                incoming = IncomingMessage(
+                    channel=self.name,
+                    chat_id=channel_id,
+                    parts=[TextPart(content=text.strip())],
+                    user_id=sender_id,
+                    account_id=self._cfg("account_id") or "",
+                    metadata={**metadata, "_command": command},
+                )
+                await self.receive(incoming)
+                return
 
             incoming = IncomingMessage(
                 channel=self.name,

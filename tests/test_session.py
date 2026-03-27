@@ -144,3 +144,62 @@ def test_get_or_create_loads_from_disk(tmp_path):
     loaded = store2.get_or_create("persist")
     assert len(loaded.messages) == 1
     assert loaded.messages[0].content == "persisted"
+
+
+# --- SessionStore.archive ---
+
+def test_archive_renames_file(tmp_path):
+    store = SessionStore(tmp_path)
+    session = store.get_or_create("telegram:99")
+    session.add_message(HumanMessage(content="hi"))
+    store.save(session)
+
+    result = store.archive("telegram:99")
+
+    assert result is True
+    # Active slot is gone
+    assert store._sessions_path("telegram:99").exists() is False
+    # Archived file exists somewhere in sessions dir
+    archived = list((tmp_path / "sessions").glob("telegram_99_archived_*.jsonl"))
+    assert len(archived) == 1
+
+
+def test_archive_removes_from_memory_cache(tmp_path):
+    store = SessionStore(tmp_path)
+    session = store.get_or_create("telegram:99")
+    store.save(session)
+    assert "telegram:99" in store._sessions
+
+    store.archive("telegram:99")
+
+    assert "telegram:99" not in store._sessions
+
+
+def test_archive_nonexistent_returns_false(tmp_path):
+    store = SessionStore(tmp_path)
+    assert store.archive("ghost:000") is False
+
+
+def test_archive_allows_fresh_session_after(tmp_path):
+    store = SessionStore(tmp_path)
+    session = store.get_or_create("telegram:99")
+    session.add_message(HumanMessage(content="old message"))
+    store.save(session)
+
+    store.archive("telegram:99")
+
+    fresh = store.get_or_create("telegram:99")
+    assert fresh.messages == []
+
+
+def test_archive_preserves_history_in_file(tmp_path):
+    store = SessionStore(tmp_path)
+    session = store.get_or_create("slack:42")
+    session.add_message(HumanMessage(content="saved message"))
+    store.save(session)
+
+    store.archive("slack:42")
+
+    archived = list((tmp_path / "sessions").glob("slack_42_archived_*.jsonl"))
+    content = archived[0].read_text(encoding="utf-8")
+    assert "saved message" in content

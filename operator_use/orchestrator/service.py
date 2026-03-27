@@ -230,6 +230,12 @@ class Orchestrator:
     # Message handling
     # ------------------------------------------------------------------
 
+    async def _handle_command(self, message: IncomingMessage) -> None:
+        """Handle session/system control commands without running the agent."""
+        from operator_use.orchestrator.commands import handle_command
+        agent = self._resolve_agent(message)
+        await handle_command(message, agent, self.bus)
+
     async def _handle_message(self, request_message: IncomingMessage) -> None:
         """Process one incoming message end-to-end."""
         session_id = f"{request_message.channel}:{request_message.chat_id}"
@@ -374,6 +380,11 @@ class Orchestrator:
                 if request_message.metadata and request_message.metadata.get("_reaction_event"):
                     agent = self._resolve_agent(request_message)
                     await agent._handle_reaction(request_message)
+                    continue
+
+                # Session control commands: handle without running the agent
+                if request_message.metadata and request_message.metadata.get("_command") in ("start", "stop", "restart"):
+                    await self._handle_command(request_message)
                     continue
 
                 # Pending reply: a tool is waiting for the user's next message

@@ -91,6 +91,21 @@ class SessionStore:
             return True
         return False
 
+    def archive(self, session_id: str) -> bool:
+        """Archive a session by renaming its file with a timestamp suffix. Returns True if existed.
+
+        The active session slot is freed so the next get_or_create starts fresh.
+        """
+        path = self._sessions_path(session_id)
+        if session_id in self._sessions:
+            del self._sessions[session_id]
+        if path.exists():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            archive_name = f"{self._session_id_to_filename(session_id)}_archived_{timestamp}.jsonl"
+            path.rename(self.sessions_dir / archive_name)
+            return True
+        return False
+
     def list_sessions(self) -> list[dict[str, Any]]:
         """Load sessions from the sessions directory. Returns list of dicts with id, created_at, updated_at, path."""
         result: list[dict[str, Any]] = []

@@ -290,8 +290,6 @@ class DiscordChannel(BaseChannel):
         content = "\n".join(content_parts) if content_parts else "[empty message]"
         str_channel_id = str(channel_id)
 
-        self._start_typing(channel_id)
-
         metadata = {
             "message_id": message.id,
             "user_id": author_id,
@@ -299,6 +297,22 @@ class DiscordChannel(BaseChannel):
             "is_group": isinstance(message.channel, discord.TextChannel),
             "channel_type": type(message.channel).__name__,
         }
+
+        # Session control commands — no typing indicator, no agent call
+        if not media_paths and content.strip().lower() in ("/start", "/stop", "/restart"):
+            command = content.strip()[1:].lower()
+            incoming = IncomingMessage(
+                channel=self.name,
+                chat_id=str_channel_id,
+                parts=[TextPart(content=content.strip())],
+                user_id=str(author_id),
+                account_id=self._cfg("account_id") or "",
+                metadata={**metadata, "_command": command},
+            )
+            await self.receive(incoming)
+            return
+
+        self._start_typing(channel_id)
 
         if media_paths:
             content, parts = await self._process_media_to_parts(
