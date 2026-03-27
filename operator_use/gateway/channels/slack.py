@@ -369,18 +369,22 @@ class SlackChannel(BaseChannel):
         }
 
         # Session control commands
-        if text and text.strip().lower() in ("/start", "/stop", "/restart"):
-            command = text.strip()[1:].lower()
-            incoming = IncomingMessage(
-                channel=self.name,
-                chat_id=channel_id,
-                parts=[TextPart(content=text.strip())],
-                user_id=sender_id,
-                account_id=self._cfg("account_id") or "",
-                metadata={**metadata, "_command": command},
-            )
-            await self.receive(incoming)
-            return
+        if text:
+            _parts = text.strip().split(maxsplit=1)
+            _cmd_word = _parts[0].lower() if _parts else ""
+            if _cmd_word in ("/start", "/stop", "/restart"):
+                command = _cmd_word[1:]
+                command_args = _parts[1] if len(_parts) > 1 else ""
+                incoming = IncomingMessage(
+                    channel=self.name,
+                    chat_id=channel_id,
+                    parts=[TextPart(content=text.strip())],
+                    user_id=sender_id,
+                    account_id=self._cfg("account_id") or "",
+                    metadata={**metadata, "_command": command, "_command_args": command_args},
+                )
+                await self.receive(incoming)
+                return
 
         # Create incoming message
         incoming = IncomingMessage(

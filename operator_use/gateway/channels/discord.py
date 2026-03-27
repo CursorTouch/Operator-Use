@@ -299,18 +299,22 @@ class DiscordChannel(BaseChannel):
         }
 
         # Session control commands — no typing indicator, no agent call
-        if not media_paths and content.strip().lower() in ("/start", "/stop", "/restart"):
-            command = content.strip()[1:].lower()
-            incoming = IncomingMessage(
-                channel=self.name,
-                chat_id=str_channel_id,
-                parts=[TextPart(content=content.strip())],
-                user_id=str(author_id),
-                account_id=self._cfg("account_id") or "",
-                metadata={**metadata, "_command": command},
-            )
-            await self.receive(incoming)
-            return
+        if not media_paths:
+            _parts = content.strip().split(maxsplit=1)
+            _cmd_word = _parts[0].lower() if _parts else ""
+            if _cmd_word in ("/start", "/stop", "/restart"):
+                command = _cmd_word[1:]
+                command_args = _parts[1] if len(_parts) > 1 else ""
+                incoming = IncomingMessage(
+                    channel=self.name,
+                    chat_id=str_channel_id,
+                    parts=[TextPart(content=content.strip())],
+                    user_id=str(author_id),
+                    account_id=self._cfg("account_id") or "",
+                    metadata={**metadata, "_command": command, "_command_args": command_args},
+                )
+                await self.receive(incoming)
+                return
 
         self._start_typing(channel_id)
 

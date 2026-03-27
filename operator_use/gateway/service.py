@@ -24,13 +24,15 @@ class Gateway:
         bus: Bus,
         on_ready: Optional[Callable] = None,
         on_stop: Optional[Callable] = None,
+        on_restart: Optional[Callable] = None,
     ) -> None:
         self._bus = bus
         self._channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task[None] | None = None
         self._running = False
-        self.on_ready = on_ready  # fired once all channels are live
-        self.on_stop = on_stop    # fired after all channels have stopped
+        self.on_ready = on_ready      # fired once all channels are live
+        self.on_stop = on_stop        # fired after all channels have stopped
+        self.on_restart = on_restart  # fired when a restart is requested
 
     def add_channel(self, channel: BaseChannel) -> None:
         """Register a channel. Uses account_id as suffix when present to support multiple bots of the same type."""

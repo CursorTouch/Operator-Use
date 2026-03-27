@@ -459,11 +459,28 @@ async def main():
         """Called by the gateway the moment all channels are live.
         Deleting restart.json is the startup-ok signal — its presence after
         worker exit means the gateway never came up (startup failure)."""
+        import json as _json
+        notify = None
         try:
+            if _restart_file.exists():
+                data = _json.loads(_restart_file.read_text())
+                notify = data.get("notify_restart")
             _restart_file.unlink(missing_ok=True)
             logger.info("restart.json deleted — startup probe passed")
         except Exception as exc:
             logger.warning("Could not delete restart.json in on_ready: %s", exc)
+
+        if notify:
+            async def _send_restart_notification() -> None:
+                await asyncio.sleep(3)  # give channels time to connect
+                await bus.publish_outgoing(OutgoingMessage(
+                    channel=notify["channel"],
+                    chat_id=notify["chat_id"],
+                    account_id=notify.get("account_id", ""),
+                    parts=[TextPart(content="System restarted. Send me a message to continue.")],
+                    reply=False,
+                ))
+            asyncio.create_task(_send_restart_notification())
 
     gateway = Gateway(bus=bus, on_ready=_on_gateway_ready)
 
@@ -608,6 +625,13 @@ async def main():
         for task in asyncio.all_tasks():
             if task is not asyncio.current_task():
                 task.cancel()
+
+    async def _on_gateway_restart() -> None:
+        from operator_use.agent.tools.builtin.control_center import request_restart
+        request_restart()
+        await _graceful_restart()
+
+    gateway.on_restart = _on_gateway_restart
 
     for agent in agents.values():
         agent.tool_register.set_extension("_graceful_restart_fn", _graceful_restart)

@@ -108,10 +108,16 @@ class Orchestrator:
         self._running = False
 
         self._pending_replies: dict[str, asyncio.Future[str]] = {}
+        self._session_overrides: dict[str, str] = {}
 
     # ------------------------------------------------------------------
     # Agent routing
     # ------------------------------------------------------------------
+
+    def _get_session_id(self, message: IncomingMessage) -> str:
+        """Return the active session ID for a message, respecting named-session overrides."""
+        default = f"{message.channel}:{message.chat_id}"
+        return self._session_overrides.get(default, default)
 
     def _resolve_agent(self, message: IncomingMessage) -> "Agent":
         name = self.router(message)
@@ -234,11 +240,11 @@ class Orchestrator:
         """Handle session/system control commands without running the agent."""
         from operator_use.orchestrator.commands import handle_command
         agent = self._resolve_agent(message)
-        await handle_command(message, agent, self.bus)
+        await handle_command(message, agent, self.bus, self._session_overrides)
 
     async def _handle_message(self, request_message: IncomingMessage) -> None:
         """Process one incoming message end-to-end."""
-        session_id = f"{request_message.channel}:{request_message.chat_id}"
+        session_id = self._get_session_id(request_message)
         try:
             # Build HumanMessage/ImageMessage (runs STT if needed)
             built_message = await self._build_request_message(request_message)
@@ -371,7 +377,7 @@ class Orchestrator:
                 request_message = await asyncio.wait_for(
                     self.bus.consume_incoming(), timeout=1.0
                 )
-                session_id = f"{request_message.channel}:{request_message.chat_id}"
+                session_id = self._get_session_id(request_message)
                 logger.info(
                     f"Message received | channel={request_message.channel} chat={request_message.chat_id}"
                 )

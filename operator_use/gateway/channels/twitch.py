@@ -145,16 +145,18 @@ class TwitchChannel(BaseChannel):
         chat_id = channel_name  # use channel name as chat_id (Twitch has one chat per channel)
 
         # Session control commands always use / prefix (e.g. /start, /stop, /restart)
-        lower_content = content.strip().lower()
+        _parts = content.strip().split(maxsplit=1)
+        _cmd_word = _parts[0].lower() if _parts else ""
         for cmd in ("start", "stop", "restart"):
-            if lower_content == f"/{cmd}":
+            if _cmd_word == f"/{cmd}":
+                command_args = _parts[1] if len(_parts) > 1 else ""
                 incoming = IncomingMessage(
                     channel=self.name,
                     chat_id=chat_id,
                     parts=[TextPart(content=content.strip())],
                     user_id=author_name,
                     account_id=self._cfg("account_id") or "",
-                    metadata={"username": author_name, "channel": channel_name, "_command": cmd},
+                    metadata={"username": author_name, "channel": channel_name, "_command": cmd, "_command_args": command_args},
                 )
                 await self.receive(incoming)
                 return

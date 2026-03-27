@@ -5,31 +5,36 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from operator_use.bus.service import Bus
 from operator_use.bus.views import IncomingMessage, OutgoingMessage, TextPart
-from operator_use.messages.service import HumanMessage, AIMessage
-from operator_use.orchestrator.commands import handle_command, COMMANDS
+from operator_use.messages.service import HumanMessage
+from operator_use.orchestrator.commands import handle_command, COMMANDS, _HELP_TEXT
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_agent(tmp_path, messages=None):
-    """Return a mock agent backed by a real SessionStore."""
+def make_agent(tmp_path):
     from operator_use.session.service import SessionStore
     store = SessionStore(tmp_path)
     agent = MagicMock()
     agent.sessions = store
+    agent.gateway = None
+    agent.tool_register._extensions = {}
     return agent
 
 
-def make_message(command: str, channel="telegram", chat_id="123"):
+def make_message(command: str, args: str = "", channel="telegram", chat_id="123"):
     return IncomingMessage(
         channel=channel,
         chat_id=chat_id,
-        parts=[TextPart(content=f"/{command}")],
+        parts=[TextPart(content=f"/{command}" + (f" {args}" if args else ""))],
         user_id="user1",
-        metadata={"_command": command},
+        metadata={"_command": command, "_command_args": args},
     )
+
+
+def make_overrides() -> dict:
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -41,37 +46,32 @@ def test_commands_contains_required():
 
 
 # ---------------------------------------------------------------------------
-# /start
+# /start — default session
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_start_no_existing_session(tmp_path):
+async def test_start_new_session_greeting(tmp_path):
     bus = Bus()
     agent = make_agent(tmp_path)
-    msg = make_message("start")
 
-    await handle_command(msg, agent, bus)
+    await handle_command(make_message("start"), agent, bus, make_overrides())
 
-    outgoing: OutgoingMessage = await bus.consume_outgoing()
-    text = outgoing.parts[0].content
+    text = (await bus.consume_outgoing()).parts[0].content
     assert "started" in text.lower()
+    assert _HELP_TEXT in text
 
 
 @pytest.mark.asyncio
-async def test_start_with_active_session(tmp_path):
+async def test_start_already_active(tmp_path):
     bus = Bus()
     agent = make_agent(tmp_path)
-
-    # Pre-populate an active session
     session = agent.sessions.get_or_create("telegram:123")
-    session.add_message(HumanMessage(content="existing message"))
+    session.add_message(HumanMessage(content="hi"))
     agent.sessions.save(session)
 
-    msg = make_message("start")
-    await handle_command(msg, agent, bus)
+    await handle_command(make_message("start"), agent, bus, make_overrides())
 
-    outgoing: OutgoingMessage = await bus.consume_outgoing()
-    text = outgoing.parts[0].content
+    text = (await bus.consume_outgoing()).parts[0].content
     assert "already active" in text.lower()
 
 
@@ -79,19 +79,76 @@ async def test_start_with_active_session(tmp_path):
 async def test_start_after_stop_starts_fresh(tmp_path):
     bus = Bus()
     agent = make_agent(tmp_path)
+    overrides = make_overrides()
 
     session = agent.sessions.get_or_create("telegram:123")
-    session.add_message(HumanMessage(content="old message"))
+    session.add_message(HumanMessage(content="old"))
     agent.sessions.save(session)
 
-    # Stop archives the session
-    await handle_command(make_message("stop"), agent, bus)
-    await bus.consume_outgoing()  # discard stop response
+    await handle_command(make_message("stop"), agent, bus, overrides)
+    await bus.consume_outgoing()
 
-    # Now start should see no active session
-    await handle_command(make_message("start"), agent, bus)
-    outgoing: OutgoingMessage = await bus.consume_outgoing()
-    assert "started" in outgoing.parts[0].content.lower()
+    await handle_command(make_message("start"), agent, bus, overrides)
+    text = (await bus.consume_outgoing()).parts[0].content
+    assert "started" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# /start <name> — named sessions
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_start_named_session_greeting(tmp_path):
+    bus = Bus()
+    agent = make_agent(tmp_path)
+    overrides = make_overrides()
+
+    await handle_command(make_message("start", args="work"), agent, bus, overrides)
+
+    text = (await bus.consume_outgoing()).parts[0].content
+    assert "'work'" in text
+    assert "started" in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_start_named_session_sets_override(tmp_path):
+    bus = Bus()
+    agent = make_agent(tmp_path)
+    overrides = make_overrides()
+
+    await handle_command(make_message("start", args="work"), agent, bus, overrides)
+    await bus.consume_outgoing()
+
+    assert overrides.get("telegram:123") == "telegram:123:work"
+
+
+@pytest.mark.asyncio
+async def test_start_default_clears_override(tmp_path):
+    bus = Bus()
+    agent = make_agent(tmp_path)
+    overrides = {"telegram:123": "telegram:123:work"}
+
+    await handle_command(make_message("start"), agent, bus, overrides)
+    await bus.consume_outgoing()
+
+    assert "telegram:123" not in overrides
+
+
+@pytest.mark.asyncio
+async def test_named_session_stored_separately(tmp_path):
+    bus = Bus()
+    agent = make_agent(tmp_path)
+    overrides = make_overrides()
+
+    # Start named session, add a message via stop (archives it)
+    # First verify named session ID is used
+    await handle_command(make_message("start", args="project"), agent, bus, overrides)
+    await bus.consume_outgoing()
+
+    assert overrides["telegram:123"] == "telegram:123:project"
+    # The named session is separate from the default one
+    assert agent.sessions.load("telegram:123") is None
+    assert agent.sessions.load("telegram:123:project") is None  # empty, not yet saved
 
 
 # ---------------------------------------------------------------------------
@@ -102,34 +159,47 @@ async def test_start_after_stop_starts_fresh(tmp_path):
 async def test_stop_archives_session(tmp_path):
     bus = Bus()
     agent = make_agent(tmp_path)
-
     session = agent.sessions.get_or_create("telegram:123")
-    session.add_message(HumanMessage(content="message to archive"))
+    session.add_message(HumanMessage(content="message"))
     agent.sessions.save(session)
 
-    await handle_command(make_message("stop"), agent, bus)
+    await handle_command(make_message("stop"), agent, bus, make_overrides())
 
-    outgoing: OutgoingMessage = await bus.consume_outgoing()
-    assert "stopped" in outgoing.parts[0].content.lower()
-
-    # Active slot is gone
+    text = (await bus.consume_outgoing()).parts[0].content
+    assert "saved" in text.lower()
     assert agent.sessions.load("telegram:123") is None
-
-    # Archived file exists
     archived = list((tmp_path / "sessions").glob("telegram_123_archived_*.jsonl"))
     assert len(archived) == 1
 
 
 @pytest.mark.asyncio
+async def test_stop_archives_named_session(tmp_path):
+    bus = Bus()
+    agent = make_agent(tmp_path)
+    overrides = {"telegram:123": "telegram:123:work"}
+
+    session = agent.sessions.get_or_create("telegram:123:work")
+    session.add_message(HumanMessage(content="work message"))
+    agent.sessions.save(session)
+
+    await handle_command(make_message("stop"), agent, bus, overrides)
+    await bus.consume_outgoing()
+
+    # Named session archived, override cleared
+    assert agent.sessions.load("telegram:123:work") is None
+    assert "telegram:123" not in overrides
+    archived = list((tmp_path / "sessions").glob("telegram_123_work_archived_*.jsonl"))
+    assert len(archived) == 1
+
+
+@pytest.mark.asyncio
 async def test_stop_empty_session(tmp_path):
-    """Stopping with no session should still respond without error."""
     bus = Bus()
     agent = make_agent(tmp_path)
 
-    await handle_command(make_message("stop"), agent, bus)
+    await handle_command(make_message("stop"), agent, bus, make_overrides())
 
-    outgoing: OutgoingMessage = await bus.consume_outgoing()
-    assert outgoing is not None
+    assert (await bus.consume_outgoing()) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -140,25 +210,55 @@ async def test_stop_empty_session(tmp_path):
 async def test_restart_sends_restarting_message(tmp_path):
     bus = Bus()
     agent = make_agent(tmp_path)
+    agent.gateway = MagicMock(on_restart=AsyncMock())
 
-    with patch("operator_use.orchestrator.commands._deferred_process_restart", new=AsyncMock()):
-        await handle_command(make_message("restart"), agent, bus)
+    with patch("operator_use.orchestrator.commands.asyncio.ensure_future") as mock_ensure:
+        mock_ensure.side_effect = lambda coro: coro.close()
+        with patch("operator_use.orchestrator.commands._save_restart_notification"):
+            await handle_command(make_message("restart"), agent, bus, make_overrides())
 
-    outgoing: OutgoingMessage = await bus.consume_outgoing()
-    assert "restart" in outgoing.parts[0].content.lower()
+    text = (await bus.consume_outgoing()).parts[0].content
+    assert "restart" in text.lower()
 
 
 @pytest.mark.asyncio
-async def test_restart_schedules_process_restart(tmp_path):
+async def test_restart_calls_gateway_on_restart(tmp_path):
     bus = Bus()
     agent = make_agent(tmp_path)
+    on_restart = AsyncMock()
+    agent.gateway = MagicMock(on_restart=on_restart)
 
-    mock_deferred = AsyncMock()
-    with patch("operator_use.orchestrator.commands._deferred_process_restart", new=mock_deferred):
-        with patch("operator_use.orchestrator.commands.asyncio.create_task") as mock_create_task:
-            mock_create_task.side_effect = lambda coro: coro.close()
-            await handle_command(make_message("restart"), agent, bus)
-            mock_create_task.assert_called_once()
+    with patch("operator_use.orchestrator.commands.asyncio.ensure_future") as mock_ensure:
+        mock_ensure.side_effect = lambda coro: coro.close()
+        with patch("operator_use.orchestrator.commands._save_restart_notification"):
+            await handle_command(make_message("restart"), agent, bus, make_overrides())
+
+    on_restart.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_restart_saves_notification(tmp_path):
+    bus = Bus()
+    agent = make_agent(tmp_path)
+    agent.gateway = MagicMock(on_restart=AsyncMock())
+
+    with patch("operator_use.orchestrator.commands.asyncio.ensure_future") as mock_ensure:
+        mock_ensure.side_effect = lambda coro: coro.close()
+        with patch("operator_use.orchestrator.commands._save_restart_notification") as mock_save:
+            await handle_command(make_message("restart", channel="discord", chat_id="999"), agent, bus, make_overrides())
+            mock_save.assert_called_once_with("discord", "999", "")
+
+
+@pytest.mark.asyncio
+async def test_restart_no_gateway_logs_warning(tmp_path):
+    bus = Bus()
+    agent = make_agent(tmp_path)
+    agent.gateway = None
+
+    with patch("operator_use.orchestrator.commands._save_restart_notification"):
+        with patch("operator_use.orchestrator.commands.logger") as mock_logger:
+            await handle_command(make_message("restart"), agent, bus, make_overrides())
+            mock_logger.warning.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +267,7 @@ async def test_restart_schedules_process_restart(tmp_path):
 
 @pytest.mark.asyncio
 async def test_unknown_command_does_nothing(tmp_path):
+    import asyncio
     bus = Bus()
     agent = make_agent(tmp_path)
     msg = IncomingMessage(
@@ -175,9 +276,8 @@ async def test_unknown_command_does_nothing(tmp_path):
         metadata={"_command": "unknown"},
     )
 
-    await handle_command(msg, agent, bus)
+    await handle_command(msg, agent, bus, make_overrides())
 
-    # Nothing published to bus
     with pytest.raises(Exception):
         await asyncio.wait_for(bus.consume_outgoing(), timeout=0.1)
 
@@ -190,14 +290,10 @@ async def test_unknown_command_does_nothing(tmp_path):
 async def test_response_routed_to_correct_channel(tmp_path):
     bus = Bus()
     agent = make_agent(tmp_path)
-    msg = make_message("stop", channel="discord", chat_id="456")
 
-    await handle_command(msg, agent, bus)
+    await handle_command(make_message("stop", channel="discord", chat_id="456"), agent, bus, make_overrides())
 
     outgoing: OutgoingMessage = await bus.consume_outgoing()
     assert outgoing.channel == "discord"
     assert outgoing.chat_id == "456"
     assert outgoing.reply is True
-
-
-import asyncio

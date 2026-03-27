@@ -874,12 +874,13 @@ class TelegramChannel(BaseChannel):
         else:
             thread_id = update.message.message_thread_id
             chat_id = self._build_chat_id(str(chat.id), thread_id)
+            args = " ".join(context.args) if context.args else ""
             incoming = IncomingMessage(
                 channel=self.name,
                 chat_id=chat_id,
-                parts=[TextPart(content="/start")],
+                parts=[TextPart(content="/start" + (f" {args}" if args else ""))],
                 user_id=str(update.effective_user.id) if update.effective_user else "",
-                metadata={"_command": "start", "thread_id": thread_id},
+                metadata={"_command": "start", "_command_args": args, "thread_id": thread_id},
             )
             await self.receive(incoming)
 
