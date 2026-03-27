@@ -112,6 +112,7 @@ class AgentMetadata(BaseModel):
 
 
 class AgentListResponse(BaseModel):
+    server_id: str = ""   # Stable UUID identifying this ACP server instance
     agents: list[AgentMetadata]
 
 

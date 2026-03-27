@@ -177,7 +177,7 @@ class ACPServer:
             agents = [self._metadata[authed]] if authed in self._metadata else []
         else:
             agents = list(self._metadata.values())
-        resp = AgentListResponse(agents=agents)
+        resp = AgentListResponse(server_id=self.config.server_id, agents=agents)
         return web.json_response(resp.model_dump())
 
     async def _handle_get_agent(self, request: web.Request) -> web.Response:

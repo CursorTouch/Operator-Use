@@ -213,6 +213,7 @@ class ACPServerSettings(Base):
     enabled: bool = False
     host: str = "0.0.0.0"   # "0.0.0.0" = reachable by other machines on the LAN
     port: int = 8765
+    server_id: str = ""      # Stable UUID identifying this server instance (auto-generated on first run)
     auth_token: str = ""     # Optional bearer token to protect the endpoint (all agents)
     public_url: str = ""     # Advertised URL for agent discovery (e.g. http://192.168.1.10:8765)
 
@@ -288,6 +289,7 @@ class Config(BaseSettings):
 def load_config(user_data_dir: Path) -> Config:
     """Load configuration from .operator_use/config.json and environment."""
     import json
+    import uuid
 
     path = user_data_dir / "config.json"
     data = {}
@@ -299,4 +301,20 @@ def load_config(user_data_dir: Path) -> Config:
             print(f"Warning: Failed to load config from {path}: {e}")
 
     # Initialize Config (Pydantic merges JSON data + actual environment variables)
-    return Config(**data)
+    config = Config(**data)
+
+    # Auto-generate a stable server_id on first run (new installs and upgrades).
+    # Written back immediately so the same ID is reused on every subsequent start.
+    if not config.acp_server.server_id:
+        config.acp_server.server_id = str(uuid.uuid4())
+        if path.exists():
+            try:
+                acp_block = data.get("acp_server", {})
+                acp_block["server_id"] = config.acp_server.server_id
+                data["acp_server"] = acp_block
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=4)
+            except Exception as e:
+                print(f"Warning: Could not persist acp_server.server_id: {e}")
+
+    return config

@@ -34,11 +34,13 @@ def _make_server(
     agent_ids: list[str],
     auth_token: str = "",
     per_agent_tokens: dict | None = None,
+    server_id: str = "test-server-001",
 ) -> ACPServer:
     runners = {aid: _echo_runner for aid in agent_ids}
     metadata = {aid: _make_metadata(aid) for aid in agent_ids}
     config = ACPServerConfig(
         enabled=True,
+        server_id=server_id,
         auth_token=auth_token,
         per_agent_tokens=per_agent_tokens or {},
     )
@@ -86,6 +88,15 @@ class TestListAgents:
         data = await resp.json()
         ids = {a["id"] for a in data["agents"]}
         assert ids == {"alpha", "beta"}
+        assert data["server_id"] == "test-server-001"
+
+    async def test_server_id_present_with_per_agent_auth(self, per_agent_auth_server):
+        resp = await per_agent_auth_server.get(
+            "/agents", headers={"Authorization": "Bearer token-a"}
+        )
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["server_id"] == "test-server-001"
 
     async def test_global_token_returns_all(self, global_auth_server):
         resp = await global_auth_server.get(

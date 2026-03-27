@@ -196,3 +196,39 @@ def test_load_config_invalid_json_uses_defaults(tmp_path):
     (tmp_path / "config.json").write_text("{ invalid json }", encoding="utf-8")
     cfg = load_config(tmp_path)
     assert isinstance(cfg, Config)
+
+
+# --- ACP server_id auto-generation ---
+
+def test_load_config_generates_server_id_when_missing(tmp_path):
+    """server_id is auto-generated and persisted on first load."""
+    data = {"agents": {"list": [{"id": "op"}]}}
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    cfg = load_config(tmp_path)
+    assert cfg.acp_server.server_id != ""
+
+    # Must be persisted back to disk
+    saved = json.loads(path.read_text())
+    assert saved["acp_server"]["server_id"] == cfg.acp_server.server_id
+
+
+def test_load_config_server_id_stable_across_reloads(tmp_path):
+    """Same server_id is returned on every subsequent load."""
+    data = {"agents": {"list": [{"id": "op"}]}}
+    (tmp_path / "config.json").write_text(json.dumps(data), encoding="utf-8")
+
+    first = load_config(tmp_path).acp_server.server_id
+    second = load_config(tmp_path).acp_server.server_id
+    assert first == second
+
+
+def test_load_config_respects_existing_server_id(tmp_path):
+    """If server_id already exists in config it is not overwritten."""
+    existing_id = "my-custom-server-id"
+    data = {"acp_server": {"server_id": existing_id}}
+    (tmp_path / "config.json").write_text(json.dumps(data), encoding="utf-8")
+
+    cfg = load_config(tmp_path)
+    assert cfg.acp_server.server_id == existing_id

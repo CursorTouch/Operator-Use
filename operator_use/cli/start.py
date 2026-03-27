@@ -487,6 +487,7 @@ async def main():
             enabled=True,
             host=acp_server_cfg.host,
             port=acp_server_cfg.port,
+            server_id=acp_server_cfg.server_id,
             auth_token=acp_server_cfg.auth_token,
             per_agent_tokens=per_agent_tokens,
             public_url=acp_server_cfg.public_url,
