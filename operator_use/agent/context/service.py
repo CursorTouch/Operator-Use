@@ -127,7 +127,7 @@ When you need to remember something, write to {workspace_path}/memory/MEMORY.md
             if self._plugin_prompt_sections:
                 parts = list(self._plugin_prompt_sections)
                 if system_prompt:
-                    parts.append(f"## Task Context\n\n{system_prompt}")
+                    parts.append(f"## Instructions\n\n{system_prompt}")
                 return "\n\n".join(parts)
             parts = [
                 "You are a subagent. Complete the delegated task and return your findings clearly. "
@@ -139,6 +139,9 @@ When you need to remember something, write to {workspace_path}/memory/MEMORY.md
 
         parts = []
         parts.append(self.get_identity())
+
+        if system_prompt:
+            parts.append(f"## Instructions\n\n{system_prompt}")
 
         if prompt_mode == PromptMode.FULL:
             if bootstrap_parts := self._load_bootstrap_files():
@@ -159,9 +162,6 @@ Available Skills:
         if prompt_mode == PromptMode.FULL:
             if knowledge_index := self.knowledge.build_knowledge_index():
                 parts.append(knowledge_index)
-
-        if system_prompt:
-            parts.append(f"## Task Context\n\n{system_prompt}")
 
         if self._plugin_prompt_sections:
             parts.extend(self._plugin_prompt_sections)
