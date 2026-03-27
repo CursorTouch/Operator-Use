@@ -82,7 +82,6 @@ class ImageGoogle(BaseImage):
 
     def _generate_gemini(self, prompt: str, output_path: str, images: list[str] | None, **kwargs) -> None:
         """Generate or edit using Gemini native image output."""
-        from google import genai
         from google.genai import types
 
         client = self._make_client()
@@ -121,7 +120,6 @@ class ImageGoogle(BaseImage):
 
     def _generate_imagen(self, prompt: str, output_path: str, images: list[str] | None, **kwargs) -> None:
         """Generate using Imagen 4 (text-to-image only)."""
-        from google import genai
         from google.genai import types
 
         if images:
