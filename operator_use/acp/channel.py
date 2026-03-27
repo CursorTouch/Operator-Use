@@ -48,8 +48,7 @@ class ACPChannel(BaseChannel):
     via the run output / SSE stream.
 
     Pass `agents` (dict[str, Agent]) to expose all agents via GET /agents and enable
-    per-agent routing.  Omitting `agents` falls back to the single-agent behaviour
-    using the agent_id/name/description fields in config.
+    per-agent routing.
     """
 
     def __init__(self, config: ACPServerConfig, bus=None, agents: dict | None = None) -> None:
@@ -69,36 +68,20 @@ class ACPChannel(BaseChannel):
         config: ACPServerConfig,
         agents: dict | None,
     ) -> tuple[dict[str, AgentRunnerFn], dict[str, AgentMetadata]]:
-        """Build per-agent runners and metadata from the agents registry.
-
-        If agents is None or empty, falls back to a single runner using the
-        agent_id/name/description from ACPServerConfig (backward compat).
-        """
-        if agents:
-            runners: dict[str, AgentRunnerFn] = {
-                aid: self._make_runner(aid) for aid in agents
-            }
-            metadata: dict[str, AgentMetadata] = {
-                aid: AgentMetadata(
-                    id=aid,
-                    name=aid,
-                    description=getattr(agent, "description", "") or "",
-                    capabilities=AgentCapabilities(streaming=True, async_mode=True, session=True),
-                )
-                for aid, agent in agents.items()
-            }
-        else:
-            # Legacy single-agent fallback
-            fallback_id = config.agent_id
-            runners = {fallback_id: self._make_runner(fallback_id)}
-            metadata = {
-                fallback_id: AgentMetadata(
-                    id=fallback_id,
-                    name=config.agent_name,
-                    description=config.agent_description,
-                    capabilities=AgentCapabilities(streaming=True, async_mode=True, session=True),
-                )
-            }
+        """Build per-agent runners and metadata from the agents registry."""
+        agents = agents or {}
+        runners: dict[str, AgentRunnerFn] = {
+            aid: self._make_runner(aid) for aid in agents
+        }
+        metadata: dict[str, AgentMetadata] = {
+            aid: AgentMetadata(
+                id=aid,
+                name=aid,
+                description=getattr(agent, "description", "") or "",
+                capabilities=AgentCapabilities(streaming=True, async_mode=True, session=True),
+            )
+            for aid, agent in agents.items()
+        }
         return runners, metadata
 
     def _make_runner(self, agent_id: str) -> AgentRunnerFn:

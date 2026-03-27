@@ -213,10 +213,7 @@ class ACPServerSettings(Base):
     enabled: bool = False
     host: str = "0.0.0.0"   # "0.0.0.0" = reachable by other machines on the LAN
     port: int = 8765
-    agent_id: str = "operator"
-    agent_name: str = "Operator"
-    agent_description: str = "Operator AI agent accessible via ACP"
-    auth_token: str = ""     # Optional bearer token to protect the endpoint
+    auth_token: str = ""     # Optional bearer token to protect the endpoint (all agents)
     public_url: str = ""     # Advertised URL for agent discovery (e.g. http://192.168.1.10:8765)
 
 
