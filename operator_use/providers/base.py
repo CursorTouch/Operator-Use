@@ -188,6 +188,49 @@ class BaseImage(Protocol):
 
 
 @runtime_checkable
+class BaseSearch(Protocol):
+    """Protocol for web search providers.
+
+    Any search provider must implement `search` and `fetch`.
+
+    Example:
+        ```python
+        class MySearchProvider(BaseSearch):
+            async def search(self, query: str, max_results: int = 10) -> list[dict]:
+                # Returns list of dicts with keys: title, url, snippet
+                ...
+
+            async def fetch(self, url: str) -> str:
+                # Returns page content as markdown
+                ...
+        ```
+    """
+
+    async def search(self, query: str, max_results: int = 10) -> list[dict]:
+        """Search the web and return results.
+
+        Args:
+            query: The search query.
+            max_results: Maximum number of results to return.
+
+        Returns:
+            List of dicts with keys: title, url, snippet.
+        """
+        ...
+
+    async def fetch(self, url: str) -> str:
+        """Fetch the content of a URL and return it as markdown text.
+
+        Args:
+            url: The URL to fetch.
+
+        Returns:
+            Page content as plain text or markdown.
+        """
+        ...
+
+
+@runtime_checkable
 class BaseTTS(Protocol):
     """Protocol for Text-to-Speech providers.
 

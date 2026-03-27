@@ -57,6 +57,12 @@ dev = [
 fal = [
     "fal-client>=0.5.0",
 ]
+exa = [
+    "exa-py>=1.0.0",
+]
+tavily = [
+    "tavily-python>=0.5.0",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"

@@ -12,7 +12,7 @@ Shared base protocols and data models:
 """
 
 # Base protocols & data models
-from operator_use.providers.base import BaseChatLLM, BaseSTT, BaseTTS, BaseImage
+from operator_use.providers.base import BaseChatLLM, BaseSTT, BaseTTS, BaseImage, BaseSearch
 from operator_use.providers.views import TokenUsage, Metadata
 from operator_use.providers.events import Thinking, LLMEvent, LLMStreamEvent, ToolCall
 
@@ -104,6 +104,19 @@ try:
 except ImportError:
     pass
 
+# Search providers
+from operator_use.providers.ddgs import DDGSSearch
+
+try:
+    from operator_use.providers.exa import ExaSearch
+except ImportError:
+    pass
+
+try:
+    from operator_use.providers.tavily import TavilySearch
+except ImportError:
+    pass
+
 # Misc
 from operator_use.providers.google.tts import GOOGLE_TTS_VOICES
 
@@ -113,6 +126,7 @@ __all__ = [
     "BaseSTT",
     "BaseTTS",
     "BaseImage",
+    "BaseSearch",
     "TokenUsage",
     "Metadata",
     "Thinking",
@@ -157,4 +171,8 @@ __all__ = [
     "ImageGoogle",
     "ImageTogether",
     "ImageFal",
+    # Search providers
+    "DDGSSearch",
+    "ExaSearch",
+    "TavilySearch",
 ]
