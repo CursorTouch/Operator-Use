@@ -889,7 +889,7 @@ def run_initial_setup():
 
                 else:
                     for i, a in enumerate(agent_defs):
-                        if choice.startswith(a["id"]):
+                        if choice.startswith(a["id"] + "  "):
                             _agent_submenu(i)
                             break
             except BackRequest:
