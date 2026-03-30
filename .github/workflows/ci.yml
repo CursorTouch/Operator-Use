@@ -34,7 +34,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Run bandit security scan
-        run: uv run bandit -r operator_use/ -ll -q
+        run: uv run bandit -r operator_use/ -ll -q -c pyproject.toml
 
       - name: Run tests
         run: uv run pytest tests/ -q --tb=short --cov=operator_use --cov-report=xml --cov-fail-under=1
@@ -50,9 +50,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run gitleaks secret scan
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz \
+            | tar xz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --verbose --redact --exit-code 1
 
   audit:
     runs-on: ubuntu-latest
@@ -67,4 +69,5 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
       - name: Run pip-audit
-        run: uv run pip-audit --desc on
+        # CVE-2026-4539 (pygments ReDoS) ignored — no fix version released yet
+        run: uv run pip-audit --desc on --ignore-vuln CVE-2026-4539
