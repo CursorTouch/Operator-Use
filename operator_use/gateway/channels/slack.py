@@ -357,8 +357,7 @@ class SlackChannel(BaseChannel):
         if event.get("subtype"):
             return
 
-        allowed = self._cfg("allow_from") or []
-        if allowed and sender_id not in allowed:
+        if not self._is_user_allowed(sender_id):
             return
 
         # Build metadata with Slack-specific info
