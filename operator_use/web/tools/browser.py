@@ -14,6 +14,32 @@ import json
 
 _MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024  # 100MB
 
+# Sensitive browser APIs the LLM must not access via script execution.
+# These could exfiltrate cookies, tokens, or stored credentials.
+_BLOCKED_JS_APIS = [
+    "document.cookie",
+    "localStorage",
+    "sessionStorage",
+    "indexedDB",
+    "XMLHttpRequest",
+    "navigator.credentials",
+    "crypto.subtle",
+    "chrome.identity",
+]
+
+
+def _check_script_safety(script_content: str) -> str | None:
+    """Return an error message if the script accesses sensitive browser APIs, else None."""
+    lower = script_content.lower()
+    for api in _BLOCKED_JS_APIS:
+        if api.lower() in lower:
+            return (
+                f"Script blocked: accesses sensitive browser API {api!r}. "
+                "This API could expose cookies, auth tokens, or stored credentials. "
+                "Remove the sensitive API access and try again."
+            )
+    return None
+
 
 def _validate_download(url: str, filename: str, downloads_dir: Path) -> str | None:
     """Validate a download request. Returns error message if invalid, None if safe."""
@@ -344,6 +370,9 @@ async def browser(
         case "script":
             if not script:
                 return ToolResult.error_result("script is required for script.")
+            _safety_err = _check_script_safety(script)
+            if _safety_err:
+                return ToolResult.error_result(_safety_err)
             result = await page.execute_script(script, truncate=True, repair=True)
             return ToolResult.success_result(f"Script result: {result}")
 
