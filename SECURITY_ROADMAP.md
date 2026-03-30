@@ -16,12 +16,13 @@
 **Fix:**
 ```python
 def resolve(base: str | Path, path: str | Path) -> Path:
-    base = Path(base).resolve()
-    resolved = (base / Path(path)).resolve()
-    # SECURITY: Ensure resolved path is within the workspace
-    if not str(resolved).startswith(str(base)):
+    base_resolved = Path(base).resolve()
+    resolved = (base_resolved / Path(path)).resolve()
+    # SECURITY: Use is_relative_to() — startswith() has a prefix-collision
+    # vulnerability (/workspace_evil passes startswith(/workspace)).
+    if not resolved.is_relative_to(base_resolved):
         raise PermissionError(
-            f"Path traversal blocked: {path!r} resolves outside workspace {base}"
+            f"Path traversal blocked: {path!r} resolves outside workspace {base_resolved}"
         )
     return resolved
 ```

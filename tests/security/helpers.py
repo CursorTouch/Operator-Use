@@ -1,7 +1,11 @@
 from pathlib import Path
 
 def assert_path_contained(path: Path, base: Path) -> None:
-    assert str(path.resolve()).startswith(str(base.resolve())), \
+    # Use is_relative_to() instead of startswith() — the string prefix check has a
+    # prefix-collision vulnerability: /tmp/workspace_evil passes startswith(/tmp/workspace).
+    resolved = path.resolve()
+    base_resolved = base.resolve()
+    assert resolved.is_relative_to(base_resolved), \
         f"Path {path} escapes base {base}"
 
 def make_traversal_attempts() -> list[str]:
