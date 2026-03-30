@@ -247,9 +247,7 @@ class TelegramChannel(BaseChannel):
         media_dir = self._cfg("media_dir")
         self._media_dir = Path(media_dir) if media_dir else Path.home() / ".operator" / "media"
 
-    def _cfg(self, key: str, default=None):
-        """Get config value from TelegramConfig dataclass."""
-        return getattr(self.config, key, default)
+    # _cfg inherited from BaseChannel
 
     def _image_to_base64(self, path: str) -> tuple[str, str]:
         """Load image and return (base64_string, mime_type)."""
@@ -503,8 +501,7 @@ class TelegramChannel(BaseChannel):
         chat_id = raw_chat_id
         sender_id = self._sender_id(user)
 
-        allowed = self._cfg("allow_from") or []
-        if allowed and sender_id not in allowed and str(user.id) not in allowed:
+        if not self._is_user_allowed(sender_id):
             return
 
         content_parts = []

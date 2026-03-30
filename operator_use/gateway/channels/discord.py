@@ -70,9 +70,7 @@ class DiscordChannel(BaseChannel):
         media_dir = self._cfg("media_dir")
         self._media_dir = Path(media_dir) if media_dir else Path.home() / ".operator" / "media"
 
-    def _cfg(self, key: str, default=None):
-        """Get config value from DiscordConfig dataclass."""
-        return getattr(self.config, key, default)
+    # _cfg inherited from BaseChannel
 
     def _init_bot(self) -> None:
         """Initialize the bot and handlers."""
@@ -257,9 +255,7 @@ class DiscordChannel(BaseChannel):
         channel_id = message.channel.id
         author_id = message.author.id
 
-        allowed = self._cfg("allow_from") or []
-        # If allow_from is empty, allow everyone (like Telegram)
-        if allowed and str(author_id) not in allowed:
+        if not self._is_user_allowed(str(author_id)):
             return
 
         content_parts = []
