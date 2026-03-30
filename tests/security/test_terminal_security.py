@@ -1,16 +1,21 @@
 """Security tests for terminal command controls. Unskipped as fixes land per SECURITY_ROADMAP.md."""
-import pytest
+
+from operator_use.agent.tools.builtin.terminal import _is_command_allowed
 
 
 class TestTerminalSecurity:
-    @pytest.mark.skip(reason="Pending fix in issue #17 [Phase 1.2.1]")
     def test_blocklist_blocks_rm_rf(self):
-        pass
+        # These should be blocked even if rm were in the allowlist — shell escape
+        allowed, reason = _is_command_allowed("git status | bash -c 'rm -rf /'")
+        assert not allowed
+        assert "escape" in reason.lower() or "blocked" in reason.lower()
 
-    @pytest.mark.skip(reason="Pending fix in issue #17 [Phase 1.2.1]")
     def test_blocklist_blocks_shell_escape(self):
-        pass
+        for cmd in ["echo $(whoami)", "ls `id`", "git log | sh"]:
+            allowed, reason = _is_command_allowed(cmd)
+            assert not allowed, f"Should have blocked: {cmd!r}"
 
-    @pytest.mark.skip(reason="Pending fix in issue #17 [Phase 1.2.1]")
     def test_allowlist_permits_safe_commands(self):
-        pass
+        for cmd in ["git status", "ls -la", "pytest tests/", "python --version"]:
+            allowed, reason = _is_command_allowed(cmd)
+            assert allowed, f"Should have allowed: {cmd!r}, reason: {reason}"
