@@ -77,6 +77,10 @@ class BrowserConfig:
     # user_data_dir set to a custom path: seeds from real Chrome profile on first run, then persists
     # user_data_dir=None: fresh temporary profile with no auth
     use_system_profile: bool = False
+    # copy_auth=False (default): never copy real Chrome cookies/sessions into the agent browser.
+    # copy_auth=True: opt-in to copying auth files — agent gains access to all logged-in accounts.
+    # Only enable if you explicitly want the agent to use your real browser sessions.
+    copy_auth: bool = False
     # attach_to_existing=True: connect to an already-running browser on cdp_port instead of launching one.
     # The browser must have been started with --remote-debugging-port=<cdp_port>.
     # No process is launched or killed. Raises RuntimeError if nothing is listening on the port.
