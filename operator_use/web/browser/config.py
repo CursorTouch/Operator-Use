@@ -84,6 +84,10 @@ class BrowserConfig:
     # copy_auth=True: opt-in to copying auth files — agent gains access to all logged-in accounts.
     # Only enable if you explicitly want the agent to use your real browser sessions.
     copy_auth: bool = False
+    # copy_auth_domains: when copy_auth=True, only copy auth data for these domains.
+    # Empty list (default) = copy all domains. Example: ["github.com", "gitlab.com"]
+    # Domain filtering implementation is Phase 2 — field available now for config compatibility.
+    copy_auth_domains: list = None
     # attach_to_existing=True: connect to an already-running browser on cdp_port instead of launching one.
     # The browser must have been started with --remote-debugging-port=<cdp_port>.
     # No process is launched or killed. Raises RuntimeError if nothing is listening on the port.
