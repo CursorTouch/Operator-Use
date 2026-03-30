@@ -8,6 +8,7 @@ from typing import Literal, Optional
 from asyncio import sleep
 from pathlib import Path
 from os import getcwd
+import os as _os
 import logging
 import httpx
 import json
@@ -22,11 +23,28 @@ _BLOCKED_JS_PATTERNS = [
     "sessionStorage",
     "indexedDB",
     "XMLHttpRequest",
+    "fetch(",           # network exfiltration
+    "fetch ",           # catch fetch with space before args
     "navigator.credentials",
     "crypto.subtle",
     ".getPassword",
     "chrome.identity",
 ]
+
+
+_MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024  # 100 MB
+
+
+def _validate_download(url: str, filename: str, downloads_dir: Path) -> str | None:
+    """Return an error message if the download parameters are unsafe, None if ok."""
+    # Reject path traversal in filename
+    safe = _os.path.basename(filename)
+    if safe != filename or not safe:
+        return f"Blocked: filename {filename!r} contains path traversal characters."
+    # Ensure downloads_dir exists and is a directory
+    if not downloads_dir.is_dir():
+        return f"Downloads directory does not exist: {downloads_dir}"
+    return None
 
 
 def _check_script_safety(script_content: str) -> str | None:
@@ -370,13 +388,29 @@ async def browser(
             if not filename:
                 return ToolResult.error_result("filename is required for download.")
             folder_path = Path(browser.config.downloads_dir)
+            _err = _validate_download(url or "", filename or "", folder_path)
+            if _err:
+                return ToolResult.error_result(_err)
+            # Use sanitized basename, not the original filename
+            safe_name = _os.path.basename(filename)
             async with httpx.AsyncClient() as client:
+                # Check Content-Length before downloading
+                head = await client.head(url)
+                content_length = int(head.headers.get("content-length", 0))
+                if content_length > _MAX_DOWNLOAD_SIZE:
+                    return ToolResult.error_result(
+                        f"Download blocked: file size {content_length} exceeds limit of {_MAX_DOWNLOAD_SIZE} bytes (100MB)."
+                    )
                 response = await client.get(url)
                 response.raise_for_status()
-            path = folder_path / filename
+                if len(response.content) > _MAX_DOWNLOAD_SIZE:
+                    return ToolResult.error_result(
+                        "Download blocked: downloaded content exceeds 100MB size limit."
+                    )
+            path = folder_path / safe_name
             with open(path, "wb") as f:
                 f.write(response.content)
-            return ToolResult.success_result(f"Downloaded {filename} from {url} to {path}.")
+            return ToolResult.success_result(f"Downloaded {safe_name} from {url} to {path}.")
 
         case _:
             return ToolResult.error_result(f"Unknown action: {action!r}.")
