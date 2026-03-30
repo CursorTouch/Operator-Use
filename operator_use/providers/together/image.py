@@ -114,7 +114,7 @@ class ImageTogether(BaseImage):
             extra_body=self._extra_body(images, **kwargs),
         )
         url = response.data[0].url
-        urllib.request.urlretrieve(url, output_path)
+        urllib.request.urlretrieve(url, output_path)  # nosec B310 — URL from Together API response (HTTPS only)
         logger.debug(f"[ImageTogether] Image saved to {output_path}")
 
     async def agenerate(

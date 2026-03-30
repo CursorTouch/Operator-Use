@@ -72,6 +72,17 @@ tavily = [
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 
+[tool.bandit]
+# B104: Binding to 0.0.0.0 is intentional — Operator-Use is a local agent
+# server designed to accept LAN connections. Suppressed project-wide.
+skips = ["B104"]
+# Exclude generated/vendored code from scan
+exclude_dirs = [
+    "operator_use/web/cdp",
+    "operator_use/computer/macos/ax",
+    "operator_use/computer/windows",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -97,6 +108,14 @@ ignore = ["E501"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "cryptography>=46.0.6",
+    "pyasn1>=0.6.3",
+    "requests>=2.33.0",
+    "tornado>=6.5.5",
+]
 
 [tool.hatch.build]
 packages = ["operator_use"]

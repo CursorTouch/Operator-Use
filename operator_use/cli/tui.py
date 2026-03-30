@@ -109,7 +109,7 @@ def print_info(title: str, info_dict: dict):
 def clear_screen() -> None:
     """Clear the terminal in a way that works reliably across Windows shells."""
     if os.name == "nt":
-        subprocess.run("cls", shell=True, check=False)
+        subprocess.run(["cls"], check=False)
     else:
         console.clear(home=True)
 
