@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
+import pytest
+
 from operator_use.utils.helper import is_binary_file, resolve, ensure_directory
 
 
 # --- is_binary_file ---
-
 
 def test_is_binary_file_text(tmp_path):
     f = tmp_path / "text.txt"
@@ -33,11 +34,18 @@ def test_is_binary_file_empty(tmp_path):
 
 # --- resolve ---
 
-
-def test_resolve_absolute_path(tmp_path):
+def test_resolve_absolute_path_inside_base(tmp_path):
+    """Absolute path inside the base directory should resolve normally."""
     abs_path = tmp_path / "file.txt"
-    result = resolve("/some/base", abs_path)
+    result = resolve(tmp_path, abs_path)
     assert result == abs_path.resolve()
+
+
+def test_resolve_absolute_path_outside_base_raises(tmp_path):
+    """Absolute path outside the base must raise PermissionError (CWE-22 fix)."""
+    abs_path = tmp_path / "file.txt"
+    with pytest.raises(PermissionError, match="Path traversal blocked"):
+        resolve("/some/other/base", abs_path)
 
 
 def test_resolve_relative_path(tmp_path):
@@ -57,7 +65,6 @@ def test_resolve_dot_path(tmp_path):
 
 
 # --- ensure_directory ---
-
 
 def test_ensure_directory_creates_new(tmp_path):
     new_dir = str(tmp_path / "new" / "nested" / "dir")
