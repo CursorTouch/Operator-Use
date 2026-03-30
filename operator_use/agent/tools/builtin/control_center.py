@@ -285,11 +285,12 @@ async def control_center(
             except Exception as e:
                 return ToolResult.error_result(f"Could not save restart continuation: {e}")
             msg += f"\nWill continue after restart: {continue_with[:100]}"
+        graceful_fn = kwargs.get("_graceful_restart_fn")
         on_restart = getattr(getattr(agent, "gateway", None), "on_restart", None)
         if callable(on_restart):
             asyncio.ensure_future(on_restart())
         else:
-            asyncio.ensure_future(_do_restart(graceful_fn=None))  # fallback: no gateway wired
+            asyncio.ensure_future(_do_restart(graceful_fn=graceful_fn))
         return ToolResult.success_result(f"{msg}\nRestart initiated.", metadata={"stop_loop": True})
 
     return ToolResult.success_result(msg)
