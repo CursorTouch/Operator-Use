@@ -7,8 +7,32 @@ from typing import Literal, Optional
 from asyncio import sleep
 from pathlib import Path
 from os import getcwd
+from urllib.parse import urlparse as _urlparse
+import os as _os
 import httpx
 import json
+
+_MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024  # 100MB
+
+
+def _validate_download(url: str, filename: str, downloads_dir: Path) -> str | None:
+    """Validate a download request. Returns error message if invalid, None if safe."""
+    # Scheme check — only http/https
+    parsed = _urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"Download blocked: only http/https URLs allowed, got scheme {parsed.scheme!r}"
+
+    # Filename sanitization — strip path components, reject traversal
+    safe_name = _os.path.basename(filename) if filename else _os.path.basename(parsed.path) or "download"
+    if not safe_name or safe_name in (".", ".."):
+        return f"Download blocked: invalid filename {filename!r}"
+
+    # Path containment — resolved target must stay inside downloads dir
+    target = (downloads_dir / safe_name).resolve()
+    if not target.is_relative_to(downloads_dir.resolve()):
+        return f"Download blocked: path traversal in filename {filename!r}"
+
+    return None
 
 
 class BrowserTool(BaseModel):
@@ -334,6 +358,9 @@ async def browser(
             if not filename:
                 return ToolResult.error_result("filename is required for download.")
             folder_path = Path(browser.config.downloads_dir)
+            _err = _validate_download(url or "", filename or "", folder_path)
+            if _err:
+                return ToolResult.error_result(_err)
             async with httpx.AsyncClient() as client:
                 response = await client.get(url)
                 response.raise_for_status()
