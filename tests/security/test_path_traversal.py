@@ -28,7 +28,6 @@ class TestPathTraversal:
 
     def test_resolve_blocks_symlink_escape(self, tmp_path):
         """Symlink pointing outside the workspace must be blocked after resolution."""
-        import tempfile
         workspace_dir = tmp_path / "workspace"
         workspace_dir.mkdir()
         # Create target outside workspace (sibling directory, not inside workspace)
