@@ -331,13 +331,26 @@ async def browser(
             _err = _validate_download(url or "", filename or "", folder_path)
             if _err:
                 return ToolResult.error_result(_err)
+            # Use sanitized basename — never the raw filename from the LLM
+            safe_name = _os.path.basename(filename) or _os.path.basename(url.split("?")[0]) or "download"
             async with httpx.AsyncClient() as client:
+                # Preflight size check via Content-Length header
+                head_resp = await client.head(url)
+                content_length = int(head_resp.headers.get("content-length", 0))
+                if content_length > _MAX_DOWNLOAD_SIZE:
+                    return ToolResult.error_result(
+                        f"Download blocked: Content-Length {content_length} bytes exceeds 100MB limit."
+                    )
                 response = await client.get(url)
                 response.raise_for_status()
-            path = folder_path / filename
+                if len(response.content) > _MAX_DOWNLOAD_SIZE:
+                    return ToolResult.error_result(
+                        "Download blocked: response body exceeds 100MB size limit."
+                    )
+            path = folder_path / safe_name
             with open(path, "wb") as f:
                 f.write(response.content)
-            return ToolResult.success_result(f"Downloaded {filename} from {url} to {path}.")
+            return ToolResult.success_result(f"Downloaded {safe_name} from {url} to {path}.")
 
         case _:
             return ToolResult.error_result(f"Unknown action: {action!r}.")
