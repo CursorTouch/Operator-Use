@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
@@ -108,7 +109,7 @@ def print_info(title: str, info_dict: dict):
 def clear_screen() -> None:
     """Clear the terminal in a way that works reliably across Windows shells."""
     if os.name == "nt":
-        os.system("cls")
+        subprocess.run("cls", shell=True, check=False)
     else:
         console.clear(home=True)
 
