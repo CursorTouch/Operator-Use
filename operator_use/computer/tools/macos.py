@@ -6,6 +6,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 from operator_use.tools import Tool, ToolResult
 from operator_use.computer.macos import ax
+from operator_use.computer.macos.ax import patterns as ax_patterns
 
 
 KEY_ALIASES = {
@@ -197,6 +198,16 @@ async def computer(
             if clicks == 0:
                 ax.SetCursorPos(x, y)
                 return ToolResult.success_result(f"Moved cursor to ({x},{y}).")
+            # Cursorless path: only for left single clicks
+            if button == "left" and clicks == 1:
+                try:
+                    element = ax.ElementAtPosition(ax.GetRootControl(), x, y)
+                    if element and ax_patterns.InvokePattern.IsSupported(element):
+                        if ax_patterns.InvokePattern(element).Invoke():
+                            return ToolResult.success_result(f"Single left clicked at ({x},{y}).")
+                except Exception:
+                    pass
+            # Coordinate fallback
             ax.MoveTo(x, y)
             await asyncio.sleep(0.05)
             match button:
