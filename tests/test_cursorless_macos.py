@@ -137,3 +137,111 @@ def test_invoke_exception_falls_back(mock_ax, mock_ax_patterns):
 
     mock_ax.Click.assert_called_once_with(100, 200)
     assert result.success
+
+
+# --- Cursorless type tests ---
+
+
+def test_type_uses_value_pattern_when_supported(mock_ax, mock_ax_patterns):
+    """Type should use ValuePattern.SetValue and NOT call ax.Click or ax.TypeText."""
+    from operator_use.computer.tools.macos import computer
+
+    element = MagicMock()
+    mock_ax.ElementAtPosition.return_value = element
+    mock_ax.GetRootControl.return_value = MagicMock()
+
+    vp = MagicMock()
+    vp.IsReadOnly = False
+    mock_ax_patterns.ValuePattern.IsSupported.return_value = True
+    mock_ax_patterns.ValuePattern.return_value = vp
+
+    result = run(computer.ainvoke(action="type", loc=[100, 200], text="hello"))
+
+    mock_ax_patterns.ValuePattern.IsSupported.assert_called_once_with(element)
+    vp.SetValue.assert_called_once_with("hello")
+    mock_ax.Click.assert_not_called()
+    mock_ax.TypeText.assert_not_called()
+    assert result.success
+
+
+def test_type_with_clear_calls_set_value_with_new_text(mock_ax, mock_ax_patterns):
+    """Type with clear=True should call SetValue with just the new text."""
+    from operator_use.computer.tools.macos import computer
+
+    element = MagicMock()
+    mock_ax.ElementAtPosition.return_value = element
+    mock_ax.GetRootControl.return_value = MagicMock()
+
+    vp = MagicMock()
+    vp.IsReadOnly = False
+    vp.Value = "old"
+    mock_ax_patterns.ValuePattern.IsSupported.return_value = True
+    mock_ax_patterns.ValuePattern.return_value = vp
+
+    result = run(computer.ainvoke(action="type", loc=[100, 200], text="new", clear=True))
+
+    vp.SetValue.assert_called_once_with("new")
+    mock_ax.Click.assert_not_called()
+    mock_ax.TypeText.assert_not_called()
+    assert result.success
+
+
+def test_type_falls_back_when_value_pattern_is_read_only(mock_ax, mock_ax_patterns):
+    """Falls back to Click+TypeText when ValuePattern is ReadOnly."""
+    from operator_use.computer.tools.macos import computer
+
+    element = MagicMock()
+    mock_ax.ElementAtPosition.return_value = element
+    mock_ax.GetRootControl.return_value = MagicMock()
+
+    vp = MagicMock()
+    vp.IsReadOnly = True
+    mock_ax_patterns.ValuePattern.IsSupported.return_value = True
+    mock_ax_patterns.ValuePattern.return_value = vp
+
+    result = run(computer.ainvoke(action="type", loc=[100, 200], text="hello"))
+
+    mock_ax.Click.assert_called_once()
+    mock_ax.TypeText.assert_called_once_with("hello")
+    assert result.success
+
+
+def test_type_falls_back_when_caret_position_not_idle(mock_ax, mock_ax_patterns):
+    """Falls back to Click+TypeText when caret_position is not idle."""
+    from operator_use.computer.tools.macos import computer
+
+    element = MagicMock()
+    mock_ax.ElementAtPosition.return_value = element
+    mock_ax.GetRootControl.return_value = MagicMock()
+
+    vp = MagicMock()
+    vp.IsReadOnly = False
+    mock_ax_patterns.ValuePattern.IsSupported.return_value = True
+    mock_ax_patterns.ValuePattern.return_value = vp
+
+    result = run(computer.ainvoke(action="type", loc=[100, 200], text="hello", caret_position="end"))
+
+    mock_ax.Click.assert_called_once()
+    mock_ax.TypeText.assert_called_once_with("hello")
+    assert result.success
+
+
+def test_type_press_enter_after_set_value(mock_ax, mock_ax_patterns):
+    """press_enter=True after ValuePattern.SetValue should fire KeyPress(Return)."""
+    from operator_use.computer.tools.macos import computer
+
+    element = MagicMock()
+    mock_ax.ElementAtPosition.return_value = element
+    mock_ax.GetRootControl.return_value = MagicMock()
+
+    vp = MagicMock()
+    vp.IsReadOnly = False
+    mock_ax_patterns.ValuePattern.IsSupported.return_value = True
+    mock_ax_patterns.ValuePattern.return_value = vp
+
+    result = run(computer.ainvoke(action="type", loc=[100, 200], text="hello", press_enter=True))
+
+    vp.SetValue.assert_called_once_with("hello")
+    mock_ax.KeyPress.assert_called_once_with(mock_ax.KeyCode.Return)
+    mock_ax.Click.assert_not_called()
+    assert result.success

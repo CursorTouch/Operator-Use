@@ -237,6 +237,21 @@ async def computer(
             if text is None:
                 return ToolResult.error_result("text is required for type.")
             x, y = loc[0], loc[1]
+            # Cursorless path: only when caret_position is idle (SetValue replaces entire value)
+            if caret_position == "idle":
+                try:
+                    element = ax.ElementAtPosition(ax.GetRootControl(), x, y)
+                    if element and ax_patterns.ValuePattern.IsSupported(element):
+                        vp = ax_patterns.ValuePattern(element)
+                        if not vp.IsReadOnly:
+                            vp.SetValue(text)
+                            if press_enter:
+                                ax.KeyPress(ax.KeyCode.Return)
+                            return ToolResult.success_result(f"Typed at ({x},{y}).")
+                        logger.debug("ValuePattern at (%s,%s) is ReadOnly, falling back", x, y)
+                except Exception:
+                    logger.debug("Cursorless type failed at (%s,%s), falling back to coordinates", x, y, exc_info=True)
+            # Coordinate fallback
             ax.Click(x, y)
             await asyncio.sleep(0.05)
             if clear:
