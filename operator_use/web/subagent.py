@@ -4,6 +4,7 @@ import logging
 
 from pydantic import BaseModel, Field
 from operator_use.tools import Tool, ToolResult
+from operator_use.web.loop import LoopGuard
 
 
 class BrowserTask(BaseModel):
@@ -141,11 +142,17 @@ async def browser_task(task: str, keep_open: bool = True, use_user_session: bool
     ]
 
     result = f"(hit {MAX_ITERATIONS}-iteration limit without finishing)"
+    loop_guard = LoopGuard()
     try:
         for iteration in range(MAX_ITERATIONS):
             messages = list(history)
             ctx = BeforeLLMCallContext(session=None, messages=messages, iteration=iteration)
             await plugin._state_hook(ctx)
+
+            # Inject loop detection warnings if any
+            warning = loop_guard.check()
+            if warning:
+                messages.append(HumanMessage(content=f"[LoopGuard] {warning}"))
 
             event = await llm.ainvoke(messages=messages, tools=tools)
             match event.type:
@@ -154,6 +161,18 @@ async def browser_task(task: str, keep_open: bool = True, use_user_session: bool
                     logger.info("[browser_task] iter=%d tool=%s params=%s", iteration, tc.name, tc.params)
                     tr = await registry.aexecute(tc.name, tc.params)
                     logger.info("[browser_task] iter=%d result=%s", iteration, tr.output if tr.success else f"ERROR: {tr.error}")
+
+                    # Record action for loop detection
+                    loop_guard.record_action(tc.name, tc.params, tr.success)
+
+                    # Record page state for stagnation/cycle detection
+                    try:
+                        page_state = await browser.get_state()
+                        if page_state and page_state.current_tab:
+                            loop_guard.record_page(page_state.current_tab.url, page_state.to_string())
+                    except Exception as e:
+                        logger.debug("[browser_task] Failed to capture page state for loop detection: %s", e)
+
                     thinking_signature = event.thinking.signature if event.thinking else None
                     history.append(ToolMessage(
                         id=tc.id,
