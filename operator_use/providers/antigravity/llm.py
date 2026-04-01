@@ -105,7 +105,11 @@ def _convert_messages(messages: List[BaseMessage]) -> tuple[Optional[str], list]
             model_parts = []
             if msg.thinking:
                 model_parts.append({"thought": True, "text": msg.thinking})
-            model_parts.append({"functionCall": {"name": msg.name, "args": msg.params}})
+            # functionCall part with thoughtSignature if available
+            function_call_part = {"functionCall": {"name": msg.name, "args": msg.params}}
+            if msg.thinking_signature:
+                function_call_part["thoughtSignature"] = msg.thinking_signature
+            model_parts.append(function_call_part)
             raw_contents.append({"role": "model", "parts": model_parts})
             raw_contents.append({
                 "role": "user",
@@ -174,14 +178,15 @@ def _parse_sse_line(line: str) -> Optional[dict]:
     return None
 
 
-def _extract_from_chunk(chunk: dict) -> tuple[str, Optional[str], Optional[dict], Optional[dict]]:
-    """Return (text, thinking_text, function_call, usage)."""
+def _extract_from_chunk(chunk: dict) -> tuple[str, Optional[str], Optional[dict], Optional[str], Optional[dict]]:
+    """Return (text, thinking_text, function_call, thought_signature, usage)."""
     # API wraps the response in a "response" key
     if "response" in chunk:
         chunk = chunk["response"]
     candidates = chunk.get("candidates", [])
     text = ""
     thinking = None
+    thought_signature = None
     function_call = None
 
     for candidate in candidates:
@@ -189,13 +194,18 @@ def _extract_from_chunk(chunk: dict) -> tuple[str, Optional[str], Optional[dict]
         for part in content.get("parts", []):
             if part.get("thought"):
                 thinking = (thinking or "") + part.get("text", "")
+                if "thoughtSignature" in part and not thought_signature:
+                    thought_signature = part.get("thoughtSignature")
             elif "text" in part:
                 text += part["text"]
             elif "functionCall" in part:
                 function_call = part["functionCall"]
+                # thoughtSignature may be in functionCall part itself
+                if "thoughtSignature" in part and not thought_signature:
+                    thought_signature = part.get("thoughtSignature")
 
     usage_meta = chunk.get("usageMetadata")
-    return text, thinking, function_call, usage_meta
+    return text, thinking, function_call, thought_signature, usage_meta
 
 
 def _make_usage(meta: Optional[dict]) -> Optional[TokenUsage]:
@@ -212,16 +222,19 @@ def _extract_final(chunks: list[dict]) -> LLMEvent:
     text_parts: list[str] = []
     thinking_parts: list[str] = []
     function_call: Optional[dict] = None
+    thought_signature: Optional[str] = None
     usage = None
 
     for chunk in chunks:
-        t, th, fc, meta = _extract_from_chunk(chunk)
+        t, th, fc, ts, meta = _extract_from_chunk(chunk)
         if t:
             text_parts.append(t)
         if th:
             thinking_parts.append(th)
         if fc:
             function_call = fc
+        if ts and not thought_signature:
+            thought_signature = ts
         if meta:
             usage = _make_usage(meta)
 
@@ -240,11 +253,12 @@ def _extract_final(chunks: list[dict]) -> LLMEvent:
             type=LLMEventType.TOOL_CALL,
             tool_call=ToolCall(id=call_id, name=name, params=args),
             usage=usage,
+            thinking=Thinking(content="".join(thinking_parts) if thinking_parts else "", signature=thought_signature) if thinking_parts or thought_signature else None,
         )
 
     thinking_obj = None
-    if thinking_parts:
-        thinking_obj = Thinking(content="".join(thinking_parts), signature=None)
+    if thinking_parts or thought_signature:
+        thinking_obj = Thinking(content="".join(thinking_parts), signature=thought_signature)
 
     return LLMEvent(
         type=LLMEventType.TEXT,
@@ -433,17 +447,19 @@ class ChatAntigravity(BaseChatLLM):
         tool_name: Optional[str] = None
         tool_call_id: Optional[str] = None
         tool_args: dict = {}
+        thought_signature: Optional[str] = None
         usage = None
 
         with httpx.Client(timeout=self._timeout) as client:
             with client.stream("POST", self._endpoint + _STREAM, headers=headers, json=body) as r:
-                r.raise_for_status()
+                if r.status_code >= 400:
+                    logger.error(f"Antigravity stream 400+ error: {r.status_code}\n{r.read().decode()}")
                 for line in r.iter_lines():
                     chunk = _parse_sse_line(line)
                     if not chunk:
                         continue
 
-                    t, th, fc, meta = _extract_from_chunk(chunk)
+                    t, th, fc, ts, meta = _extract_from_chunk(chunk)
                     if meta:
                         usage = _make_usage(meta)
 
@@ -452,6 +468,9 @@ class ChatAntigravity(BaseChatLLM):
                             think_started = True
                             yield LLMStreamEvent(type=LLMStreamEventType.THINK_START)
                         yield LLMStreamEvent(type=LLMStreamEventType.THINK_DELTA, content=th)
+
+                    if ts and not thought_signature:
+                        thought_signature = ts
 
                     if t:
                         if think_started:
@@ -482,6 +501,7 @@ class ChatAntigravity(BaseChatLLM):
                 type=LLMStreamEventType.TOOL_CALL,
                 tool_call=ToolCall(id=tool_call_id, name=tool_name, params=tool_args),
                 usage=usage,
+                thinking=Thinking(content="", signature=thought_signature) if thought_signature else None,
             )
 
     async def astream(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> AsyncIterator[LLMStreamEvent]:
@@ -492,17 +512,19 @@ class ChatAntigravity(BaseChatLLM):
         tool_name: Optional[str] = None
         tool_call_id: Optional[str] = None
         tool_args: dict = {}
+        thought_signature: Optional[str] = None
         usage = None
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             async with client.stream("POST", self._endpoint + _STREAM, headers=headers, json=body) as r:
-                r.raise_for_status()
+                if r.status_code >= 400:
+                    logger.error(f"Antigravity astream 400+ error: {r.status_code}\n{(await r.aread()).decode()}")
                 async for line in r.aiter_lines():
                     chunk = _parse_sse_line(line)
                     if not chunk:
                         continue
 
-                    t, th, fc, meta = _extract_from_chunk(chunk)
+                    t, th, fc, ts, meta = _extract_from_chunk(chunk)
                     if meta:
                         usage = _make_usage(meta)
 
@@ -511,6 +533,9 @@ class ChatAntigravity(BaseChatLLM):
                             think_started = True
                             yield LLMStreamEvent(type=LLMStreamEventType.THINK_START)
                         yield LLMStreamEvent(type=LLMStreamEventType.THINK_DELTA, content=th)
+
+                    if ts and not thought_signature:
+                        thought_signature = ts
 
                     if t:
                         if think_started:
@@ -541,6 +566,7 @@ class ChatAntigravity(BaseChatLLM):
                 type=LLMStreamEventType.TOOL_CALL,
                 tool_call=ToolCall(id=tool_call_id, name=tool_name, params=tool_args),
                 usage=usage,
+                thinking=Thinking(content="", signature=thought_signature) if thought_signature else None,
             )
 
     def get_metadata(self) -> Metadata:

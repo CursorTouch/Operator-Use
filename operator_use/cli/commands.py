@@ -888,6 +888,7 @@ def auth_codex():
 def agent_repl(
     session: str = typer.Option("", "--session", "-s", help="Session ID to resume (default: new session per run)."),
     agent_id: str = typer.Option("", "--agent", "-a", help="Agent ID to use (default: first agent in config)."),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show tool calls and logs in console"),
 ):
     """Chat directly with the agent in the terminal (no gateway required)."""
     from operator_use.cli.start import (
@@ -904,7 +905,7 @@ def agent_repl(
         console.print("[red]No config found.[/red] Run [bold]operator onboard[/bold] first.")
         raise typer.Exit(1)
 
-    setup_logging(USERDATA_DIR)
+    setup_logging(USERDATA_DIR, verbose=verbose)
     config = load_config(USERDATA_DIR)
     if not config.agents.list:
         console.print("[red]No agents defined in config.[/red] Run [bold]operator onboard[/bold] first.")
@@ -936,6 +937,15 @@ def agent_repl(
     if agent is None:
         console.print(f"[red]Failed to initialize agent '{defn.id}'.[/red]")
         raise typer.Exit(1)
+
+    # Add tool call hook for verbose mode
+    if verbose:
+        from operator_use.agent.hooks.events import HookEvent
+        async def _log_tool_call(ctx):
+            tool_call = ctx.tool_call
+            params_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in tool_call.params.items())
+            console.print(f"[dim]→ Tool: {tool_call.name}({params_str})[/dim]")
+        agent.hooks.register(HookEvent.BEFORE_TOOL_CALL, _log_tool_call)
 
     orchestrator = Orchestrator(
         bus=bus,

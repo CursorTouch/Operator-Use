@@ -300,7 +300,9 @@ class Agent:
 
     async def _execute_tool(self, tool_call, thinking, thinking_signature, session: Session):
         """Execute a tool call and append a ToolMessage to the session."""
-        logger.info(f"Tool call | name={tool_call.name} params={tool_call.params}")
+        # Format tool call nicely: tool_name(param1=value1, param2=value2, ...)
+        params_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in tool_call.params.items())
+        logger.info(f"Tool call | {tool_call.name}({params_str})")
 
         pre_ctx = await self.hooks.emit(
             HookEvent.BEFORE_TOOL_CALL,
