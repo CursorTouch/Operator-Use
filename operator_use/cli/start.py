@@ -297,10 +297,11 @@ def _build_agents(config: Config, cron, gateway, bus, image=None, search=None) -
     for agent in agents.values():
         agent.tool_register.set_extension("_agent_registry", agents)
 
-    # Wire MCP manager per agent
+    # Wire shared MCP manager to all agents
+    # (reference counting allows multiple agents to share the same server connection)
     from operator_use.mcp import MCPManager
+    mcp_manager = MCPManager(list(config.mcp_servers.values()))
     for agent in agents.values():
-        mcp_manager = MCPManager(list(config.mcp_servers.values()))
         agent.tool_register.set_extension("_mcp_manager", mcp_manager)
 
     return agents

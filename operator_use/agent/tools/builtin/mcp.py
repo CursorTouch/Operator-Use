@@ -55,6 +55,7 @@ async def mcp(
 
     manager: MCPManager | None = kwargs.get("_mcp_manager")
     agent = kwargs.get("_agent")
+    agent_id: str = kwargs.get("_agent_id", "unknown")
 
     if manager is None:
         return ToolResult.error_result(
@@ -62,23 +63,26 @@ async def mcp(
         )
 
     if action == "list":
-        servers = manager.list_servers()
+        # Show only servers this agent is connected to
+        servers = manager.list_servers(agent_id=agent_id)
         if not servers:
             return ToolResult.success_result(
-                "No MCP servers configured. Add entries under 'mcpServers' in config.json."
+                "You are not connected to any MCP servers. "
+                "Configure servers under 'mcpServers' in config.json and connect to them."
             )
-        lines = ["Configured MCP Servers:"]
+        lines = ["Your MCP Servers:"]
         for s in servers:
-            status = "connected" if s["connected"] else "disconnected"
-            tool_info = f" ({s['tool_count']} tools)" if s["connected"] else ""
-            lines.append(f"  • {s['name']} [{status}]{tool_info}  transport={s['transport']}")
+            status = "connected" if s["agent_connected"] else "disconnected"
+            tool_info = f" ({s['tool_count']} tools)" if s["agent_connected"] else ""
+            shared_info = f"  [shared: {s['connection_count']} agent(s)]" if s["connection_count"] > 1 else ""
+            lines.append(f"  • {s['name']} [{status}]{tool_info}{shared_info}")
         return ToolResult.success_result("\n".join(lines))
 
     if action == "connect":
-        if manager.is_connected(server_name):
-            return ToolResult.error_result(f"Server '{server_name}' is already connected.")
+        if manager.is_connected(agent_id, server_name):
+            return ToolResult.error_result(f"You are already connected to '{server_name}'.")
         try:
-            tools = await manager.connect(server_name)
+            tools = await manager.connect(agent_id, server_name)
         except ValueError as e:
             return ToolResult.error_result(str(e))
         except Exception as e:
@@ -105,10 +109,10 @@ async def mcp(
             )
 
     if action == "disconnect":
-        if not manager.is_connected(server_name):
-            return ToolResult.error_result(f"Server '{server_name}' is not connected.")
+        if not manager.is_connected(agent_id, server_name):
+            return ToolResult.error_result(f"You are not connected to '{server_name}'.")
         try:
-            tool_names = await manager.disconnect(server_name)
+            tool_names = await manager.disconnect(agent_id, server_name)
         except Exception as e:
             logger.exception(f"Failed to disconnect from MCP server '{server_name}'")
             return ToolResult.error_result(f"Failed to disconnect from '{server_name}': {e}")
