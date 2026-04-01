@@ -802,18 +802,23 @@ def _attempt_startup_recovery(exit_code: int) -> bool:
     If ``restart.json`` contains an ``improvement_session`` (written by
     control_center before a self-improvement restart), the agent made code
     changes, restarted, and the new worker crashed before reading restart.json.
+    In this case, we revert files and build a recovery message.
 
-    Steps:
+    If ``startup_error.json`` exists but restart.json doesn't (or has no
+    improvement_session), it's a regular startup error — we read and display it
+    for debugging but don't attempt recovery.
+
+    Steps for self-improvement recovery:
     1. Read ``startup_error.json`` written by the worker exception handler.
     2. Call ``revert_session()`` to restore every snapshotted file from its
        original content — no git required.
-    3. Append to ``self_improvement_log.jsonl`` so the agent can see the full
+    3. Append to ``interceptor_log.jsonl`` so the agent can see the full
        consecutive failure history on the next attempt.
     4. Rewrite ``restart.json`` keeping the improvement_session and raw error
        so the clean worker can run LLM synthesis before dispatching to agent.
 
     Returns True if recovery was attempted (caller should restart),
-    False if this was an unrelated crash (caller should sys.exit).
+    False otherwise (caller should sys.exit).
     """
     import json as _json
     from operator_use.paths import get_userdata_dir as _gud
@@ -823,29 +828,41 @@ def _attempt_startup_recovery(exit_code: int) -> bool:
     restart_file = userdata / "restart.json"
     error_file = userdata / "startup_error.json"
 
-    # If restart.json is absent, on_ready already deleted it — worker started fine.
+    # Read error if present (exists for both regular and self-improvement crashes).
+    error_text = None
+    if error_file.exists():
+        try:
+            err_data = _json.loads(error_file.read_text(encoding="utf-8"))
+            error_file.unlink()
+            error_text = err_data.get("error")
+        except Exception:
+            pass
+
+    # Check if restart.json exists (indicates a prior self-improvement restart).
     if not restart_file.exists():
+        # Regular startup error (no self-improvement in flight) — show error and exit.
+        if error_text:
+            print(f"\n[supervisor] Startup failure (exit={exit_code}):\n{error_text[-1500:]}", flush=True)
         return False
 
     try:
         restart_data = _json.loads(restart_file.read_text(encoding="utf-8"))
     except Exception:
+        if error_text:
+            print(f"\n[supervisor] Startup failure (exit={exit_code}):\n{error_text[-1500:]}", flush=True)
         return False
 
+    # Check if this is a self-improvement recovery scenario.
     improvement_session = restart_data.get("improvement_session")
     if not improvement_session:
-        # No startup proof AND no improvement session — unrelated crash.
+        # restart.json exists but no improvement_session — not a recovery scenario.
+        if error_text:
+            print(f"\n[supervisor] Startup failure (exit={exit_code}):\n{error_text[-1500:]}", flush=True)
         return False
 
-    # Read captured traceback (may be absent for import-time crashes).
-    error_text = "(no traceback captured — likely an import or syntax error)"
-    if error_file.exists():
-        try:
-            err_data = _json.loads(error_file.read_text(encoding="utf-8"))
-            error_file.unlink()
-            error_text = err_data.get("error", error_text)
-        except Exception:
-            pass
+    # Self-improvement recovery: revert files, log failure, and prepare recovery message.
+    if not error_text:
+        error_text = "(no traceback captured — likely an import or syntax error)"
 
     print(
         f"\n[supervisor] Self-improvement startup failure (exit={exit_code}, "
