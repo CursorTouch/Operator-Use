@@ -25,12 +25,13 @@ class PromptMode(str, Enum):
 class Context:
     """Builds conversation context: system prompt + message history."""
 
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, mcp_servers: dict | None = None):
         self.workspace = workspace
         self.codebase = Path(operator_use.__file__).resolve().parent.parent
         self.skills = Skills(self.workspace)
         self.memory = Memory(self.workspace)
         self.knowledge = Knowledge(self.workspace)
+        self.mcp_servers = mcp_servers or {}
         from operator_use.paths import get_userdata_dir
         self.interceptor = RestartInterceptor(
             userdata=get_userdata_dir(),
@@ -108,6 +109,37 @@ When you need to remember something, write to {workspace_path}/memory/MEMORY.md
                 parts.append(f"""### {filename}\n\n{content}""")
         return parts
 
+    def _build_mcp_context(self) -> str | None:
+        """Build context about available MCP servers."""
+        if not self.mcp_servers:
+            return None
+
+        lines = ["## Available MCP Servers"]
+        lines.append("You can connect to external MCP servers to access additional tools and capabilities.")
+        lines.append("Use the `mcp(action=\"list\")` tool to see all configured servers and their connection status.")
+        lines.append("Use `mcp(action=\"connect\", server_name=\"...\")` to connect and load tools from a server.")
+        lines.append("\n### Configured MCP Servers:\n")
+
+        for name, config in self.mcp_servers.items():
+            transport = config.get("transport", "unknown")
+            if transport == "stdio":
+                cmd = config.get("command", "?")
+                args = config.get("args", [])
+                args_str = f" {' '.join(args)}" if args else ""
+                lines.append(f"- **{name}** (stdio): `{cmd}{args_str}`")
+            elif transport in ("http", "sse"):
+                url = config.get("url", "?")
+                lines.append(f"- **{name}** ({transport}): `{url}`")
+            else:
+                lines.append(f"- **{name}** ({transport})")
+
+        lines.append("\nTo use an MCP server's tools:")
+        lines.append("1. Call `mcp(action=\"connect\", server_name=\"<server-name>\")`")
+        lines.append("2. The server's tools will be loaded and available for use")
+        lines.append("3. Call `mcp(action=\"disconnect\", server_name=\"<server-name>\")` when done")
+
+        return "\n".join(lines)
+
     def get_respond_behavior(self, is_voice: bool = False) -> str:
         parts = ["## Respond Behavior"]
         base = """
@@ -161,6 +193,10 @@ You have access to the following skills to enhance your capabilities, to use a s
 Available Skills:
 {skills_summary}
 ''')
+
+        if mcp_context := self._build_mcp_context():
+            parts.append(mcp_context)
+
         if prompt_mode == PromptMode.FULL:
             if memory_context := self.memory.get_memory_context():
                 parts.append(memory_context)

@@ -292,6 +292,7 @@ def _build_agents(config: Config, cron, gateway, bus, image=None, search=None) -
             plugins=plugins,
             image=image,
             search=search,
+            mcp_servers=dict(config.mcp_servers),
         )
 
     for agent in agents.values():

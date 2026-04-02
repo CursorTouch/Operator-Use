@@ -68,6 +68,7 @@ class Agent:
         plugins: "list[Plugin] | None" = None,
         image=None,
         search=None,
+        mcp_servers: dict | None = None,
     ):
         self.agent_id = agent_id
         self.description = description
@@ -76,7 +77,7 @@ class Agent:
             workspace = get_named_workspace_dir("operator")
         self.workspace = workspace
         self.sessions = sessions or SessionStore(workspace=self.workspace)
-        self.context = Context(workspace=self.workspace)
+        self.context = Context(workspace=self.workspace, mcp_servers=mcp_servers)
         self.tool_register = ToolRegistry()
         self.max_iterations = max_iterations
         self.llm = llm

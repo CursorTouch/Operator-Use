@@ -8,6 +8,7 @@ load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from operator_use.cli.tui import BackRequest, NavigateBack, clear_screen, print_banner, print_start, print_step, select, text_input, confirm, print_end, print_end_first_install, console
+from operator_use.cli.mcp_setup import show_mcp_menu, validate_mcp_servers
 
 # --- Registry Data ---
 
@@ -367,6 +368,7 @@ def _save_config(
     api_keys_dict: dict[str, str],
     acp_server: "ACPServerSettings | None" = None,
     acp_agents: "dict[str, ACPAgentEntry] | None" = None,
+    mcp_servers: dict | None = None,
 ) -> None:
     """Build the Config object and persist it to disk."""
     from operator_use.paths import get_userdata_dir
@@ -419,6 +421,7 @@ def _save_config(
         providers=providers,
         acp_server=acp_server or ACPServerSettings(),
         acp_agents=acp_agents or {},
+        mcp_servers=mcp_servers or {},
     )
 
     operator_use_dir = get_userdata_dir()
@@ -610,6 +613,9 @@ def run_initial_setup():
     acp_agents: dict[str, ACPAgentEntry] = {
         k: ACPAgentEntry(**v) for k, v in _acp_agents_raw.items()
     } if _acp_agents_raw else {}
+
+    # MCP servers registry
+    mcp_servers: dict[str, dict] = existing_data.get("mcpServers", existing_data.get("mcp_servers", {}))
 
     # Agent definitions: list of dicts with per-agent overrides.
     # None values mean "use global default".
@@ -981,6 +987,7 @@ def run_initial_setup():
             acp_label = f"{acp_srv_label}, {acp_agents_count} remote agent{'s' if acp_agents_count != 1 else ''}" if acp_server.enabled or acp_agents_count else "disabled"
 
             search_label = search_provider_key if search_provider_key else "ddgs"
+            mcp_label = f"{len(mcp_servers)} servers" if mcp_servers else "none"
             choice = select("What would you like to configure?", [
                 f"STT           {stt_label}",
                 f"TTS           {tts_label}",
@@ -989,6 +996,7 @@ def run_initial_setup():
                 f"Heartbeat     {hb_label}",
                 f"Agents        {agents_label}",
                 f"ACP           {acp_label}",
+                f"MCP           {mcp_label}",
                 "Save & Exit",
             ])
 
@@ -1065,6 +1073,15 @@ def run_initial_setup():
             elif choice.startswith("ACP"):
                 _acp_menu()
 
+            elif choice.startswith("MCP"):
+                mcp_servers = show_mcp_menu(mcp_servers)
+                if validate_mcp_servers(mcp_servers):
+                    console.print("│")
+                    console.print("│  [green]MCP servers validated[/green]")
+                else:
+                    console.print("│")
+                    console.print("│  [red]MCP configuration has errors[/red]")
+
             elif choice.startswith("Save"):
                 if any(not a.get("llm_provider_key") for a in agent_defs):
                     console.print("│")
@@ -1095,6 +1112,7 @@ def run_initial_setup():
         api_keys_dict=api_keys_dict,
         acp_server=acp_server,
         acp_agents=acp_agents,
+        mcp_servers=mcp_servers,
     )
     print_end()
 
