@@ -20,15 +20,19 @@ Use the `browser_task` tool to perform web browsing tasks. Describe the full tas
 and the tool will run an isolated browser agent with its own context window (30-iteration budget). \
 The agent returns a summary of what was accomplished.
 
-Parameters:
-- `task`: Full description of what to do (e.g., "Go to example.com and find the price of X")
-- `keep_open`: Keep browser open after task (default: True). Set False only if user explicitly asks to close it.
-- `use_user_session`: Use real browser profile with logins (default: False). Set True when the task needs existing credentials.
+**Setup:**
 
-Example: "Go to Gmail, check my inbox for messages from alice@example.com"
+Start Chrome with remote debugging enabled:
+1. Close all Chrome windows
+2. Create profile directory (first time only):
+   - `mkdir %LOCALAPPDATA%/Operator/chrome-debug-profile`
+3. Start Chrome:
+   - `chrome.exe --remote-debugging-port=9222 --user-data-dir=%LOCALAPPDATA%/Operator/chrome-debug-profile`
+4. Sign into your accounts (Gmail, YouTube, etc.) - logins persist
+5. Use browser_task - agent attaches directly to your Chrome with full access
 
-The browser stays open by default so you can take follow-up actions. Browser sessions are reused \
-across tasks when compatible (e.g., multiple tasks with `use_user_session=True` share the same profile).\
+**Example:**
+"Go to Gmail and check my inbox for messages from alice@example.com"\
 """
 
 

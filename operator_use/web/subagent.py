@@ -1,6 +1,7 @@
 """browser_task tool — runs browser automation in an isolated context window."""
 
 import logging
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 from operator_use.tools import Tool, ToolResult
@@ -9,8 +10,7 @@ from operator_use.web.loop import LoopGuard
 
 class BrowserTask(BaseModel):
     task: str = Field(..., description="Full description of the browser automation task to perform.")
-    keep_open: bool = Field(default=True, description="Keep the browser open after the task completes. Always True by default — only set to False when the user explicitly asks to close the browser after the task.")
-    use_user_session: bool = Field(default=False, description="Use the user's real browser profile (cookies, logins). Set to True when the task requires the user to already be logged in. Defaults to False (clean isolated profile).")
+    keep_open: bool = Field(default=True, description="Keep the browser open after the task completes.")
 from operator_use.agent.tools import ToolRegistry
 from operator_use.messages import SystemMessage, HumanMessage, ToolMessage
 from operator_use.providers.events import LLMEventType
@@ -90,14 +90,13 @@ key findings or results, and any URLs or sources referenced.\
     name="browser_task",
     description=(
         "Delegate a browser automation task to an isolated agent with its own context window. "
+        "Requires Chrome running with --remote-debugging-port=9222. "
         "Describe the full task — the agent handles all browser interactions and returns a clean result. "
-        "The browser stays open after the task by default so the user can see the result. "
-        "Only set keep_open=False when the user explicitly asks to close the browser after the task. "
-        "Set use_user_session=True when the task needs the user's existing logins or cookies."
+        "The browser stays open by default so the user can see the result."
     ),
     model=BrowserTask,
 )
-async def browser_task(task: str, keep_open: bool = True, use_user_session: bool = False, **kwargs) -> ToolResult:
+async def browser_task(task: str, keep_open: bool = True, **kwargs) -> ToolResult:
     llm = kwargs.get("_llm")
     if llm is None:
         return ToolResult.error_result("No LLM available.")
@@ -108,20 +107,15 @@ async def browser_task(task: str, keep_open: bool = True, use_user_session: bool
     from operator_use.web.tools.browser import browser as browser_tool
     from operator_use.agent.hooks.events import BeforeLLMCallContext
 
-    # Reuse the persistent browser from BrowserPlugin if available and compatible.
-    # A session mismatch (e.g. task wants user session but browser is clean) forces a new instance.
+    # Reuse the persistent browser from BrowserPlugin if available.
     existing_browser: Browser | None = kwargs.get("_browser")
-    if existing_browser is not None and existing_browser._client is not None:
-        if use_user_session and not existing_browser.config.use_system_profile:
-            existing_browser = None  # need a user-session browser, can't reuse clean one
-        elif not use_user_session and existing_browser.config.use_system_profile:
-            existing_browser = None  # need a clean browser, can't reuse user-session one
 
     if existing_browser is not None and existing_browser._client is not None:
         browser = existing_browser
         owns_browser = False
     else:
-        config = BrowserConfig(use_system_profile=use_user_session)
+        # Attach to running Chrome on port 9222 (must be started with --remote-debugging-port=9222)
+        config = BrowserConfig(attach_to_existing=True, cdp_port=9222)
         browser = Browser(config=config)
         owns_browser = True
 
