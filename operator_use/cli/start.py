@@ -239,7 +239,7 @@ def _get_plugin_registry() -> dict[str, type]:
     return PLUGIN_REGISTRY
 
 
-def _build_agents(config: Config, cron, gateway, bus, image=None, search=None) -> dict[str, Agent]:
+def _build_agents(config: Config, cron, gateway, bus, image=None, search=None) -> tuple[dict[str, Agent], "MCPManager | None"]:
     """Instantiate one Agent per agent definition in config."""
     from operator_use.agent.tools.builtin import resolve_tools
 
@@ -303,11 +303,11 @@ def _build_agents(config: Config, cron, gateway, bus, image=None, search=None) -
     # Wire shared MCP manager to all agents
     # (reference counting allows multiple agents to share the same server connection)
     from operator_use.mcp import MCPManager
-    mcp_manager = MCPManager(list(config.mcp_servers.values()))
+    mcp_manager = MCPManager(list(config.mcp_servers.values())) if config.mcp_servers else None
     for agent in agents.values():
         agent.tool_register.set_extension("_mcp_manager", mcp_manager)
 
-    return agents
+    return agents, mcp_manager
 
 
 def _build_router(config: Config):
@@ -607,7 +607,7 @@ async def main():
 
     image_provider = _make_image(config)
     search_provider = _make_search(config)  # always set, DDGS is the default
-    agents = _build_agents(config, cron=cron, gateway=gateway, bus=bus, image=image_provider, search=search_provider)
+    agents, mcp_manager = _build_agents(config, cron=cron, gateway=gateway, bus=bus, image=image_provider, search=search_provider)
 
     # Add ACP server channel after agents are built so all agents are discoverable
     if acp_server_enabled:
@@ -794,6 +794,12 @@ async def main():
         if config.heartbeat.enabled:
             heartbeat.stop()
         cron.stop()
+        # Gracefully disconnect all MCP servers
+        if mcp_manager is not None:
+            try:
+                await mcp_manager.disconnect_all()
+            except Exception as e:
+                logger.warning(f"Error disconnecting MCP servers during shutdown: {e}")
         try:
             await asyncio.shield(gateway.stop())
         except asyncio.CancelledError:
