@@ -45,8 +45,21 @@ class MCPTool(Tool):
         # and should not be forwarded to the MCP tool
         clean_kwargs = {k: v for k, v in kwargs.items() if not k.startswith("_")}
 
+        # Also convert non-JSON-serializable values to strings
+        # This handles cases where parameters contain objects like Browser that can't be serialized
+        serializable_kwargs = {}
+        for k, v in clean_kwargs.items():
+            try:
+                # Try to JSON-serialize the value to check if it's serializable
+                import json
+                json.dumps(v)
+                serializable_kwargs[k] = v
+            except (TypeError, ValueError):
+                # If not serializable, convert to string
+                serializable_kwargs[k] = str(v)
+
         try:
-            result = await self._session.call_tool(self._mcp_tool_name, clean_kwargs)
+            result = await self._session.call_tool(self._mcp_tool_name, serializable_kwargs)
             # result.content is List[TextContent | ImageContent | EmbeddedResource]
             parts = []
             for item in result.content:
