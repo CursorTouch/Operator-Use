@@ -147,6 +147,9 @@ class MCPManager:
                 stack = self._stacks.pop(server_name)
                 try:
                     await stack.aclose()
+                except (RuntimeError, GeneratorExit) as e:
+                    # RuntimeError from asyncio scope issues during cleanup is non-fatal
+                    logger.debug(f"Non-fatal error closing MCP stack for '{server_name}': {e}")
                 except Exception as e:
                     logger.warning(f"Error closing MCP stack for '{server_name}': {e}")
             self._tools.pop(server_name, None)
@@ -166,6 +169,9 @@ class MCPManager:
             for server_name in servers_to_disconnect:
                 try:
                     await self.disconnect(agent_id, server_name)
+                except (RuntimeError, GeneratorExit):
+                    # Non-fatal async scope errors during cleanup
+                    logger.debug(f"Non-fatal error disconnecting agent {agent_id} from '{server_name}'")
                 except Exception as e:
                     logger.warning(f"Error disconnecting agent {agent_id} from '{server_name}': {e}")
         else:
@@ -176,6 +182,9 @@ class MCPManager:
                 for server_name in servers:
                     try:
                         await self.disconnect(agent, server_name)
+                    except (RuntimeError, GeneratorExit):
+                        # Non-fatal async scope errors during cleanup
+                        logger.debug(f"Non-fatal error disconnecting agent {agent} from '{server_name}'")
                     except Exception as e:
                         logger.warning(f"Error disconnecting agent {agent} from '{server_name}': {e}")
 
