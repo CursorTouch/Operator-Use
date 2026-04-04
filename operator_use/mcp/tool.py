@@ -40,12 +40,20 @@ class MCPTool(Tool):
 
     async def ainvoke(self, **kwargs) -> ToolResult:
         """Call the remote MCP tool, stripping internal extension kwargs."""
-        # Remove registry extension keys before forwarding to MCP
-        # Extensions (starting with _) are injected by ToolRegistry._merge_params
-        # and should not be forwarded to the MCP tool
-        clean_kwargs = {k: v for k, v in kwargs.items() if not k.startswith("_")}
+        # Only include parameters that are actually defined in the MCP tool's input schema
+        # This prevents unexpected parameters (like injected extensions) from reaching the MCP server
+        input_schema = self._input_schema
+        expected_props = set()
+        if isinstance(input_schema, dict) and "properties" in input_schema:
+            expected_props = set(input_schema["properties"].keys())
 
-        # Also convert non-JSON-serializable values to strings
+        # Filter to only include expected parameters
+        clean_kwargs = {
+            k: v for k, v in kwargs.items()
+            if not k.startswith("_") and (not expected_props or k in expected_props)
+        }
+
+        # Convert non-JSON-serializable values to strings
         # This handles cases where parameters contain objects like Browser that can't be serialized
         serializable_kwargs = {}
         for k, v in clean_kwargs.items():
