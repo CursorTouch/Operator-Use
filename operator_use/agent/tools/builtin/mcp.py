@@ -63,19 +63,19 @@ async def mcp(
         )
 
     if action == "list":
-        # Show only servers this agent is connected to
-        servers = manager.list_servers(agent_id=agent_id)
+        # Show all configured servers with their connection status
+        servers = manager.list_servers()
         if not servers:
             return ToolResult.success_result(
-                "You are not connected to any MCP servers. "
-                "Configure servers under 'mcpServers' in config.json and connect to them."
+                "No MCP servers configured. Add servers to 'mcpServers' in config.json."
             )
-        lines = ["Your MCP Servers:"]
+        lines = ["Configured MCP Servers:"]
         for s in servers:
-            status = "connected" if s["agent_connected"] else "disconnected"
-            tool_info = f" ({s['tool_count']} tools)" if s["agent_connected"] else ""
+            status = "connected" if s["connected"] else "not connected"
+            tool_info = f" ({s['tool_count']} tools)" if s["connected"] else ""
+            agent_status = f"  [you: connected]" if s["agent_connected"] else f"  [you: not connected]"
             shared_info = f"  [shared: {s['connection_count']} agent(s)]" if s["connection_count"] > 1 else ""
-            lines.append(f"  • {s['name']} [{status}]{tool_info}{shared_info}")
+            lines.append(f"  • {s['name']} [{status}]{tool_info}{agent_status}{shared_info}")
         return ToolResult.success_result("\n".join(lines))
 
     if action == "connect":
