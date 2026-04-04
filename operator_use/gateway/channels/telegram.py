@@ -17,6 +17,7 @@ from telegram.ext import (
 )
 import json
 from telegram.request import HTTPXRequest
+from telegram.error import NetworkError
 
 import base64
 from io import BytesIO
@@ -344,10 +345,14 @@ class TelegramChannel(BaseChannel):
         if self._app.post_init:
             await self._app.post_init(self._app)
         await self._app.start()
-        await self._app.updater.start_polling(
-            allowed_updates=["message", "message_reaction"],
-            drop_pending_updates=True,
-        )
+        try:
+            await self._app.updater.start_polling(
+                allowed_updates=["message", "message_reaction"],
+                drop_pending_updates=True,
+            )
+        except NetworkError:
+            # Suppress transient network errors - bot will retry automatically
+            pass
         bot_info = await self._app.bot.get_me()
         logger.info("Telegram bot @%s connected", bot_info.username)
         while self._polling_running:
