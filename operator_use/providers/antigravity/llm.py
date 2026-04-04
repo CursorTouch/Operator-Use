@@ -106,10 +106,10 @@ def _convert_messages(messages: List[BaseMessage]) -> tuple[Optional[str], list]
             if msg.thinking:
                 model_parts.append({"thought": True, "text": msg.thinking})
             # functionCall part with thoughtSignature if available
-            function_call_part = {"functionCall": {"name": msg.name, "args": msg.params}}
+            function_call = {"name": msg.name, "args": msg.params}
             if msg.thinking_signature:
-                function_call_part["thoughtSignature"] = msg.thinking_signature
-            model_parts.append(function_call_part)
+                function_call["thoughtSignature"] = msg.thinking_signature
+            model_parts.append({"functionCall": function_call})
             raw_contents.append({"role": "model", "parts": model_parts})
             raw_contents.append({
                 "role": "user",
