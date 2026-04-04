@@ -22,6 +22,7 @@ from operator_use.config.service import (
     ACPServerSettings,
     HeartbeatConfig,
     ToolsConfig,
+    RetryConfig,
     SubagentConfig,
     PluginConfig,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "ACPServerSettings",
     "HeartbeatConfig",
     "ToolsConfig",
+    "RetryConfig",
     "SubagentConfig",
     "PluginConfig",
 ]

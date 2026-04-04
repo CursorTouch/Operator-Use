@@ -37,6 +37,10 @@ class Subagents(BaseModel):
         default=None,
         description="Subagent task_id — required for status and cancel actions.",
     )
+    depends_on: Optional[list[str]] = Field(
+        default=None,
+        description="Optional list of task_ids that must complete before this task starts (create action). Task fails if any dependency fails.",
+    )
 
 
 def _format_duration(started: datetime, finished: datetime | None) -> str:
@@ -72,6 +76,7 @@ async def subagents(
     task: str | None = None,
     label: str | None = None,
     task_id: str | None = None,
+    depends_on: list[str] | None = None,
     **kwargs,
 ) -> ToolResult:
     subagent_manager = kwargs.get("_subagent_manager")
@@ -89,13 +94,18 @@ async def subagents(
                 return ToolResult.error_result("Provide task description to create a subagent")
             if channel is None or chat_id is None:
                 return ToolResult.error_result("Channel context not available (internal error)")
-            tid = await subagent_manager.ainvoke(task, label, channel, chat_id, account_id)
+
+            try:
+                tid = await subagent_manager.ainvoke(task, label, channel, chat_id, account_id, depends_on=depends_on)
+            except ValueError as e:
+                return ToolResult.error_result(f"Cannot create subagent: {e}")
+
             display = label or task[:60]
-            return ToolResult.success_result(
-                f"Subagent created (task_id={tid}  label='{display}')\n"
-                f"Running in background — result will be delivered automatically when done.\n"
-                f"END YOUR TURN NOW. Do not call list or any other tool. Inform the user and stop."
-            )
+            msg = f"Subagent created (task_id={tid}  label='{display}')\n"
+            if depends_on:
+                msg += f"Dependencies: {', '.join(depends_on)}\n"
+            msg += "Running in background — result will be delivered automatically when done.\nEND YOUR TURN NOW. Do not call list or any other tool. Inform the user and stop."
+            return ToolResult.success_result(msg)
 
         case "agents":
             records = subagent_manager.list_all()

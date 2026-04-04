@@ -170,12 +170,23 @@ class ToolsConfig(Base):
     deny: List[str] = Field(default_factory=list)         # Tool names to remove from resolved list
 
 
+class RetryConfig(Base):
+    """Retry configuration for subagents — exponential backoff."""
+
+    max_retries: int = 3
+    base_delay: float = 1.0      # seconds before first retry
+    max_delay: float = 60.0      # cap on delay between retries
+    backoff_factor: float = 2.0  # multiplier per attempt
+
+
 class SubagentConfig(Base):
     """Global subagent configuration — applies to all subagents spawned by any agent."""
 
     max_iterations: int = 20
     system_prompt: str = ""  # If empty, subagent uses its built-in default system prompt
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    retry: Optional[RetryConfig] = None  # If None, no retry (backward-compatible)
+    max_concurrent: int = 10  # Max concurrent subagent tasks (0 = unlimited)
 
 
 class AgentDefaults(Base):

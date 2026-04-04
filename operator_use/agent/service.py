@@ -33,6 +33,7 @@ from operator_use.agent.hooks.events import (
 
 if TYPE_CHECKING:
     from operator_use.providers.base import BaseChatLLM
+    from operator_use.tracing import Tracer
     from operator_use.crons.service import Cron
     from operator_use.plugins import Plugin
 
@@ -69,6 +70,7 @@ class Agent:
         image=None,
         search=None,
         mcp_servers: dict | None = None,
+        tracer: "Tracer | None" = None,
     ):
         self.agent_id = agent_id
         self.description = description
@@ -84,9 +86,14 @@ class Agent:
         self.cron = cron
         self.gateway = gateway
         self.bus = bus
-        self.subagent_manager = SubagentManager(llm=llm, bus=bus, config=subagent_config)
+        self.tracer = tracer
+        self.subagent_manager = SubagentManager(llm=llm, bus=bus, config=subagent_config, tracer=tracer)
         self.process_store = ProcessStore()
         self.hooks = Hooks()
+
+        # Register tracer hooks if provided
+        if self.tracer:
+            self.tracer.register(self.hooks)
 
         self.prompt_mode = prompt_mode
         self.system_prompt = system_prompt
