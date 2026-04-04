@@ -146,6 +146,8 @@ class Subagent:
                                 name=tc.name,
                                 params=tc.params,
                                 content=tr.output if tr.success else tr.error,
+                                thinking=event.thinking.content if event.thinking else None,
+                                thinking_signature=event.thinking.signature if event.thinking else None,
                             ))
                         case LLMEventType.TEXT:
                             result = event.content or "(no result)"
