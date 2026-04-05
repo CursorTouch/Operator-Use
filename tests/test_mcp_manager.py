@@ -173,7 +173,7 @@ class TestMCPManagerReferenceCounting:
         manager._agent_connections["agent_a"] = {server_name}
         manager._agent_connections["agent_b"] = {server_name}
 
-        mock_session = AsyncMock()
+        _mock_session = AsyncMock()
         manager._tools[server_name] = [MagicMock(name="tool")]
 
         # Mock stack to avoid actual closing
@@ -182,7 +182,7 @@ class TestMCPManagerReferenceCounting:
         manager._stacks[server_name] = mock_stack
 
         # Agent A disconnects
-        tool_names = await manager.disconnect("agent_a", server_name)
+        await manager.disconnect("agent_a", server_name)
 
         # Server should still be alive
         assert manager._connection_count[server_name] == 1
