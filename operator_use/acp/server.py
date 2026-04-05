@@ -33,6 +33,7 @@ from aiohttp import web
 
 from operator_use.acp.config import ACPServerConfig
 from operator_use.acp.provenance import ACPProvenance, fetch_public_key
+from operator_use.utils.rate_limiter import RateLimiter
 from operator_use.acp.models import (
     AgentListResponse,
     AgentMetadata,
@@ -78,6 +79,8 @@ class ACPServer:
         self._provenance: ACPProvenance | None = None
         # Cache of fetched peer public keys: agent_id -> public_key_b64
         self._peer_pubkeys: dict[str, str] = dict(config.trusted_agents)
+        # Per-agent rate limiter: 10 req/s sustained, 20-request burst
+        self._rate_limiter = RateLimiter(rate=10.0, capacity=20.0)
         self._app = self._build_app()
         self._site: web.TCPSite | None = None
         self._runner_obj: web.AppRunner | None = None
@@ -226,6 +229,14 @@ class ACPServer:
             return web.json_response(
                 {"error": f"not authorized to run agent '{target_agent_id}'"},
                 status=403,
+            )
+
+        # Rate limit: per-agent token bucket (10 req/s, 20 burst)
+        if not self._rate_limiter.is_allowed(target_agent_id):
+            logger.warning("Rate limit exceeded for agent %s", target_agent_id)
+            return web.json_response(
+                {"error": f"Rate limit exceeded for agent '{target_agent_id}'"},
+                status=429,
             )
 
         run = Run(
