@@ -52,6 +52,34 @@ _MODIFIER_KEYS: dict[str, dict] = {
 logger = logging.getLogger(__name__)
 
 
+def _validate_xpath(xpath: str) -> str | None:
+    """Basic XPath syntax validation. Returns error message if invalid, None if ok."""
+    if not xpath or not xpath.strip():
+        return "XPath expression cannot be empty"
+    if "\x00" in xpath:
+        return "XPath expression contains null bytes"
+    if len(xpath) > 2000:
+        return f"XPath expression too long ({len(xpath)} chars, max 2000)"
+    return None
+
+
+def _escape_xpath(xpath: str) -> str:
+    """Escape XPath string for safe interpolation into JavaScript.
+
+    Escapes characters that could break out of the JS string context:
+    backslash, double-quote, single-quote, backtick, and template literal ${ .
+    Always call _validate_xpath() before this function.
+    """
+    return (
+        xpath
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("'", "\\'")
+        .replace("`", "\\`")
+        .replace("${", "\\${")
+    )
+
+
 def _parse_key_combo(keys_str: str):
     parts = [p.strip() for p in keys_str.split('+')]
     mods = [_MODIFIER_KEYS[p] for p in parts[:-1] if p in _MODIFIER_KEYS]
@@ -936,7 +964,10 @@ class Browser:
         await self.current_page().click_at(x, y)
 
     async def scroll_into_view(self, xpath: str):
-        escaped = xpath.replace('"', '\\"')
+        _xpath_err = _validate_xpath(xpath)
+        if _xpath_err:
+            raise ValueError(f"Invalid XPath: {_xpath_err}")
+        escaped = _escape_xpath(xpath)
         await self.execute_script(
             f'(function(){{'
             f'  var el = document.evaluate("{escaped}", document, null, 8, null).singleNodeValue;'
@@ -954,7 +985,10 @@ class Browser:
         await self.current_page().scroll_page(direction, amount=amount)
 
     async def scroll_element(self, xpath: str, direction: str, amount: int = 500):
-        escaped = xpath.replace('"', '\\"')
+        _xpath_err = _validate_xpath(xpath)
+        if _xpath_err:
+            raise ValueError(f"Invalid XPath: {_xpath_err}")
+        escaped = _escape_xpath(xpath)
         delta = -amount if direction == 'up' else amount
         await self.execute_script(
             f'(function(){{'
@@ -994,7 +1028,10 @@ class Browser:
 
     async def set_file_input(self, xpath: str, files: list[str]):
         sid = self._get_current_session_id()
-        escaped = xpath.replace('"', '\\"')
+        _xpath_err = _validate_xpath(xpath)
+        if _xpath_err:
+            raise ValueError(f"Invalid XPath: {_xpath_err}")
+        escaped = _escape_xpath(xpath)
         result = await self.send('Runtime.evaluate', {
             'expression': f'document.evaluate("{escaped}", document, null, 8, null).singleNodeValue',
             'returnByValue': False,
@@ -1009,7 +1046,7 @@ class Browser:
         }, session_id=sid)
 
     async def select_option(self, xpath: str, labels: list[str]):
-        escaped     = xpath.replace('"', '\\"')
+        escaped     = _escape_xpath(xpath)
         labels_json = json.dumps(labels)
         await self.execute_script(
             f'(function(){{'

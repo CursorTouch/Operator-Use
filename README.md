@@ -2,6 +2,7 @@
   <h1>Operator-Use</h1>
   <p>
     <a href="https://pypi.org/project/operator-use/"><img src="https://img.shields.io/pypi/v/operator-use" alt="PyPI"></a>
+    <a href="https://github.com/CursorTouch/Operator-Use/actions/workflows/ci.yml"><img src="https://github.com/CursorTouch/Operator-Use/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <a href="https://pepy.tech/project/operator-use"><img src="https://static.pepy.tech/badge/operator-use" alt="Downloads"></a>
     <img src="https://img.shields.io/badge/python-≥3.12-blue" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">

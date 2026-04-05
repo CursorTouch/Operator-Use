@@ -31,7 +31,6 @@ Use a **local agent** (``localagents`` tool) when:
 
 import asyncio
 import logging
-import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
