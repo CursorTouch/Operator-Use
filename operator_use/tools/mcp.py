@@ -74,9 +74,7 @@ async def mcp(
             status = "connected" if s["connected"] else "disconnected"
             tool_info = f" ({s['tool_count']} tools)" if s["connected"] else ""
             agent_status = "  [you: connected]" if s["agent_connected"] else "  [you: disconnected]"
-            shared_info = (
-                f"  [shared: {s['connection_count']} agent(s)]" if s["connection_count"] > 1 else ""
-            )
+            shared_info = f"  [shared: {s['connection_count']} agent(s)]" if s["connection_count"] > 1 else ""
             lines.append(f"  • {s['name']} [{status}]{tool_info}{agent_status}{shared_info}")
         return ToolResult.success_result("\n".join(lines))
 

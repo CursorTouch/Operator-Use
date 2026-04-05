@@ -1,0 +1,18 @@
+{
+  "task": "macOS cursorless click via InvokePattern",
+  "skill_loaded": null,
+  "plugin_loaded": null,
+  "files_modified": [
+    "operator_use/computer/tools/macos.py",
+    "tests/test_cursorless_macos.py"
+  ],
+  "tests_run": [
+    "uv run python -m pytest tests/test_cursorless_macos.py -v: 6 passed"
+  ],
+  "status": "PASS",
+  "notes": {
+    "ty_hook_issue": "The ty_validator.py hook blocks on pre-existing pydantic unresolved-import because uvx ty check runs without --python .venv. This is not caused by this change. Recommend adding --python .venv to the hook invocation.",
+    "test_api_adjustment": "Tests use computer.ainvoke() instead of computer() because @Tool decorator returns a Tool instance, not the raw async function. This matches the pattern used by all other tests in the project (test_browser_tool_page_usage.py, test_local_agents.py, etc.).",
+    "is_success_vs_success": "Task spec referenced result.is_success but ToolResult dataclass uses result.success. Tests assert result.success."
+  }
+}
