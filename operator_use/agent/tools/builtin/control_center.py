@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import sys
 from typing import Optional
 
@@ -131,7 +132,7 @@ async def _do_restart(graceful_fn=None) -> None:
     ``os._exit(75)`` which skips cleanup but guarantees the process terminates.
     """
     global _requested_exit_code
-    os.system("cls" if os.name == "nt" else "clear")
+    subprocess.run(["cls"] if os.name == "nt" else ["clear"], check=False)
     frames = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]
     for i in range(20):
         sys.stdout.write(f"\r {frames[i % len(frames)]}  Restarting Operator...")
@@ -288,7 +289,8 @@ async def control_center(
         if callable(on_restart):
             asyncio.ensure_future(on_restart())
         else:
-            asyncio.ensure_future(_do_restart(graceful_fn=None))  # fallback: no gateway wired
+            graceful_fn = kwargs.get("_graceful_restart_fn")
+        asyncio.ensure_future(_do_restart(graceful_fn=graceful_fn))
         return ToolResult.success_result(f"{msg}\nRestart initiated.", metadata={"stop_loop": True})
 
     return ToolResult.success_result(msg)
