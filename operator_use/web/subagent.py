@@ -1,7 +1,6 @@
 """browser_task tool — runs browser automation in an isolated context window."""
 
 import logging
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 from operator_use.tools import Tool, ToolResult

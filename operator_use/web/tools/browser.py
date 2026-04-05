@@ -1,14 +1,63 @@
-"""Browser tool — single unified action interface for web automation via CDP."""
+"""Browser tool -- single unified action interface for web automation via CDP."""
 
 from operator_use.tools import Tool, ToolResult
+from operator_use.guardrails import PolicyEngine, DefaultPolicy
 from pydantic import BaseModel, Field, model_validator
 from markdownify import markdownify
 from typing import Literal, Optional
 from asyncio import sleep
 from pathlib import Path
 from os import getcwd
+import os as _os
+import logging
 import httpx
 import json
+
+logger = logging.getLogger(__name__)
+
+_engine = PolicyEngine([DefaultPolicy()])
+
+_BLOCKED_JS_PATTERNS = [
+    "document.cookie",
+    "localStorage",
+    "sessionStorage",
+    "indexedDB",
+    "XMLHttpRequest",
+    "fetch(",           # network exfiltration
+    "fetch ",           # catch fetch with space before args
+    "navigator.credentials",
+    "crypto.subtle",
+    ".getPassword",
+    "chrome.identity",
+]
+
+
+_MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024  # 100 MB
+
+
+def _validate_download(url: str, filename: str, downloads_dir: Path) -> str | None:
+    """Return an error message if the download parameters are unsafe, None if ok."""
+    # Reject path traversal in filename
+    safe = _os.path.basename(filename)
+    if safe != filename or not safe:
+        return f"Blocked: filename {filename!r} contains path traversal characters."
+    # Ensure downloads_dir exists and is a directory
+    if not downloads_dir.is_dir():
+        return f"Downloads directory does not exist: {downloads_dir}"
+    return None
+
+
+def _check_script_safety(script_content: str) -> str | None:
+    """Returns an error message if script accesses sensitive APIs, None if safe."""
+    script_lower = script_content.lower()
+    for pattern in _BLOCKED_JS_PATTERNS:
+        if pattern.lower() in script_lower:
+            return (
+                f"Script blocked: accesses sensitive browser API {pattern!r}. "
+                "This is a security guardrail. If you need this capability, "
+                "request human confirmation first."
+            )
+    return None
 
 
 class BrowserTool(BaseModel):
@@ -20,20 +69,20 @@ class BrowserTool(BaseModel):
         ...,
         description=(
             "Browser action to perform:\n"
-            "  goto       — Navigate to a URL (requires url).\n"
-            "  back       — Go to the previous page in browser history.\n"
-            "  forward    — Go to the next page in browser history.\n"
-            "  click      — Click at (x, y) coordinates from the Interactive Elements list.\n"
-            "  type       — Click at (x, y) then type text. Optionally clear existing text and submit with Enter.\n"
-            "  key        — Press a key or combination, e.g. 'Enter', 'Control+A', 'Escape' (requires text).\n"
-            "  scroll     — Scroll the page or element at (x, y). Omit x/y to scroll the whole page.\n"
-            "  menu       — Select options in a <select> dropdown at (x, y) by visible label text.\n"
-            "  upload     — Upload files to a file input at (x, y). Files must exist in ./uploads.\n"
-            "  tab        — Manage tabs: tab_mode=open|close|switch. switch requires tab_index.\n"
-            "  wait       — Pause for a number of seconds (requires time).\n"
-            "  script     — Execute JavaScript on the current page. Wrap in IIFE with try-catch.\n"
-            "  scrape     — Extract the current page as markdown.\n"
-            "  download   — Download a file from url and save it as filename in the downloads directory.\n"
+            "  goto       -- Navigate to a URL (requires url).\n"
+            "  back       -- Go to the previous page in browser history.\n"
+            "  forward    -- Go to the next page in browser history.\n"
+            "  click      -- Click at (x, y) coordinates from the Interactive Elements list.\n"
+            "  type       -- Click at (x, y) then type text. Optionally clear existing text and submit with Enter.\n"
+            "  key        -- Press a key or combination, e.g. 'Enter', 'Control+A', 'Escape' (requires text).\n"
+            "  scroll     -- Scroll the page or element at (x, y). Omit x/y to scroll the whole page.\n"
+            "  menu       -- Select options in a <select> dropdown at (x, y) by visible label text.\n"
+            "  upload     -- Upload files to a file input at (x, y). Files must exist in ./uploads.\n"
+            "  tab        -- Manage tabs: tab_mode=open|close|switch. switch requires tab_index.\n"
+            "  wait       -- Pause for a number of seconds (requires time).\n"
+            "  script     -- Execute JavaScript on the current page. Wrap in IIFE with try-catch.\n"
+            "  scrape     -- Extract the current page as markdown.\n"
+            "  download   -- Download a file from url and save it as filename in the downloads directory.\n"
         ),
     )
     # Navigation
@@ -119,7 +168,7 @@ class BrowserTool(BaseModel):
     description=(
         "Control the web browser. "
         "The current browser state (URL, open tabs, interactive elements with coordinates, informative text, scrollable elements) "
-        "is provided automatically before each call — use element coordinates from the state for click, type, scroll, menu, and upload."
+        "is provided automatically before each call -- use element coordinates from the state for click, type, scroll, menu, and upload."
     ),
     model=BrowserTool,
 )
@@ -261,6 +310,11 @@ async def browser(
         case "script":
             if not script:
                 return ToolResult.error_result("script is required for script.")
+            _safety_err = _check_script_safety(script or "")
+            if _safety_err:
+                return ToolResult.error_result(_safety_err)
+            risk = _engine.assess("browser", {"action": "script"})
+            logger.warning("Browser script execution -- risk=%s", risk.value)
             result = await page.execute_script(script, truncate=True, repair=True)
             return ToolResult.success_result(f"Script result: {result}")
 
@@ -275,13 +329,29 @@ async def browser(
             if not filename:
                 return ToolResult.error_result("filename is required for download.")
             folder_path = Path(browser.config.downloads_dir)
+            _err = _validate_download(url or "", filename or "", folder_path)
+            if _err:
+                return ToolResult.error_result(_err)
+            # Use sanitized basename, not the original filename
+            safe_name = _os.path.basename(filename)
             async with httpx.AsyncClient() as client:
+                # Check Content-Length before downloading
+                head = await client.head(url)
+                content_length = int(head.headers.get("content-length", 0))
+                if content_length > _MAX_DOWNLOAD_SIZE:
+                    return ToolResult.error_result(
+                        f"Download blocked: file size {content_length} exceeds limit of {_MAX_DOWNLOAD_SIZE} bytes (100MB)."
+                    )
                 response = await client.get(url)
                 response.raise_for_status()
-            path = folder_path / filename
+                if len(response.content) > _MAX_DOWNLOAD_SIZE:
+                    return ToolResult.error_result(
+                        "Download blocked: downloaded content exceeds 100MB size limit."
+                    )
+            path = folder_path / safe_name
             with open(path, "wb") as f:
                 f.write(response.content)
-            return ToolResult.success_result(f"Downloaded {filename} from {url} to {path}.")
+            return ToolResult.success_result(f"Downloaded {safe_name} from {url} to {path}.")
 
         case _:
             return ToolResult.error_result(f"Unknown action: {action!r}.")

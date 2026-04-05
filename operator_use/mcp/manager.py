@@ -2,7 +2,7 @@
 
 import logging
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from operator_use.mcp.tool import MCPTool
 
