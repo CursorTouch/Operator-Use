@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import sys
 from typing import Optional
 
@@ -125,7 +126,7 @@ async def _do_restart(graceful_fn=None) -> None:
     ``os._exit(75)`` which skips cleanup but guarantees the process terminates.
     """
     global _requested_exit_code
-    os.system("cls" if os.name == "nt" else "clear")
+    subprocess.run(["cls"] if os.name == "nt" else ["clear"], check=False)
     frames = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]
     for i in range(20):
         sys.stdout.write(f"\r {frames[i % len(frames)]}  Restarting Operator...")
