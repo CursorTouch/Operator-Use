@@ -28,13 +28,12 @@ def test_enabled_plugin_returns_system_prompt():
     prompt = plugin.get_system_prompt()
     assert prompt is SYSTEM_PROMPT
     assert "desktop" in prompt.lower()
-    assert "<perception>" in prompt
-    assert "<tool_use>" in prompt
-    assert "<execution_principles>" in prompt
+    # Prompt is plain Markdown — assert on actual content, not old XML tags
+    assert "computer_task" in prompt
 
 
 # ---------------------------------------------------------------------------
-# register_hooks — BEFORE_LLM_CALL + AFTER_TOOL_CALL, gated on _enabled
+# register_hooks — hooks NOT registered to main agent (subagent arch)
 # ---------------------------------------------------------------------------
 
 
@@ -46,21 +45,21 @@ def test_disabled_plugin_registers_no_hooks():
     assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
 
 
-def test_enabled_plugin_registers_both_hooks():
+def test_enabled_plugin_does_not_register_hooks_to_main_agent():
+    """Hooks are intentionally not wired to main agent — subagent manages its own state."""
     plugin = ComputerPlugin(enabled=False)
     plugin._enabled = True
     hooks = Hooks()
     plugin.register_hooks(hooks)
-    assert plugin._state_hook in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
-    assert plugin._wait_for_ui_hook in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
+    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
 
 
-def test_unregister_hooks_removes_both():
+def test_unregister_hooks_is_safe_noop():
     plugin = ComputerPlugin(enabled=False)
-    plugin._enabled = True
     hooks = Hooks()
     plugin.register_hooks(hooks)
-    plugin.unregister_hooks(hooks)
+    plugin.unregister_hooks(hooks)  # must not raise
     assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
     assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
 
@@ -101,7 +100,8 @@ def test_detach_prompt_removes_injected_prompt():
 
 
 @pytest.mark.asyncio
-async def test_enable_registers_both_hooks_and_prompt():
+async def test_enable_injects_prompt_no_hooks():
+    """enable() registers tools and injects prompt — hooks NOT wired to main agent."""
     plugin = ComputerPlugin(enabled=False)
     hooks = Hooks()
     plugin.register_hooks(hooks)
@@ -111,13 +111,13 @@ async def test_enable_registers_both_hooks_and_prompt():
     await plugin.enable()
 
     assert plugin._enabled is True
-    assert plugin._state_hook in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
-    assert plugin._wait_for_ui_hook in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
+    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
     context.register_plugin_prompt.assert_called_once_with(SYSTEM_PROMPT)
 
 
 @pytest.mark.asyncio
-async def test_disable_unregisters_both_hooks_and_removes_prompt():
+async def test_disable_removes_prompt():
     plugin = ComputerPlugin(enabled=False)
     plugin._enabled = True
     hooks = Hooks()
@@ -160,27 +160,12 @@ async def test_state_hook_appends_desktop_state():
     mock_state.to_string.return_value = "Active: Notepad | Elements: [button 'Save']"
     plugin.desktop = MagicMock()
 
-    import asyncio
-
-    loop = asyncio.get_event_loop()
-
-    async def _fake_executor(exc, fn):
-        return fn()
-
-    plugin.desktop.get_state = MagicMock(return_value=mock_state)
-
-    ctx = MagicMock()
-    ctx.messages = []
-
-    with pytest.MonkeyPatch().context() as mp:
-        mp.setattr(loop, "run_in_executor", lambda exc, fn: asyncio.coroutine(lambda: fn())())
-        # Simpler: just patch run_in_executor at the asyncio level
-
-    # Direct call with mocked executor
     from unittest.mock import patch
 
     with patch("asyncio.get_event_loop") as mock_loop:
         mock_loop.return_value.run_in_executor = AsyncMock(return_value=mock_state)
+        ctx = MagicMock()
+        ctx.messages = []
         await plugin._state_hook(ctx)
 
     assert len(ctx.messages) == 1
@@ -192,19 +177,16 @@ async def test_state_hook_handles_exception_gracefully():
     plugin = ComputerPlugin(enabled=False)
     plugin.desktop = MagicMock()
 
-    ctx = MagicMock()
-    ctx.messages = []
-
     from unittest.mock import patch
 
     with patch("asyncio.get_event_loop") as mock_loop:
-        mock_loop.return_value.run_in_executor = AsyncMock(
-            side_effect=RuntimeError("accessibility error")
-        )
+        mock_loop.return_value.run_in_executor = AsyncMock(side_effect=RuntimeError("accessibility error"))
+        ctx = MagicMock()
+        ctx.messages = []
         result = await plugin._state_hook(ctx)
 
     assert result is ctx
-    assert ctx.messages == []  # no message appended on error
+    assert ctx.messages == []
 
 
 # ---------------------------------------------------------------------------
