@@ -77,7 +77,6 @@ from operator_use.providers.google import TTSGoogle
 # Image generation providers
 from operator_use.providers.openai import ImageOpenAI
 from operator_use.providers.google import ImageGoogle
-from operator_use.providers.xai import ImageXai
 
 try:
     from operator_use.providers.together import ImageTogether
@@ -89,7 +88,6 @@ try:
 except ImportError:
     pass
 from operator_use.providers.groq import TTSGroq
-from operator_use.providers.xai import TTSXai
 
 try:
     from operator_use.providers.elevenlabs import TTSElevenLabs
