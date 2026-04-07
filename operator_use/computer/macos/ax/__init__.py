@@ -114,6 +114,7 @@ from .core import (
     GetDisplayCount,
     GetDisplayBounds,
     GetDPIScale,
+    GetPerDisplayInfo,
     CaptureScreen,
     CGImageToPIL,
     # Mouse
