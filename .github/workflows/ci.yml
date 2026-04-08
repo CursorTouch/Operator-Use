@@ -24,6 +24,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --all-extras
@@ -31,5 +33,41 @@ jobs:
       - name: Lint with ruff
         run: uv run ruff check .
 
+      - name: Run bandit security scan
+        run: uv run bandit -r operator_use/ -ll -q -c pyproject.toml
+
       - name: Run tests
-        run: uv run pytest tests/ -q --tb=short
+        run: uv run pytest tests/ -q --tb=short --cov=operator_use --cov-report=xml --cov-fail-under=1
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          fail_ci_if_error: false
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks secret scan
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz \
+            | tar xz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --verbose --redact --exit-code 1
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --all-extras
+      - name: Run pip-audit
+        # CVE-2026-4539 (pygments ReDoS) ignored — no fix version released yet
+        run: uv run pip-audit --desc on --ignore-vuln CVE-2026-4539

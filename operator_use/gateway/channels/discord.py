@@ -262,9 +262,7 @@ class DiscordChannel(BaseChannel):
         channel_id = message.channel.id
         author_id = message.author.id
 
-        allowed = self._cfg("allow_from") or []
-        # If allow_from is empty, allow everyone (like Telegram)
-        if allowed and str(author_id) not in allowed:
+        if not self._is_user_allowed(str(author_id)):
             return
 
         content_parts = []

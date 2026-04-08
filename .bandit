@@ -1,0 +1,4 @@
+[bandit]
+# B104: Binding to 0.0.0.0 is intentional — Operator-Use is a local agent server
+# designed to accept connections on the LAN. This is documented behaviour.
+skips = B104

@@ -132,10 +132,8 @@ class TwitchChannel(BaseChannel):
     async def _on_message(self, message: twitchio.Message) -> None:
         """Handle an incoming Twitch chat message."""
         channel_name = self._cfg("channel_name") or ""
-        allowed = self._cfg("allow_from") or []
-
         author_name = message.author.name if message.author else ""
-        if allowed and author_name not in allowed:
+        if not self._is_user_allowed(author_name):
             return
 
         content = message.content or ""

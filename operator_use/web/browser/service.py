@@ -341,7 +341,12 @@ class Browser:
         if self.config.use_system_profile:
             # Always copy to a fresh temp dir — never touch the real profile
             tmp = tempfile.mkdtemp(prefix='web-use-profile-')
-            if system_profile:
+            if system_profile and self.config.copy_auth:
+                logger.warning(
+                    "Browser auth data copy enabled (copy_auth=True) — "
+                    "the agent has access to all browser cookies and login sessions. "
+                    "Set browser.copy_auth=false to use a clean isolated profile."
+                )
                 self._copy_auth_files(system_profile, tmp)
             return tmp
 
@@ -354,11 +359,20 @@ class Browser:
             if is_real_profile:
                 # Treat the same as use_system_profile — avoid lock conflict
                 tmp = tempfile.mkdtemp(prefix='web-use-profile-')
-                self._copy_auth_files(str(custom), tmp)
+                if self.config.copy_auth:
+                    logger.warning(
+                        "Browser auth data copy enabled (copy_auth=True) — "
+                        "the agent has access to all browser cookies and login sessions."
+                    )
+                    self._copy_auth_files(str(custom), tmp)
                 return tmp
 
-            # Custom path: seed on first run only
-            if not (custom / 'Default').exists() and system_profile:
+            # Custom path: seed on first run only — requires copy_auth opt-in
+            if not (custom / 'Default').exists() and system_profile and self.config.copy_auth:
+                logger.warning(
+                    "Browser auth data copy enabled (copy_auth=True) — "
+                    "seeding custom profile from real Chrome profile."
+                )
                 self._copy_auth_files(system_profile, str(custom))
 
             custom.mkdir(parents=True, exist_ok=True)

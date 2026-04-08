@@ -434,8 +434,7 @@ class TelegramChannel(BaseChannel):
         chat_id = raw_chat_id
         sender_id = self._sender_id(user)
 
-        allowed = self._cfg("allow_from") or []
-        if allowed and sender_id not in allowed and str(user.id) not in allowed:
+        if not self._is_user_allowed(sender_id):
             return
 
         content_parts = []

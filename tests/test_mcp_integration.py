@@ -78,7 +78,7 @@ async def test_multi_agent_shared_connection_scenario():
     assert "mcp_1" in manager._stacks, "Server should still be alive"
     print(f"  [OK] Agent A disconnected, removed {len(tool_names_a)} tools")
     print(f"  [OK] Connection count: {manager._connection_count['mcp_1']}")
-    print(f"  [OK] Server still running (for Agent B)")
+    print("  [OK] Server still running (for Agent B)")
 
     # --- SCENARIO: Agent B disconnects (kills server) ---
     print("\n[Agent B] Disconnecting from MCP 1...")
@@ -90,7 +90,7 @@ async def test_multi_agent_shared_connection_scenario():
     assert "mcp_1" not in manager._stacks, "Server should be dead"
     print(f"  [OK] Agent B disconnected, removed {len(tool_names_b)} tools")
     print(f"  [OK] Connection count: {manager._connection_count['mcp_1']}")
-    print(f"  [OK] Server CLOSED (no more agents)")
+    print("  [OK] Server CLOSED (no more agents)")
 
     # --- VERIFY: List servers shows correct state ---
     print("\n[List Servers] Querying connection status...")
