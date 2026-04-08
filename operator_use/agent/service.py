@@ -306,13 +306,11 @@ class Agent:
             system_prompt=system_prompt,
         )
 
-    async def _execute_tool(self, tool_call, thinking, thinking_signature, session: Session, error_messages: list[ToolMessage] | None = None):
-        """Execute a tool call and append a ToolMessage to the session or error_messages list.
+    async def _execute_tool(self, tool_call, thinking, thinking_signature, session: Session, error_messages: list[ToolMessage]):
+        """Execute a tool call and manage error accumulation.
 
-        If error_messages list is provided:
-        - Failed tool calls are added to error_messages
-        - Successful tool calls are added to session, and error_messages are cleared
-        Otherwise, all messages go directly to session (backward compatible).
+        Failed tool calls are added to error_messages list.
+        Successful tool calls are added to session, and error_messages are cleared.
         """
         # Format tool call nicely: tool_name(param1=value1, param2=value2, ...)
         params_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in tool_call.params.items())
@@ -349,21 +347,17 @@ class Agent:
         )
 
         # Handle error accumulation and cleanup
-        if error_messages is not None:
-            if tool_result.success:
-                # Success: add to session and clear accumulated errors
-                session.add_message(tool_message)
-                num_errors = len(error_messages)
-                error_messages.clear()
-                if num_errors > 0:
-                    logger.info(f"Tool success - cleared {num_errors} accumulated error messages")
-            else:
-                # Failure: add to error_messages list for feedback during retries
-                error_messages.append(tool_message)
-                logger.info(f"Tool added to error queue | accumulated errors: {len(error_messages)}")
-        else:
-            # Backward compatibility: add all messages directly to session
+        if tool_result.success:
+            # Success: add to session and clear accumulated errors
             session.add_message(tool_message)
+            num_errors = len(error_messages)
+            error_messages.clear()
+            if num_errors > 0:
+                logger.info(f"Tool success - cleared {num_errors} accumulated error messages")
+        else:
+            # Failure: add to error_messages list for feedback during retries
+            error_messages.append(tool_message)
+            logger.info(f"Tool added to error queue | accumulated errors: {len(error_messages)}")
 
         return tool_result, content
 
