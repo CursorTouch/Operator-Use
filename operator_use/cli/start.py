@@ -1,13 +1,19 @@
 """Run Operator with channels and agents."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 import logging
 from rich.console import Console
+
+if TYPE_CHECKING:
+    from operator_use.mcp import MCPManager
 
 load_dotenv()
 
@@ -72,7 +78,6 @@ from operator_use.bus import OutgoingMessage, IncomingMessage, TextPart
 from operator_use.config import Config, load_config, AgentDefinition
 from operator_use.paths import get_named_workspace_dir
 from typing import Optional
-from pathlib import Path
 
 LLM_CLASS_MAP = {
     "openai": "ChatOpenAI",
