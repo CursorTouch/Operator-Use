@@ -87,6 +87,7 @@ if TYPE_CHECKING:
     from macos_mcp.ax.controls import ApplicationControl, Control, WindowControl
 
 from .enums import (
+    AXError,
     AXValueType,
     Attribute,
     KeyCode,
@@ -482,6 +483,136 @@ def GetElementPid(element: Any) -> Optional[int]:
     except Exception:
         pass
     return None
+
+
+# =============================================================================
+# Parsing helpers for AX value objects
+# =============================================================================
+
+def _parse_ax_position(pos_val) -> Optional[Tuple[float, float]]:
+    """
+    Parse an AXValue of type Position into (x, y) coordinates.
+
+    Args:
+        pos_val: An AXValue representing a position, or None.
+
+    Returns:
+        Tuple of (x, y) as floats, or None if parsing fails.
+    """
+    if pos_val is None:
+        return None
+    try:
+        from ApplicationServices import AXValueGetType, AXValueGetValue
+        from Cocoa import NSPoint
+
+        # Check if it's an AXValue with type Position (0)
+        val_type = AXValueGetType(pos_val)
+        if val_type != AXValueType.Position:
+            return None
+
+        # AXValueGetValue returns (error, value)
+        error, point_obj = AXValueGetValue(pos_val, None)
+        if error != kAXErrorSuccess:
+            return None
+
+        # Extract x, y from the point object
+        if hasattr(point_obj, 'x') and hasattr(point_obj, 'y'):
+            return (float(point_obj.x), float(point_obj.y))
+    except Exception:
+        pass
+    return None
+
+
+def _parse_ax_size(size_val) -> Optional[Tuple[float, float]]:
+    """
+    Parse an AXValue of type Size into (width, height).
+
+    Args:
+        size_val: An AXValue representing a size, or None.
+
+    Returns:
+        Tuple of (width, height) as floats, or None if parsing fails.
+    """
+    if size_val is None:
+        return None
+    try:
+        from ApplicationServices import AXValueGetType, AXValueGetValue
+
+        # Check if it's an AXValue with type Size (1)
+        val_type = AXValueGetType(size_val)
+        if val_type != AXValueType.Size:
+            return None
+
+        # AXValueGetValue returns (error, value)
+        error, size_obj = AXValueGetValue(size_val, None)
+        if error != kAXErrorSuccess:
+            return None
+
+        # Extract width, height from the size object
+        if hasattr(size_obj, 'width') and hasattr(size_obj, 'height'):
+            return (float(size_obj.width), float(size_obj.height))
+    except Exception:
+        pass
+    return None
+
+
+# =============================================================================
+# Batch Attribute Reading for Tree Traversal
+# =============================================================================
+
+_TRAVERSAL_ATTRIBUTES = [
+    Attribute.Role,
+    Attribute.Subrole,
+    Attribute.Position,
+    Attribute.Size,
+    Attribute.Hidden,
+    Attribute.Enabled,
+    Attribute.Help,
+    Attribute.Title,
+    Attribute.Description,
+    Attribute.Identifier,
+    Attribute.Value,
+]
+
+
+def GetTraversalBatch(element: Any) -> dict:
+    """
+    Fetch all attributes needed for accessibility tree traversal in a single API call.
+
+    Replaces ~10 individual GetAttribute calls per element with one
+    AXUIElementCopyMultipleAttributeValues call, giving a significant speedup
+    when traversing large UI trees.
+
+    Returns a dict with pre-parsed, ready-to-use values:
+        role, subrole, hidden, enabled, help, title, description,
+        identifier, value, label (computed), rect (Rect | None)
+    """
+    raw = GetMultipleAttributeValues(element, _TRAVERSAL_ATTRIBUTES)
+
+    pos = _parse_ax_position(raw.get(Attribute.Position))
+    size = _parse_ax_size(raw.get(Attribute.Size))
+    rect = Rect.from_position_size(pos[0], pos[1], size[0], size[1]) if pos and size else None
+
+    title = raw.get(Attribute.Title) or ''
+    identifier = raw.get(Attribute.Identifier) or ''
+    description = raw.get(Attribute.Description) or ''
+    value = raw.get(Attribute.Value)
+    value_str = str(value) if value is not None else ''
+    label = title or identifier or description or value_str
+
+    return {
+        'role': raw.get(Attribute.Role) or '',
+        'subrole': raw.get(Attribute.Subrole) or '',
+        'hidden': raw.get(Attribute.Hidden) is True,
+        'enabled': raw.get(Attribute.Enabled) is not False,
+        'help': raw.get(Attribute.Help) or '',
+        'title': title,
+        'description': description,
+        'identifier': identifier,
+        'value': value,
+        'label': label,
+        'rect': rect,
+    }
 
 
 def GetMultipleAttributeValues(

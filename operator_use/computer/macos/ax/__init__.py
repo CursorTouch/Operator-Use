@@ -103,6 +103,7 @@ from .core import (
     GetRect,
     ElementAtPosition,
     GetElementPid,
+    GetTraversalBatch,
     GetMultipleAttributeValues,
     GetAttributeValues,
     GetActionDescription,
