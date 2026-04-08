@@ -2,8 +2,6 @@
 
 import json
 from typing import Optional
-from pathlib import Path
-from operator_use.config.service import MCPServerConfig
 from operator_use.cli.tui import (
     clear_screen, print_start, select, text_input, confirm, console
 )
