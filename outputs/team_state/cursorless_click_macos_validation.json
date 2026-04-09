@@ -1,0 +1,67 @@
+{
+  "task": "macOS cursorless click via InvokePattern",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "import added",
+      "result": "PASS",
+      "evidence": "macos.py:9 — `from operator_use.computer.macos.ax import patterns as ax_patterns`"
+    },
+    {
+      "name": "cursorless path for left single click",
+      "result": "PASS",
+      "evidence": "macos.py:202-207 — guards on `button == 'left' and clicks == 1`, calls ElementAtPosition, checks InvokePattern.IsSupported, calls Invoke(), returns success"
+    },
+    {
+      "name": "try/except silent fallback",
+      "result": "PASS",
+      "evidence": "macos.py:203-209 — cursorless block wrapped in `try/except Exception: pass`, falls through to coordinate path on any error"
+    },
+    {
+      "name": "hover (clicks==0) bypasses cursorless",
+      "result": "PASS",
+      "evidence": "macos.py:198-200 — clicks==0 returns early via SetCursorPos before reaching the cursorless guard at line 202"
+    },
+    {
+      "name": "right click bypasses cursorless",
+      "result": "PASS",
+      "evidence": "macos.py:202 — guard `button == 'left'` excludes right click; right click hits coordinate fallback at line 215"
+    },
+    {
+      "name": "double click bypasses cursorless",
+      "result": "PASS",
+      "evidence": "macos.py:202 — guard `clicks == 1` excludes clicks>=2; double click hits coordinate fallback at line 220"
+    },
+    {
+      "name": "middle click bypasses cursorless",
+      "result": "PASS",
+      "evidence": "macos.py:202 — guard `button == 'left'` excludes middle; middle click hits coordinate fallback at line 217"
+    },
+    {
+      "name": "drag bypasses cursorless",
+      "result": "PASS",
+      "evidence": "drag is action='move' (macos.py:271-280), not action='click' — entirely separate code path"
+    },
+    {
+      "name": "test file exists with required coverage",
+      "result": "PASS",
+      "evidence": "tests/test_cursorless_macos.py — 111 lines, 6 tests: invoke used when supported, fallback when not supported, fallback when no element, right click bypasses, double click bypasses, exception fallback"
+    },
+    {
+      "name": "tests pass",
+      "result": "PASS",
+      "evidence": "pytest: 6 passed, 0 failed in 0.39s"
+    },
+    {
+      "name": "no changes to ax/ directory",
+      "result": "PASS",
+      "evidence": "`git diff HEAD~1 --name-only -- '**/ax/**'` returned empty — zero files changed in ax/"
+    },
+    {
+      "name": "committed on correct branch",
+      "result": "PASS",
+      "evidence": "branch `richardson/cursorless-automation`, commit b78d4ed `feat(macos): cursorless click via InvokePattern with coordinate fallback`"
+    }
+  ],
+  "issues": []
+}

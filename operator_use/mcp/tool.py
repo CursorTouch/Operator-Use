@@ -1,6 +1,6 @@
 """MCP Tool — a Tool backed by a remote MCP server."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from operator_use.tools.service import Tool, ToolResult
 
 if TYPE_CHECKING:

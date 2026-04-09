@@ -1,0 +1,15 @@
+{
+  "task": "Windows cursorless click via InvokePattern",
+  "skill_loaded": null,
+  "plugin_loaded": null,
+  "files_modified": [
+    "operator_use/computer/tools/windows.py",
+    "tests/test_cursorless_windows.py"
+  ],
+  "tests_run": [
+    "uv run python -m pytest tests/test_cursorless_windows.py -v: 7 passed",
+    "uv run python -m pytest tests/test_cursorless_macos.py -v: 12 passed (regression check)"
+  ],
+  "status": "PASS",
+  "commit": "27f37df feat(windows): cursorless click via InvokePattern with coordinate fallback"
+}
