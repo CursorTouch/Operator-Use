@@ -1,7 +1,6 @@
 """Tracer — unified observability system that hooks into agent execution."""
 
 import asyncio
-import inspect
 import logging
 import uuid
 from datetime import datetime
