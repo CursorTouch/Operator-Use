@@ -40,7 +40,7 @@ At startup the agent pre-loads the `computer_use` plugin and grants itself full 
 ### Testing Criteria
 
 - Unit: Tool registry must not contain desktop-control or shell-execution tools unless the corresponding plugin was explicitly loaded in config.
-- Integration: A task that requires file rename must not trigger access to any path outside the declared target. Assert that no additional filesystem calls are made.
+- Integration: A task that requires file rename must not trigger access to any path outside the declared target. Assert that no agent-initiated filesystem reads or writes occur outside the declared target path. Use the `sandbox_root` enforcement mechanism from Principle 4 as the implementation layer — a `SandboxViolationError` must be raised for any out-of-scope path access.
 - Code review gate: Any new tool that calls `subprocess`, `os.system`, `socket`, or platform accessibility APIs must include a justification comment and be reviewed against this principle.
 
 ---
@@ -56,7 +56,7 @@ No action that is irreversible, has external side effects, or affects systems be
 - `RULES.md` in the agent workspace is the canonical source for hard constraints. It must include an explicit rule requiring confirmation before: deleting files, sending messages to external services, executing shell commands that modify system state, and making purchases or API calls with financial cost.
 - The orchestrator must intercept tool calls marked `requires_confirmation=True` and pause execution pending a user response via the active channel.
 - Restart-and-self-improve flows (`os._exit(75)`) must present the proposed code change to the user and receive approval before executing the restart.
-- Scheduled (cron) tasks that involve external actions must re-confirm at first run if the task was created more than 24 hours ago and has not yet executed.
+- Scheduled (cron) tasks that involve external actions must re-confirm at first run if the task was created more than 24 hours ago and has not yet executed. Define a `confirmed_at` timestamp on the cron record. Re-confirmation is required when `now - created_at > 24h AND confirmed_at IS NULL`. Once confirmed, `confirmed_at` is set and subsequent runs within the cron schedule do not require re-confirmation.
 
 ### Example: Compliant Behaviour
 
@@ -83,7 +83,7 @@ The agent explains what it is about to do and why before taking any action with 
 ### Implementation Guidance (Operator-Use)
 
 - The agent's system prompt (built in `context/`) must include an instruction requiring it to state its planned actions and rationale before executing any tool call sequence longer than one step.
-- For multi-step plans, the agent must present the full ordered list of actions and wait for a go/no-go signal before proceeding.
+- For multi-step plans, the agent must present the full ordered list of actions and wait for a go/no-go signal before proceeding. When an action requires both a transparency statement (this principle) and a human confirmation (Principle 2), these may be combined into a single message — state the plan and ask for go/no-go simultaneously. Do not require two separate round-trips for the same action.
 - Streaming responses (Telegram, Discord live edits) must show intermediate reasoning steps, not just the final output.
 - Logs emitted via `operator logs` must include a human-readable action summary alongside the technical tool call record.
 
@@ -98,7 +98,7 @@ The agent silently reads emails, writes the file, and then says "Done. I saved a
 ### Testing Criteria
 
 - Unit: For any tool call chain of length > 1, assert that the agent emits a plan message before executing the first tool.
-- Content check: The plan message must contain: the action verb, the target resource, and the expected outcome for each step. A regex or NLP assertion may be used to verify this.
+- Content check: The plan message must contain: the action verb, the target resource, and the expected outcome for each step. A regex assertion must be used for automated CI. NLP-based checks may be used for manual audits only.
 - Manual review gate: All changes to `context/` (system prompt construction) must be reviewed to ensure transparency instructions have not been weakened or removed.
 
 ---
@@ -146,7 +146,7 @@ The agent never accesses, stores, transmits, or retains data beyond what the cur
 - `USER.md` must not store sensitive identifiers (phone numbers, email addresses, financial data) in plaintext. If retention is necessary, the agent must ask the user to confirm what may be stored.
 - Browser tools must not log page content, form data, or extracted text to persistent storage unless the user has explicitly requested a save.
 - API call logs must redact credential values, personal identifiers, and message bodies before writing to disk. Log levels should use `DEBUG` only for non-sensitive metadata.
-- The `allow_from` channel config field (Telegram, Discord, Slack) must be honoured as a privacy boundary — messages from unlisted senders must be silently dropped, not stored or forwarded.
+- The `allow_from` channel config field (Telegram, Discord, Slack) must be honoured as a privacy boundary — messages from unlisted senders must be silently dropped and not stored or forwarded, but the drop event must be logged at `DEBUG` level with the sender ID and channel identifier only — never the message content.
 
 ### Example: Compliant Behaviour
 
@@ -175,7 +175,7 @@ When the agent encounters uncertainty — ambiguous instructions, unexpected sta
 - The agent loop's `max_iterations` limit must result in a graceful stop and a user-facing message explaining what was accomplished and what remains, not a silent exit or an error trace.
 - The agent must detect and surface contradictory instructions (e.g., "delete the file" combined with a previous instruction to "never delete anything without asking") rather than resolving the contradiction silently.
 - Tool calls that return unexpected state (file not found, API 5xx, accessibility permission denied) must propagate a structured error to the agent loop. The agent must report the error to the user and ask how to proceed. It must not retry indefinitely or attempt a workaround without informing the user.
-- The heartbeat loop must skip silently (not fail loudly) when `HEARTBEAT.md` is empty or missing, and must never attempt actions on behalf of a user who has not been active in the current session.
+- The heartbeat loop must skip silently (i.e., send no user-facing message — this is not a general license to suppress errors, which must still be surfaced per this principle's Error Surfacing requirement) when `HEARTBEAT.md` is empty or missing, and must never attempt actions on behalf of a user who has not been active in the current session.
 - When the agent cannot determine whether an action is reversible, it must treat it as irreversible (Principle 2 applies).
 
 ### Example: Compliant Behaviour
@@ -197,7 +197,7 @@ The agent encounters a permissions error, skips the failing step silently, compl
 ## References
 
 - [NIST AI Risk Management Framework (AI 100-1)](https://www.nist.gov/artificial-intelligence/ai-100-1)
-- [EU AI Act](https://artificialintelligenceact.eu/)
+- [EU AI Act (Regulation (EU) 2024/1689, in force Aug 2024)](https://artificialintelligenceact.eu/)
 - [Anthropic Core Views on AI Safety](https://www.anthropic.com/research/core-views-on-ai-safety)
-- [IEEE 7000 — Ethical AI Design](https://standards.ieee.org/ieee/7000/6781/)
+- [IEEE 7000-2021 — Ethical considerations in system design](https://standards.ieee.org/ieee/7000/6781/)
 - [Google AI Principles](https://ai.google/responsibility/principles/)
