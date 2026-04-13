@@ -59,7 +59,7 @@ def setup_logging(userdata_dir: Path, verbose: bool = False) -> None:
     logging.getLogger("operator_use").setLevel(logging.INFO)
 
     # Install credential masking so no secrets leak into log files or console
-    from operator_use.utils.log_masking import install_credential_masking
+    from operator_use.utils.log_filter import install_credential_masking
     install_credential_masking()
 
 import operator_use

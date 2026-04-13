@@ -1,8 +1,9 @@
 """Tests for credential masking in log output."""
 
+import io
 import logging
 
-from operator_use.utils.log_masking import (
+from operator_use.utils.log_filter import (
     CredentialMaskingFilter,
     install_credential_masking,
     mask_credentials,
@@ -72,6 +73,41 @@ class TestMaskCredentials:
         safe = "Agent loop iteration 3 of 10 completed in 1.2s"
         assert mask_credentials(safe) == safe
 
+    # --- Provider-specific patterns (Req Gap 2) ---
+
+    def test_masks_groq_gsk_key(self):
+        assert "gsk_abc123def456" not in mask_credentials("key=gsk_abc123def456ghi")
+
+    def test_masks_google_aiza_key(self):
+        assert "AIzaSyD123" not in mask_credentials("api_key=AIzaSyD123abc456def")
+
+    def test_masks_nvidia_nvapi_key(self):
+        assert "nvapi-abc123" not in mask_credentials(
+            "Authorization: nvapi-abc123def456"
+        )
+
+    # --- Generic high-entropy pattern (Req Gap 3) ---
+
+    def test_masks_generic_high_entropy_equals(self):
+        """Key=value where value is 32+ alphanumeric chars should be masked."""
+        long_token = "A" * 32
+        result = mask_credentials(f"db_token={long_token}")
+        assert long_token not in result
+        assert "REDACTED" in result
+
+    def test_masks_generic_high_entropy_colon(self):
+        """Key: value where value is 32+ alphanumeric chars should be masked."""
+        long_token = "b" * 40
+        result = mask_credentials(f"session_id: {long_token}")
+        assert long_token not in result
+        assert "REDACTED" in result
+
+    def test_does_not_mask_short_values(self):
+        """Values shorter than 32 chars in generic key-value context are not masked."""
+        result = mask_credentials("count=12345678901234")
+        assert "count" in result  # key preserved
+        assert "12345678901234" in result  # short value not masked
+
 
 class TestCredentialMaskingFilter:
     def test_filter_masks_record_msg(self):
@@ -92,22 +128,23 @@ class TestCredentialMaskingFilter:
         assert f.filter(record) is True
 
     def test_filter_masks_tuple_args(self):
+        """Credential in %-formatted string arg is masked in rendered output."""
         f = CredentialMaskingFilter()
         record = logging.LogRecord(
             "test", logging.INFO, "", 0, "key=%s", ("api_key=supersecret",), None
         )
         f.filter(record)
-        assert "supersecret" not in str(record.args)
+        assert "supersecret" not in record.msg
 
     def test_filter_masks_dict_args(self):
+        """Credential in %(name)s-formatted dict arg is masked in rendered output."""
         f = CredentialMaskingFilter()
         record = logging.LogRecord(
-            "test", logging.INFO, "", 0, "%(cred)s", (), None
+            "test", logging.INFO, "", 0, "%(cred)s", None, None
         )
-        # Set dict args after construction to avoid LogRecord constructor issue
         record.args = {"cred": "token=abc123xyz"}
         f.filter(record)
-        assert "abc123xyz" not in str(record.args)
+        assert "abc123xyz" not in record.msg
 
     def test_filter_handles_none_args(self):
         f = CredentialMaskingFilter()
@@ -115,6 +152,27 @@ class TestCredentialMaskingFilter:
             "test", logging.INFO, "", 0, "no args here", None, None
         )
         assert f.filter(record) is True
+
+    def test_filter_no_error_on_numeric_args(self):
+        """filter() must not raise TypeError for %d or %.2f numeric placeholders."""
+        f = CredentialMaskingFilter()
+        record = logging.LogRecord(
+            "test", logging.INFO, "", 0, "iteration=%d", (3,), None
+        )
+        # Should not raise — numeric arg rendered without coercion issues
+        result = f.filter(record)
+        assert result is True
+        assert "3" in record.msg
+
+    def test_filter_no_error_on_float_args(self):
+        """filter() must not raise TypeError for %.2f float placeholders."""
+        f = CredentialMaskingFilter()
+        record = logging.LogRecord(
+            "test", logging.INFO, "", 0, "took %.2f seconds", (1.23,), None
+        )
+        result = f.filter(record)
+        assert result is True
+        assert "1.23" in record.msg
 
 
 class TestInstallCredentialMasking:
@@ -142,3 +200,46 @@ class TestInstallCredentialMasking:
             f for f in root.filters if isinstance(f, CredentialMaskingFilter)
         ]
         assert len(masking_filters) == 1
+
+    def test_install_adds_filter_to_handlers(self):
+        """Filter must be installed on root logger handlers for global enforcement."""
+        stream = io.StringIO()
+        root = logging.getLogger()
+        # Clean slate
+        root.filters = [
+            f for f in root.filters if not isinstance(f, CredentialMaskingFilter)
+        ]
+        handler = logging.StreamHandler(stream)
+        handler.filters = []
+        root.addHandler(handler)
+        try:
+            install_credential_masking()
+            masking_on_handler = [
+                f for f in handler.filters if isinstance(f, CredentialMaskingFilter)
+            ]
+            assert len(masking_on_handler) >= 1
+        finally:
+            root.removeHandler(handler)
+
+    def test_named_logger_output_is_masked(self):
+        """Records from named loggers must have credentials masked in handler output."""
+        stream = io.StringIO()
+        root = logging.getLogger()
+        # Clean slate
+        root.filters = [
+            f for f in root.filters if not isinstance(f, CredentialMaskingFilter)
+        ]
+        handler = logging.StreamHandler(stream)
+        handler.filters = []
+        handler.setLevel(logging.DEBUG)
+        root.addHandler(handler)
+        root.setLevel(logging.DEBUG)
+        try:
+            install_credential_masking()
+            named_logger = logging.getLogger("operator_use.test.masking")
+            named_logger.info("Connecting with password=topsecretpassword99")
+            output = stream.getvalue()
+            assert "topsecretpassword99" not in output
+            assert "REDACTED" in output
+        finally:
+            root.removeHandler(handler)
