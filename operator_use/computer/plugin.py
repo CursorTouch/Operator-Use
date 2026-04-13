@@ -6,6 +6,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from operator_use.plugins.base import Plugin
+from operator_use.agent.hooks.events import HookEvent
 
 if TYPE_CHECKING:
     from operator_use.agent.hooks import Hooks
@@ -21,6 +22,23 @@ SYSTEM_PROMPT = """\
 Use the `computer_task` tool to perform desktop interactions. Describe the full task clearly, \
 and the tool will run an isolated automation agent with its own context window (30-iteration budget). \
 The agent returns a summary of what was accomplished.
+
+<perception>
+Before each desktop interaction, the current state of the desktop (active window, visible elements, \
+accessibility tree) is injected automatically into your context so you always have an up-to-date \
+view of the screen.
+</perception>
+
+<tool_use>
+Use `computer_task` to delegate desktop goals. Describe the full goal in natural language — \
+the desktop subagent handles window focus, clicking, typing, and screen reading internally.
+</tool_use>
+
+<execution_principles>
+- One `computer_task` call per distinct goal. Chain calls for multi-step workflows.
+- Prefer specific, outcome-oriented descriptions: "Save the document as report.docx" not "press Ctrl+S".
+- If a task fails, inspect the returned error and retry with a clearer description.
+</execution_principles>
 
 Example: "Open Notepad, type 'Hello World', save it as test.txt"
 
@@ -69,11 +87,13 @@ class ComputerPlugin(Plugin):
 
     def register_hooks(self, hooks: "Hooks") -> None:
         self._hooks = hooks
-        # Hooks are not registered to main agent (subagent manages its own state injection)
+        if self._enabled:
+            hooks.register(HookEvent.BEFORE_LLM_CALL, self._state_hook)
+            hooks.register(HookEvent.AFTER_TOOL_CALL, self._wait_for_ui_hook)
 
     def unregister_hooks(self, hooks: "Hooks") -> None:
-        # No-op: hooks were never registered to main agent
-        pass
+        hooks.unregister(HookEvent.BEFORE_LLM_CALL, self._state_hook)
+        hooks.unregister(HookEvent.AFTER_TOOL_CALL, self._wait_for_ui_hook)
 
     def attach_prompt(self, context: "Context") -> None:
         self._context = context
@@ -114,6 +134,9 @@ class ComputerPlugin(Plugin):
     async def enable(self) -> None:
         """Dynamically enable computer_use at runtime."""
         self._enabled = True
+        if self._hooks is not None:
+            self._hooks.register(HookEvent.BEFORE_LLM_CALL, self._state_hook)
+            self._hooks.register(HookEvent.AFTER_TOOL_CALL, self._wait_for_ui_hook)
         if self._registry is not None:
             for tool in self.get_tools():
                 if self._registry.get(tool.name) is None:
@@ -125,6 +148,8 @@ class ComputerPlugin(Plugin):
     async def disable(self) -> None:
         """Dynamically disable computer_use at runtime."""
         self._enabled = False
+        if self._hooks is not None:
+            self.unregister_hooks(self._hooks)
         if self._registry is not None:
             self.unregister_tools(self._registry)
         if self._context is not None:

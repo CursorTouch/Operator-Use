@@ -46,9 +46,12 @@ class ToolRegistry:
         """Return all registered tools."""
         return list(self._tools.values())
 
-    def get(self, name: str) -> Tool | None:
-        """Get a tool by name."""
-        return self._tools.get(name)
+    def get(self, name: str) -> "Tool | Any | None":
+        """Get a tool by name. Also checks extensions (e.g. browser, desktop instances)."""
+        result = self._tools.get(name)
+        if result is not None:
+            return result
+        return self._extensions.get(name)
 
     def _merge_params(self, params: dict) -> dict:
         """Merge extensions with params. Params override extensions for same keys."""
