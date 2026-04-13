@@ -372,7 +372,7 @@ class TestSessionEncryption:
         store_with_key.save(session)
 
         store_no_key = SessionStore(tmp_path)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             store_no_key.load("enc-3")
 
     def test_unencrypted_save_load_round_trip(self, tmp_path: Path) -> None:

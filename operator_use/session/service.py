@@ -44,6 +44,12 @@ class SessionStore:
         if self._fernet:
             return self._load_encrypted(session_id, path, ttl)
 
+        raw = path.read_bytes()
+        if raw.startswith(b"gAAAAA") and self._fernet is None:
+            raise ValueError(
+                f"Session file for '{session_id}' is Fernet-encrypted but no encryption_key was provided."
+            )
+
         messages: list[BaseMessage] = []
         created_at = datetime.now()
         updated_at = datetime.now()
