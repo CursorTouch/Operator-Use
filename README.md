@@ -378,6 +378,8 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for br
 
 To report a vulnerability, please follow the steps in [SECURITY.md](SECURITY.md). Do not open a public issue for security concerns.
 
+For the AI safety principles that govern agent behaviour, capability boundaries, and human oversight requirements, see [AI_PRINCIPLES.md](AI_PRINCIPLES.md).
+
 ---
 
 ## Citation
