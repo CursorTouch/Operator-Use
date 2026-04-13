@@ -1901,7 +1901,7 @@ requires-dist = [
     { name = "twitchio", specifier = ">=2.0.0,<3.0.0" },
     { name = "typer", specifier = ">=0.24.1" },
 ]
-provides-extras = ["dev", "fal", "exa", "tavily"]
+provides-extras = ["dev", "fal", "exa", "tavily", "linux-automation"]
 
 [[package]]
 name = "packaging"

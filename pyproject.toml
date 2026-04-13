@@ -65,6 +65,24 @@ exa = [
 tavily = [
     "tavily-python>=0.5.0",
 ]
+linux-automation = [
+    # AT-SPI D-Bus accessibility API — primary cursorless automation backend.
+    #
+    # pyatspi is distributed as a SYSTEM package only — it is NOT on PyPI.
+    # Install it with your Linux system package manager:
+    #   sudo apt install python3-atspi          # Debian / Ubuntu  (provides pyatspi)
+    #   sudo dnf install python3-atspi          # Fedora / RHEL
+    #   sudo pacman -S python-atspi             # Arch Linux
+    #
+    # ydotool is the Wayland fallback — also a system tool, not a Python package:
+    #   sudo apt install ydotool                # Debian / Ubuntu
+    #   sudo systemctl enable --now ydotoold   # start the required ydotool daemon
+    #
+    # This group intentionally has no pip-installable entries because both
+    # dependencies must be provided by the system.  The [linux-automation]
+    # extra exists purely as a documentation marker for `pip install
+    # operator-use[linux-automation]` to surface the install instructions.
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
