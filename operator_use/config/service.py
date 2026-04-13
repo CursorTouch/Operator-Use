@@ -287,6 +287,13 @@ class HeartbeatConfig(Base):
     llm_config: Optional[LLMConfig] = None  # Dedicated LLM for heartbeat tasks
 
 
+class SessionConfig(Base):
+    """Session lifecycle configuration."""
+
+    ttl_hours: float = 24.0  # Session idle timeout in hours (default: 24h)
+    encrypt: bool = False  # Encrypt session files at rest (AES-256 via Fernet)
+
+
 class Config(BaseSettings):
     """Root configuration for Operator."""
 
@@ -298,6 +305,7 @@ class Config(BaseSettings):
     search: SearchConfig = Field(default_factory=SearchConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     heartbeat: HeartbeatConfig = Field(default_factory=HeartbeatConfig)
+    session: SessionConfig = Field(default_factory=SessionConfig)
     # Named registry of pre-approved remote ACP agents.
     # The LLM can only call agents listed here — it never supplies raw URLs.
     acp_agents: Dict[str, ACPAgentEntry] = Field(default_factory=dict)
