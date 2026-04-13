@@ -88,9 +88,11 @@ class ComputerPlugin(Plugin):
     def register_hooks(self, hooks: "Hooks") -> None:
         self._hooks = hooks
         if self._enabled:
+            hooks.register(HookEvent.BEFORE_LLM_CALL, self._state_hook)
             hooks.register(HookEvent.AFTER_TOOL_CALL, self._wait_for_ui_hook)
 
     def unregister_hooks(self, hooks: "Hooks") -> None:
+        hooks.unregister(HookEvent.BEFORE_LLM_CALL, self._state_hook)
         hooks.unregister(HookEvent.AFTER_TOOL_CALL, self._wait_for_ui_hook)
 
     def attach_prompt(self, context: "Context") -> None:
@@ -133,6 +135,7 @@ class ComputerPlugin(Plugin):
         """Dynamically enable computer_use at runtime."""
         self._enabled = True
         if self._hooks is not None:
+            self._hooks.register(HookEvent.BEFORE_LLM_CALL, self._state_hook)
             self._hooks.register(HookEvent.AFTER_TOOL_CALL, self._wait_for_ui_hook)
         if self._registry is not None:
             for tool in self.get_tools():

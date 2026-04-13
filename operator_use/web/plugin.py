@@ -4,6 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from operator_use.plugins.base import Plugin
+from operator_use.agent.hooks.events import HookEvent
 
 if TYPE_CHECKING:
     from operator_use.agent.hooks import Hooks
@@ -96,9 +97,11 @@ class BrowserPlugin(Plugin):
 
     def register_hooks(self, hooks: "Hooks") -> None:
         self._hooks = hooks
+        if self._enabled:
+            hooks.register(HookEvent.BEFORE_LLM_CALL, self._state_hook)
 
     def unregister_hooks(self, hooks: "Hooks") -> None:
-        pass
+        hooks.unregister(HookEvent.BEFORE_LLM_CALL, self._state_hook)
 
     def attach_prompt(self, context: "Context") -> None:
         self._context = context
@@ -125,7 +128,7 @@ class BrowserPlugin(Plugin):
         """Dynamically enable browser_use at runtime."""
         self._enabled = True
         if self._hooks is not None:
-            pass
+            self._hooks.register(HookEvent.BEFORE_LLM_CALL, self._state_hook)
         if self._registry is not None:
             if self.browser is not None:
                 self._registry.set_extension("browser", self.browser)
