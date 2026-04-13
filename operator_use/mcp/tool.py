@@ -1,6 +1,6 @@
 """MCP Tool — a Tool backed by a remote MCP server."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from operator_use.tools.service import Tool, ToolResult
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ class MCPTool(Tool):
         namespaced_name = f"mcp_{server_name}_{mcp_tool_name}"
         super().__init__(name=namespaced_name, description=description, model=None)
         self._mcp_tool_name = mcp_tool_name  # raw MCP tool name for call_tool()
-        self._input_schema = input_schema    # MCP's inputSchema dict
+        self._input_schema = input_schema  # MCP's inputSchema dict
         self._session = session
 
     @property
@@ -49,7 +49,8 @@ class MCPTool(Tool):
 
         # Filter to only include expected parameters
         clean_kwargs = {
-            k: v for k, v in kwargs.items()
+            k: v
+            for k, v in kwargs.items()
             if not k.startswith("_") and (not expected_props or k in expected_props)
         }
 
@@ -60,6 +61,7 @@ class MCPTool(Tool):
             try:
                 # Try to JSON-serialize the value to check if it's serializable
                 import json
+
                 json.dumps(v)
                 serializable_kwargs[k] = v
             except (TypeError, ValueError):

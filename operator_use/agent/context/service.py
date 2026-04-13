@@ -17,9 +17,9 @@ BOOTSTRAP_FILENAMES = ["RULES.md", "SOUL.md", "USER.md", "CODE.md", "AGENTS.md"]
 
 
 class PromptMode(str, Enum):
-    FULL    = "full"     # Main agent: full prompt with memory, bootstrap files, respond rules
+    FULL = "full"  # Main agent: full prompt with memory, bootstrap files, respond rules
     MINIMAL = "minimal"  # Delegated agent: identity + skills only, no memory/user/soul files
-    NONE    = "none"     # Raw subagent: single-line identity only
+    NONE = "none"  # Raw subagent: single-line identity only
 
 
 class Context:
@@ -33,6 +33,7 @@ class Context:
         self.knowledge = Knowledge(self.workspace)
         self.mcp_servers = mcp_servers or {}
         from operator_use.config.paths import get_userdata_dir
+
         self.interceptor = RestartInterceptor(
             userdata=get_userdata_dir(),
             project_root=self.codebase,
@@ -61,7 +62,9 @@ class Context:
         lines.append(f"## Desktop: {(home / 'Desktop').as_posix()}")
         lines.append(f"## Documents: {(home / 'Documents').as_posix()}")
         if _sys == "Windows":
-            lines.append("## Shell: Windows CMD / PowerShell. Use `dir` not `ls`, `del` not `rm`. Pass commands as plain strings without surrounding quotes.")
+            lines.append(
+                "## Shell: Windows CMD / PowerShell. Use `dir` not `ls`, `del` not `rm`. Pass commands as plain strings without surrounding quotes."
+            )
         elif _sys == "Darwin":
             lines.append("## Shell: macOS bash/zsh.")
         else:
@@ -115,9 +118,15 @@ When you need to remember something, write to {workspace_path}/memory/MEMORY.md
             return None
 
         lines = ["## Available MCP Servers"]
-        lines.append("You can connect to external MCP servers to access additional tools and capabilities.")
-        lines.append("Use the `mcp(action=\"list\")` tool to see all configured servers and their connection status.")
-        lines.append("Use `mcp(action=\"connect\", server_name=\"...\")` to connect and load tools from a server.")
+        lines.append(
+            "You can connect to external MCP servers to access additional tools and capabilities."
+        )
+        lines.append(
+            'Use the `mcp(action="list")` tool to see all configured servers and their connection status.'
+        )
+        lines.append(
+            'Use `mcp(action="connect", server_name="...")` to connect and load tools from a server.'
+        )
         lines.append("\n### Configured MCP Servers:\n")
 
         for name, config in self.mcp_servers.items():
@@ -143,9 +152,9 @@ When you need to remember something, write to {workspace_path}/memory/MEMORY.md
                 lines.append(f"- **{name}** ({transport})")
 
         lines.append("\nTo use an MCP server's tools:")
-        lines.append("1. Call `mcp(action=\"connect\", server_name=\"<server-name>\")`")
+        lines.append('1. Call `mcp(action="connect", server_name="<server-name>")`')
         lines.append("2. The server's tools will be loaded and available for use")
-        lines.append("3. Call `mcp(action=\"disconnect\", server_name=\"<server-name>\")` when done")
+        lines.append('3. Call `mcp(action="disconnect", server_name="<server-name>")` when done')
 
         return "\n".join(lines)
 
@@ -161,7 +170,12 @@ When you need to remember something, write to {workspace_path}/memory/MEMORY.md
 - Use plain text only. Markdown is not allowed in voice replies.
 - NEVER include message IDs like [bot_msg_id:N] or [msg_id:N] in your response. These are for your reference only.
 """
-        parts.append(voice if is_voice else base + "\n- NEVER include message IDs like [bot_msg_id:N] or [msg_id:N] in your response. These are for your reference only.")
+        parts.append(
+            voice
+            if is_voice
+            else base
+            + "\n- NEVER include message IDs like [bot_msg_id:N] or [msg_id:N] in your response. These are for your reference only."
+        )
         return "\n".join(parts)
 
     def build_system_prompt(
@@ -195,13 +209,13 @@ When you need to remember something, write to {workspace_path}/memory/MEMORY.md
                 parts.extend(bootstrap_parts)
 
         skills_summary = self.skills.build_skills_summary() or "(No skills available)"
-        parts.append(f'''## Skills
+        parts.append(f"""## Skills
 
 You have access to the following skills to enhance your capabilities, to use a skill, read the SKILL.md file for the skill.
 
 Available Skills:
 {skills_summary}
-''')
+""")
 
         if mcp_context := self._build_mcp_context():
             parts.append(mcp_context)
@@ -226,7 +240,7 @@ Available Skills:
         runtime_context = self._build_runtime_context()
         codebase_context = self._build_codebase_context()
         workspace_context = self._build_workspace_context()
-        return f'''
+        return f"""
 You are operator-use created by CursorTouch.
 
 You are a helpful personal assistant.
@@ -236,7 +250,7 @@ You are a helpful personal assistant.
 {workspace_context}
 
 {codebase_context}
-'''
+"""
 
     def _hydrate_history(self, history: list[BaseMessage]) -> list[BaseMessage]:
         """Inject channel metadata into message content so the LLM can see IDs for reactions/references.
@@ -272,10 +286,12 @@ You are a helpful personal assistant.
             if isinstance(msg, (HumanMessage, ImageMessage)) and msg.metadata:
                 msg_id = msg.metadata.get("message_id")
                 if msg_id is not None:
-                    hydrated.append(HumanMessage(
-                        content=f"[msg_id:{msg_id}] {msg.content}",
-                        metadata=msg.metadata,
-                    ))
+                    hydrated.append(
+                        HumanMessage(
+                            content=f"[msg_id:{msg_id}] {msg.content}",
+                            metadata=msg.metadata,
+                        )
+                    )
                     continue
             elif isinstance(msg, AIMessage) and msg.metadata.get("message_id") is not None:
                 bot_msg_id = msg.metadata["message_id"]
@@ -289,13 +305,15 @@ You are a helpful personal assistant.
                     reaction_str = " reactions:" + ",".join(
                         f"{e}({c})" if c > 1 else e for e, c in counts.items()
                     )
-                hydrated.append(AIMessage(
-                    content=f"[bot_msg_id:{bot_msg_id}{reaction_str}] {msg.content or ''}",
-                    thinking=msg.thinking,
-                    thinking_signature=msg.thinking_signature,
-                    usage=msg.usage,
-                    metadata=msg.metadata,
-                ))
+                hydrated.append(
+                    AIMessage(
+                        content=f"[bot_msg_id:{bot_msg_id}{reaction_str}] {msg.content or ''}",
+                        thinking=msg.thinking,
+                        thinking_signature=msg.thinking_signature,
+                        usage=msg.usage,
+                        metadata=msg.metadata,
+                    )
+                )
                 continue
             hydrated.append(msg)
         return hydrated
@@ -309,10 +327,14 @@ You are a helpful personal assistant.
         system_prompt: str | None = None,
     ) -> list[BaseMessage]:
         """Build messages: [System, history]."""
-        messages = [SystemMessage(content=self.build_system_prompt(
-            is_voice=is_voice,
-            prompt_mode=prompt_mode,
-            system_prompt=system_prompt,
-        ))]
+        messages = [
+            SystemMessage(
+                content=self.build_system_prompt(
+                    is_voice=is_voice,
+                    prompt_mode=prompt_mode,
+                    system_prompt=system_prompt,
+                )
+            )
+        ]
         messages.extend(self._hydrate_history(history))
         return messages

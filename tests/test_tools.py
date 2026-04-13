@@ -9,6 +9,7 @@ from operator_use.tools.service import Tool, ToolResult
 
 # --- ToolResult ---
 
+
 def test_tool_result_success():
     r = ToolResult.success_result("done")
     assert r.success is True
@@ -30,6 +31,7 @@ def test_tool_result_with_metadata():
 
 # --- Concrete Tool subclass for testing ---
 
+
 class SearchParams(BaseModel):
     query: str
     limit: int = 10
@@ -46,12 +48,14 @@ class SearchTool(Tool):
 
 search_tool = SearchTool()
 
+
 @search_tool
 def _search_fn(query: str, limit: int = 10):
     return f"results for {query}"
 
 
 # --- json_schema ---
+
 
 def test_json_schema_name():
     assert search_tool.json_schema["name"] == "search"
@@ -82,6 +86,7 @@ def test_json_schema_required_fields():
 
 # --- validate_params ---
 
+
 def test_validate_params_valid():
     errors = search_tool.validate_params({"query": "hello"})
     assert errors == []
@@ -98,6 +103,7 @@ def test_validate_params_wrong_type():
 
 
 # --- invoke ---
+
 
 def test_invoke_success():
     result = search_tool.invoke(query="python", limit=5)
@@ -122,6 +128,7 @@ def test_invoke_exception_returns_error():
 
 
 # --- ainvoke ---
+
 
 @pytest.mark.asyncio
 async def test_ainvoke_sync_function():
@@ -166,6 +173,7 @@ async def test_ainvoke_exception_returns_error():
 
 # --- Literal validation ---
 
+
 class ModeParams(BaseModel):
     mode: Literal["read", "write"]
 
@@ -176,6 +184,7 @@ class ModeTool(Tool):
 
 
 mode_tool = ModeTool()
+
 
 @mode_tool
 def _mode_fn(mode: str):

@@ -63,12 +63,12 @@ class CompactionStrategy(BaseContextStrategy):
             )
             return messages
 
-        conversation_text = "\n\n".join(
-            f"{type(m).__name__}: {m.content}" for m in non_system
-        )
+        conversation_text = "\n\n".join(f"{type(m).__name__}: {m.content}" for m in non_system)
         try:
             event = await llm.ainvoke(
-                messages=[HumanMessage(content=_COMPACTION_PROMPT.format(conversation=conversation_text))],
+                messages=[
+                    HumanMessage(content=_COMPACTION_PROMPT.format(conversation=conversation_text))
+                ],
                 tools=[],
             )
         except Exception as exc:

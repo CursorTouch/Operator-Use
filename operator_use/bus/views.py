@@ -95,8 +95,12 @@ class OutgoingMessage(BaseMessage):
 
     account_id: str = ""  # Which bot account should send this (for per-agent channel routing)
     reply: bool = False
-    stream_phase: StreamPhase | None = None  # Streaming: start, chunk, end, done. None = normal message.
-    continue_typing: bool = False  # If True, restart typing indicator after sending (for intermediate messages).
+    stream_phase: StreamPhase | None = (
+        None  # Streaming: start, chunk, end, done. None = normal message.
+    )
+    continue_typing: bool = (
+        False  # If True, restart typing indicator after sending (for intermediate messages).
+    )
     # Optional future: channel resolves this with the sent message_id after delivery.
     # Lets the agent learn the channel-assigned ID without touching the bus.
     sent_id_future: asyncio.Future[int | None] | None = None

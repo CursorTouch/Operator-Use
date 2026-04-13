@@ -15,12 +15,9 @@ from operator_use.agent.tools.builtin.control_center import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_config(agent_id: str = "op", plugins: list | None = None) -> dict:
-    return {
-        "agents": {
-            "list": [{"id": agent_id, "plugins": plugins or []}]
-        }
-    }
+    return {"agents": {"list": [{"id": agent_id, "plugins": plugins or []}]}}
 
 
 def _call_cc(**kwargs):
@@ -38,6 +35,7 @@ def _call_cc(**kwargs):
 # ---------------------------------------------------------------------------
 # _set_plugin_enabled / _get_plugin_enabled helpers
 # ---------------------------------------------------------------------------
+
 
 def test_set_plugin_adds_entry_when_absent():
     entry = {"id": "op", "plugins": []}
@@ -64,6 +62,7 @@ def test_get_plugin_returns_correct_value():
 # ---------------------------------------------------------------------------
 # control_center — plugin toggles call agent methods
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_enable_browser_use_calls_agent(tmp_path):
@@ -138,9 +137,11 @@ async def test_status_only_returns_current_state(tmp_path):
 # control_center — audit logging
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_audit_log_emitted_on_plugin_change(tmp_path, caplog):
     import logging
+
     cfg = _make_config()
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps(cfg))
@@ -149,7 +150,9 @@ async def test_audit_log_emitted_on_plugin_change(tmp_path, caplog):
     mock_agent.enable_browser_use = AsyncMock()
 
     with patch("operator_use.agent.tools.builtin.control_center.CONFIG_PATH", cfg_file):
-        with caplog.at_level(logging.WARNING, logger="operator_use.agent.tools.builtin.control_center"):
+        with caplog.at_level(
+            logging.WARNING, logger="operator_use.agent.tools.builtin.control_center"
+        ):
             await _call_cc(
                 browser_use=True,
                 _agent=mock_agent,
@@ -165,12 +168,15 @@ async def test_audit_log_emitted_on_plugin_change(tmp_path, caplog):
 @pytest.mark.asyncio
 async def test_audit_log_emitted_on_status_check(tmp_path, caplog):
     import logging
+
     cfg = _make_config()
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps(cfg))
 
     with patch("operator_use.agent.tools.builtin.control_center.CONFIG_PATH", cfg_file):
-        with caplog.at_level(logging.WARNING, logger="operator_use.agent.tools.builtin.control_center"):
+        with caplog.at_level(
+            logging.WARNING, logger="operator_use.agent.tools.builtin.control_center"
+        ):
             await _call_cc(_channel="discord", _chat_id="999", _agent_id="op")
 
     assert any("control_center" in r.message for r in caplog.records)
@@ -179,6 +185,7 @@ async def test_audit_log_emitted_on_status_check(tmp_path, caplog):
 # ---------------------------------------------------------------------------
 # control_center — graceful restart wiring
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_restart_calls_graceful_fn_not_os_exit(tmp_path):
@@ -221,6 +228,7 @@ async def test_restart_without_graceful_fn_still_works(tmp_path):
 # ---------------------------------------------------------------------------
 # error cases
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_returns_error_when_no_agents(tmp_path):

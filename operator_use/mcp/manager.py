@@ -2,7 +2,7 @@
 
 import logging
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from operator_use.mcp.tool import MCPTool
 
@@ -55,14 +55,16 @@ class MCPManager:
                 if name not in self._agent_connections.get(agent_id, set()):
                     continue
 
-            result.append({
-                "name": name,
-                "transport": cfg.transport,
-                "connected": self.is_server_connected(name),
-                "agent_connected": self.is_connected(agent_id, name) if agent_id else None,
-                "tool_count": len(self._tools.get(name, [])),
-                "connection_count": self._connection_count.get(name, 0),  # how many agents
-            })
+            result.append(
+                {
+                    "name": name,
+                    "transport": cfg.transport,
+                    "connected": self.is_server_connected(name),
+                    "agent_connected": self.is_connected(agent_id, name) if agent_id else None,
+                    "tool_count": len(self._tools.get(name, [])),
+                    "connection_count": self._connection_count.get(name, 0),  # how many agents
+                }
+            )
         return result
 
     async def connect(self, agent_id: str, server_name: str) -> list[MCPTool]:
@@ -171,9 +173,13 @@ class MCPManager:
                     await self.disconnect(agent_id, server_name)
                 except (RuntimeError, GeneratorExit):
                     # Non-fatal async scope errors during cleanup
-                    logger.debug(f"Non-fatal error disconnecting agent {agent_id} from '{server_name}'")
+                    logger.debug(
+                        f"Non-fatal error disconnecting agent {agent_id} from '{server_name}'"
+                    )
                 except Exception as e:
-                    logger.warning(f"Error disconnecting agent {agent_id} from '{server_name}': {e}")
+                    logger.warning(
+                        f"Error disconnecting agent {agent_id} from '{server_name}': {e}"
+                    )
         else:
             # Full shutdown: disconnect all agents from all servers
             all_agents = list(self._agent_connections.keys())
@@ -184,9 +190,13 @@ class MCPManager:
                         await self.disconnect(agent, server_name)
                     except (RuntimeError, GeneratorExit):
                         # Non-fatal async scope errors during cleanup
-                        logger.debug(f"Non-fatal error disconnecting agent {agent} from '{server_name}'")
+                        logger.debug(
+                            f"Non-fatal error disconnecting agent {agent} from '{server_name}'"
+                        )
                     except Exception as e:
-                        logger.warning(f"Error disconnecting agent {agent} from '{server_name}': {e}")
+                        logger.warning(
+                            f"Error disconnecting agent {agent} from '{server_name}': {e}"
+                        )
 
     @staticmethod
     async def _open_session(stack: AsyncExitStack, cfg: "MCPServerConfig") -> "ClientSession":

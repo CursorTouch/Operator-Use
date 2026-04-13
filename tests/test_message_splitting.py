@@ -5,6 +5,7 @@ from operator_use.gateway.channels.discord import _split_message as discord_spli
 
 # --- Discord _split_message ---
 
+
 def test_split_short_message():
     chunks = discord_split("hello", max_len=2000)
     assert chunks == ["hello"]

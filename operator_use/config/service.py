@@ -65,12 +65,12 @@ class TwitchConfig(Base):
     """Twitch channel configuration."""
 
     enabled: bool = False
-    token: str = ""           # OAuth token (oauth:xxxx or raw token)
-    nick: str = ""            # Bot's Twitch username
-    channel_name: str = ""    # Channel to join (without #)
-    account_id: str = ""      # Internal routing ID (set automatically for per-agent bots)
+    token: str = ""  # OAuth token (oauth:xxxx or raw token)
+    nick: str = ""  # Bot's Twitch username
+    channel_name: str = ""  # Channel to join (without #)
+    account_id: str = ""  # Internal routing ID (set automatically for per-agent bots)
     allow_from: List[str] = Field(default_factory=list)  # Allowed Twitch usernames
-    prefix: str = "!"         # Command prefix for twitchio
+    prefix: str = "!"  # Command prefix for twitchio
 
 
 class ChannelsConfig(Base):
@@ -120,20 +120,20 @@ class ImageConfig(Base):
 class SearchConfig(Base):
     """Web search provider configuration. Search is always enabled — users pick the provider."""
 
-    provider: Optional[str] = None   # "ddgs", "exa", "tavily" — defaults to ddgs if unset
-    api_key: Optional[str] = None    # required for exa and tavily
+    provider: Optional[str] = None  # "ddgs", "exa", "tavily" — defaults to ddgs if unset
+    api_key: Optional[str] = None  # required for exa and tavily
 
 
 class MCPServerConfig(Base):
     """Configuration for a single MCP server connection."""
 
     name: str
-    transport: str = "stdio"           # "stdio" | "http" | "sse"
-    command: Optional[str] = None      # For stdio: executable path (e.g. "npx", "uvx", "python")
-    args: List[str] = Field(default_factory=list)   # CLI args for stdio subprocess
-    url: Optional[str] = None          # For http/sse transport
+    transport: str = "stdio"  # "stdio" | "http" | "sse"
+    command: Optional[str] = None  # For stdio: executable path (e.g. "npx", "uvx", "python")
+    args: List[str] = Field(default_factory=list)  # CLI args for stdio subprocess
+    url: Optional[str] = None  # For http/sse transport
     env: Dict[str, str] = Field(default_factory=dict)  # Extra env vars for subprocess
-    auth_token: Optional[str] = None   # Bearer token for HTTP auth header
+    auth_token: Optional[str] = None  # Bearer token for HTTP auth header
 
 
 class PeerMatch(Base):
@@ -167,15 +167,15 @@ class ToolsConfig(Base):
 
     profile: str = "full"  # Base preset: "minimal", "coding", or "full"
     also_allow: List[str] = Field(default_factory=list)  # Tool names to add on top of profile
-    deny: List[str] = Field(default_factory=list)         # Tool names to remove from resolved list
+    deny: List[str] = Field(default_factory=list)  # Tool names to remove from resolved list
 
 
 class RetryConfig(Base):
     """Retry configuration for subagents — exponential backoff."""
 
     max_retries: int = 3
-    base_delay: float = 1.0      # seconds before first retry
-    max_delay: float = 60.0      # cap on delay between retries
+    base_delay: float = 1.0  # seconds before first retry
+    max_delay: float = 60.0  # cap on delay between retries
     backoff_factor: float = 2.0  # multiplier per attempt
 
 
@@ -215,9 +215,9 @@ class AgentDefinition(Base):
     channels: Optional["ChannelsConfig"] = None  # Per-agent dedicated channel bots
     plugins: List[PluginConfig] = Field(default_factory=list)  # Ordered list of plugins
     tools: ToolsConfig = Field(default_factory=ToolsConfig)  # Tool profile + allow/deny
-    prompt_mode: str = "full"   # Prompt mode: "full", "minimal", or "none"
-    system_prompt: str = ""     # Freeform instructions appended to every system prompt call
-    acp_token: str = ""         # If set, this agent is only accessible via ACP with this token
+    prompt_mode: str = "full"  # Prompt mode: "full", "minimal", or "none"
+    system_prompt: str = ""  # Freeform instructions appended to every system prompt call
+    acp_token: str = ""  # If set, this agent is only accessible via ACP with this token
 
 
 class AgentsConfig(Base):
@@ -241,11 +241,11 @@ class ACPServerSettings(Base):
     """Config for exposing Operator itself as an ACP server on the local network."""
 
     enabled: bool = False
-    host: str = "0.0.0.0"   # "0.0.0.0" = reachable by other machines on the LAN
+    host: str = "0.0.0.0"  # "0.0.0.0" = reachable by other machines on the LAN
     port: int = 8765
-    id: str = ""      # Stable UUID identifying this server instance (auto-generated on first run)
-    auth_token: str = ""     # Optional bearer token to protect the endpoint (all agents)
-    public_url: str = ""     # Advertised URL for agent discovery (e.g. http://192.168.1.10:8765)
+    id: str = ""  # Stable UUID identifying this server instance (auto-generated on first run)
+    auth_token: str = ""  # Optional bearer token to protect the endpoint (all agents)
+    public_url: str = ""  # Advertised URL for agent discovery (e.g. http://192.168.1.10:8765)
 
 
 class ProviderConfig(Base):

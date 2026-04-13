@@ -8,6 +8,7 @@ from operator_use.crons.service import _ms, _job_to_dict, _dict_to_job, _compute
 
 # --- _ms ---
 
+
 def test_ms_returns_milliseconds():
     before = int(time.time() * 1000)
     result = _ms()
@@ -16,6 +17,7 @@ def test_ms_returns_milliseconds():
 
 
 # --- CronSchedule / CronPayload / CronJobState ---
+
 
 def test_cron_schedule_defaults():
     s = CronSchedule(mode="cron")
@@ -39,6 +41,7 @@ def test_cron_job_state_defaults():
 
 
 # --- _compute_next_run ---
+
 
 def test_compute_next_run_every_mode():
     schedule = CronSchedule(mode="every", interval_ms=60000)
@@ -90,6 +93,7 @@ def test_compute_next_run_unknown_mode():
 
 # --- _job_to_dict / _dict_to_job ---
 
+
 def test_job_serialization_roundtrip():
     job = CronJob(
         id="job-1",
@@ -120,6 +124,7 @@ def test_dict_to_job_defaults():
 
 
 # --- Cron service ---
+
 
 def test_cron_list_jobs_empty(tmp_path):
     cron = Cron(store_path=tmp_path / "cron.json")
@@ -180,7 +185,9 @@ def test_cron_update_job_disable(tmp_path):
 def test_cron_persists_to_disk(tmp_path):
     path = tmp_path / "cron.json"
     cron1 = Cron(store_path=path)
-    cron1.add_job("persisted", CronSchedule(mode="every", interval_ms=5000), CronPayload(message="hi"))
+    cron1.add_job(
+        "persisted", CronSchedule(mode="every", interval_ms=5000), CronPayload(message="hi")
+    )
 
     cron2 = Cron(store_path=path)
     jobs = cron2.list_jobs()

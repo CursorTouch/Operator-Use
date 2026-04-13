@@ -14,7 +14,7 @@ class CrashWatchdog(BaseWatchdog):
     """
 
     async def attach(self) -> None:
-        self.session.on('Inspector.targetCrashed', self._on_crash)
+        self.session.on("Inspector.targetCrashed", self._on_crash)
 
     def _on_crash(self, event, session_id=None) -> None:
         if not session_id:
@@ -33,7 +33,7 @@ class CrashWatchdog(BaseWatchdog):
 
         if target_id:
             # Tracked tab crashed — clean up target/session maps
-            logger.warning('Tab crashed (target=%s, session=%s)', target_id, session_id)
+            logger.warning("Tab crashed (target=%s, session=%s)", target_id, session_id)
             self.session._session_manager.remove_by_target(target_id)
 
             # Switch current target to another tab if possible
@@ -44,4 +44,4 @@ class CrashWatchdog(BaseWatchdog):
                 self.session.crashed = True
         else:
             # Untracked session (sub-frame, service worker, etc.) — log quietly
-            logger.debug('Sub-frame/worker crashed (session=%s) — ignored', session_id)
+            logger.debug("Sub-frame/worker crashed (session=%s) — ignored", session_id)

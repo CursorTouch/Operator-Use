@@ -11,7 +11,7 @@ class Tab:
     session_id: str
 
     def to_string(self) -> str:
-        return f'{self.id}|{self.title}|{self.url}'
+        return f"{self.id}|{self.title}|{self.url}"
 
 
 @dataclass
@@ -32,19 +32,19 @@ class BrowserState:
         return f"""## Browser State
 
 Current Tab:
-{self.current_tab.to_string() if self.current_tab else 'No active tab'}
+{self.current_tab.to_string() if self.current_tab else "No active tab"}
 
 Open Tabs:
-{self.tabs_to_string() if self.tabs else 'No tabs open'}
+{self.tabs_to_string() if self.tabs else "No tabs open"}
 
 Interactive Elements:
-{self.dom_state.interactive_elements_to_string() if self.dom_state else 'No interactive elements'}
+{self.dom_state.interactive_elements_to_string() if self.dom_state else "No interactive elements"}
 
 Informative Elements:
-{self.dom_state.informative_elements_to_string() if self.dom_state else 'No informative elements'}
+{self.dom_state.informative_elements_to_string() if self.dom_state else "No informative elements"}
 
 Scrollable Elements:
-{self.dom_state.scrollable_elements_to_string() if self.dom_state else 'No scrollable elements'}
+{self.dom_state.scrollable_elements_to_string() if self.dom_state else "No scrollable elements"}
 """
 
     def __str__(self) -> str:

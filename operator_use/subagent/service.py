@@ -31,7 +31,6 @@ Use a **local agent** (``localagents`` tool) when:
 
 import asyncio
 import logging
-import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -88,6 +87,7 @@ class Subagent:
         # Emit trace event for subagent run start
         if self.tracer:
             from operator_use.tracing import TraceEvent, TraceEventType
+
             trace_event = TraceEvent(
                 span_id=record.task_id,
                 event_type=TraceEventType.SUBAGENT_RUN,
@@ -99,6 +99,7 @@ class Subagent:
             self._trace_event = trace_event
 
         from operator_use.agent.tools.builtin import resolve_tools
+
         if self.config and self.config.tools:
             tools_cfg = self.config.tools
             tool_list = resolve_tools(
@@ -115,7 +116,11 @@ class Subagent:
 
         tools = registry.list_tools()
 
-        system_prompt = self.config.system_prompt if (self.config and self.config.system_prompt) else DEFAULT_SYSTEM_PROMPT
+        system_prompt = (
+            self.config.system_prompt
+            if (self.config and self.config.system_prompt)
+            else DEFAULT_SYSTEM_PROMPT
+        )
         max_iterations = self.config.max_iterations if self.config else DEFAULT_MAX_ITERATIONS
 
         # Retry configuration
@@ -141,14 +146,18 @@ class Subagent:
                         case LLMEventType.TOOL_CALL:
                             tc = event.tool_call
                             tr = await registry.aexecute(tc.name, tc.params)
-                            history.append(ToolMessage(
-                                id=tc.id,
-                                name=tc.name,
-                                params=tc.params,
-                                content=tr.output if tr.success else tr.error,
-                                thinking=event.thinking.content if event.thinking else None,
-                                thinking_signature=event.thinking.signature if event.thinking else None,
-                            ))
+                            history.append(
+                                ToolMessage(
+                                    id=tc.id,
+                                    name=tc.name,
+                                    params=tc.params,
+                                    content=tr.output if tr.success else tr.error,
+                                    thinking=event.thinking.content if event.thinking else None,
+                                    thinking_signature=event.thinking.signature
+                                    if event.thinking
+                                    else None,
+                                )
+                            )
                         case LLMEventType.TEXT:
                             result = event.content or "(no result)"
                             break
@@ -169,7 +178,7 @@ class Subagent:
                 if attempt < max_retries:
                     # Exponential backoff
                     delay = min(
-                        retry_cfg.base_delay * (retry_cfg.backoff_factor ** attempt),
+                        retry_cfg.base_delay * (retry_cfg.backoff_factor**attempt),
                         retry_cfg.max_delay,
                     )
                     logger.warning(
@@ -180,18 +189,24 @@ class Subagent:
                     # Continue to next retry iteration
                 else:
                     # Final failure
-                    logger.error(f"[{record.task_id}] subagent '{record.label}' failed after {max_retries + 1} attempts: {e}", exc_info=True)
+                    logger.error(
+                        f"[{record.task_id}] subagent '{record.label}' failed after {max_retries + 1} attempts: {e}",
+                        exc_info=True,
+                    )
                     result = f"(error: {type(e).__name__}: {e})"
                     record.status = "failed"
                     break
 
         record.result = result
         record.finished_at = datetime.now()
-        logger.info(f"[{record.task_id}] subagent '{record.label}' done — status={record.status} (attempt {record.retry_count + 1}/{max_retries + 1})")
+        logger.info(
+            f"[{record.task_id}] subagent '{record.label}' done — status={record.status} (attempt {record.retry_count + 1}/{max_retries + 1})"
+        )
 
         # Emit trace event for subagent run end
         if self.tracer and hasattr(self, "_trace_event"):
             from operator_use.tracing import TraceEventType
+
             # Update the stored trace event with final info
             self._trace_event.finished_at = record.finished_at
             self._trace_event.subagent_status = record.status
@@ -207,12 +222,13 @@ class Subagent:
             f"Summarize this naturally for the user in 1-2 sentences. "
             f"Do not mention technical terms like 'subagent' or task IDs."
         )
-        await self.bus.publish_incoming(IncomingMessage(
-            channel=record.channel,
-            chat_id=record.chat_id,
-            account_id=record.account_id,
-            parts=[TextPart(content=content)],
-            user_id="subagent",
-            metadata={"_subagent_result": True, "task_id": record.task_id},
-        ))
-
+        await self.bus.publish_incoming(
+            IncomingMessage(
+                channel=record.channel,
+                chat_id=record.chat_id,
+                account_id=record.account_id,
+                parts=[TextPart(content=content)],
+                user_id="subagent",
+                metadata={"_subagent_result": True, "task_id": record.task_id},
+            )
+        )

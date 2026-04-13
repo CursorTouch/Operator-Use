@@ -56,6 +56,7 @@ class BrowserPlugin(Plugin):
 
     def get_tools(self) -> list:
         from operator_use.web.subagent import browser_task
+
         return [browser_task]
 
     def get_system_prompt(self) -> str | None:
@@ -100,6 +101,7 @@ class BrowserPlugin(Plugin):
         """Synchronously initialise Browser (safe to call at startup)."""
         from operator_use.web.browser.service import Browser
         from operator_use.web.browser.config import BrowserConfig
+
         if self.browser is None:
             self.browser = Browser(config=BrowserConfig(use_system_profile=True))
 
@@ -132,6 +134,7 @@ class BrowserPlugin(Plugin):
 
     async def _state_hook(self, ctx: "BeforeLLMCallContext") -> "BeforeLLMCallContext":
         from operator_use.messages import HumanMessage
+
         try:
             if self.browser._client is None:
                 return ctx

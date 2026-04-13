@@ -1,4 +1,4 @@
-﻿"""Bus: async message queue for decoupled channel-agent communication.
+"""Bus: async message queue for decoupled channel-agent communication.
 Provides publish/consume methods for incoming and outgoing messages."""
 
 import asyncio

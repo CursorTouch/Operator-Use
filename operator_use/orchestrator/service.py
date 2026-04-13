@@ -11,7 +11,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from operator_use.bus import Bus, IncomingMessage, OutgoingMessage, StreamPhase
-from operator_use.bus.views import AudioPart, ContentPart, FilePart, ImagePart, TextPart, text_from_parts
+from operator_use.bus.views import (
+    AudioPart,
+    ContentPart,
+    FilePart,
+    ImagePart,
+    TextPart,
+    text_from_parts,
+)
 from operator_use.messages import AIMessage, HumanMessage, ImageMessage
 
 if TYPE_CHECKING:
@@ -22,10 +29,36 @@ logger = logging.getLogger(__name__)
 
 
 _INLINE_EXTENSIONS = {
-    ".txt", ".md", ".csv", ".json", ".jsonl", ".xml", ".yaml", ".yml",
-    ".toml", ".ini", ".cfg", ".env", ".html", ".htm", ".css", ".js",
-    ".ts", ".py", ".java", ".c", ".cpp", ".h", ".rs", ".go", ".rb",
-    ".sh", ".bat", ".ps1", ".sql", ".log",
+    ".txt",
+    ".md",
+    ".csv",
+    ".json",
+    ".jsonl",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".env",
+    ".html",
+    ".htm",
+    ".css",
+    ".js",
+    ".ts",
+    ".py",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".rs",
+    ".go",
+    ".rb",
+    ".sh",
+    ".bat",
+    ".ps1",
+    ".sql",
+    ".log",
 }
 
 _MAX_INLINE_CHARS = 8_000
@@ -57,10 +90,16 @@ def _extract_file_content(path: str) -> str:
     # Binary files (PDF, DOCX, PPTX, XLSX, images, etc.)
     # File is already saved to media folder — tell the agent where it is
     type_label = {
-        ".pdf": "PDF", ".docx": "Word document", ".doc": "Word document",
-        ".pptx": "PowerPoint", ".ppt": "PowerPoint",
-        ".xlsx": "Excel spreadsheet", ".xls": "Excel spreadsheet",
-        ".zip": "ZIP archive", ".mp4": "Video", ".mp3": "Audio",
+        ".pdf": "PDF",
+        ".docx": "Word document",
+        ".doc": "Word document",
+        ".pptx": "PowerPoint",
+        ".ppt": "PowerPoint",
+        ".xlsx": "Excel spreadsheet",
+        ".xls": "Excel spreadsheet",
+        ".zip": "ZIP archive",
+        ".mp4": "Video",
+        ".mp3": "Audio",
     }.get(ext, "File")
 
     return (
@@ -123,9 +162,7 @@ class Orchestrator:
         name = self.router(message)
         agent = self.agents.get(name) or self.agents.get(self.default_agent)
         if agent is None:
-            raise ValueError(
-                f"No agent found for name={name!r} and no default agent configured"
-            )
+            raise ValueError(f"No agent found for name={name!r} and no default agent configured")
         return agent
 
     # ------------------------------------------------------------------
@@ -182,7 +219,9 @@ class Orchestrator:
             return HumanMessage(content=content)
 
         metadata: dict = {"image_paths": image_paths} if image_paths else {}
-        return ImageMessage(content=content, images=images, mime_type="image/jpeg", metadata=metadata)
+        return ImageMessage(
+            content=content, images=images, mime_type="image/jpeg", metadata=metadata
+        )
 
     # ------------------------------------------------------------------
     # Outgoing building (AIMessage → OutgoingMessage)
@@ -200,7 +239,7 @@ class Orchestrator:
         Text-in → text-out always.
         """
         text = response.content or ""
-        clean_text = re.sub(r'^\[(bot_)?msg_id:[^\]]+\]\s*', '', text)
+        clean_text = re.sub(r"^\[(bot_)?msg_id:[^\]]+\]\s*", "", text)
         parts: list[ContentPart] = []
 
         if self.tts and clean_text and len(clean_text) <= 4000 and self._user_sent_voice(message):
@@ -239,6 +278,7 @@ class Orchestrator:
     async def _handle_command(self, message: IncomingMessage) -> None:
         """Handle session/system control commands without running the agent."""
         from operator_use.orchestrator.commands import handle_command
+
         agent = self._resolve_agent(message)
         await handle_command(message, agent, self.bus, self._session_overrides)
 
@@ -266,7 +306,11 @@ class Orchestrator:
 
             async def publish_stream(content: str, is_final: bool, init: bool = False) -> None:
                 nonlocal streamed
-                phase = StreamPhase.START if init else (StreamPhase.END if is_final else StreamPhase.CHUNK)
+                phase = (
+                    StreamPhase.START
+                    if init
+                    else (StreamPhase.END if is_final else StreamPhase.CHUNK)
+                )
                 if is_final:
                     streamed = True
                 await self.bus.publish_outgoing(
@@ -291,7 +335,9 @@ class Orchestrator:
             )
 
             # Build OutgoingMessage (runs TTS if needed)
-            outgoing = await self._build_outgoing_message(request_message, response_message, streamed)
+            outgoing = await self._build_outgoing_message(
+                request_message, response_message, streamed
+            )
 
             loop = asyncio.get_event_loop()
             sent_id_future: asyncio.Future[int | None] = loop.create_future()
@@ -323,7 +369,11 @@ class Orchestrator:
                         chat_id=request_message.chat_id,
                         channel=request_message.channel,
                         account_id=request_message.account_id,
-                        parts=[TextPart(content=f"Sorry, I encountered an error: {type(e).__name__}: {str(e)[:300]}")],
+                        parts=[
+                            TextPart(
+                                content=f"Sorry, I encountered an error: {type(e).__name__}: {str(e)[:300]}"
+                            )
+                        ],
                         metadata=request_message.metadata,
                         reply=True,
                     )
@@ -375,9 +425,7 @@ class Orchestrator:
         logger.info("Orchestrator ainvoke loop started")
         while self._running:
             try:
-                request_message = await asyncio.wait_for(
-                    self.bus.consume_incoming(), timeout=1.0
-                )
+                request_message = await asyncio.wait_for(self.bus.consume_incoming(), timeout=1.0)
                 session_id = self._get_session_id(request_message)
                 logger.info(
                     f"Message received | channel={request_message.channel} chat={request_message.chat_id}"
@@ -390,7 +438,11 @@ class Orchestrator:
                     continue
 
                 # Session control commands: handle without running the agent
-                if request_message.metadata and request_message.metadata.get("_command") in ("start", "stop", "restart"):
+                if request_message.metadata and request_message.metadata.get("_command") in (
+                    "start",
+                    "stop",
+                    "restart",
+                ):
                     await self._handle_command(request_message)
                     continue
 

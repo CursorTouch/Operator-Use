@@ -13,6 +13,7 @@ from rich import box
 console = Console()
 
 from operator_use.config.paths import get_userdata_dir
+
 USERDATA_DIR = get_userdata_dir()
 
 app = typer.Typer(
@@ -22,10 +23,17 @@ app = typer.Typer(
     no_args_is_help=False,
 )
 
+
 @app.callback()
-def default(ctx: typer.Context, verbose: bool = typer.Option(False, "--verbose", "-v", help="Show logs in console", is_eager=False)):
+def default(
+    ctx: typer.Context,
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show logs in console", is_eager=False
+    ),
+):
     if ctx.invoked_subcommand is None:
         gateway(verbose=verbose)
+
 
 @app.command("help")
 def help_cmd(ctx: typer.Context):
@@ -38,13 +46,24 @@ def help_cmd(ctx: typer.Context):
     table.add_row("operator -v / --verbose", "Start the agent and show logs in console")
     table.add_row("operator gateway", "Start the agent with gateway channels")
     table.add_row("operator agent", "Chat with first agent")
-    table.add_row("operator agent <name>", "Chat with a specific agent  [dim](e.g., operator agent jarvis)[/dim]")
+    table.add_row(
+        "operator agent <name>",
+        "Chat with a specific agent  [dim](e.g., operator agent jarvis)[/dim]",
+    )
     table.add_row("operator agent <name> -v", "Chat with agent in verbose mode")
-    table.add_row("operator agent <name> -s <id>", "Resume a session by ID  [dim](--session / -s)[/dim]")
+    table.add_row(
+        "operator agent <name> -s <id>", "Resume a session by ID  [dim](--session / -s)[/dim]"
+    )
     table.add_row("operator onboard", "Interactive setup wizard")
     table.add_row("operator agents list", "List all configured agents")
-    table.add_row("operator agents add <id>", "Add a new agent  [dim](--provider / --model / --workspace)[/dim]")
-    table.add_row("operator agents remove <id>", "Remove an agent  [dim](--delete-workspace to also wipe files)[/dim]")
+    table.add_row(
+        "operator agents add <id>",
+        "Add a new agent  [dim](--provider / --model / --workspace)[/dim]",
+    )
+    table.add_row(
+        "operator agents remove <id>",
+        "Remove an agent  [dim](--delete-workspace to also wipe files)[/dim]",
+    )
     table.add_row("operator status", "Show config and agent status")
     table.add_row("operator sessions", "List conversation sessions")
     table.add_row("operator logs", "Show agent logs  [dim](--follow / -f to tail)[/dim]")
@@ -58,7 +77,9 @@ def help_cmd(ctx: typer.Context):
     table.add_row("operator heartbeat disable", "Disable the heartbeat")
     table.add_row("operator models", "Show model providers and active LLM/STT/TTS")
     table.add_row("operator config list", "List all config values")
-    table.add_row("operator config get <key>", "Get a config value  [dim](e.g. agent.llm.model)[/dim]")
+    table.add_row(
+        "operator config get <key>", "Get a config value  [dim](e.g. agent.llm.model)[/dim]"
+    )
     table.add_row("operator config set <key> <val>", "Set a config value")
     table.add_row("operator config unset <key>", "Remove a config key")
     table.add_row("operator cron list", "List scheduled cron jobs")
@@ -72,25 +93,33 @@ def help_cmd(ctx: typer.Context):
     table.add_row("operator acp run <url> <msg>", "Send a message to a remote ACP agent")
     table.add_row("operator acp stdio", "Start ACP stdio bridge (for IDE integration)")
     console.print(table)
-    console.print("[dim]Use [bold]operator <command> --help[/bold] for details on any command.[/dim]\n")
+    console.print(
+        "[dim]Use [bold]operator <command> --help[/bold] for details on any command.[/dim]\n"
+    )
+
 
 @app.command("onboard")
 def onboard():
     """Launch the interactive configuration wizard."""
     try:
         from operator_use.cli import setup
+
         setup.run_initial_setup()
     except ImportError as e:
         print(f"Error: Unable to start configuration UI. Missing dependencies? ({e})")
+
 
 @app.command("gateway")
 def gateway(verbose: bool = typer.Option(False, "--verbose", "-v", help="Show logs in console")):
     """Start the agent with gateway channels (auto-onboards on first run if no config exists)."""
     if not (USERDATA_DIR / "config.json").exists():
         from operator_use.cli import setup
+
         setup.run_first_install()
     from operator_use.cli.start import run
+
     run(verbose=verbose)
+
 
 @app.command("status")
 def status():
@@ -106,10 +135,14 @@ def status():
     channels = config.get("channels", {})
     crons_path = USERDATA_DIR / "crons.json"
     workspaces_dir = USERDATA_DIR / "workspaces"
-    sessions_dir = next(
-        (d / "sessions" for d in sorted(workspaces_dir.iterdir()) if (d / "sessions").exists()),
-        None,
-    ) if workspaces_dir.exists() else None
+    sessions_dir = (
+        next(
+            (d / "sessions" for d in sorted(workspaces_dir.iterdir()) if (d / "sessions").exists()),
+            None,
+        )
+        if workspaces_dir.exists()
+        else None
+    )
     log_file = USERDATA_DIR / "operator.log"
 
     # LLM
@@ -121,13 +154,17 @@ def status():
 
     # Channels
     active = [
-        name for name, cfg in channels.items()
-        if isinstance(cfg, dict) and (cfg.get("token") or cfg.get("botToken") or cfg.get("bot_token"))
+        name
+        for name, cfg in channels.items()
+        if isinstance(cfg, dict)
+        and (cfg.get("token") or cfg.get("botToken") or cfg.get("bot_token"))
     ]
     table.add_row("Channels", ", ".join(active) if active else "[dim]none configured[/dim]")
 
     # Sessions
-    session_count = len(list(sessions_dir.glob("*.jsonl"))) if sessions_dir and sessions_dir.exists() else 0
+    session_count = (
+        len(list(sessions_dir.glob("*.jsonl"))) if sessions_dir and sessions_dir.exists() else 0
+    )
     table.add_row("Sessions", str(session_count))
 
     # Crons
@@ -145,6 +182,7 @@ def status():
 
     console.print("\n[bold]Operator Status[/bold]")
     console.print(table)
+
 
 @app.command("sessions")
 def sessions(limit: int = typer.Option(20, "--limit", "-n", help="Max sessions to show.")):
@@ -193,8 +231,12 @@ def sessions(limit: int = typer.Option(20, "--limit", "-n", help="Max sessions t
     console.print(table)
 
 
-
-channel_app = typer.Typer(name="channel", help="Manage connected channels.", invoke_without_command=True, no_args_is_help=True)
+channel_app = typer.Typer(
+    name="channel",
+    help="Manage connected channels.",
+    invoke_without_command=True,
+    no_args_is_help=True,
+)
 app.add_typer(channel_app)
 
 
@@ -225,12 +267,18 @@ def channel_add():
     console.print("[green]Channel added.[/green] Run [bold]operator run[/bold] to start.")
 
 
-cron_app = typer.Typer(name="cron", help="Manage scheduled cron jobs.", invoke_without_command=True, no_args_is_help=True)
+cron_app = typer.Typer(
+    name="cron",
+    help="Manage scheduled cron jobs.",
+    invoke_without_command=True,
+    no_args_is_help=True,
+)
 app.add_typer(cron_app)
 
 
 def _load_cron():
     from operator_use.crons.service import Cron
+
     return Cron(store_path=USERDATA_DIR / "crons.json")
 
 
@@ -238,6 +286,7 @@ def _ms_to_str(ms: int | None) -> str:
     if ms is None:
         return "[dim]-[/dim]"
     from datetime import datetime
+
     return datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -265,7 +314,14 @@ def cron_list():
         elif last_status == "success":
             last_status = f"[green]{last_status}[/green]"
         row_status = f"{enabled}  {last_status}"
-        table.add_row(j.id[:8], j.name, sched, row_status, _ms_to_str(j.state.last_run_at_ms), _ms_to_str(j.state.next_run_at_ms))
+        table.add_row(
+            j.id[:8],
+            j.name,
+            sched,
+            row_status,
+            _ms_to_str(j.state.last_run_at_ms),
+            _ms_to_str(j.state.next_run_at_ms),
+        )
     console.print(f"\n[bold]Cron Jobs[/bold] ({len(jobs)})")
     console.print(table)
 
@@ -275,18 +331,23 @@ def cron_add(
     name: str = typer.Argument(..., help="Job name"),
     expr: str = typer.Argument(..., help='Cron expression, e.g. "*/5 * * * *"'),
     message: str = typer.Argument(..., help="Message to send when job fires"),
-    channel: str = typer.Option(..., "--channel", "-c", help="Channel name (telegram, discord, slack)"),
+    channel: str = typer.Option(
+        ..., "--channel", "-c", help="Channel name (telegram, discord, slack)"
+    ),
     chat_id: str = typer.Option(..., "--chat-id", "-i", help="Chat/user ID to send to"),
     deliver: bool = typer.Option(False, "--deliver", help="Deliver directly (skip agent)"),
     tz: str = typer.Option("UTC", "--tz", help="Timezone, e.g. Asia/Kolkata"),
 ):
     """Add a new cron job."""
     from operator_use.crons.views import CronSchedule, CronPayload
+
     cron = _load_cron()
     schedule = CronSchedule(mode="cron", expr=expr, tz=tz)
     payload = CronPayload(message=message, deliver=deliver, channel=channel, chat_id=chat_id)
     job = cron.add_job(name=name, schedule=schedule, payload=payload)
-    console.print(f"[green]Added[/green] job [bold]{job.name}[/bold] ({job.id[:8]})  next run: {_ms_to_str(job.state.next_run_at_ms)}")
+    console.print(
+        f"[green]Added[/green] job [bold]{job.name}[/bold] ({job.id[:8]})  next run: {_ms_to_str(job.state.next_run_at_ms)}"
+    )
 
 
 @cron_app.command("remove")
@@ -328,7 +389,12 @@ def cron_disable(job_id: str = typer.Argument(..., help="Job ID (or prefix)")):
     console.print(f"[dim]Disabled[/dim] job [bold]{jobs[0].name}[/bold]")
 
 
-config_app = typer.Typer(name="config", help="Get, set, or unset config values.", invoke_without_command=True, no_args_is_help=True)
+config_app = typer.Typer(
+    name="config",
+    help="Get, set, or unset config values.",
+    invoke_without_command=True,
+    no_args_is_help=True,
+)
 app.add_typer(config_app)
 
 
@@ -458,9 +524,9 @@ def channels():
     ch = config.get("channels", {})
 
     CHANNEL_DEFS = [
-        ("Telegram",  ch.get("telegram", {}),  ["token"]),
-        ("Discord",   ch.get("discord", {}),   ["token"]),
-        ("Slack",     ch.get("slack", {}),      ["botToken", "bot_token"]),
+        ("Telegram", ch.get("telegram", {}), ["token"]),
+        ("Discord", ch.get("discord", {}), ["token"]),
+        ("Slack", ch.get("slack", {}), ["botToken", "bot_token"]),
     ]
 
     table = Table(box=box.ROUNDED, show_header=True, padding=(0, 1))
@@ -473,7 +539,11 @@ def channels():
         token = next((cfg.get(k, "") for k in token_keys if cfg.get(k)), "")
         configured = bool(token)
         status = "[green]active[/green]" if configured else "[dim]not configured[/dim]"
-        masked = f"{token[:16]}...{token[-8:]}" if len(token) > 24 else ("[dim]-[/dim]" if not token else token)
+        masked = (
+            f"{token[:16]}...{token[-8:]}"
+            if len(token) > 24
+            else ("[dim]-[/dim]" if not token else token)
+        )
         allow = ", ".join(cfg.get("allowFrom", cfg.get("allow_from", []))) or "[dim]all[/dim]"
         table.add_row(name, status, masked, allow)
 
@@ -504,7 +574,10 @@ def models():
     if stt.get("enabled"):
         active_table.add_row("STT", f"{stt.get('provider', '-')}  /  {stt.get('model', '-')}")
     if tts.get("enabled"):
-        active_table.add_row("TTS", f"{tts.get('provider', '-')}  /  {tts.get('model', '-')}  (voice: {tts.get('voice', '-')})")
+        active_table.add_row(
+            "TTS",
+            f"{tts.get('provider', '-')}  /  {tts.get('model', '-')}  (voice: {tts.get('voice', '-')})",
+        )
 
     console.print("\n[bold]Active Models[/bold]")
     console.print(active_table)
@@ -520,7 +593,11 @@ def models():
             continue
         key = cfg.get("apiKey", cfg.get("api_key", ""))
         base = cfg.get("apiBase", cfg.get("api_base", "")) or "[dim]-[/dim]"
-        masked_key = f"{key[:16]}...{key[-8:]}" if len(key) > 24 else ("[dim]not set[/dim]" if not key else key)
+        masked_key = (
+            f"{key[:16]}...{key[-8:]}"
+            if len(key) > 24
+            else ("[dim]not set[/dim]" if not key else key)
+        )
         active_marker = " [green]*[/green]" if name == llm.get("provider") else ""
         prov_table.add_row(name.replace("_", " ").title() + active_marker, masked_key, base)
 
@@ -528,7 +605,12 @@ def models():
     console.print(prov_table)
 
 
-acp_app = typer.Typer(name="acp", help="Manage ACP (Agent Communication Protocol) sessions and connections.", invoke_without_command=True, no_args_is_help=True)
+acp_app = typer.Typer(
+    name="acp",
+    help="Manage ACP (Agent Communication Protocol) sessions and connections.",
+    invoke_without_command=True,
+    no_args_is_help=True,
+)
 app.add_typer(acp_app)
 
 
@@ -569,8 +651,12 @@ def acp_sessions():
 
 @acp_app.command("list")
 def acp_list(
-    url: str = typer.Argument(..., help="Base URL of the remote ACP server, e.g. http://localhost:9000"),
-    token: str = typer.Option("", "--token", "-t", help="Bearer token if the server requires auth."),
+    url: str = typer.Argument(
+        ..., help="Base URL of the remote ACP server, e.g. http://localhost:9000"
+    ),
+    token: str = typer.Option(
+        "", "--token", "-t", help="Bearer token if the server requires auth."
+    ),
 ):
     """Discover agents available on a remote ACP server."""
     from operator_use.acp.client import ACPClient
@@ -599,9 +685,18 @@ def acp_list(
     table.add_column("Capabilities")
     for a in resp.agents:
         caps = a.capabilities
-        cap_str = ", ".join(
-            c for c, on in [("streaming", caps.streaming), ("async", caps.async_mode), ("sessions", caps.session)] if on
-        ) or "[dim]-[/dim]"
+        cap_str = (
+            ", ".join(
+                c
+                for c, on in [
+                    ("streaming", caps.streaming),
+                    ("async", caps.async_mode),
+                    ("sessions", caps.session),
+                ]
+                if on
+            )
+            or "[dim]-[/dim]"
+        )
         table.add_row(a.id, a.name, a.description or "[dim]-[/dim]", cap_str)
 
     console.print(f"\n[bold]Agents at {url}[/bold]")
@@ -625,6 +720,7 @@ def acp_stdio():
     os.environ["OPERATOR_STDIO"] = "1"
     # Redirect the runner's startup banner to stderr so stdout stays clean JSON-RPC
     from operator_use.cli import start as _start
+
     _start._console = _Console(file=sys.stderr)
     asyncio.run(_start.main())
 
@@ -633,16 +729,24 @@ def acp_stdio():
 def acp_run(
     url: str = typer.Argument(..., help="Base URL of the remote ACP server."),
     message: str = typer.Argument(..., help="Message to send."),
-    agent: str = typer.Option("", "--agent", "-a", help="Target agent ID (auto-detected if omitted)."),
-    session: str = typer.Option("", "--session", "-s", help="Session ID for multi-turn conversations."),
-    token: str = typer.Option("", "--token", "-t", help="Bearer token if the server requires auth."),
+    agent: str = typer.Option(
+        "", "--agent", "-a", help="Target agent ID (auto-detected if omitted)."
+    ),
+    session: str = typer.Option(
+        "", "--session", "-s", help="Session ID for multi-turn conversations."
+    ),
+    token: str = typer.Option(
+        "", "--token", "-t", help="Bearer token if the server requires auth."
+    ),
 ):
     """Send a one-shot message to a remote ACP agent and print the response."""
     from operator_use.acp.client import ACPClient
     from operator_use.acp.config import ACPClientConfig
 
     async def _run():
-        cfg = ACPClientConfig(enabled=True, base_url=url, agent_id=agent or "operator", auth_token=token)
+        cfg = ACPClientConfig(
+            enabled=True, base_url=url, agent_id=agent or "operator", auth_token=token
+        )
         async with ACPClient(cfg) as client:
             if not agent:
                 try:
@@ -666,7 +770,9 @@ def acp_run(
 def acp_discover(
     port: int = typer.Option(8765, "--port", "-p", help="ACP server port to scan for."),
     timeout: float = typer.Option(0.5, "--timeout", "-t", help="Seconds to wait per host."),
-    add: bool = typer.Option(False, "--add", help="Interactively add discovered servers to acp_agents config."),
+    add: bool = typer.Option(
+        False, "--add", help="Interactively add discovered servers to acp_agents config."
+    ),
 ):
     """Scan the local network for running Operator ACP servers.
 
@@ -715,7 +821,9 @@ def acp_discover(
 
     if not found:
         console.print(f"[dim]No Operator ACP servers found on port {port}.[/dim]")
-        console.print("[dim]Make sure the other machine has[/dim] [bold]acp_server.enabled = true[/bold] [dim]in config.json.[/dim]")
+        console.print(
+            "[dim]Make sure the other machine has[/dim] [bold]acp_server.enabled = true[/bold] [dim]in config.json.[/dim]"
+        )
         return
 
     table = Table(box=box.ROUNDED, show_header=True, padding=(0, 1))
@@ -744,9 +852,12 @@ def acp_discover(
 
     if add:
         import json as _json
+
         config_path = USERDATA_DIR / "config.json"
         if not config_path.exists():
-            console.print("[red]No config.json found.[/red] Run [bold]operator onboard[/bold] first.")
+            console.print(
+                "[red]No config.json found.[/red] Run [bold]operator onboard[/bold] first."
+            )
             raise typer.Exit(1)
         data = _json.loads(config_path.read_text(encoding="utf-8"))
         acp_agents = data.setdefault("acpAgents", {})
@@ -763,7 +874,10 @@ def acp_discover(
                 suggested_name = f"operator-{entry['ip'].split('.')[-1]}"
 
             console.print(f"\nFound [cyan]{entry['url']}[/cyan] — [bold]{agent_name}[/bold]")
-            name = typer.prompt(f"  Registry name (press Enter to use '{suggested_name}', or skip to ignore)", default=suggested_name)
+            name = typer.prompt(
+                f"  Registry name (press Enter to use '{suggested_name}', or skip to ignore)",
+                default=suggested_name,
+            )
             if not name.strip():
                 continue
 
@@ -775,13 +889,22 @@ def acp_discover(
             added += 1
 
         if added:
-            config_path.write_text(_json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8")
-            console.print(f"\n[green]Added {added} agent(s) to config.json.[/green] Restart operator to apply.")
+            config_path.write_text(
+                _json.dumps(data, indent=4, ensure_ascii=False), encoding="utf-8"
+            )
+            console.print(
+                f"\n[green]Added {added} agent(s) to config.json.[/green] Restart operator to apply."
+            )
         else:
             console.print("\n[dim]No agents added.[/dim]")
 
 
-auth_app = typer.Typer(name="auth", help="Authenticate with OAuth-based providers.", invoke_without_command=True, no_args_is_help=True)
+auth_app = typer.Typer(
+    name="auth",
+    help="Authenticate with OAuth-based providers.",
+    invoke_without_command=True,
+    no_args_is_help=True,
+)
 app.add_typer(auth_app)
 
 
@@ -789,12 +912,16 @@ app.add_typer(auth_app)
 def auth_antigravity():
     """Login with Google Cloud Code Assist (Antigravity) OAuth."""
     from operator_use.providers.antigravity.auth import login, load_auth
+
     existing = load_auth()
     if existing and existing.get("access_token"):
         import time as _t
+
         expires_at = existing.get("expires_at", 0)
         if expires_at > _t.time() + 60:
-            console.print(f"[green]Already authenticated![/green] Project: {existing.get('project_id', '-')}")
+            console.print(
+                f"[green]Already authenticated![/green] Project: {existing.get('project_id', '-')}"
+            )
             return
     console.print("[bold]Authenticating with Antigravity (Google Cloud Code Assist)...[/bold]")
     try:
@@ -810,6 +937,7 @@ def auth_claude_code():
     """Login with Claude Code OAuth (token auto-discovered from Claude CLI)."""
     import subprocess
     from operator_use.providers.claude_code.llm import load_claude_code_token
+
     token = load_claude_code_token()
     if token:
         console.print(f"[green]Already authenticated![/green] Token: {token[:20]}...")
@@ -829,16 +957,20 @@ def auth_claude_code():
     if token:
         console.print(f"[green]Logged in![/green] Token: {token[:20]}...")
     else:
-        console.print("[yellow]Token will be auto-discovered from ~/.claude/.credentials.json on next run.[/yellow]")
+        console.print(
+            "[yellow]Token will be auto-discovered from ~/.claude/.credentials.json on next run.[/yellow]"
+        )
 
 
 @auth_app.command("github-copilot")
 def auth_github_copilot():
     """Login with GitHub Copilot OAuth (GitHub Device Flow)."""
     from operator_use.providers.github_copilot.auth import load_auth, get_copilot_token
+
     auth = load_auth()
     if auth and auth.get("github_token"):
         import time as _t
+
         if auth.get("copilot_expires_at", 0) > _t.time() + 60:
             console.print("[green]Already authenticated![/green] GitHub Copilot token is valid.")
             return
@@ -853,6 +985,7 @@ def auth_github_copilot():
     console.print("[bold]Authenticating with GitHub Copilot...[/bold]")
     try:
         from operator_use.providers.github_copilot.auth import login
+
         login()
         console.print("[green]Logged in![/green] GitHub Copilot credentials saved.")
     except Exception as e:
@@ -865,9 +998,12 @@ def auth_codex():
     """Login with OpenAI Codex (ChatGPT subscription) OAuth."""
     import subprocess
     from operator_use.providers.codex.llm import _load_auth
+
     auth = _load_auth()
     if auth and auth.get("access"):
-        console.print(f"[green]Already authenticated![/green] Account: {auth.get('account_id', '-')}")
+        console.print(
+            f"[green]Already authenticated![/green] Account: {auth.get('account_id', '-')}"
+        )
         return
     console.print("[bold]Authenticating with Codex (ChatGPT subscription)...[/bold]")
     console.print("Launching [bold]codex login[/bold]...")
@@ -884,14 +1020,22 @@ def auth_codex():
     if auth and auth.get("access"):
         console.print(f"[green]Logged in![/green] Account: {auth.get('account_id', '-')}")
     else:
-        console.print("[yellow]Token will be auto-discovered from ~/.codex/auth.json on next run.[/yellow]")
+        console.print(
+            "[yellow]Token will be auto-discovered from ~/.codex/auth.json on next run.[/yellow]"
+        )
 
 
 @app.command("agent")
 def agent_repl(
-    agent_name: str = typer.Argument("", help="Agent name to chat with (optional, uses first agent if not specified)."),
-    session: str = typer.Option("", "--session", "-s", help="Session ID to resume (default: new session per run)."),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show tool calls and logs in console"),
+    agent_name: str = typer.Argument(
+        "", help="Agent name to chat with (optional, uses first agent if not specified)."
+    ),
+    session: str = typer.Option(
+        "", "--session", "-s", help="Session ID to resume (default: new session per run)."
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show tool calls and logs in console"
+    ),
 ):
     """Chat directly with the agent in the terminal (no gateway required).
 
@@ -902,8 +1046,14 @@ def agent_repl(
     """
     agent_id = agent_name  # Use the positional argument as agent_id
     from operator_use.cli.start import (
-        _build_agents, _make_stt, _make_tts, _make_search, _make_image,
-        copy_templates_to_workspace, _resolve_agent_workspace, setup_logging,
+        _build_agents,
+        _make_stt,
+        _make_tts,
+        _make_search,
+        _make_image,
+        copy_templates_to_workspace,
+        _resolve_agent_workspace,
+        setup_logging,
     )
     from operator_use.config import load_config
     from operator_use.bus import Bus
@@ -918,7 +1068,9 @@ def agent_repl(
     setup_logging(USERDATA_DIR, verbose=verbose)
     config = load_config(USERDATA_DIR)
     if not config.agents.list:
-        console.print("[red]No agents defined in config.[/red] Run [bold]operator onboard[/bold] first.")
+        console.print(
+            "[red]No agents defined in config.[/red] Run [bold]operator onboard[/bold] first."
+        )
         raise typer.Exit(1)
 
     # Resolve target agent definition
@@ -951,6 +1103,7 @@ def agent_repl(
     # Restrict to CLI-appropriate tools (no channel, messaging, cron, or multi-agent tools)
     from operator_use.agent.tools.builtin import CLI_TOOLS
     from operator_use.agent.tools.registry import ToolRegistry
+
     agent.tool_register = ToolRegistry()
     agent.tool_register.register_tools(CLI_TOOLS)
     # Re-inject runtime extensions
@@ -962,10 +1115,12 @@ def agent_repl(
     # Add tool call hook for verbose mode
     if verbose:
         from operator_use.agent.hooks.events import HookEvent
+
         async def _log_tool_call(ctx):
             tool_call = ctx.tool_call
             params_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in tool_call.params.items())
             console.print(f"[dim]→ Tool: {tool_call.name}({params_str})[/dim]")
+
         agent.hooks.register(HookEvent.BEFORE_TOOL_CALL, _log_tool_call)
 
     orchestrator = Orchestrator(
@@ -977,18 +1132,23 @@ def agent_repl(
     )
 
     import uuid as _uuid
+
     chat_id = session or f"cli_{_uuid.uuid4().hex[:8]}"
     llm_conf = defn.llm_config
     llm_label = f"{llm_conf.provider} / {llm_conf.model}" if llm_conf else "not configured"
     agent_label = f"[dim]{defn.id}[/dim]  " if len(agents) > 1 or agent_id else ""
-    console.print(f"\n[bold]Operator Agent[/bold]  {agent_label}[dim]{llm_label}[/dim]  [dim](session: {chat_id})[/dim]")
+    console.print(
+        f"\n[bold]Operator Agent[/bold]  {agent_label}[dim]{llm_label}[/dim]  [dim](session: {chat_id})[/dim]"
+    )
     console.print("[dim]Type your message and press Enter. Ctrl+C or Ctrl+D to exit.[/dim]\n")
 
     async def _run():
         nonlocal chat_id
         while True:
             try:
-                user_input = await asyncio.get_event_loop().run_in_executor(None, lambda: input("You: "))
+                user_input = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: input("You: ")
+                )
             except (EOFError, KeyboardInterrupt):
                 console.print("\n[dim]Goodbye.[/dim]")
                 break
@@ -1002,7 +1162,7 @@ def agent_repl(
                 if init and not state["started"]:
                     console.print(f"\n[bold cyan]{defn.id.title()}:[/bold cyan] ", end="")
                     state["started"] = True
-                delta = content[state["printed"]:]
+                delta = content[state["printed"] :]
                 if delta:
                     console.print(delta, end="", highlight=False)
                     state["printed"] = len(content)
@@ -1022,28 +1182,37 @@ def agent_repl(
                         existing = agent.sessions.load(target_session_id)
                         name_label = f" '{session_name}'" if session_name else ""
                         if existing and existing.messages:
-                            console.print(f"\nSession{name_label} is already active. Use /stop to end it first.\n")
+                            console.print(
+                                f"\nSession{name_label} is already active. Use /stop to end it first.\n"
+                            )
                         else:
                             console.print(f"\nSession{name_label} started.\n")
                             from operator_use.orchestrator.commands import _HELP_TEXT
+
                             console.print(_HELP_TEXT, highlight=False, markup=False)
                             chat_id = target_session_id
                     elif command == "stop":
                         agent.sessions.archive(chat_id)
-                        console.print("\nSession saved and closed.\nUse /start to begin a new session.\n")
+                        console.print(
+                            "\nSession saved and closed.\nUse /start to begin a new session.\n"
+                        )
                         chat_id = f"cli_{_uuid.uuid4().hex[:8]}"
                     elif command == "restart":
                         console.print("\nRestarting system. I'll be back in a moment.\n")
                         import os
+
                         os._exit(75)
                     elif command == "help":
                         from operator_use.orchestrator.commands import _HELP_TEXT
+
                         console.print(f"\n{_HELP_TEXT}\n", highlight=False, markup=False)
                     else:
                         console.print(f"\n[yellow]Unknown command:[/yellow] /{command}\n")
                 else:
                     await orchestrator.process_direct(
-                        content=user_input, channel="cli", chat_id=chat_id,
+                        content=user_input,
+                        channel="cli",
+                        chat_id=chat_id,
                         publish_stream=stream_chunk,
                     )
                     if not state["started"]:
@@ -1093,7 +1262,9 @@ def agents_list():
     agent_defs = config.agents.list or []
 
     if not agent_defs:
-        console.print("[dim]No agents configured — a single [bold]default[/bold] agent is used.[/dim]")
+        console.print(
+            "[dim]No agents configured — a single [bold]default[/bold] agent is used.[/dim]"
+        )
         return
 
     table = Table(box=box.SIMPLE, show_header=True, padding=(0, 1))
@@ -1113,14 +1284,29 @@ def agents_list():
 @agents_app.command("add")
 def agents_add(
     agent_id: str = typer.Argument(..., help="Agent ID (e.g. 'work', 'personal')."),
-    workspace: str = typer.Option("", "--workspace", "-w", help="Custom workspace path (default: ~/.operator-use/workspaces/<id>)."),
+    workspace: str = typer.Option(
+        "",
+        "--workspace",
+        "-w",
+        help="Custom workspace path (default: ~/.operator-use/workspaces/<id>).",
+    ),
     provider: str = typer.Option("", "--provider", "-p", help="LLM provider (e.g. 'anthropic')."),
     model: str = typer.Option("", "--model", "-m", help="LLM model (e.g. 'claude-opus-4-6')."),
-    prompt_mode: str = typer.Option("", "--prompt-mode", help="Prompt mode: full, minimal, or none."),
-    system_prompt: str = typer.Option("", "--system-prompt", "-s", help="Freeform instructions appended to every system prompt."),
-    tools_profile: str = typer.Option("", "--tools-profile", help="Tool profile: minimal, coding, or full."),
-    tools_allow: list[str] = typer.Option([], "--tools-allow", help="Extra tool names to add on top of the profile."),
-    tools_deny: list[str] = typer.Option([], "--tools-deny", help="Tool names to remove from the profile."),
+    prompt_mode: str = typer.Option(
+        "", "--prompt-mode", help="Prompt mode: full, minimal, or none."
+    ),
+    system_prompt: str = typer.Option(
+        "", "--system-prompt", "-s", help="Freeform instructions appended to every system prompt."
+    ),
+    tools_profile: str = typer.Option(
+        "", "--tools-profile", help="Tool profile: minimal, coding, or full."
+    ),
+    tools_allow: list[str] = typer.Option(
+        [], "--tools-allow", help="Extra tool names to add on top of the profile."
+    ),
+    tools_deny: list[str] = typer.Option(
+        [], "--tools-deny", help="Tool names to remove from the profile."
+    ),
 ):
     """Add a new agent and create its workspace."""
     from operator_use.cli.start import copy_templates_to_workspace, _resolve_agent_workspace
@@ -1167,7 +1353,9 @@ def agents_add(
 @agents_app.command("remove")
 def agents_remove(
     agent_id: str = typer.Argument(..., help="Agent ID to remove."),
-    delete_workspace: bool = typer.Option(False, "--delete-workspace", "-d", help="Also delete the workspace directory."),
+    delete_workspace: bool = typer.Option(
+        False, "--delete-workspace", "-d", help="Also delete the workspace directory."
+    ),
 ):
     """Remove an agent from config and optionally delete its workspace."""
     from operator_use.config import load_config
@@ -1184,15 +1372,13 @@ def agents_remove(
         if len(data["agents"]["list"]) == before:
             console.print(f"[yellow]Agent '{agent_id}' not found.[/yellow]")
             raise typer.Exit(1)
-        data["bindings"] = [
-            b for b in data.get("bindings", [])
-            if b.get("agentId") != agent_id
-        ]
+        data["bindings"] = [b for b in data.get("bindings", []) if b.get("agentId") != agent_id]
 
     _load_and_save_config(mutate)
 
     if delete_workspace and ws_path and ws_path.exists():
         import shutil
+
         shutil.rmtree(ws_path)
         console.print(f"[green]Agent '{agent_id}' removed.[/green] Workspace deleted: {ws_path}")
     else:
@@ -1203,12 +1389,18 @@ def agents_remove(
 # heartbeat sub-app
 # ---------------------------------------------------------------------------
 
-heartbeat_app = typer.Typer(name="heartbeat", help="Enable or disable the heartbeat.", invoke_without_command=True, no_args_is_help=True)
+heartbeat_app = typer.Typer(
+    name="heartbeat",
+    help="Enable or disable the heartbeat.",
+    invoke_without_command=True,
+    no_args_is_help=True,
+)
 app.add_typer(heartbeat_app, name="heartbeat")
 
 
 def _set_heartbeat(enabled: bool) -> None:
     import json as _json
+
     config_path = USERDATA_DIR / "config.json"
     if not config_path.exists():
         console.print("[red]No config found.[/red] Run [bold]operator onboard[/bold] first.")
@@ -1234,6 +1426,7 @@ def heartbeat_disable():
 
 # ---------------------------------------------------------------------------
 
+
 @app.command("logs")
 def logs(
     lines: int = typer.Option(50, "--lines", "-n", help="Number of lines to show."),
@@ -1242,7 +1435,9 @@ def logs(
     """Show agent logs."""
     log_file = USERDATA_DIR / "operator.log"
     if not log_file.exists():
-        console.print("[dim]No log file found. Start the agent first with [bold]operator run[/bold].[/dim]")
+        console.print(
+            "[dim]No log file found. Start the agent first with [bold]operator run[/bold].[/dim]"
+        )
         raise typer.Exit(1)
 
     # Show last N lines

@@ -38,7 +38,7 @@ class SlidingWindowStrategy(BaseContextStrategy):
         if len(non_system) <= self.window:
             return messages
 
-        trimmed = non_system[-self.window:]
+        trimmed = non_system[-self.window :]
         logger.debug(
             "SlidingWindowStrategy: dropped %d message(s), keeping last %d",
             len(non_system) - self.window,

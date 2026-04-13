@@ -33,17 +33,20 @@ PRIMARY = "#e5c07b"
 SECONDARY = "#61afef"
 MUTED = "#abb2bf"
 
-clack_style = get_style({
-    "questionmark": f"{PRIMARY} bold",
-    "question": f"{PRIMARY} bold",
-    "answermark": f"{SECONDARY}",
-    "answered_question": f"{PRIMARY} bold",
-    "answer": f"{MUTED}",
-    "pointer": f"{SECONDARY} bold",
-    "highlighted": f"{SECONDARY} bold",
-    "selected": f"{SECONDARY} bold",
-    "instruction": f"{MUTED}",
-}, False)
+clack_style = get_style(
+    {
+        "questionmark": f"{PRIMARY} bold",
+        "question": f"{PRIMARY} bold",
+        "answermark": f"{SECONDARY}",
+        "answered_question": f"{PRIMARY} bold",
+        "answer": f"{MUTED}",
+        "pointer": f"{SECONDARY} bold",
+        "highlighted": f"{SECONDARY} bold",
+        "selected": f"{SECONDARY} bold",
+        "instruction": f"{MUTED}",
+    },
+    False,
+)
 
 
 class BackRequest(Exception):
@@ -52,37 +55,50 @@ class BackRequest(Exception):
 
 BACK_KEYBINDINGS = {"skip": [{"key": "escape"}]}
 
+
 def _version() -> str:
     try:
         from importlib.metadata import version
+
         return version("operator-use")
     except Exception:
         return ""
+
 
 def print_banner():
     ver = _version()
     ver_str = f"  [dim]v{ver}[/dim]" if ver else ""
     console.print()
-    console.print(f"               [bold {PRIMARY}]OPERATOR[/bold {PRIMARY}]{ver_str}", justify="left")
+    console.print(
+        f"               [bold {PRIMARY}]OPERATOR[/bold {PRIMARY}]{ver_str}", justify="left"
+    )
     console.print()
+
 
 def print_start(title: str = "Initial Setup"):
     ver = _version()
     ver_str = f" [dim]v{ver}[/dim]" if ver else ""
-    console.print(f"┌ [bold {PRIMARY}]Operator[/bold {PRIMARY}]{ver_str} [bold {PRIMARY}]{title}[/bold {PRIMARY}]")
+    console.print(
+        f"┌ [bold {PRIMARY}]Operator[/bold {PRIMARY}]{ver_str} [bold {PRIMARY}]{title}[/bold {PRIMARY}]"
+    )
     console.print("│")
+
 
 def print_step(n: int, total: int, title: str, hint: str = "") -> None:
     """Print a numbered step header."""
     console.print(f"[bold {PRIMARY}]│[/bold {PRIMARY}]")
     step_label = f"[dim]Step {n}/{total}[/dim]"
-    console.print(f"[bold {SECONDARY}]◆[/bold {SECONDARY}] {step_label}  [bold {PRIMARY}]{title}[/bold {PRIMARY}]")
+    console.print(
+        f"[bold {SECONDARY}]◆[/bold {SECONDARY}] {step_label}  [bold {PRIMARY}]{title}[/bold {PRIMARY}]"
+    )
     if hint:
         console.print(f"[bold {PRIMARY}]│[/bold {PRIMARY}]  [dim]{hint}[/dim]")
 
 
 def print_info(title: str, info_dict: dict):
-    console.print(f"[bold {SECONDARY}]◇[/bold {SECONDARY}] [bold {PRIMARY}]{title}[/bold {PRIMARY}]")
+    console.print(
+        f"[bold {SECONDARY}]◇[/bold {SECONDARY}] [bold {PRIMARY}]{title}[/bold {PRIMARY}]"
+    )
     console.print("│")
     for k, v in info_dict.items():
         console.print(f"│ [bright_black]{k}:[/bright_black] [white]{v}[/white]")
@@ -108,6 +124,7 @@ def _execute_prompt(prompt, allow_back: bool = True):
         app.ttimeoutlen = ESCAPE_FLUSH_TIMEOUT_SECONDS
 
     if allow_back:
+
         @prompt.register_kb("escape")
         def _go_back(event):
             event.app.exit(result=BACK_SIGNAL)
@@ -116,6 +133,7 @@ def _execute_prompt(prompt, allow_back: bool = True):
     if result == BACK_SIGNAL:
         raise NavigateBack
     return result
+
 
 def select(message: str, choices: list, is_last: bool = False, allow_back: bool = True) -> str:
     console.print(f"[bold {PRIMARY}]│[/bold {PRIMARY}]")
@@ -129,7 +147,7 @@ def select(message: str, choices: list, is_last: bool = False, allow_back: bool 
         choices=formatted_choices,
         qmark="◆",
         amark="◇",
-        pointer="◉", # The active pointer replaces the margin slot before the Choice item
+        pointer="◉",  # The active pointer replaces the margin slot before the Choice item
         instruction=" ",
         style=clack_style,
         keybindings=BACK_KEYBINDINGS,
@@ -145,7 +163,14 @@ def select(message: str, choices: list, is_last: bool = False, allow_back: bool 
 
     return result
 
-def text_input(message: str, is_password: bool = False, is_last: bool = False, default: str = "", allow_back: bool = True) -> str:
+
+def text_input(
+    message: str,
+    is_password: bool = False,
+    is_last: bool = False,
+    default: str = "",
+    allow_back: bool = True,
+) -> str:
     console.print(f"[bold {PRIMARY}]│[/bold {PRIMARY}]")
 
     if is_password:
@@ -174,6 +199,7 @@ def text_input(message: str, is_password: bool = False, is_last: bool = False, d
 
     return result
 
+
 def confirm(message: str, is_last: bool = False, allow_back: bool = True) -> bool:
     console.print(f"[bold {PRIMARY}]│[/bold {PRIMARY}]")
 
@@ -196,12 +222,18 @@ def confirm(message: str, is_last: bool = False, allow_back: bool = True) -> boo
 
     return result
 
+
 def print_end():
     console.print(f"[bold {PRIMARY}]│[/bold {PRIMARY}]")
-    console.print(f"└ [bold {SECONDARY}]Setup complete![/bold {SECONDARY}] [dim]Restart operator to apply changes.[/dim]")
+    console.print(
+        f"└ [bold {SECONDARY}]Setup complete![/bold {SECONDARY}] [dim]Restart operator to apply changes.[/dim]"
+    )
     console.print()
+
 
 def print_end_first_install():
     console.print(f"[bold {PRIMARY}]│[/bold {PRIMARY}]")
-    console.print(f"└ [bold {SECONDARY}]Setup complete![/bold {SECONDARY}] Starting your agent now...")
+    console.print(
+        f"└ [bold {SECONDARY}]Setup complete![/bold {SECONDARY}] Starting your agent now..."
+    )
     console.print()

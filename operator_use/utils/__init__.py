@@ -1,4 +1,4 @@
-﻿"""Utils module."""
+"""Utils module."""
 
 from operator_use.utils.helper import ensure_directory
 

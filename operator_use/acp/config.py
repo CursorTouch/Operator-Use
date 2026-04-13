@@ -3,10 +3,10 @@
 from dataclasses import dataclass, field
 
 
-
 @dataclass
 class ACPServerConfig:
     """Configuration for the built-in ACP server (exposes Operator as an ACP agent)."""
+
     enabled: bool = False
     host: str = "0.0.0.0"
     port: int = 8765
@@ -35,6 +35,7 @@ class ACPServerConfig:
 @dataclass
 class ACPClientConfig:
     """Configuration for the ACP client channel (Operator calls a remote ACP agent)."""
+
     enabled: bool = False
     # Base URL of the remote ACP server (e.g. "http://localhost:9000")
     base_url: str = ""
@@ -65,6 +66,7 @@ class ACPStdioConfig:
     responses to stdout — letting IDEs and CLI tools (Claude Code, Zed,
     Codex, etc.) pipe directly into the agent without an HTTP server.
     """
+
     enabled: bool = False
     agent_id: str = "operator"
     agent_name: str = "Operator"

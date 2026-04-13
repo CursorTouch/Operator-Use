@@ -1,4 +1,4 @@
-﻿"""Heartbeat service: background loop that reads HEARTBEAT.md on an interval."""
+"""Heartbeat service: background loop that reads HEARTBEAT.md on an interval."""
 
 import asyncio
 from pathlib import Path
@@ -6,16 +6,17 @@ from typing import Awaitable, Callable
 from datetime import datetime
 import logging
 
-HEARTBEAT_INTERVAL = 0.5*60*60 # 30 minutes
+HEARTBEAT_INTERVAL = 0.5 * 60 * 60  # 30 minutes
 HEARTBEAT_FILENAME = "HEARTBEAT.md"
 
-HEARTBEAT_PROMPT='''
+HEARTBEAT_PROMPT = """
 Read the HEARTBEAT.md file in your workspace (if it exists).
 Follow any instructions or tasks mentioned in there.
 If there are no instructions or tasks, do nothing.
-'''
+"""
 
 logger = logging.getLogger(__name__)
+
 
 class Heartbeat:
     """Background task that reads HEARTBEAT.md from the workspace on a schedule."""
@@ -75,7 +76,7 @@ class Heartbeat:
             return
         self._running = True
         self._task = asyncio.create_task(self._loop())
-        logger.info(f"Heartbeat started, beats every {(self.interval)/60} minutes")
+        logger.info(f"Heartbeat started, beats every {(self.interval) / 60} minutes")
 
     def stop(self) -> None:
         """Stop the background heartbeat loop."""

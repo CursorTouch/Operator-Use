@@ -1,3 +1,3 @@
-﻿from operator_use.providers.anthropic.llm import ChatAnthropic
+from operator_use.providers.anthropic.llm import ChatAnthropic
 
 __all__ = ["ChatAnthropic"]

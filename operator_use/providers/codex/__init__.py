@@ -1,3 +1,3 @@
-﻿from operator_use.providers.codex.llm import ChatCodex
+from operator_use.providers.codex.llm import ChatCodex
 
 __all__ = ["ChatCodex"]

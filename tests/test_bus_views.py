@@ -15,6 +15,7 @@ from operator_use.bus.views import (
 
 # --- Part models ---
 
+
 def test_text_part():
     p = TextPart(content="hello")
     assert p.content == "hello"
@@ -44,6 +45,7 @@ def test_file_part():
 
 # --- text_from_parts ---
 
+
 def test_text_from_parts_only_text():
     parts = [TextPart(content="hello"), TextPart(content="world")]
     assert text_from_parts(parts) == "hello\nworld"
@@ -64,6 +66,7 @@ def test_text_from_parts_empty():
 
 
 # --- media_paths_from_parts ---
+
 
 def test_media_paths_from_audio():
     parts = [AudioPart(audio="/voice.ogg")]
@@ -101,6 +104,7 @@ def test_media_paths_empty():
 
 # --- StreamPhase ---
 
+
 def test_stream_phase_values():
     assert StreamPhase.START == "start"
     assert StreamPhase.CHUNK == "chunk"
@@ -109,6 +113,7 @@ def test_stream_phase_values():
 
 
 # --- Message models ---
+
 
 def test_incoming_message():
     msg = IncomingMessage(

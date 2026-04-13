@@ -1,4 +1,4 @@
-﻿"""Operator CLI entry point."""
+"""Operator CLI entry point."""
 
 from operator_use.cli.commands import app
 

@@ -13,6 +13,7 @@ from operator_use.agent.hooks.events import HookEvent
 # get_system_prompt — gated on _enabled
 # ---------------------------------------------------------------------------
 
+
 def test_disabled_plugin_has_no_prompt():
     assert BrowserPlugin(enabled=False).get_system_prompt() is None
 
@@ -31,6 +32,7 @@ def test_enabled_plugin_returns_system_prompt():
 # ---------------------------------------------------------------------------
 # register_tools — only when enabled
 # ---------------------------------------------------------------------------
+
 
 def test_disabled_plugin_registers_no_tools():
     plugin = BrowserPlugin(enabled=False)
@@ -62,6 +64,7 @@ def test_unregister_tools_removes_browser_tool():
 # register_hooks — BEFORE_LLM_CALL gated on _enabled
 # ---------------------------------------------------------------------------
 
+
 def test_disabled_plugin_registers_no_hooks():
     plugin = BrowserPlugin(enabled=False)
     hooks = Hooks()
@@ -89,6 +92,7 @@ def test_unregister_hooks_removes_state_hook():
 # ---------------------------------------------------------------------------
 # attach_prompt — gated on _enabled, stores context reference
 # ---------------------------------------------------------------------------
+
 
 def test_disabled_plugin_does_not_inject_prompt():
     plugin = BrowserPlugin(enabled=False)
@@ -118,6 +122,7 @@ def test_detach_prompt_removes_injected_prompt():
 # ---------------------------------------------------------------------------
 # enable() / disable() — full lifecycle
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_enable_registers_hooks_and_injects_prompt():
@@ -167,6 +172,7 @@ async def test_enable_then_disable_leaves_no_hooks():
 # ---------------------------------------------------------------------------
 # _state_hook — gracefully skips when browser has no active session
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_state_hook_skips_when_no_browser_client():

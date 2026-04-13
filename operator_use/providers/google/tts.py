@@ -1,4 +1,4 @@
-﻿import os
+import os
 import wave
 import logging
 from typing import Optional
@@ -23,11 +23,36 @@ logger = logging.getLogger(__name__)
 # Sulafat (Warm)
 
 GOOGLE_TTS_VOICES = [
-    "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus",
-    "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel",
-    "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia",
-    "Achernar", "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird",
-    "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat",
+    "Zephyr",
+    "Puck",
+    "Charon",
+    "Kore",
+    "Fenrir",
+    "Leda",
+    "Orus",
+    "Aoede",
+    "Callirrhoe",
+    "Autonoe",
+    "Enceladus",
+    "Iapetus",
+    "Umbriel",
+    "Algieba",
+    "Despina",
+    "Erinome",
+    "Algenib",
+    "Rasalgethi",
+    "Laomedeia",
+    "Achernar",
+    "Alnilam",
+    "Schedar",
+    "Gacrux",
+    "Pulcherrima",
+    "Achird",
+    "Zubenelgenubi",
+    "Vindemiatrix",
+    "Sadachbia",
+    "Sadaltager",
+    "Sulafat",
 ]
 
 
@@ -73,9 +98,7 @@ class TTSGoogle(BaseTTS):
         self.voice = voice
         self.sample_rate = sample_rate
         self.api_key = (
-            api_key
-            or os.environ.get("GEMINI_API_KEY")
-            or os.environ.get("GOOGLE_API_KEY")
+            api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         )
 
         self.client = genai.Client(api_key=self.api_key)

@@ -20,19 +20,19 @@ class ChatNvidia(ChatOpenAI):
     # Available models with context windows (tokens)
     MODELS = {
         # NVIDIA native models
-        "nvidia/nemotron-3-super-120b-a12b": 128000,           # Hybrid MoE LLM, agentic reasoning
+        "nvidia/nemotron-3-super-120b-a12b": 128000,  # Hybrid MoE LLM, agentic reasoning
         # Qwen models
-        "qwen/qwen3.5-122b-a10b": 131072,                      # 122B MoE LLM for coding/reasoning
-        "qwen/qwen3.5-397b-a17b": 131072,                      # Next-gen VLM 400B MoE
+        "qwen/qwen3.5-122b-a10b": 131072,  # 122B MoE LLM for coding/reasoning
+        "qwen/qwen3.5-397b-a17b": 131072,  # Next-gen VLM 400B MoE
         # Z-AI (Zhipu) models
-        "z-ai/glm-5": 131072,                                  # 744B MoE reasoning model
-        "z-ai/glm-4.7": 131072,                                # Multilingual agentic coding
+        "z-ai/glm-5": 131072,  # 744B MoE reasoning model
+        "z-ai/glm-4.7": 131072,  # Multilingual agentic coding
         # MiniMax models
-        "minimaxai/minimax-m2.5": 40960,                       # 230B text-to-text coding/reasoning
+        "minimaxai/minimax-m2.5": 40960,  # 230B text-to-text coding/reasoning
         # StepFun models
-        "stepfun-ai/step-3.5-flash": 200000,                   # 200B reasoning engine
+        "stepfun-ai/step-3.5-flash": 200000,  # 200B reasoning engine
         # Moonshot models
-        "moonshotai/kimi-k2.5": 1048576,                       # 1T multimodal MoE
+        "moonshotai/kimi-k2.5": 1048576,  # 1T multimodal MoE
     }
 
     # Models that support extended reasoning/thinking
@@ -53,7 +53,9 @@ class ChatNvidia(ChatOpenAI):
         temperature: Optional[float] = None,
         **kwargs,
     ):
-        api_key = api_key or os.environ.get("NVIDIA_NIM_API_KEY") or os.environ.get("NVIDIA_API_KEY")
+        api_key = (
+            api_key or os.environ.get("NVIDIA_NIM_API_KEY") or os.environ.get("NVIDIA_API_KEY")
+        )
         base_url = base_url or os.environ.get("NVIDIA_NIM_API_BASE") or NVIDIA_NIM_BASE_URL
         super().__init__(
             model=model,

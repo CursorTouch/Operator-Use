@@ -1,4 +1,4 @@
-﻿import os
+import os
 import logging
 from typing import Optional
 
@@ -104,9 +104,7 @@ class STTDeepgram(BaseSTT):
         with open(file_path, "rb") as audio:
             source = {"buffer": audio}
             options = self._build_options()
-            response = await self.client.listen.asyncrest.v("1").transcribe_file(
-                source, options
-            )
+            response = await self.client.listen.asyncrest.v("1").transcribe_file(source, options)
 
         text = response.results.channels[0].alternatives[0].transcript
         logger.debug(f"[STTDeepgram] Async transcription complete: {len(text)} chars")

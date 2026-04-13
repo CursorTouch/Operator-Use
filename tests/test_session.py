@@ -9,6 +9,7 @@ from operator_use.messages.service import HumanMessage, AIMessage
 
 # --- Session ---
 
+
 def test_session_defaults():
     s = Session(id="test-id")
     assert s.id == "test-id"
@@ -52,6 +53,7 @@ def test_session_message_order():
 
 
 # --- SessionStore ---
+
 
 def test_session_id_sanitization(tmp_path):
     store = SessionStore(tmp_path)
@@ -147,6 +149,7 @@ def test_get_or_create_loads_from_disk(tmp_path):
 
 
 # --- SessionStore.archive ---
+
 
 def test_archive_renames_file(tmp_path):
     store = SessionStore(tmp_path)

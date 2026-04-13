@@ -1,4 +1,11 @@
-from operator_use.web.dom.views import DOMElementNode, DOMTextualNode, ScrollElementNode, DOMState, CenterCord, BoundingBox
+from operator_use.web.dom.views import (
+    DOMElementNode,
+    DOMTextualNode,
+    ScrollElementNode,
+    DOMState,
+    CenterCord,
+    BoundingBox,
+)
 from typing import TYPE_CHECKING
 from asyncio import sleep
 from time import perf_counter
@@ -12,67 +19,175 @@ if TYPE_CHECKING:
     from operator_use.web.browser import Browser
 
 
-COMPUTED_STYLES = ['display', 'visibility', 'opacity', 'cursor', 'overflow-y', 'position']
+COMPUTED_STYLES = ["display", "visibility", "opacity", "cursor", "overflow-y", "position"]
 _D, _V, _O, _C, _OY, _P = range(6)
 
-INTERACTIVE_ROLES = frozenset({
-    'button', 'link', 'checkbox', 'radio', 'textbox', 'combobox', 'listbox',
-    'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'tab', 'treeitem',
-    'slider', 'spinbutton', 'searchbox', 'switch', 'gridcell',
-    'columnheader', 'rowheader',
-    'tooltip', 'tree', 'tabpanel', 'progressbar', 'scrollbar',
-})
+INTERACTIVE_ROLES = frozenset(
+    {
+        "button",
+        "link",
+        "checkbox",
+        "radio",
+        "textbox",
+        "combobox",
+        "listbox",
+        "menuitem",
+        "menuitemcheckbox",
+        "menuitemradio",
+        "option",
+        "tab",
+        "treeitem",
+        "slider",
+        "spinbutton",
+        "searchbox",
+        "switch",
+        "gridcell",
+        "columnheader",
+        "rowheader",
+        "tooltip",
+        "tree",
+        "tabpanel",
+        "progressbar",
+        "scrollbar",
+    }
+)
 
-INTERACTIVE_TAGS = frozenset({
-    'a', 'button', 'input', 'select', 'textarea', 'option',
-    'summary', 'menu', 'menuitem',
-    'embed', 'canvas', 'object',
-})
+INTERACTIVE_TAGS = frozenset(
+    {
+        "a",
+        "button",
+        "input",
+        "select",
+        "textarea",
+        "option",
+        "summary",
+        "menu",
+        "menuitem",
+        "embed",
+        "canvas",
+        "object",
+    }
+)
 
-INFORMATIVE_ROLES = frozenset({
-    'heading', 'article', 'note', 'paragraph', 'status',
-    'alert', 'log', 'term', 'definition', 'region',
-    'tooltip', 'text', 'contentinfo', 'presentation',
-})
+INFORMATIVE_ROLES = frozenset(
+    {
+        "heading",
+        "article",
+        "note",
+        "paragraph",
+        "status",
+        "alert",
+        "log",
+        "term",
+        "definition",
+        "region",
+        "tooltip",
+        "text",
+        "contentinfo",
+        "presentation",
+    }
+)
 
-INFORMATIVE_TAGS = frozenset({
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'label',
-    'code', 'pre', 'th', 'td', 'article',
-    'dl', 'dt', 'dd', 'img', 'table',
-})
+INFORMATIVE_TAGS = frozenset(
+    {
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "label",
+        "code",
+        "pre",
+        "th",
+        "td",
+        "article",
+        "dl",
+        "dt",
+        "dd",
+        "img",
+        "table",
+    }
+)
 
-EXCLUDED_TAGS = frozenset({
-    'style', 'script', 'noscript', 'link', 'meta',
-    'head', 'br', 'hr',
-})
+EXCLUDED_TAGS = frozenset(
+    {
+        "style",
+        "script",
+        "noscript",
+        "link",
+        "meta",
+        "head",
+        "br",
+        "hr",
+    }
+)
 
-SAFE_ATTRIBUTES = frozenset({
-    # Identity
-    'id', 'name', 'role', 'type',
-    # Content / labels
-    'value', 'placeholder', 'alt', 'title',
-    'aria-label', 'aria-placeholder', 'aria-autocomplete',
-    # State (is it checked? expanded? disabled?)
-    'checked', 'selected', 'expanded', 'pressed',
-    'disabled', 'required', 'invalid',
-    'aria-checked', 'aria-selected', 'aria-expanded',
-    'aria-pressed', 'aria-disabled', 'aria-hidden',
-    'data-state',
-    # Input constraints (help agent avoid wrong formats)
-    'pattern', 'min', 'max', 'minlength', 'maxlength',
-    'step', 'accept', 'multiple', 'inputmode', 'autocomplete',
-    # Range / slider values
-    'aria-valuemin', 'aria-valuemax', 'aria-valuenow',
-    # Date / time format hints
-    'data-date-format', 'data-datepicker',
-    # Rich text / popup hints
-    'contenteditable', 'haspopup', 'multiselectable',
-    # Test / automation hooks
-    'data-testid',
-    # Clickability signals
-    'onclick', 'href', 'tabindex',
-    'data-tooltip', 'data-id', 'data-qa', 'data-cy',
-})
+SAFE_ATTRIBUTES = frozenset(
+    {
+        # Identity
+        "id",
+        "name",
+        "role",
+        "type",
+        # Content / labels
+        "value",
+        "placeholder",
+        "alt",
+        "title",
+        "aria-label",
+        "aria-placeholder",
+        "aria-autocomplete",
+        # State (is it checked? expanded? disabled?)
+        "checked",
+        "selected",
+        "expanded",
+        "pressed",
+        "disabled",
+        "required",
+        "invalid",
+        "aria-checked",
+        "aria-selected",
+        "aria-expanded",
+        "aria-pressed",
+        "aria-disabled",
+        "aria-hidden",
+        "data-state",
+        # Input constraints (help agent avoid wrong formats)
+        "pattern",
+        "min",
+        "max",
+        "minlength",
+        "maxlength",
+        "step",
+        "accept",
+        "multiple",
+        "inputmode",
+        "autocomplete",
+        # Range / slider values
+        "aria-valuemin",
+        "aria-valuemax",
+        "aria-valuenow",
+        # Date / time format hints
+        "data-date-format",
+        "data-datepicker",
+        # Rich text / popup hints
+        "contenteditable",
+        "haspopup",
+        "multiselectable",
+        # Test / automation hooks
+        "data-testid",
+        # Clickability signals
+        "onclick",
+        "href",
+        "tabindex",
+        "data-tooltip",
+        "data-id",
+        "data-qa",
+        "data-cy",
+    }
+)
 
 _MARK_PAGE_JS = """(function(boxes){
     var ls=window.__wu_labels__=window.__wu_labels__||[];
@@ -113,7 +228,7 @@ _CHECK_COVERAGE_JS = """(function(els){
 
 
 class DOM:
-    def __init__(self, session: 'Browser'):
+    def __init__(self, session: "Browser"):
         self.session = session
 
     async def get_state(self, use_vision: bool = False) -> tuple[bytes | None, DOMState]:
@@ -123,14 +238,18 @@ class DOM:
             sid = self.session._get_current_session_id()
 
             snapshot, ax_result, viewport, dpr = await asyncio.gather(
-                self.session.send('DOMSnapshot.captureSnapshot', {
-                    'computedStyles': COMPUTED_STYLES,
-                    'includePaintOrder': True,
-                    'includeDOMRects': True,
-                }, session_id=sid),
-                self.session.send('Accessibility.getFullAXTree', {}, session_id=sid),
+                self.session.send(
+                    "DOMSnapshot.captureSnapshot",
+                    {
+                        "computedStyles": COMPUTED_STYLES,
+                        "includePaintOrder": True,
+                        "includeDOMRects": True,
+                    },
+                    session_id=sid,
+                ),
+                self.session.send("Accessibility.getFullAXTree", {}, session_id=sid),
                 self.session.get_viewport(),
-                self.session.execute_script('window.devicePixelRatio || 1'),
+                self.session.execute_script("window.devicePixelRatio || 1"),
             )
 
             dpr = float(dpr or 1.0)
@@ -139,13 +258,18 @@ class DOM:
             # Coverage check: remove elements hidden behind other elements
             if interactive:
                 payload = [
-                    {'tag': n.tag, 'cx': n.center.x, 'cy': n.center.y,
-                     'left': n.bounding_box.left, 'top': n.bounding_box.top}
+                    {
+                        "tag": n.tag,
+                        "cx": n.center.x,
+                        "cy": n.center.y,
+                        "left": n.bounding_box.left,
+                        "top": n.bounding_box.top,
+                    }
                     for n in interactive
                 ]
                 try:
                     visible = await self.session.execute_script(
-                        _CHECK_COVERAGE_JS.replace('ELEMENTS', json.dumps(payload))
+                        _CHECK_COVERAGE_JS.replace("ELEMENTS", json.dumps(payload))
                     )
                     if isinstance(visible, list) and len(visible) == len(interactive):
                         interactive = [n for n, v in zip(interactive, visible) if v]
@@ -155,16 +279,16 @@ class DOM:
             screenshot = None
             if use_vision and interactive:
                 boxes = [n.bounding_box.to_dict() for n in interactive]
-                await self.session.execute_script(_MARK_PAGE_JS.replace('BOXES', json.dumps(boxes)))
+                await self.session.execute_script(_MARK_PAGE_JS.replace("BOXES", json.dumps(boxes)))
                 await sleep(0.1)
                 screenshot = await self.session.get_screenshot()
                 await self.session.execute_script(_UNMARK_PAGE_JS)
 
         except Exception as e:
-            logger.debug('Failed to get DOM state: %s', e)
+            logger.debug("Failed to get DOM state: %s", e)
             interactive, informative, scrollable, screenshot = [], [], [], None
 
-        logger.info('[DOM] DOM State capture took %.2f seconds', perf_counter() - start_time)
+        logger.info("[DOM] DOM State capture took %.2f seconds", perf_counter() - start_time)
 
         selector_map = dict(enumerate(interactive + scrollable))
         return screenshot, DOMState(
@@ -181,32 +305,32 @@ class DOM:
         viewport: tuple[int, int],
         dpr: float,
     ) -> tuple[list, list, list]:
-        strings = snapshot.get('strings', [])
-        docs    = snapshot.get('documents', [])
+        strings = snapshot.get("strings", [])
+        docs = snapshot.get("documents", [])
         if not docs:
             return [], [], []
 
-        doc    = docs[0]
-        nodes  = doc.get('nodes', {})
-        layout = doc.get('layout', {})
+        doc = docs[0]
+        nodes = doc.get("nodes", {})
+        layout = doc.get("layout", {})
         vw, vh = viewport
 
         def s(idx: int) -> str:
-            return strings[idx] if isinstance(idx, int) and 0 <= idx < len(strings) else ''
+            return strings[idx] if isinstance(idx, int) and 0 <= idx < len(strings) else ""
 
         # -- Node arrays --
-        node_names   = nodes.get('nodeName', [])
-        node_types   = nodes.get('nodeType', [])
-        node_parent  = nodes.get('parentIndex', [])
-        node_backend = nodes.get('backendNodeId', [])
-        node_attrs   = nodes.get('attributes', [])
-        node_values  = nodes.get('nodeValue', [])
-        clickable_set = set(nodes.get('isClickable', {}).get('index', []))
+        node_names = nodes.get("nodeName", [])
+        node_types = nodes.get("nodeType", [])
+        node_parent = nodes.get("parentIndex", [])
+        node_backend = nodes.get("backendNodeId", [])
+        node_attrs = nodes.get("attributes", [])
+        node_values = nodes.get("nodeValue", [])
+        clickable_set = set(nodes.get("isClickable", {}).get("index", []))
 
         # -- Layout arrays --
-        layout_nodes      = layout.get('nodeIndex', [])
-        layout_bounds_raw = layout.get('bounds', [])
-        layout_styles_raw = layout.get('styles', [])
+        layout_nodes = layout.get("nodeIndex", [])
+        layout_bounds_raw = layout.get("bounds", [])
+        layout_styles_raw = layout.get("styles", [])
 
         # DOM node index -> layout index
         node_to_layout = {ni: li for li, ni in enumerate(layout_nodes)}
@@ -216,9 +340,11 @@ class DOM:
         for i, parent_idx in enumerate(node_parent):
             if i < len(node_types) and node_types[i] == 3 and parent_idx >= 0:
                 val_idx = node_values[i] if i < len(node_values) else -1
-                text = s(val_idx).strip() if val_idx >= 0 else ''
+                text = s(val_idx).strip() if val_idx >= 0 else ""
                 if text:
-                    element_text[parent_idx] = (element_text.get(parent_idx, '') + ' ' + text).strip()
+                    element_text[parent_idx] = (
+                        element_text.get(parent_idx, "") + " " + text
+                    ).strip()
 
         def get_bounds(li: int):
             if li >= len(layout_bounds_raw):
@@ -230,21 +356,23 @@ class DOM:
 
         def get_style(li: int, si: int) -> str:
             row = layout_styles_raw[li] if li < len(layout_styles_raw) else []
-            return s(row[si]) if si < len(row) else ''
+            return s(row[si]) if si < len(row) else ""
 
         # -- Accessibility map: backendNodeId -> {role, name, props} --
         ax_map: dict[int, dict] = {}
-        for ax_node in ax_result.get('nodes', []):
-            if ax_node.get('ignored'):
+        for ax_node in ax_result.get("nodes", []):
+            if ax_node.get("ignored"):
                 continue
-            bid = ax_node.get('backendDOMNodeId')
+            bid = ax_node.get("backendDOMNodeId")
             if not bid:
                 continue
             ax_map[bid] = {
-                'role':  ax_node.get('role', {}).get('value', ''),
-                'name':  ax_node.get('name', {}).get('value', ''),
-                'props': {p['name']: p.get('value', {}).get('value')
-                          for p in ax_node.get('properties', [])},
+                "role": ax_node.get("role", {}).get("value", ""),
+                "name": ax_node.get("name", {}).get("value", ""),
+                "props": {
+                    p["name"]: p.get("value", {}).get("value")
+                    for p in ax_node.get("properties", [])
+                },
             }
 
         # -- Pre-compute sibling positions for O(n) XPath construction --
@@ -253,8 +381,8 @@ class DOM:
         for i, p in enumerate(node_parent):
             if p < 0:
                 continue
-            tag_i = s(node_names[i]).lower() if i < len(node_names) else ''
-            if not tag_i or tag_i.startswith('#'):
+            tag_i = s(node_names[i]).lower() if i < len(node_names) else ""
+            if not tag_i or tag_i.startswith("#"):
                 continue
             key = (p, tag_i)
             tag_count[key] = tag_count.get(key, 0) + 1
@@ -265,19 +393,19 @@ class DOM:
             cur = ni
             while 0 <= cur < len(node_names):
                 tag = s(node_names[cur]).lower()
-                if not tag or tag.startswith('#'):
+                if not tag or tag.startswith("#"):
                     break
                 par = node_parent[cur] if cur < len(node_parent) else -1
                 pos = sibling_pos.get(cur, 1)
-                parts.insert(0, f'{tag}[{pos}]')
+                parts.insert(0, f"{tag}[{pos}]")
                 if par < 0:
                     break
                 cur = par
-            return '/' + '/'.join(parts) if parts else ''
+            return "/" + "/".join(parts) if parts else ""
 
-        interactive: list[DOMElementNode]    = []
-        informative: list[DOMTextualNode]    = []
-        scrollable:  list[ScrollElementNode] = []
+        interactive: list[DOMElementNode] = []
+        informative: list[DOMTextualNode] = []
+        scrollable: list[ScrollElementNode] = []
         # node index -> name for every interactive element added so far
         interactive_name_by_ni: dict[int, str] = {}
 
@@ -287,7 +415,7 @@ class DOM:
                 continue
 
             tag = s(node_names[ni]).lower()
-            if not tag or tag in EXCLUDED_TAGS or tag.startswith('#'):
+            if not tag or tag in EXCLUDED_TAGS or tag.startswith("#"):
                 continue
 
             # Must have layout (excludes display:none etc.)
@@ -303,28 +431,28 @@ class DOM:
                 continue
 
             # Computed style visibility checks
-            if get_style(li, _D) == 'none':
+            if get_style(li, _D) == "none":
                 continue
-            if get_style(li, _V) == 'hidden':
+            if get_style(li, _V) == "hidden":
                 continue
             try:
-                if float(get_style(li, _O) or '1') <= 0:
+                if float(get_style(li, _O) or "1") <= 0:
                     continue
             except ValueError:
                 pass
 
             # Viewport check — fixed/sticky elements are always on-screen
             position = get_style(li, _P)
-            if position not in ('fixed', 'sticky'):
+            if position not in ("fixed", "sticky"):
                 if y + h < -200 or y > vh + 200 or x + w < -200 or x > vw + 200:
                     continue
 
             # AX info
-            bid     = node_backend[ni] if ni < len(node_backend) else None
-            ax      = ax_map.get(bid, {}) if bid else {}
-            ax_role  = ax.get('role', '')
-            ax_name  = ax.get('name', '')
-            ax_props = ax.get('props', {})
+            bid = node_backend[ni] if ni < len(node_backend) else None
+            ax = ax_map.get(bid, {}) if bid else {}
+            ax_role = ax.get("role", "")
+            ax_name = ax.get("name", "")
+            ax_props = ax.get("props", {})
 
             # Attributes (safe subset only)
             raw_attrs = node_attrs[ni] if ni < len(node_attrs) else []
@@ -334,7 +462,7 @@ class DOM:
                 if k in SAFE_ATTRIBUTES:
                     attrs[k] = s(raw_attrs[j + 1])
 
-            cursor     = get_style(li, _C)
+            cursor = get_style(li, _C)
             overflow_y = get_style(li, _OY)
             cx = round(x + w / 2)
             cy = round(y + h / 2)
@@ -342,25 +470,33 @@ class DOM:
             is_interactive = (
                 tag in INTERACTIVE_TAGS
                 or ax_role in INTERACTIVE_ROLES
-                or cursor == 'pointer'
+                or cursor == "pointer"
                 or ni in clickable_set
-                or ax_props.get('focusable') is True
-                or bool(ax_props.get('editable'))
-                or 'onclick' in attrs
-                or 'href' in attrs
-                or attrs.get('contenteditable') in ('true', '', 'plaintext-only')
-                or (attrs.get('tabindex', '-1') not in ('-1', ''))
+                or ax_props.get("focusable") is True
+                or bool(ax_props.get("editable"))
+                or "onclick" in attrs
+                or "href" in attrs
+                or attrs.get("contenteditable") in ("true", "", "plaintext-only")
+                or (attrs.get("tabindex", "-1") not in ("-1", ""))
             )
 
-            is_scrollable = overflow_y in ('auto', 'scroll', 'overlay') and h >= vh * 0.4
+            is_scrollable = overflow_y in ("auto", "scroll", "overlay") and h >= vh * 0.4
 
             xpath = build_xpath(ni)
-            inner_text = element_text.get(ni, '')
-            name  = ax_name or attrs.get('aria-label') or attrs.get('title') or attrs.get('placeholder') or attrs.get('name') or inner_text or ''
-            role  = ax_role or attrs.get('role') or tag
+            inner_text = element_text.get(ni, "")
+            name = (
+                ax_name
+                or attrs.get("aria-label")
+                or attrs.get("title")
+                or attrs.get("placeholder")
+                or attrs.get("name")
+                or inner_text
+                or ""
+            )
+            role = ax_role or attrs.get("role") or tag
 
             # Discard elements hidden from assistive technology
-            if attrs.get('aria-hidden') == 'true':
+            if attrs.get("aria-hidden") == "true":
                 continue
 
             if not name:
@@ -379,29 +515,44 @@ class DOM:
                     continue
 
                 interactive_name_by_ni[ni] = name
-                interactive.append(DOMElementNode(
-                    tag=tag, role=role, name=name,
-                    attributes=attrs,
-                    center=CenterCord(x=cx, y=cy),
-                    bounding_box=BoundingBox(left=round(x), top=round(y), width=round(w), height=round(h)),
-                    xpath={'frame': '', 'element': xpath},
-                    viewport=(vw, vh),
-                ))
-            elif is_scrollable:
-                scrollable.append(ScrollElementNode(
-                    tag=tag, role=role, name=name,
-                    attributes=attrs,
-                    xpath={'frame': '', 'element': xpath},
-                    viewport=(vw, vh),
-                ))
-            else:
-                if (tag in INFORMATIVE_TAGS or ax_role in INFORMATIVE_ROLES) and (ax_name or inner_text):
-                    informative.append(DOMTextualNode(
-                        tag=tag, role=ax_role,
-                        content=ax_name or inner_text,
+                interactive.append(
+                    DOMElementNode(
+                        tag=tag,
+                        role=role,
+                        name=name,
+                        attributes=attrs,
                         center=CenterCord(x=cx, y=cy),
-                        xpath={'frame': '', 'element': xpath},
+                        bounding_box=BoundingBox(
+                            left=round(x), top=round(y), width=round(w), height=round(h)
+                        ),
+                        xpath={"frame": "", "element": xpath},
                         viewport=(vw, vh),
-                    ))
+                    )
+                )
+            elif is_scrollable:
+                scrollable.append(
+                    ScrollElementNode(
+                        tag=tag,
+                        role=role,
+                        name=name,
+                        attributes=attrs,
+                        xpath={"frame": "", "element": xpath},
+                        viewport=(vw, vh),
+                    )
+                )
+            else:
+                if (tag in INFORMATIVE_TAGS or ax_role in INFORMATIVE_ROLES) and (
+                    ax_name or inner_text
+                ):
+                    informative.append(
+                        DOMTextualNode(
+                            tag=tag,
+                            role=ax_role,
+                            content=ax_name or inner_text,
+                            center=CenterCord(x=cx, y=cy),
+                            xpath={"frame": "", "element": xpath},
+                            viewport=(vw, vh),
+                        )
+                    )
 
         return interactive, informative, scrollable

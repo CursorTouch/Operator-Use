@@ -142,7 +142,9 @@ class ACPClient:
         session = self._ensure_session()
         body = json.dumps(req.model_dump(mode="json")).encode()
         headers = self._signature_headers(body)
-        async with session.post("/runs", data=body, headers={**headers, "Content-Type": "application/json"}) as resp:
+        async with session.post(
+            "/runs", data=body, headers={**headers, "Content-Type": "application/json"}
+        ) as resp:
             resp.raise_for_status()
             return Run(**await resp.json())
 

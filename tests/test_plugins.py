@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 # --- Concrete plugin stubs ---
 
+
 class EmptyPlugin(Plugin):
     name = "empty"
 
@@ -39,6 +40,7 @@ class DummyTool(Tool):
 
 dummy_tool = DummyTool()
 
+
 @dummy_tool
 def _dummy(value: str, **kwargs):
     return f"result:{value}"
@@ -53,6 +55,7 @@ class ToolPlugin(Plugin):
 
 # --- get_tools ---
 
+
 def test_empty_plugin_returns_no_tools():
     assert EmptyPlugin().get_tools() == []
 
@@ -63,6 +66,7 @@ def test_tool_plugin_returns_tools():
 
 
 # --- get_system_prompt ---
+
 
 def test_empty_plugin_no_prompt():
     assert EmptyPlugin().get_system_prompt() is None
@@ -75,6 +79,7 @@ def test_prompt_plugin_returns_prompt():
 
 
 # --- register_tools / unregister_tools ---
+
 
 def test_register_tools_adds_to_registry():
     registry = ToolRegistry()
@@ -96,6 +101,7 @@ def test_empty_plugin_register_tools_no_error():
 
 
 # --- attach_prompt / detach_prompt ---
+
 
 def test_attach_prompt_calls_context():
     context = MagicMock()
@@ -123,6 +129,7 @@ def test_detach_prompt_empty_plugin_skips():
 
 # --- register_hooks / unregister_hooks ---
 
+
 def test_register_hooks_default_no_op():
     hooks = Hooks()
     EmptyPlugin().register_hooks(hooks)  # should not raise
@@ -148,11 +155,15 @@ async def test_plugin_hooks_fire_on_emit():
     HookPlugin().register_hooks(hooks)
 
     from operator_use.agent.hooks.events import BeforeAgentStartContext
-    await hooks.emit(HookEvent.BEFORE_AGENT_START, BeforeAgentStartContext(message=None, session=None))
+
+    await hooks.emit(
+        HookEvent.BEFORE_AGENT_START, BeforeAgentStartContext(message=None, session=None)
+    )
     assert "start" in HookPlugin.fired
 
 
 # --- Plugin integrated with Agent ---
+
 
 def test_plugin_registered_in_agent(tmp_path):
     from unittest.mock import MagicMock, AsyncMock

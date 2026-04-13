@@ -50,6 +50,7 @@ class ComputerPlugin(Plugin):
 
     def get_tools(self) -> list:
         from operator_use.computer.subagent import computer_task
+
         return [computer_task]
 
     def get_system_prompt(self) -> str | None:
@@ -92,14 +93,18 @@ class ComputerPlugin(Plugin):
         if sys.platform == "win32":
             from operator_use.computer.windows.desktop.service import Desktop
             from operator_use.computer.windows.watchdog.service import WatchDog
+
             if self.desktop is None:
-                self.desktop = Desktop(use_vision=False, use_annotation=False, use_accessibility=True)
+                self.desktop = Desktop(
+                    use_vision=False, use_annotation=False, use_accessibility=True
+                )
             if self.watchdog is None:
                 self.watchdog = WatchDog()
                 self.watchdog.start()
         elif sys.platform == "darwin":
             from operator_use.computer.macos.desktop.service import Desktop
             from operator_use.computer.macos.watchdog.service import WatchDog
+
             if self.desktop is None:
                 self.desktop = Desktop()
             if self.watchdog is None:
@@ -132,6 +137,7 @@ class ComputerPlugin(Plugin):
 
     async def _state_hook(self, ctx: "BeforeLLMCallContext") -> "BeforeLLMCallContext":
         from operator_use.messages import HumanMessage
+
         try:
             state = await asyncio.get_event_loop().run_in_executor(None, self.desktop.get_state)
             if state:

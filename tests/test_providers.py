@@ -13,6 +13,7 @@ from operator_use.providers.events import (
 
 # --- TokenUsage ---
 
+
 def test_token_usage_basic():
     u = TokenUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30)
     assert u.prompt_tokens == 10
@@ -44,6 +45,7 @@ def test_token_usage_with_all_fields():
 
 # --- Metadata ---
 
+
 def test_metadata():
     m = Metadata(name="claude-3", context_window=200000, owned_by="anthropic")
     assert m.name == "claude-3"
@@ -52,6 +54,7 @@ def test_metadata():
 
 
 # --- LLMStreamEventType ---
+
 
 def test_stream_event_type_values():
     assert LLMStreamEventType.TEXT_START == "text_start"
@@ -65,12 +68,14 @@ def test_stream_event_type_values():
 
 # --- LLMEventType ---
 
+
 def test_event_type_values():
     assert LLMEventType.TEXT == "text"
     assert LLMEventType.TOOL_CALL == "tool_call"
 
 
 # --- Thinking ---
+
 
 def test_thinking_defaults():
     t = Thinking()
@@ -90,6 +95,7 @@ def test_thinking_with_bytes_signature():
 
 # --- ToolCall ---
 
+
 def test_tool_call():
     tc = ToolCall(id="tc1", name="search", params={"query": "test"})
     assert tc.id == "tc1"
@@ -103,6 +109,7 @@ def test_tool_call_empty_params():
 
 
 # --- LLMStreamEvent ---
+
 
 def test_llm_stream_event_text():
     e = LLMStreamEvent(type=LLMStreamEventType.TEXT_DELTA, content="hello")
@@ -124,6 +131,7 @@ def test_llm_stream_event_with_usage():
 
 
 # --- LLMEvent ---
+
 
 def test_llm_event_text():
     e = LLMEvent(type=LLMEventType.TEXT, content="response")

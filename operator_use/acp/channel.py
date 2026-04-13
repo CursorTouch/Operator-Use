@@ -70,9 +70,7 @@ class ACPChannel(BaseChannel):
     ) -> tuple[dict[str, AgentRunnerFn], dict[str, AgentMetadata]]:
         """Build per-agent runners and metadata from the agents registry."""
         agents = agents or {}
-        runners: dict[str, AgentRunnerFn] = {
-            aid: self._make_runner(aid) for aid in agents
-        }
+        runners: dict[str, AgentRunnerFn] = {aid: self._make_runner(aid) for aid in agents}
         metadata: dict[str, AgentMetadata] = {
             aid: AgentMetadata(
                 id=aid,
@@ -86,8 +84,10 @@ class ACPChannel(BaseChannel):
 
     def _make_runner(self, agent_id: str) -> AgentRunnerFn:
         """Return a runner coroutine-generator bound to a specific agent."""
+
         async def runner(input_text: str, session_id: str | None):
             import uuid
+
             run_id = session_id or str(uuid.uuid4())
             queue: asyncio.Queue[str | None] = asyncio.Queue()
             self._response_queues[run_id] = queue
@@ -111,9 +111,12 @@ class ACPChannel(BaseChannel):
                         break
                     yield chunk
             except asyncio.TimeoutError:
-                logger.warning(f"ACP run {run_id} (agent={agent_id}) timed out waiting for response")
+                logger.warning(
+                    f"ACP run {run_id} (agent={agent_id}) timed out waiting for response"
+                )
             finally:
                 self._response_queues.pop(run_id, None)
+
         return runner
 
     @property
@@ -167,4 +170,3 @@ class ACPChannel(BaseChannel):
             await queue.put(None)
 
         return None
-

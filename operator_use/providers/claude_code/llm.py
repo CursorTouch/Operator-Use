@@ -1,4 +1,4 @@
-﻿"""
+"""
 Claude Code OAuth provider.
 
 Uses the OAuth token issued by the Claude Code CLI (`claude setup-token` or
@@ -56,7 +56,9 @@ def _load_keychain_token() -> Optional[dict]:
     try:
         result = subprocess.run(
             ["security", "find-generic-password", "-s", _KEYCHAIN_SERVICE, "-w"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             data = json.loads(result.stdout.strip())
@@ -170,7 +172,7 @@ class ChatClaudeCode(ChatAnthropic):
         # We replicate ChatAnthropic.__init__ but swap api_key → auth_token.
         super().__init__(
             model=model,
-            api_key=None,           # don't pass api_key to parent
+            api_key=None,  # don't pass api_key to parent
             base_url=base_url,
             timeout=timeout,
             max_retries=max_retries,

@@ -1,4 +1,4 @@
-﻿from operator_use.computer.macos.desktop.config import BROWSER_BUNDLE_IDS, EXCLUDED_BUNDLE_IDS
+from operator_use.computer.macos.desktop.config import BROWSER_BUNDLE_IDS, EXCLUDED_BUNDLE_IDS
 from operator_use.computer.macos.desktop.views import DesktopState, Size, Window, Status
 from operator_use.computer.macos.tree.views import BoundingBox, TreeElementNode
 from operator_use.computer.macos.tree.service import Tree
@@ -13,8 +13,11 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
 class Desktop:
-    def __init__(self, use_vision: bool = False, use_annotation: bool = False, use_accessibility: bool = True):
+    def __init__(
+        self, use_vision: bool = False, use_annotation: bool = False, use_accessibility: bool = True
+    ):
         self.use_vision = use_vision
         self.use_annotation = use_annotation
         self.use_accessibility = use_accessibility
@@ -35,13 +38,16 @@ class Desktop:
             tree_state = self.tree.get_state(active_window=active_window)
         else:
             from operator_use.computer.macos.tree.views import TreeState
+
             tree_state = TreeState()
 
         if self.use_vision:
             if self.use_annotation:
                 nodes = tree_state.interactive_nodes if tree_state else []
                 if nodes:
-                    screenshot = self.get_annotated_screenshot(nodes=nodes, as_bytes=as_bytes, scale=scale)
+                    screenshot = self.get_annotated_screenshot(
+                        nodes=nodes, as_bytes=as_bytes, scale=scale
+                    )
                 else:
                     screenshot = self.get_screenshot(as_bytes=as_bytes)
             else:
@@ -62,23 +68,23 @@ class Desktop:
     def execute_command(
         self,
         command: str,
-        mode: Literal['shell', 'osascript'] = 'shell',
+        mode: Literal["shell", "osascript"] = "shell",
         timeout: int = 10,
     ) -> Tuple[str, int]:
         """Execute a shell or AppleScript command."""
         return ax.ExecuteCommand(command, mode=mode, timeout=timeout)
 
     def get_foreground_window(self) -> Optional[Window]:
-        app=ax.GetFrontmostApplication()
+        app = ax.GetFrontmostApplication()
         if app is None:
             return None
-        window=app.MainWindow
+        window = app.MainWindow
         if window is None:
             return None
         is_browser = app.BundleIdentifier in BROWSER_BUNDLE_IDS
-        rect=window.BoundingRectangle
+        rect = window.BoundingRectangle
         if rect:
-            bounding_box=BoundingBox(
+            bounding_box = BoundingBox(
                 left=int(rect.left),
                 top=int(rect.top),
                 right=int(rect.right),
@@ -87,7 +93,7 @@ class Desktop:
                 height=int(rect.height),
             )
         else:
-            bounding_box=BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
+            bounding_box = BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
         status_str = app.Status
         try:
             status = Status(status_str)
@@ -111,15 +117,15 @@ class Desktop:
             windows — list of Window objects
         """
         # Get all regular (Dock-visible) applications
-        apps = ax.GetRunningApplications(policy='Regular')
+        apps = ax.GetRunningApplications(policy="Regular")
 
         windows = []
         for app in apps:
-            bundle_id = app.BundleIdentifier or ''
+            bundle_id = app.BundleIdentifier or ""
             if bundle_id in EXCLUDED_BUNDLE_IDS:
                 continue
 
-            app_name = app.Name or ''
+            app_name = app.Name or ""
             pid = app.PID
             is_browser = bundle_id in BROWSER_BUNDLE_IDS
 
@@ -151,14 +157,16 @@ class Desktop:
                 else:
                     bbox = BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
 
-            windows.append(Window(
-                name=app_name,
-                is_browser=is_browser,
-                status=status,
-                bounding_box=bbox,
-                pid=pid,
-                bundle_id=bundle_id,
-            ))
+            windows.append(
+                Window(
+                    name=app_name,
+                    is_browser=is_browser,
+                    status=status,
+                    bounding_box=bbox,
+                    pid=pid,
+                    bundle_id=bundle_id,
+                )
+            )
 
         return windows
 
@@ -201,7 +209,9 @@ class Desktop:
         """
         img = self.get_screenshot()
         if img is None:
-            logger.warning("Screenshot capture failed. Grant Screen Recording permission in System Settings > Privacy & Security.")
+            logger.warning(
+                "Screenshot capture failed. Grant Screen Recording permission in System Settings > Privacy & Security."
+            )
             return None
         padding = 5
         width = int(img.width + 1.5 * padding)
@@ -218,31 +228,33 @@ class Desktop:
         display_infos = ax.GetPerDisplayInfo()
         pixel_left_acc = 0
         for d in display_infos:
-            d['pixel_left'] = pixel_left_acc
-            pixel_left_acc += d['pixel_width']
+            d["pixel_left"] = pixel_left_acc
+            pixel_left_acc += d["pixel_width"]
 
-        virtual_left = display_infos[0]['logical_left'] if display_infos else 0
-        virtual_top = min(d['logical_top'] for d in display_infos) if display_infos else 0
+        virtual_left = display_infos[0]["logical_left"] if display_infos else 0
+        virtual_top = min(d["logical_top"] for d in display_infos) if display_infos else 0
 
         def _find_display(lx: float, ly: float):
             for d in display_infos:
-                if (d['logical_left'] <= lx < d['logical_left'] + d['logical_width'] and
-                        d['logical_top'] <= ly < d['logical_top'] + d['logical_height']):
+                if (
+                    d["logical_left"] <= lx < d["logical_left"] + d["logical_width"]
+                    and d["logical_top"] <= ly < d["logical_top"] + d["logical_height"]
+                ):
                     return d
             return None
 
         def _logical_to_pixel(lx: float, ly: float) -> tuple[int, int]:
             d = _find_display(lx, ly)
             if d:
-                px = d['pixel_left'] + int((lx - d['logical_left']) * d['scale'])
-                py = int((ly - d['logical_top']) * d['scale'])
+                px = d["pixel_left"] + int((lx - d["logical_left"]) * d["scale"])
+                py = int((ly - d["logical_top"]) * d["scale"])
                 return px, py
             # Fallback: use average scale across all displays
-            avg_scale = img.width / max(sum(d['logical_width'] for d in display_infos), 1)
+            avg_scale = img.width / max(sum(d["logical_width"] for d in display_infos), 1)
             return int((lx - virtual_left) * avg_scale), int((ly - virtual_top) * avg_scale)
 
         # Font sized to main display scale
-        dpi_scale = display_infos[0]['scale'] if display_infos else ax.GetDPIScale()
+        dpi_scale = display_infos[0]["scale"] if display_infos else ax.GetDPIScale()
         font_size = max(12, int(14 * dpi_scale))
         try:
             font_path = "/System/Library/Fonts/Helvetica.ttc"
@@ -268,10 +280,10 @@ class Desktop:
             cy = (box.top + box.bottom) / 2
             d = _find_display(cx, cy)
             if d:
-                s = d['scale']
-                pl = d['pixel_left']
-                dl = d['logical_left']
-                dt = d['logical_top']
+                s = d["scale"]
+                pl = d["pixel_left"]
+                dl = d["logical_left"]
+                dt = d["logical_top"]
                 x1 = pl + int((box.left - dl) * s) + padding
                 y1 = int((box.top - dt) * s) + padding
                 x2 = pl + int((box.right - dl) * s) + padding
@@ -279,8 +291,10 @@ class Desktop:
             else:
                 x1, y1 = _logical_to_pixel(box.left, box.top)
                 x2, y2 = _logical_to_pixel(box.right, box.bottom)
-                x1 += padding; y1 += padding
-                x2 += padding; y2 += padding
+                x1 += padding
+                y1 += padding
+                x2 += padding
+                y2 += padding
 
             # Deterministic color per label
             random.seed(label)

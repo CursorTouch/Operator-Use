@@ -1,4 +1,4 @@
-﻿"""Slack channel using Socket Mode or Webhooks."""
+"""Slack channel using Socket Mode or Webhooks."""
 
 import asyncio
 import logging
@@ -28,13 +28,31 @@ logger = logging.getLogger(__name__)
 MAX_MESSAGE_LEN = 4000  # Slack message character limit (practical)
 
 _EMOJI_TO_SLACK: dict[str, str] = {
-    "👍": "thumbsup", "👎": "thumbsdown", "❤️": "heart", "🔥": "fire",
-    "😂": "joy", "😊": "blush", "😍": "heart_eyes", "🎉": "tada",
-    "✅": "white_check_mark", "❌": "x", "⚠️": "warning", "🚀": "rocket",
-    "👀": "eyes", "💯": "100", "🙏": "pray", "😎": "sunglasses",
-    "🤔": "thinking_face", "😅": "sweat_smile", "🥳": "partying_face",
-    "👋": "wave", "💪": "muscle", "🎯": "dart", "⭐": "star",
+    "👍": "thumbsup",
+    "👎": "thumbsdown",
+    "❤️": "heart",
+    "🔥": "fire",
+    "😂": "joy",
+    "😊": "blush",
+    "😍": "heart_eyes",
+    "🎉": "tada",
+    "✅": "white_check_mark",
+    "❌": "x",
+    "⚠️": "warning",
+    "🚀": "rocket",
+    "👀": "eyes",
+    "💯": "100",
+    "🙏": "pray",
+    "😎": "sunglasses",
+    "🤔": "thinking_face",
+    "😅": "sweat_smile",
+    "🥳": "partying_face",
+    "👋": "wave",
+    "💪": "muscle",
+    "🎯": "dart",
+    "⭐": "star",
 }
+
 
 def _emoji_to_slack_name(emoji: str) -> str:
     """Convert an emoji character to a Slack reaction name."""
@@ -124,17 +142,17 @@ def _split_message(content: str, max_len: int = MAX_MESSAGE_LEN) -> list[str]:
     return chunks
 
 
-def _verify_slack_signature(request_body: bytes, signing_secret: str, timestamp: str, signature: str) -> bool:
+def _verify_slack_signature(
+    request_body: bytes, signing_secret: str, timestamp: str, signature: str
+) -> bool:
     """Verify Slack request signature for webhook security."""
     if not signing_secret:
         return False
 
     base_string = f"v0:{timestamp}:{request_body.decode('utf-8')}"
-    my_signature = "v0=" + hmac.new(
-        signing_secret.encode(),
-        base_string.encode(),
-        hashlib.sha256
-    ).hexdigest()
+    my_signature = (
+        "v0=" + hmac.new(signing_secret.encode(), base_string.encode(), hashlib.sha256).hexdigest()
+    )
 
     return hmac.compare_digest(my_signature, signature)
 
@@ -252,6 +270,7 @@ class SlackChannel(BaseChannel):
 
                 # Check timestamp is recent (within 5 minutes)
                 import time
+
                 current_time = int(time.time())
                 try:
                     req_time = int(timestamp)
@@ -289,9 +308,7 @@ class SlackChannel(BaseChannel):
         app.router.add_post(webhook_path, handle_slack_event)
         self._webhook_runner = aiohttp.web.AppRunner(app)
         await self._webhook_runner.setup()
-        self._webhook_site = aiohttp.web.TCPSite(
-            self._webhook_runner, "0.0.0.0", webhook_port
-        )
+        self._webhook_site = aiohttp.web.TCPSite(self._webhook_runner, "0.0.0.0", webhook_port)
         await self._webhook_site.start()
         logger.info(f"Slack webhook server listening on port {webhook_port}")
 
@@ -522,7 +539,9 @@ class SlackChannel(BaseChannel):
                     except Exception as e:
                         err = str(e)
                         if "already_reacted" not in err:
-                            logger.warning(f"Failed to add reaction {emoji_name} to message {react_msg_id}: {e}")
+                            logger.warning(
+                                f"Failed to add reaction {emoji_name} to message {react_msg_id}: {e}"
+                            )
                 return None
 
             # Streaming: skip intermediate chunks, send only the final text

@@ -51,12 +51,14 @@ TIMESTAMP_TOLERANCE_SECS = 30
 # Internal: lazy import of cryptography (optional dep)
 # ---------------------------------------------------------------------------
 
+
 def _ed25519():
     try:
         from cryptography.hazmat.primitives.asymmetric.ed25519 import (
             Ed25519PrivateKey,
             Ed25519PublicKey,
         )
+
         return Ed25519PrivateKey, Ed25519PublicKey
     except ImportError:
         raise ImportError(
@@ -73,12 +75,14 @@ def _serialization():
         PublicFormat,
         load_pem_private_key,
     )
+
     return Encoding, NoEncryption, PrivateFormat, PublicFormat, load_pem_private_key
 
 
 # ---------------------------------------------------------------------------
 # ACPProvenance
 # ---------------------------------------------------------------------------
+
 
 class ACPProvenance:
     """Holds an Ed25519 keypair and provides sign/verify helpers."""
@@ -183,9 +187,7 @@ class ACPProvenance:
         # Replay protection
         age = abs(time.time() - timestamp)
         if age > TIMESTAMP_TOLERANCE_SECS:
-            logger.warning(
-                f"ACP signature rejected: timestamp too old/future ({age:.0f}s)"
-            )
+            logger.warning(f"ACP signature rejected: timestamp too old/future ({age:.0f}s)")
             return False
 
         try:
@@ -204,6 +206,7 @@ class ACPProvenance:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _canonical_payload(agent_id: str, timestamp: int, body: bytes) -> bytes:
     """Canonical signed payload: agent_id\\ntimestamp\\nsha256_hex(body)"""
     body_hash = hashlib.sha256(body).hexdigest()
@@ -219,6 +222,7 @@ def _pad_b64(s: str) -> str:
 # Public key fetch helper (for verifying remote agents)
 # ---------------------------------------------------------------------------
 
+
 async def fetch_public_key(agent_url: str, agent_id: str) -> str | None:
     """Fetch a remote agent's Ed25519 public key.
 
@@ -227,6 +231,7 @@ async def fetch_public_key(agent_url: str, agent_id: str) -> str | None:
     """
     try:
         import aiohttp
+
         url = f"{agent_url.rstrip('/')}/agents/{agent_id}/pubkey"
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:

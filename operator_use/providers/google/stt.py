@@ -1,4 +1,4 @@
-﻿import os
+import os
 import logging
 from typing import Optional
 
@@ -48,9 +48,7 @@ class STTGoogle(BaseSTT):
     ):
         self._model = model
         self.api_key = (
-            api_key
-            or os.environ.get("GEMINI_API_KEY")
-            or os.environ.get("GOOGLE_API_KEY")
+            api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         )
         self.prompt = prompt
         self.language = language

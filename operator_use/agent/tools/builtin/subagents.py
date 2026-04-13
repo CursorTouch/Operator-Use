@@ -88,7 +88,6 @@ async def subagents(
         return ToolResult.error_result("Subagent store not available (internal error)")
 
     match action:
-
         case "create":
             if not task:
                 return ToolResult.error_result("Provide task description to create a subagent")
@@ -96,7 +95,9 @@ async def subagents(
                 return ToolResult.error_result("Channel context not available (internal error)")
 
             try:
-                tid = await subagent_manager.ainvoke(task, label, channel, chat_id, account_id, depends_on=depends_on)
+                tid = await subagent_manager.ainvoke(
+                    task, label, channel, chat_id, account_id, depends_on=depends_on
+                )
             except ValueError as e:
                 return ToolResult.error_result(f"Cannot create subagent: {e}")
 
@@ -116,15 +117,13 @@ async def subagents(
             for r in records:
                 duration = _format_duration(r.started_at, r.finished_at)
                 status_icon = {
-                    "running":   "⏳",
+                    "running": "⏳",
                     "completed": "✅",
-                    "failed":    "❌",
+                    "failed": "❌",
                     "cancelled": "🚫",
                 }.get(r.status, "?")
 
-                line = (
-                    f"{status_icon} {r.task_id}  [{r.status}]  {duration}  label='{r.label}'"
-                )
+                line = f"{status_icon} {r.task_id}  [{r.status}]  {duration}  label='{r.label}'"
                 if r.status == "running":
                     line += f"\n   task: {r.task[:100]}"
                 elif r.result:
@@ -144,9 +143,9 @@ async def subagents(
                 return ToolResult.error_result(f"No subagent found with task_id='{task_id}'")
             duration = _format_duration(record.started_at, record.finished_at)
             status_icon = {
-                "running":   "⏳",
+                "running": "⏳",
                 "completed": "✅",
-                "failed":    "❌",
+                "failed": "❌",
                 "cancelled": "🚫",
             }.get(record.status, "?")
             lines = [
@@ -171,7 +170,9 @@ async def subagents(
                 return ToolResult.success_result(f"Subagent {task_id} cancelled.")
             record = subagent_manager.get_record(task_id)
             if record:
-                return ToolResult.error_result(f"Subagent {task_id} is not running (status={record.status})")
+                return ToolResult.error_result(
+                    f"Subagent {task_id} is not running (status={record.status})"
+                )
             return ToolResult.error_result(f"No subagent found with task_id='{task_id}'")
 
         case _:

@@ -87,6 +87,7 @@ class ImageTogether(BaseImage):
 
     def _make_clients(self):
         from openai import AsyncOpenAI, OpenAI
+
         client = OpenAI(api_key=self.api_key, base_url=TOGETHER_BASE_URL)
         aclient = AsyncOpenAI(api_key=self.api_key, base_url=TOGETHER_BASE_URL)
         return client, aclient
@@ -102,7 +103,9 @@ class ImageTogether(BaseImage):
             body["strength"] = kwargs.get("strength", 0.8)
         return body
 
-    def generate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    def generate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         client, _ = self._make_clients()
         response = client.images.generate(
             model=self._model,
@@ -114,7 +117,9 @@ class ImageTogether(BaseImage):
         urllib.request.urlretrieve(url, output_path)
         logger.debug(f"[ImageTogether] Image saved to {output_path}")
 
-    async def agenerate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    async def agenerate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         import aiohttp as _aiohttp
 
         _, aclient = self._make_clients()

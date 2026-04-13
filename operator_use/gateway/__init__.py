@@ -1,4 +1,4 @@
-﻿"""Gateway module: unified channel management and outbound dispatch."""
+"""Gateway module: unified channel management and outbound dispatch."""
 
 from operator_use.gateway.service import Gateway
 from operator_use.gateway.channels import BaseChannel

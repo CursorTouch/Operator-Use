@@ -96,6 +96,7 @@ class ImageOpenAI(BaseImage):
                 f.write(image_bytes)
         elif data.url:
             import urllib.request
+
             urllib.request.urlretrieve(data.url, output_path)
         else:
             raise RuntimeError("No image data in response")
@@ -116,10 +117,14 @@ class ImageOpenAI(BaseImage):
         # DALL-E 2: no quality param
         return params
 
-    def generate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    def generate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         if images:
             if self._model in _NO_EDIT_MODELS:
-                raise ValueError(f"{self._model!r} does not support image editing. Use gpt-image-1.5 or gpt-image-1.")
+                raise ValueError(
+                    f"{self._model!r} does not support image editing. Use gpt-image-1.5 or gpt-image-1."
+                )
 
             if self._is_gpt_image():
                 image_files = [open(p, "rb") for p in images]
@@ -158,10 +163,14 @@ class ImageOpenAI(BaseImage):
         self._save_response(response.data[0], output_path)
         logger.debug(f"[ImageOpenAI] Image saved to {output_path}")
 
-    async def agenerate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    async def agenerate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         if images:
             if self._model in _NO_EDIT_MODELS:
-                raise ValueError(f"{self._model!r} does not support image editing. Use gpt-image-1.5 or gpt-image-1.")
+                raise ValueError(
+                    f"{self._model!r} does not support image editing. Use gpt-image-1.5 or gpt-image-1."
+                )
 
             if self._is_gpt_image():
                 image_files = [open(p, "rb") for p in images]
@@ -195,7 +204,9 @@ class ImageOpenAI(BaseImage):
                     if "mask" in edit_kwargs:
                         edit_kwargs["mask"].close()
         else:
-            response = await self.aclient.images.generate(**self._build_generate_params(prompt, **kwargs))
+            response = await self.aclient.images.generate(
+                **self._build_generate_params(prompt, **kwargs)
+            )
 
         self._save_response(response.data[0], output_path)
         logger.debug(f"[ImageOpenAI] Async image saved to {output_path}")

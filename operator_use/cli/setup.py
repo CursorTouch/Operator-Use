@@ -4,10 +4,24 @@ import re as _re
 from pathlib import Path
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from operator_use.cli.tui import BackRequest, NavigateBack, clear_screen, print_banner, print_start, print_step, select, text_input, confirm, print_end, print_end_first_install, console
+from operator_use.cli.tui import (
+    BackRequest,
+    NavigateBack,
+    clear_screen,
+    print_banner,
+    print_start,
+    print_step,
+    select,
+    text_input,
+    confirm,
+    print_end,
+    print_end_first_install,
+    console,
+)
 from operator_use.cli.mcp_setup import show_mcp_menu, validate_mcp_servers
 
 # --- Registry Data ---
@@ -213,7 +227,10 @@ IMAGE_PROVIDERS: dict[str, list[tuple[str, str]]] = {
     "Google": [
         ("Gemini 2.5 Flash Image (gen + edit, recommended)", "gemini-2.5-flash-image"),
         ("Gemini 3 Pro Image Preview (gen + edit, studio quality)", "gemini-3-pro-image-preview"),
-        ("Gemini 3.1 Flash Image Preview (gen + edit, high volume)", "gemini-3.1-flash-image-preview"),
+        (
+            "Gemini 3.1 Flash Image Preview (gen + edit, high volume)",
+            "gemini-3.1-flash-image-preview",
+        ),
         ("Imagen 4 Standard (text-to-image only)", "imagen-4.0-generate-001"),
         ("Imagen 4 Ultra (text-to-image only, highest quality)", "imagen-4.0-ultra-generate-001"),
         ("Imagen 4 Fast (text-to-image only, low latency)", "imagen-4.0-fast-generate-001"),
@@ -253,7 +270,47 @@ VOICES: dict[str, list[str]] = {
     "Google": ["Aoede", "Charon", "Fenrir", "Kore", "Puck"],
     "ElevenLabs": ["Rachel", "Drew", "Clyde", "Paul", "Domi"],
     "Deepgram": ["asteria-en", "luna-en", "stella-en", "athena-en", "hera-en"],
-    "Sarvam": ["aditya", "ritu", "ashutosh", "priya", "neha", "rahul", "pooja", "rohan", "simran", "kavya", "amit", "dev", "ishita", "shreya", "ratan", "varun", "manan", "sumit", "roopa", "kabir", "aayan", "shubh", "advait", "amelia", "sophia", "anand", "tanya", "tarun", "sunny", "mani", "gokul", "vijay", "shruti", "suhani", "mohit", "kavitha", "rehan", "soham", "rupali"],
+    "Sarvam": [
+        "aditya",
+        "ritu",
+        "ashutosh",
+        "priya",
+        "neha",
+        "rahul",
+        "pooja",
+        "rohan",
+        "simran",
+        "kavya",
+        "amit",
+        "dev",
+        "ishita",
+        "shreya",
+        "ratan",
+        "varun",
+        "manan",
+        "sumit",
+        "roopa",
+        "kabir",
+        "aayan",
+        "shubh",
+        "advait",
+        "amelia",
+        "sophia",
+        "anand",
+        "tanya",
+        "tarun",
+        "sunny",
+        "mani",
+        "gokul",
+        "vijay",
+        "shruti",
+        "suhani",
+        "mohit",
+        "kavitha",
+        "rehan",
+        "soham",
+        "rupali",
+    ],
 }
 
 OAUTH_PROVIDERS = {"Antigravity", "Codex", "Claude Code", "GitHub Copilot"}
@@ -270,8 +327,8 @@ OAUTH_NOTES = {
 
 CHANNEL_NOTES = {
     "Telegram": "Create a bot via @BotFather on Telegram and copy the token.",
-    "Discord":  "Create a bot at discord.com/developers, enable Message Content Intent, and copy the token.",
-    "Slack":    "Create a Slack app at api.slack.com. Bot token starts with xoxb-, app token with xapp-.",
+    "Discord": "Create a bot at discord.com/developers, enable Message Content Intent, and copy the token.",
+    "Slack": "Create a Slack app at api.slack.com. Bot token starts with xoxb-, app token with xapp-.",
 }
 
 
@@ -294,12 +351,18 @@ def _get_ollama_models() -> list[tuple[str, str]]:
     """Query the local Ollama server for installed models."""
     try:
         from ollama import Client
+
         client = Client()
         response = client.list()
         models = response.models if hasattr(response, "models") else response.get("models", [])
         if models:
-            return [(m.model if hasattr(m, "model") else m["name"],
-                     m.model if hasattr(m, "model") else m["name"]) for m in models]
+            return [
+                (
+                    m.model if hasattr(m, "model") else m["name"],
+                    m.model if hasattr(m, "model") else m["name"],
+                )
+                for m in models
+            ]
     except Exception:
         pass
     return []
@@ -311,7 +374,9 @@ def _get_model_options(prov_name: str) -> list[tuple[str, str]]:
         models = _get_ollama_models()
         if models:
             return models
-        console.print("[yellow]⚠  Could not reach Ollama or no models installed. Run [bold]ollama pull <model>[/bold] first.[/yellow]")
+        console.print(
+            "[yellow]⚠  Could not reach Ollama or no models installed. Run [bold]ollama pull <model>[/bold] first.[/yellow]"
+        )
     return LLM_PROVIDERS[prov_name]
 
 
@@ -325,11 +390,26 @@ def _select_model(label: str, options: list[tuple[str, str]]) -> str:
 
 
 from operator_use.config import (
-    Config, LLMConfig, STTConfig, TTSConfig, ImageConfig, SearchConfig,
-    AgentDefaults, AgentsConfig, ProvidersConfig, ProviderConfig,
-    ChannelsConfig, TelegramConfig, DiscordConfig, SlackConfig,
-    AgentDefinition, ACPServerSettings, ACPAgentEntry, HeartbeatConfig,
-    ToolsConfig, PluginConfig,
+    Config,
+    LLMConfig,
+    STTConfig,
+    TTSConfig,
+    ImageConfig,
+    SearchConfig,
+    AgentDefaults,
+    AgentsConfig,
+    ProvidersConfig,
+    ProviderConfig,
+    ChannelsConfig,
+    TelegramConfig,
+    DiscordConfig,
+    SlackConfig,
+    AgentDefinition,
+    ACPServerSettings,
+    ACPAgentEntry,
+    HeartbeatConfig,
+    ToolsConfig,
+    PluginConfig,
 )
 
 
@@ -391,7 +471,9 @@ def _save_config(
     for a in agent_defs:
         defn_kwargs: dict = {"id": a["id"]}
         if a["llm_provider_key"] and a["llm_model"]:
-            defn_kwargs["llm_config"] = LLMConfig(provider=a["llm_provider_key"], model=a["llm_model"])
+            defn_kwargs["llm_config"] = LLMConfig(
+                provider=a["llm_provider_key"], model=a["llm_model"]
+            )
         ch = a.get("channels", {})
         if ch.get("telegram") or ch.get("discord") or ch.get("slack_bot"):
             agent_channels = ChannelsConfig()
@@ -400,11 +482,12 @@ def _save_config(
             if ch.get("discord"):
                 agent_channels.discord = DiscordConfig(enabled=True, token=ch["discord"])
             if ch.get("slack_bot"):
-                agent_channels.slack = SlackConfig(enabled=True, bot_token=ch["slack_bot"], app_token=ch.get("slack_app", ""))
+                agent_channels.slack = SlackConfig(
+                    enabled=True, bot_token=ch["slack_bot"], app_token=ch.get("slack_app", "")
+                )
             defn_kwargs["channels"] = agent_channels
         defn_kwargs["plugins"] = [
-            PluginConfig(id=p["id"], enabled=p.get("enabled", True))
-            for p in a.get("plugins", [])
+            PluginConfig(id=p["id"], enabled=p.get("enabled", True)) for p in a.get("plugins", [])
         ]
         defn_kwargs["prompt_mode"] = a.get("prompt_mode", "full")
         if a.get("system_prompt"):
@@ -416,16 +499,29 @@ def _save_config(
         )
         agent_list.append(AgentDefinition(**defn_kwargs))
 
-    hb_llm = LLMConfig(provider=heartbeat_llm_provider_key, model=heartbeat_llm_model) if heartbeat_llm_provider_key and heartbeat_llm_model else None
+    hb_llm = (
+        LLMConfig(provider=heartbeat_llm_provider_key, model=heartbeat_llm_model)
+        if heartbeat_llm_provider_key and heartbeat_llm_model
+        else None
+    )
     config_obj = Config(
         heartbeat=HeartbeatConfig(enabled=heartbeat_enabled, llm_config=hb_llm),
         agents=AgentsConfig(
             defaults=AgentDefaults(),
             list=agent_list,
         ),
-        stt=STTConfig(enabled=stt_enabled, provider=stt_provider_key or None, model=stt_model or None),
-        tts=TTSConfig(enabled=tts_enabled, provider=tts_provider_key or None, model=tts_model or None, voice=tts_voice),
-        image=ImageConfig(enabled=image_enabled, provider=image_provider_key or None, model=image_model or None),
+        stt=STTConfig(
+            enabled=stt_enabled, provider=stt_provider_key or None, model=stt_model or None
+        ),
+        tts=TTSConfig(
+            enabled=tts_enabled,
+            provider=tts_provider_key or None,
+            model=tts_model or None,
+            voice=tts_voice,
+        ),
+        image=ImageConfig(
+            enabled=image_enabled, provider=image_provider_key or None, model=image_model or None
+        ),
         search=SearchConfig(provider=search_provider_key or "ddgs", api_key=search_api_key or None),
         providers=providers,
         acp_server=acp_server or ACPServerSettings(),
@@ -437,23 +533,25 @@ def _save_config(
     operator_use_dir.mkdir(parents=True, exist_ok=True)
     config_path = operator_use_dir / "config.json"
     with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(config_obj.model_dump(by_alias=True, exclude_none=True), f, indent=4, ensure_ascii=False)
+        json.dump(
+            config_obj.model_dump(by_alias=True, exclude_none=True), f, indent=4, ensure_ascii=False
+        )
 
     key_to_env = {
-        "groq":        "GROQ_API_KEY",
-        "openai":      "OPENAI_API_KEY",
-        "anthropic":   "ANTHROPIC_API_KEY",
-        "google":      "GEMINI_API_KEY",
-        "nvidia":      "NVIDIA_API_KEY",
-        "deepseek":    "DEEPSEEK_API_KEY",
-        "xai":         "XAI_API_KEY",
-        "cerebras":    "CEREBRAS_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GEMINI_API_KEY",
+        "nvidia": "NVIDIA_API_KEY",
+        "deepseek": "DEEPSEEK_API_KEY",
+        "xai": "XAI_API_KEY",
+        "cerebras": "CEREBRAS_API_KEY",
         "open_router": "OPENROUTER_API_KEY",
-        "elevenlabs":  "ELEVENLABS_API_KEY",
-        "deepgram":    "DEEPGRAM_API_KEY",
-        "mistral":     "MISTRAL_API_KEY",
-        "azure_openai":"AZURE_OPENAI_API_KEY",
-        "sarvam":      "SARVAM_API_KEY",
+        "elevenlabs": "ELEVENLABS_API_KEY",
+        "deepgram": "DEEPGRAM_API_KEY",
+        "mistral": "MISTRAL_API_KEY",
+        "azure_openai": "AZURE_OPENAI_API_KEY",
+        "sarvam": "SARVAM_API_KEY",
     }
     env_vars = {key_to_env[k]: v for k, v in api_keys_dict.items() if k in key_to_env}
     if env_vars:
@@ -465,16 +563,26 @@ def _save_config(
 
 def run_first_install():
     """Linear step-by-step wizard for first-time installation (no config.json exists)."""
+
     def _render_step(step: int) -> None:
         clear_screen()
         print_banner()
         print_start()
         if step == 0:
-            print_step(1, 3, "Your agent", "Give your agent a name — used for its workspace folder.")
+            print_step(
+                1, 3, "Your agent", "Give your agent a name — used for its workspace folder."
+            )
         elif step == 1:
-            print_step(2, 3, "Language model", "This is the AI brain. Pick a provider you have access to.")
+            print_step(
+                2, 3, "Language model", "This is the AI brain. Pick a provider you have access to."
+            )
         else:
-            print_step(3, 3, "Messaging channel", "Connect a channel to message your agent. You can add more later with `operator channel add`.")
+            print_step(
+                3,
+                3,
+                "Messaging channel",
+                "Connect a channel to message your agent. You can add more later with `operator channel add`.",
+            )
 
     api_keys_dict: dict[str, str] = {}
     agent_id = "operator"
@@ -483,7 +591,11 @@ def run_first_install():
     agent_channels: dict = {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""}
 
     def _need_key(prov_key: str, prov_name: str) -> bool:
-        return prov_key not in api_keys_dict and prov_name not in OAUTH_PROVIDERS and prov_name not in NO_KEY_PROVIDERS
+        return (
+            prov_key not in api_keys_dict
+            and prov_name not in OAUTH_PROVIDERS
+            and prov_name not in NO_KEY_PROVIDERS
+        )
 
     step = 0
     while step < 3:
@@ -502,37 +614,51 @@ def run_first_install():
                     console.print("│")
                     console.print(f"│  [dim]ℹ  {OAUTH_NOTES[prov_name]}[/dim]")
                 elif _need_key(prov_key, prov_name):
-                    api_keys_dict[prov_key] = text_input(f"Enter API Key for {prov_name}:", is_password=True)
+                    api_keys_dict[prov_key] = text_input(
+                        f"Enter API Key for {prov_name}:", is_password=True
+                    )
                 llm_model = _select_model("Pick the LLM model:", _get_model_options(prov_name))
                 llm_provider_key = prov_key
                 step = 2
                 continue
 
             agent_channels = {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""}
-            ch_name = select("Pick a channel to connect:", ["Telegram", "Discord", "Slack", "Skip for now"])
+            ch_name = select(
+                "Pick a channel to connect:", ["Telegram", "Discord", "Slack", "Skip for now"]
+            )
             if ch_name != "Skip for now":
                 note = CHANNEL_NOTES.get(ch_name, "")
                 if note:
                     console.print("│")
                     console.print(f"│  [dim]{note}[/dim]")
                 if ch_name == "Telegram":
-                    agent_channels["telegram"] = text_input("Enter Telegram Bot Token:", is_password=True)
+                    agent_channels["telegram"] = text_input(
+                        "Enter Telegram Bot Token:", is_password=True
+                    )
                 elif ch_name == "Discord":
-                    agent_channels["discord"] = text_input("Enter Discord Bot Token:", is_password=True)
+                    agent_channels["discord"] = text_input(
+                        "Enter Discord Bot Token:", is_password=True
+                    )
                 elif ch_name == "Slack":
-                    agent_channels["slack_bot"] = text_input("Enter Slack Bot Token (xoxb-...):", is_password=True)
-                    agent_channels["slack_app"] = text_input("Enter Slack App Token (xapp-...):", is_password=True)
+                    agent_channels["slack_bot"] = text_input(
+                        "Enter Slack Bot Token (xoxb-...):", is_password=True
+                    )
+                    agent_channels["slack_app"] = text_input(
+                        "Enter Slack App Token (xapp-...):", is_password=True
+                    )
             step = 3
         except BackRequest:
             if step > 0:
                 step -= 1
 
-    agent_defs = [{
-        "id": agent_id,
-        "llm_provider_key": llm_provider_key,
-        "llm_model": llm_model,
-        "channels": agent_channels,
-    }]
+    agent_defs = [
+        {
+            "id": agent_id,
+            "llm_provider_key": llm_provider_key,
+            "llm_model": llm_model,
+            "channels": agent_channels,
+        }
+    ]
 
     _save_config(
         agent_defs=agent_defs,
@@ -566,6 +692,7 @@ def run_initial_setup():
         print_start("Configure")
 
     from operator_use.config.paths import get_userdata_dir
+
     _config_path = get_userdata_dir() / "config.json"
 
     # --- Load existing config ---
@@ -596,22 +723,22 @@ def run_initial_setup():
     heartbeat_llm_model: str = _hb_llm.get("model", "")
 
     # --- Global mutable state ---
-    stt_enabled: bool     = bool(_stt.get("enabled", False))
+    stt_enabled: bool = bool(_stt.get("enabled", False))
     stt_provider_key: str = _stt.get("provider", "") or ""
-    stt_model: str        = _stt.get("model", "") or ""
+    stt_model: str = _stt.get("model", "") or ""
 
-    tts_enabled: bool     = bool(_tts.get("enabled", False))
+    tts_enabled: bool = bool(_tts.get("enabled", False))
     tts_provider_key: str = _tts.get("provider", "") or ""
-    tts_model: str        = _tts.get("model", "") or ""
+    tts_model: str = _tts.get("model", "") or ""
     tts_voice: str | None = _tts.get("voice", None)
 
-    image_enabled: bool     = bool(_img.get("enabled", False))
+    image_enabled: bool = bool(_img.get("enabled", False))
     image_provider_key: str = _img.get("provider", "") or ""
-    image_model: str        = _img.get("model", "") or ""
+    image_model: str = _img.get("model", "") or ""
 
     _srch = existing_data.get("search", {})
     search_provider_key: str = _srch.get("provider", "") or "ddgs"
-    search_api_key: str      = _srch.get("api_key", "") or ""
+    search_api_key: str = _srch.get("api_key", "") or ""
 
     # ACP server settings
     _acp_srv = existing_data.get("acpServer", existing_data.get("acp_server", {}))
@@ -619,61 +746,81 @@ def run_initial_setup():
 
     # ACP remote agents registry
     _acp_agents_raw = existing_data.get("acpAgents", existing_data.get("acp_agents", {}))
-    acp_agents: dict[str, ACPAgentEntry] = {
-        k: ACPAgentEntry(**v) for k, v in _acp_agents_raw.items()
-    } if _acp_agents_raw else {}
+    acp_agents: dict[str, ACPAgentEntry] = (
+        {k: ACPAgentEntry(**v) for k, v in _acp_agents_raw.items()} if _acp_agents_raw else {}
+    )
 
     # MCP servers registry
-    mcp_servers: dict[str, dict] = existing_data.get("mcpServers", existing_data.get("mcp_servers", {}))
+    mcp_servers: dict[str, dict] = existing_data.get(
+        "mcpServers", existing_data.get("mcp_servers", {})
+    )
 
     # Agent definitions: list of dicts with per-agent overrides.
     # None values mean "use global default".
     agent_defs: list[dict] = []
     for a in existing_data.get("agents", {}).get("list", []):
-        _a_llm   = a.get("llmConfig", a.get("llm_config")) or {}
-        _a_ch    = a.get("channels", {}) or {}
+        _a_llm = a.get("llmConfig", a.get("llm_config")) or {}
+        _a_ch = a.get("channels", {}) or {}
         _a_tools = a.get("tools") or {}
-        agent_defs.append({
-            "id":               a.get("id", ""),
-            "llm_provider_key": _a_llm.get("provider") or None,
-            "llm_model":        _a_llm.get("model") or None,
-            "channels":         {
-                "telegram":  _a_ch.get("telegram", {}).get("token", "") or "",
-                "discord":   _a_ch.get("discord",  {}).get("token", "") or "",
-                "slack_bot": _a_ch.get("slack", {}).get("botToken", "") or "",
-                "slack_app": _a_ch.get("slack", {}).get("appToken", "") or "",
-            },
-            "plugins":       [{"id": p["id"], "enabled": p.get("enabled", True)} for p in (a.get("plugins") or [])],
-            "prompt_mode":   a.get("promptMode", a.get("prompt_mode", "full")),
-            "system_prompt": a.get("systemPrompt", a.get("system_prompt", "")),
-            "tools_profile": _a_tools.get("profile", "full"),
-            "tools_allow":   _a_tools.get("alsoAllow", _a_tools.get("also_allow", [])),
-            "tools_deny":    _a_tools.get("deny", []),
-        })
+        agent_defs.append(
+            {
+                "id": a.get("id", ""),
+                "llm_provider_key": _a_llm.get("provider") or None,
+                "llm_model": _a_llm.get("model") or None,
+                "channels": {
+                    "telegram": _a_ch.get("telegram", {}).get("token", "") or "",
+                    "discord": _a_ch.get("discord", {}).get("token", "") or "",
+                    "slack_bot": _a_ch.get("slack", {}).get("botToken", "") or "",
+                    "slack_app": _a_ch.get("slack", {}).get("appToken", "") or "",
+                },
+                "plugins": [
+                    {"id": p["id"], "enabled": p.get("enabled", True)}
+                    for p in (a.get("plugins") or [])
+                ],
+                "prompt_mode": a.get("promptMode", a.get("prompt_mode", "full")),
+                "system_prompt": a.get("systemPrompt", a.get("system_prompt", "")),
+                "tools_profile": _a_tools.get("profile", "full"),
+                "tools_allow": _a_tools.get("alsoAllow", _a_tools.get("also_allow", [])),
+                "tools_deny": _a_tools.get("deny", []),
+            }
+        )
 
     # Ensure at least one agent entry exists (edge case: corrupted config)
     if not agent_defs:
-        agent_defs.append({
-            "id": "operator", "llm_provider_key": None, "llm_model": None,
-            "channels": {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""},
-            "plugins": [],
-            "prompt_mode": "full", "system_prompt": "",
-            "tools_profile": "full", "tools_allow": [], "tools_deny": [],
-        })
+        agent_defs.append(
+            {
+                "id": "operator",
+                "llm_provider_key": None,
+                "llm_model": None,
+                "channels": {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""},
+                "plugins": [],
+                "prompt_mode": "full",
+                "system_prompt": "",
+                "tools_profile": "full",
+                "tools_allow": [],
+                "tools_deny": [],
+            }
+        )
 
     def _need_key(prov_key: str, prov_name: str) -> bool:
-        return prov_key not in api_keys_dict and prov_name not in OAUTH_PROVIDERS and prov_name not in NO_KEY_PROVIDERS
+        return (
+            prov_key not in api_keys_dict
+            and prov_name not in OAUTH_PROVIDERS
+            and prov_name not in NO_KEY_PROVIDERS
+        )
 
     def _configure_llm(cur_prov: str, cur_model: str) -> tuple[str, str]:
         """Shared LLM picker. Returns (provider_key, model)."""
         prov_name = select("Pick the LLM provider:", list(LLM_PROVIDERS.keys()))
-        prov_key  = get_provider_key(prov_name)
-        model     = _select_model("Pick the LLM model:", _get_model_options(prov_name))
+        prov_key = get_provider_key(prov_name)
+        model = _select_model("Pick the LLM model:", _get_model_options(prov_name))
         if prov_name in OAUTH_PROVIDERS:
             console.print("│")
             console.print(f"│  [dim]ℹ  {OAUTH_NOTES[prov_name]}[/dim]")
         elif _need_key(prov_key, prov_name):
-            api_keys_dict[prov_key] = text_input(f"Enter API Key for {prov_name}:", is_password=True)
+            api_keys_dict[prov_key] = text_input(
+                f"Enter API Key for {prov_name}:", is_password=True
+            )
         return prov_key, model
 
     # ── Per-agent submenu ─────────────────────────────────────────────────────
@@ -689,7 +836,9 @@ def run_initial_setup():
                     a_llm_label = "not configured"
 
                 ch = a.get("channels", {})
-                configured_chs = [n for n in ("telegram", "discord", "slack") if ch.get(n) or ch.get(f"{n}_bot")]
+                configured_chs = [
+                    n for n in ("telegram", "discord", "slack") if ch.get(n) or ch.get(f"{n}_bot")
+                ]
                 ch_label = ", ".join(configured_chs) if configured_chs else "none"
 
                 plugins_list = a.get("plugins", [])
@@ -706,17 +855,20 @@ def run_initial_setup():
                 if tools_deny:
                     tools_label += f"  -{len(tools_deny)}"
 
-                choice = select(f"Configure agent: {a['id']}", [
-                    f"Rename         {a['id']}",
-                    f"LLM            {a_llm_label}",
-                    f"Channels       {ch_label}",
-                    f"Plugins        {plugins_label}",
-                    f"Prompt Mode    {pm_label}",
-                    f"System Prompt  {sp_label}",
-                    f"Tools          {tools_label}",
-                    "Remove agent",
-                    "← Back",
-                ])
+                choice = select(
+                    f"Configure agent: {a['id']}",
+                    [
+                        f"Rename         {a['id']}",
+                        f"LLM            {a_llm_label}",
+                        f"Channels       {ch_label}",
+                        f"Plugins        {plugins_label}",
+                        f"Prompt Mode    {pm_label}",
+                        f"System Prompt  {sp_label}",
+                        f"Tools          {tools_label}",
+                        "Remove agent",
+                        "← Back",
+                    ],
+                )
 
                 if choice.startswith("←"):
                     break
@@ -731,55 +883,79 @@ def run_initial_setup():
                         agent_defs[idx]["id"] = new_id
 
                 elif choice.startswith("LLM"):
-                    prov_choice = select("Pick LLM provider for this agent:", list(LLM_PROVIDERS.keys()))
+                    prov_choice = select(
+                        "Pick LLM provider for this agent:", list(LLM_PROVIDERS.keys())
+                    )
                     prov_key = get_provider_key(prov_choice)
                     model = _select_model("Pick the LLM model:", _get_model_options(prov_choice))
                     if prov_choice in OAUTH_PROVIDERS:
                         console.print("│")
                         console.print(f"│  [dim]ℹ  {OAUTH_NOTES[prov_choice]}[/dim]")
                     elif _need_key(prov_key, prov_choice):
-                        api_keys_dict[prov_key] = text_input(f"Enter API Key for {prov_choice}:", is_password=True)
+                        api_keys_dict[prov_key] = text_input(
+                            f"Enter API Key for {prov_choice}:", is_password=True
+                        )
                     agent_defs[idx]["llm_provider_key"] = prov_key
                     agent_defs[idx]["llm_model"] = model
 
                 elif choice.startswith("Channels"):
-                    ch = agent_defs[idx].setdefault("channels", {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""})
+                    ch = agent_defs[idx].setdefault(
+                        "channels",
+                        {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""},
+                    )
                     while True:
                         try:
                             _render_configure_screen()
-                            tg_label  = "✓ configured" if ch.get("telegram")  else "not set"
-                            dc_label  = "✓ configured" if ch.get("discord")   else "not set"
-                            sl_label  = "✓ configured" if ch.get("slack_bot") else "not set"
-                            ch_choice = select(f"Channels for {a['id']}:", [
-                                f"Telegram   {tg_label}",
-                                f"Discord    {dc_label}",
-                                f"Slack      {sl_label}",
-                                "← Back",
-                            ])
+                            tg_label = "✓ configured" if ch.get("telegram") else "not set"
+                            dc_label = "✓ configured" if ch.get("discord") else "not set"
+                            sl_label = "✓ configured" if ch.get("slack_bot") else "not set"
+                            ch_choice = select(
+                                f"Channels for {a['id']}:",
+                                [
+                                    f"Telegram   {tg_label}",
+                                    f"Discord    {dc_label}",
+                                    f"Slack      {sl_label}",
+                                    "← Back",
+                                ],
+                            )
                             if ch_choice.startswith("←"):
                                 break
                             elif ch_choice.startswith("Telegram"):
                                 note = CHANNEL_NOTES.get("Telegram", "")
                                 console.print("│")
                                 console.print(f"│  [dim]{note}[/dim]")
-                                if ch.get("telegram") and not confirm("Replace existing Telegram token?"):
+                                if ch.get("telegram") and not confirm(
+                                    "Replace existing Telegram token?"
+                                ):
                                     continue
-                                ch["telegram"] = text_input(f"Telegram Bot Token for {a['id']}:", is_password=True)
+                                ch["telegram"] = text_input(
+                                    f"Telegram Bot Token for {a['id']}:", is_password=True
+                                )
                             elif ch_choice.startswith("Discord"):
                                 note = CHANNEL_NOTES.get("Discord", "")
                                 console.print("│")
                                 console.print(f"│  [dim]{note}[/dim]")
-                                if ch.get("discord") and not confirm("Replace existing Discord token?"):
+                                if ch.get("discord") and not confirm(
+                                    "Replace existing Discord token?"
+                                ):
                                     continue
-                                ch["discord"] = text_input(f"Discord Bot Token for {a['id']}:", is_password=True)
+                                ch["discord"] = text_input(
+                                    f"Discord Bot Token for {a['id']}:", is_password=True
+                                )
                             elif ch_choice.startswith("Slack"):
                                 note = CHANNEL_NOTES.get("Slack", "")
                                 console.print("│")
                                 console.print(f"│  [dim]{note}[/dim]")
-                                if ch.get("slack_bot") and not confirm("Replace existing Slack tokens?"):
+                                if ch.get("slack_bot") and not confirm(
+                                    "Replace existing Slack tokens?"
+                                ):
                                     continue
-                                ch["slack_bot"] = text_input(f"Slack Bot Token (xoxb-...) for {a['id']}:", is_password=True)
-                                ch["slack_app"] = text_input(f"Slack App Token (xapp-...) for {a['id']}:", is_password=True)
+                                ch["slack_bot"] = text_input(
+                                    f"Slack Bot Token (xoxb-...) for {a['id']}:", is_password=True
+                                )
+                                ch["slack_app"] = text_input(
+                                    f"Slack App Token (xapp-...) for {a['id']}:", is_password=True
+                                )
                         except BackRequest:
                             continue
 
@@ -802,16 +978,22 @@ def run_initial_setup():
                             if p_choice.startswith("←"):
                                 break
                             selected_id = p_choice.split()[0]
-                            entry = next((p for p in current_plugins if p["id"] == selected_id), None)
+                            entry = next(
+                                (p for p in current_plugins if p["id"] == selected_id), None
+                            )
                             if entry is None:
                                 current_plugins.append({"id": selected_id, "enabled": True})
                                 console.print(f"│  [green]{selected_id} added and enabled.[/green]")
                             else:
-                                action = select(f"{selected_id}:", ["Toggle enabled/disabled", "Remove"])
+                                action = select(
+                                    f"{selected_id}:", ["Toggle enabled/disabled", "Remove"]
+                                )
                                 if action.startswith("Toggle"):
                                     entry["enabled"] = not entry.get("enabled", True)
                                 elif action.startswith("Remove"):
-                                    current_plugins = [p for p in current_plugins if p["id"] != selected_id]
+                                    current_plugins = [
+                                        p for p in current_plugins if p["id"] != selected_id
+                                    ]
                             agent_defs[idx]["plugins"] = current_plugins
                         except BackRequest:
                             break
@@ -832,22 +1014,37 @@ def run_initial_setup():
                             tp = agent_defs[idx].get("tools_profile", "full")
                             ta = ", ".join(agent_defs[idx].get("tools_allow", [])) or "none"
                             td = ", ".join(agent_defs[idx].get("tools_deny", [])) or "none"
-                            tools_choice = select("Tools configuration:", [
-                                f"Profile    {tp}",
-                                f"Also Allow {ta}",
-                                f"Deny       {td}",
-                                "← Back",
-                            ])
+                            tools_choice = select(
+                                "Tools configuration:",
+                                [
+                                    f"Profile    {tp}",
+                                    f"Also Allow {ta}",
+                                    f"Deny       {td}",
+                                    "← Back",
+                                ],
+                            )
                             if tools_choice.startswith("←"):
                                 break
                             elif tools_choice.startswith("Profile"):
-                                agent_defs[idx]["tools_profile"] = select("Tools profile:", ["full", "coding", "minimal"])
+                                agent_defs[idx]["tools_profile"] = select(
+                                    "Tools profile:", ["full", "coding", "minimal"]
+                                )
                             elif tools_choice.startswith("Also Allow"):
-                                raw = text_input("Extra tools to allow (comma-separated):", default=", ".join(agent_defs[idx].get("tools_allow", [])))
-                                agent_defs[idx]["tools_allow"] = [t.strip() for t in raw.split(",") if t.strip()]
+                                raw = text_input(
+                                    "Extra tools to allow (comma-separated):",
+                                    default=", ".join(agent_defs[idx].get("tools_allow", [])),
+                                )
+                                agent_defs[idx]["tools_allow"] = [
+                                    t.strip() for t in raw.split(",") if t.strip()
+                                ]
                             elif tools_choice.startswith("Deny"):
-                                raw = text_input("Tools to deny (comma-separated):", default=", ".join(agent_defs[idx].get("tools_deny", [])))
-                                agent_defs[idx]["tools_deny"] = [t.strip() for t in raw.split(",") if t.strip()]
+                                raw = text_input(
+                                    "Tools to deny (comma-separated):",
+                                    default=", ".join(agent_defs[idx].get("tools_deny", [])),
+                                )
+                                agent_defs[idx]["tools_deny"] = [
+                                    t.strip() for t in raw.split(",") if t.strip()
+                                ]
                         except BackRequest:
                             break
 
@@ -888,18 +1085,25 @@ def run_initial_setup():
                         console.print("│")
                         console.print(f"│  [red]Agent '{new_id}' already exists.[/red]")
                     else:
-                        agent_defs.append({
-                            "id": new_id,
-                            "llm_provider_key": None,
-                            "llm_model": None,
-                            "channels": {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""},
-                            "plugins": [],
-                            "prompt_mode": "full",
-                            "system_prompt": "",
-                            "tools_profile": "full",
-                            "tools_allow": [],
-                            "tools_deny": [],
-                        })
+                        agent_defs.append(
+                            {
+                                "id": new_id,
+                                "llm_provider_key": None,
+                                "llm_model": None,
+                                "channels": {
+                                    "telegram": "",
+                                    "discord": "",
+                                    "slack_bot": "",
+                                    "slack_app": "",
+                                },
+                                "plugins": [],
+                                "prompt_mode": "full",
+                                "system_prompt": "",
+                                "tools_profile": "full",
+                                "tools_allow": [],
+                                "tools_deny": [],
+                            }
+                        )
                         _agent_submenu(len(agent_defs) - 1)
 
                 else:
@@ -917,11 +1121,14 @@ def run_initial_setup():
                 _render_configure_screen()
                 srv_label = f"enabled  port={acp_server.port}" if acp_server.enabled else "disabled"
                 agents_label = f"{len(acp_agents)} registered" if acp_agents else "none"
-                choice = select("ACP (Agent Communication Protocol):", [
-                    f"Server        {srv_label}",
-                    f"Remote Agents {agents_label}",
-                    "← Back",
-                ])
+                choice = select(
+                    "ACP (Agent Communication Protocol):",
+                    [
+                        f"Server        {srv_label}",
+                        f"Remote Agents {agents_label}",
+                        "← Back",
+                    ],
+                )
 
                 if choice.startswith("←"):
                     break
@@ -934,9 +1141,13 @@ def run_initial_setup():
                             acp_server.port = int(raw_port)
                         except ValueError:
                             pass
-                        raw_token = text_input("Auth token (leave blank for none):", default=acp_server.auth_token)
+                        raw_token = text_input(
+                            "Auth token (leave blank for none):", default=acp_server.auth_token
+                        )
                         acp_server.auth_token = raw_token.strip()
-                        raw_url = text_input("Public URL (leave blank to skip):", default=acp_server.public_url)
+                        raw_url = text_input(
+                            "Public URL (leave blank to skip):", default=acp_server.public_url
+                        )
                         acp_server.public_url = raw_url.strip()
                     else:
                         acp_server.enabled = False
@@ -945,7 +1156,9 @@ def run_initial_setup():
                     while True:
                         try:
                             _render_configure_screen()
-                            agent_choices = [f"{name}  —  {entry.base_url}" for name, entry in acp_agents.items()]
+                            agent_choices = [
+                                f"{name}  —  {entry.base_url}" for name, entry in acp_agents.items()
+                            ]
                             agent_choices += ["+ Add agent", "← Back"]
                             sub = select("Remote ACP Agents:", agent_choices)
 
@@ -958,12 +1171,22 @@ def run_initial_setup():
                                     continue
                                 if name in acp_agents:
                                     console.print("│")
-                                    console.print(f"│  [red]Agent '{name}' already registered.[/red]")
+                                    console.print(
+                                        f"│  [red]Agent '{name}' already registered.[/red]"
+                                    )
                                     continue
-                                base_url = text_input("Base URL (e.g. http://localhost:9000):").strip()
-                                agent_id = text_input("Remote agent ID (leave blank to auto-discover):", default="").strip()
-                                auth_token = text_input("Auth token (leave blank for none):", default="").strip()
-                                description = text_input("Description (shown to LLM):", default="").strip()
+                                base_url = text_input(
+                                    "Base URL (e.g. http://localhost:9000):"
+                                ).strip()
+                                agent_id = text_input(
+                                    "Remote agent ID (leave blank to auto-discover):", default=""
+                                ).strip()
+                                auth_token = text_input(
+                                    "Auth token (leave blank for none):", default=""
+                                ).strip()
+                                description = text_input(
+                                    "Description (shown to LLM):", default=""
+                                ).strip()
                                 acp_agents[name] = ACPAgentEntry(
                                     base_url=base_url,
                                     agent_id=agent_id,
@@ -972,7 +1195,9 @@ def run_initial_setup():
                                 )
 
                             else:
-                                matched = next((n for n in acp_agents if sub.startswith(n + "  ")), None)
+                                matched = next(
+                                    (n for n in acp_agents if sub.startswith(n + "  ")), None
+                                )
                                 if matched and confirm(f"Remove agent '{matched}'?"):
                                     del acp_agents[matched]
                         except BackRequest:
@@ -984,30 +1209,41 @@ def run_initial_setup():
     while True:
         try:
             _render_configure_screen()
-            stt_label    = f"{stt_provider_key} / {stt_model}" if stt_enabled else "disabled"
-            tts_label    = f"{tts_provider_key} / {tts_model}" if tts_enabled else "disabled"
-            image_label  = f"{image_provider_key} / {image_model}" if image_enabled else "disabled"
+            stt_label = f"{stt_provider_key} / {stt_model}" if stt_enabled else "disabled"
+            tts_label = f"{tts_provider_key} / {tts_model}" if tts_enabled else "disabled"
+            image_label = f"{image_provider_key} / {image_model}" if image_enabled else "disabled"
             agents_label = ", ".join(a["id"] for a in agent_defs)
-            hb_llm_label = f"  [{heartbeat_llm_provider_key} / {heartbeat_llm_model}]" if heartbeat_enabled and heartbeat_llm_provider_key else ""
-            hb_label     = f"enabled{hb_llm_label}" if heartbeat_enabled else "disabled"
+            hb_llm_label = (
+                f"  [{heartbeat_llm_provider_key} / {heartbeat_llm_model}]"
+                if heartbeat_enabled and heartbeat_llm_provider_key
+                else ""
+            )
+            hb_label = f"enabled{hb_llm_label}" if heartbeat_enabled else "disabled"
 
             acp_srv_label = f"server:{acp_server.port}" if acp_server.enabled else "disabled"
             acp_agents_count = len(acp_agents)
-            acp_label = f"{acp_srv_label}, {acp_agents_count} remote agent{'s' if acp_agents_count != 1 else ''}" if acp_server.enabled or acp_agents_count else "disabled"
+            acp_label = (
+                f"{acp_srv_label}, {acp_agents_count} remote agent{'s' if acp_agents_count != 1 else ''}"
+                if acp_server.enabled or acp_agents_count
+                else "disabled"
+            )
 
             search_label = search_provider_key if search_provider_key else "ddgs"
             mcp_label = f"{len(mcp_servers)} servers" if mcp_servers else "none"
-            choice = select("What would you like to configure?", [
-                f"STT           {stt_label}",
-                f"TTS           {tts_label}",
-                f"Image         {image_label}",
-                f"Search        {search_label}",
-                f"Heartbeat     {hb_label}",
-                f"Agents        {agents_label}",
-                f"ACP           {acp_label}",
-                f"MCP           {mcp_label}",
-                "Save & Exit",
-            ])
+            choice = select(
+                "What would you like to configure?",
+                [
+                    f"STT           {stt_label}",
+                    f"TTS           {tts_label}",
+                    f"Image         {image_label}",
+                    f"Search        {search_label}",
+                    f"Heartbeat     {hb_label}",
+                    f"Agents        {agents_label}",
+                    f"ACP           {acp_label}",
+                    f"MCP           {mcp_label}",
+                    "Save & Exit",
+                ],
+            )
 
             if choice.startswith("STT"):
                 if confirm("Enable Speech-to-Text (STT)?"):
@@ -1015,7 +1251,9 @@ def run_initial_setup():
                     stt_provider_key = get_provider_key(prov_name)
                     stt_model = _select_model("Pick the STT model:", STT_PROVIDERS[prov_name])
                     if _need_key(stt_provider_key, prov_name):
-                        api_keys_dict[stt_provider_key] = text_input(f"Enter API Key for {prov_name}:", is_password=True)
+                        api_keys_dict[stt_provider_key] = text_input(
+                            f"Enter API Key for {prov_name}:", is_password=True
+                        )
                     stt_enabled = True
                 else:
                     stt_enabled = False
@@ -1031,7 +1269,9 @@ def run_initial_setup():
                     if prov_name in VOICES:
                         tts_voice = select("Pick a voice:", VOICES[prov_name])
                     if _need_key(tts_provider_key, prov_name):
-                        api_keys_dict[tts_provider_key] = text_input(f"Enter API Key for {prov_name}:", is_password=True)
+                        api_keys_dict[tts_provider_key] = text_input(
+                            f"Enter API Key for {prov_name}:", is_password=True
+                        )
                     tts_enabled = True
                 else:
                     tts_enabled = False
@@ -1045,7 +1285,9 @@ def run_initial_setup():
                     image_provider_key = get_provider_key(prov_name)
                     image_model = _select_model("Pick the image model:", IMAGE_PROVIDERS[prov_name])
                     if _need_key(image_provider_key, prov_name):
-                        api_keys_dict[image_provider_key] = text_input(f"Enter API Key for {prov_name}:", is_password=True)
+                        api_keys_dict[image_provider_key] = text_input(
+                            f"Enter API Key for {prov_name}:", is_password=True
+                        )
                     image_enabled = True
                 else:
                     image_enabled = False
@@ -1056,21 +1298,31 @@ def run_initial_setup():
                 prov_display = select("Pick the search provider:", list(SEARCH_PROVIDERS.keys()))
                 search_provider_key = SEARCH_PROVIDERS[prov_display]
                 if search_provider_key in ("exa", "tavily"):
-                    search_api_key = text_input(f"Enter API key for {prov_display}:", is_password=True)
+                    search_api_key = text_input(
+                        f"Enter API key for {prov_display}:", is_password=True
+                    )
                 else:
                     search_api_key = ""
 
             elif choice.startswith("Heartbeat"):
-                heartbeat_enabled = confirm("Enable Heartbeat? (agent runs periodic self-maintenance tasks)")
+                heartbeat_enabled = confirm(
+                    "Enable Heartbeat? (agent runs periodic self-maintenance tasks)"
+                )
                 if heartbeat_enabled:
-                    hb_prov_name = select("Pick the LLM provider for Heartbeat:", list(LLM_PROVIDERS.keys()))
-                    hb_prov_key  = get_provider_key(hb_prov_name)
-                    heartbeat_llm_model = _select_model("Pick the Heartbeat LLM model:", LLM_PROVIDERS[hb_prov_name])
+                    hb_prov_name = select(
+                        "Pick the LLM provider for Heartbeat:", list(LLM_PROVIDERS.keys())
+                    )
+                    hb_prov_key = get_provider_key(hb_prov_name)
+                    heartbeat_llm_model = _select_model(
+                        "Pick the Heartbeat LLM model:", LLM_PROVIDERS[hb_prov_name]
+                    )
                     if hb_prov_name in OAUTH_PROVIDERS:
                         console.print("│")
                         console.print(f"│  [dim]ℹ  {OAUTH_NOTES[hb_prov_name]}[/dim]")
                     elif _need_key(hb_prov_key, hb_prov_name):
-                        api_keys_dict[hb_prov_key] = text_input(f"Enter API Key for {hb_prov_name}:", is_password=True)
+                        api_keys_dict[hb_prov_key] = text_input(
+                            f"Enter API Key for {hb_prov_name}:", is_password=True
+                        )
                     heartbeat_llm_provider_key = hb_prov_key
                 else:
                     heartbeat_llm_provider_key = ""
@@ -1094,7 +1346,9 @@ def run_initial_setup():
             elif choice.startswith("Save"):
                 if any(not a.get("llm_provider_key") for a in agent_defs):
                     console.print("│")
-                    console.print("│  [red]All agents must have an LLM configured.[/red] Go to Agents to set one.")
+                    console.print(
+                        "│  [red]All agents must have an LLM configured.[/red] Go to Agents to set one."
+                    )
                     continue
                 break
         except (BackRequest, NavigateBack):

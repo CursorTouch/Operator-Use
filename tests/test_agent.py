@@ -11,6 +11,7 @@ from operator_use.providers.events import LLMEvent, LLMEventType, ToolCall
 
 # --- _clean_content (static, pure) ---
 
+
 def test_clean_content_strips_think_block():
     result = Agent._clean_content("<think>internal reasoning</think> actual response")
     assert result == "actual response"
@@ -58,6 +59,7 @@ def test_clean_content_think_only_returns_placeholder():
 
 # --- Mock LLM helper ---
 
+
 def make_mock_llm(text_response="Hello from agent"):
     llm = MagicMock()
     llm.model_name = "mock-llm"
@@ -68,6 +70,7 @@ def make_mock_llm(text_response="Hello from agent"):
 
 
 # --- Agent._handle_reaction ---
+
 
 @pytest.mark.asyncio
 async def test_handle_reaction_adds_emoji(tmp_path):
@@ -90,7 +93,7 @@ async def test_handle_reaction_adds_emoji(tmp_path):
             "_reaction_removed_emojis": [],
             "_reaction_bot_message_id": 999,
             "user_id": "user1",
-        }
+        },
     )
     await agent._handle_reaction(reaction_msg)
 
@@ -108,10 +111,13 @@ async def test_handle_reaction_removes_emoji(tmp_path):
 
     session_id = "telegram:456"
     session = agent.sessions.get_or_create(session_id)
-    ai_msg = AIMessage(content="response", metadata={
-        "message_id": 100,
-        "reactions": [{"emojis": ["👍"], "user_id": "user1", "timestamp": "2026-01-01"}]
-    })
+    ai_msg = AIMessage(
+        content="response",
+        metadata={
+            "message_id": 100,
+            "reactions": [{"emojis": ["👍"], "user_id": "user1", "timestamp": "2026-01-01"}],
+        },
+    )
     session.add_message(ai_msg)
     agent.sessions.save(session)
 
@@ -125,7 +131,7 @@ async def test_handle_reaction_removes_emoji(tmp_path):
             "_reaction_removed_emojis": ["👍"],
             "_reaction_bot_message_id": 100,
             "user_id": "user1",
-        }
+        },
     )
     await agent._handle_reaction(reaction_msg)
 
@@ -136,6 +142,7 @@ async def test_handle_reaction_removes_emoji(tmp_path):
 
 
 # --- Agent.run with mocked LLM ---
+
 
 @pytest.mark.asyncio
 async def test_agent_run_returns_ai_message(tmp_path):
@@ -170,7 +177,7 @@ async def test_agent_run_with_tool_call_then_text(tmp_path):
 
     tool_event = LLMEvent(
         type=LLMEventType.TOOL_CALL,
-        tool_call=ToolCall(id="t1", name="echo", params={"message": "test"})
+        tool_call=ToolCall(id="t1", name="echo", params={"message": "test"}),
     )
     text_event = LLMEvent(type=LLMEventType.TEXT, content="Done!")
     llm.ainvoke = AsyncMock(side_effect=[tool_event, text_event])
@@ -187,13 +194,16 @@ async def test_agent_run_with_tool_call_then_text(tmp_path):
     class EchoTool(Tool):
         def __init__(self):
             super().__init__(name="echo", description="echo", model=EchoParams)
+
         def __call__(self, fn):
             self.function = fn
             return self
 
     et = EchoTool()
+
     @et
-    def _echo(message: str, **kwargs): return message
+    def _echo(message: str, **kwargs):
+        return message
 
     agent.tool_register.register(et)
 
@@ -209,9 +219,9 @@ async def test_agent_run_max_iterations_raises(tmp_path):
     llm.astream = None
 
     from operator_use.providers.events import LLMEvent, LLMEventType, ToolCall
+
     tool_event = LLMEvent(
-        type=LLMEventType.TOOL_CALL,
-        tool_call=ToolCall(id="t1", name="nonexistent_tool", params={})
+        type=LLMEventType.TOOL_CALL, tool_call=ToolCall(id="t1", name="nonexistent_tool", params={})
     )
     llm.ainvoke = AsyncMock(return_value=tool_event)
 
@@ -231,10 +241,12 @@ async def test_agent_run_hooks_fired(tmp_path):
     from operator_use.agent.hooks.events import HookEvent
 
     @agent.hooks.on(HookEvent.BEFORE_AGENT_START)
-    async def on_start(ctx): fired.append("start")
+    async def on_start(ctx):
+        fired.append("start")
 
     @agent.hooks.on(HookEvent.AFTER_AGENT_END)
-    async def on_end(ctx): fired.append("end")
+    async def on_end(ctx):
+        fired.append("end")
 
     await agent.run(message=HumanMessage(content="hi"), session_id="hook:session")
     assert "start" in fired

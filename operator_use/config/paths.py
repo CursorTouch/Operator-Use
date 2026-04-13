@@ -8,6 +8,7 @@ def get_userdata_dir() -> Path:
     """Return the user data directory: ~/.operator-use"""
     return Path.home() / _DEFAULT_BASE_DIR
 
+
 def get_config_file() -> Path:
     """Return the configuration file path: ~/.operator-use/config.json"""
     return get_userdata_dir() / _CONFIG_FILE_NAME

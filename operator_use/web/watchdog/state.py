@@ -4,7 +4,11 @@ import asyncio
 import logging
 from time import monotonic
 
-from operator_use.web.browser.events import NavigationSettledEvent, NavigationStartedEvent, StateInvalidatedEvent
+from operator_use.web.browser.events import (
+    NavigationSettledEvent,
+    NavigationStartedEvent,
+    StateInvalidatedEvent,
+)
 from operator_use.web.browser.views import BrowserState
 from operator_use.web.dom import DOM
 from operator_use.web.watchdog.base import BaseWatchdog
@@ -30,16 +34,16 @@ class StateWatchdog(BaseWatchdog):
     def _on_navigation_started(self, payload: NavigationStartedEvent) -> None:
         self._dirty = True
         self._cached_state = None
-        logger.debug('StateWatchdog marked state dirty on navigation start: %s', payload)
+        logger.debug("StateWatchdog marked state dirty on navigation start: %s", payload)
 
     def _on_navigation_settled(self, payload: NavigationSettledEvent) -> None:
         self._dirty = True
         self._last_stable_at = monotonic()
-        logger.debug('StateWatchdog saw navigation settle: %s', payload)
+        logger.debug("StateWatchdog saw navigation settle: %s", payload)
 
     def _on_state_invalidated(self, payload: StateInvalidatedEvent) -> None:
         self._dirty = True
-        logger.debug('StateWatchdog invalidated state: %s', payload)
+        logger.debug("StateWatchdog invalidated state: %s", payload)
 
     async def get_state(self, use_vision: bool = False) -> BrowserState | None:
         if self.session._client is None or self.session._get_current_session_id() is None:
@@ -60,9 +64,11 @@ class StateWatchdog(BaseWatchdog):
             return None
 
         if self.session.is_navigation_pending():
-            await self.session._wait_for_page(timeout=self.session.config.maximum_wait_page_load_time)
+            await self.session._wait_for_page(
+                timeout=self.session.config.maximum_wait_page_load_time
+            )
             if self.session.is_navigation_pending():
-                logger.debug('StateWatchdog skipped capture because navigation is still pending')
+                logger.debug("StateWatchdog skipped capture because navigation is still pending")
                 return None
 
         min_wait = self.session.config.minimum_wait_page_load_time

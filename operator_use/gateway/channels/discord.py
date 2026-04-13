@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 MAX_MESSAGE_LEN = 2000  # Discord message character limit
 
 
-
 def _split_message(content: str, max_len: int = MAX_MESSAGE_LEN) -> list[str]:
     """Split content into chunks within max_len, preferring line breaks."""
     if not content:
@@ -69,9 +68,7 @@ class DiscordChannel(BaseChannel):
         self._webhook_site: Optional[aiohttp.web.TCPSite] = None
         self._webhook_stop = asyncio.Event()
         media_dir = self._cfg("media_dir")
-        self._media_dir = (
-            Path(media_dir) if media_dir else Path.home() / ".operator" / "media"
-        )
+        self._media_dir = Path(media_dir) if media_dir else Path.home() / ".operator" / "media"
 
     def _cfg(self, key: str, default=None):
         """Get config value from DiscordConfig dataclass."""
@@ -184,9 +181,7 @@ class DiscordChannel(BaseChannel):
         webhook_port = int(self._cfg("webhook_port") or 8080)
 
         if not webhook_url:
-            logger.warning(
-                "Discord channel: use_webhook=True but webhook_url not set, skipping"
-            )
+            logger.warning("Discord channel: use_webhook=True but webhook_url not set, skipping")
             return
 
         # Verify Discord public key for security
@@ -213,7 +208,9 @@ class DiscordChannel(BaseChannel):
 
                 # Handle MESSAGE_CREATE events
                 if data.get("type") == 2:  # APPLICATION_COMMAND
-                    return aiohttp.web.json_response({"type": 4, "data": {"content": "Command received"}})
+                    return aiohttp.web.json_response(
+                        {"type": 4, "data": {"content": "Command received"}}
+                    )
 
             except Exception as e:
                 logger.error(f"Discord webhook error: {e}")
@@ -226,9 +223,7 @@ class DiscordChannel(BaseChannel):
         app.router.add_post(webhook_path, handle_discord_interaction)
         self._webhook_runner = aiohttp.web.AppRunner(app)
         await self._webhook_runner.setup()
-        self._webhook_site = aiohttp.web.TCPSite(
-            self._webhook_runner, "0.0.0.0", webhook_port
-        )
+        self._webhook_site = aiohttp.web.TCPSite(self._webhook_runner, "0.0.0.0", webhook_port)
         await self._webhook_site.start()
         logger.info(f"Discord webhook server listening on port {webhook_port}")
 
@@ -342,7 +337,11 @@ class DiscordChannel(BaseChannel):
         media_types: list[str] | str,
     ) -> tuple[str, list[ContentPart]]:
         """Process media: load images, transcribe audio. Returns (content, parts)."""
-        types = media_types if isinstance(media_types, list) else [media_types] * max(len(media_paths), 1)
+        types = (
+            media_types
+            if isinstance(media_types, list)
+            else [media_types] * max(len(media_paths), 1)
+        )
         parts: list[TextPart | ImagePart | AudioPart | FilePart] = []
         result_lines: list[str] = []
 
@@ -383,7 +382,11 @@ class DiscordChannel(BaseChannel):
                 result_lines.append(line_stripped)
                 parts.append(TextPart(content=line_stripped))
 
-        content_str = "\n".join(result_lines) if result_lines else ("(image)" if any(isinstance(p, ImagePart) for p in parts) else "[empty message]")
+        content_str = (
+            "\n".join(result_lines)
+            if result_lines
+            else ("(image)" if any(isinstance(p, ImagePart) for p in parts) else "[empty message]")
+        )
         return content_str, parts
 
     @staticmethod
@@ -437,13 +440,17 @@ class DiscordChannel(BaseChannel):
             content = text_from_parts(message.parts) or "…"
             stream_state = self._stream_state.get(channel_id)
 
-            if phase == StreamPhase.START and (not stream_state or stream_state.get("message_id") is None):
+            if phase == StreamPhase.START and (
+                not stream_state or stream_state.get("message_id") is None
+            ):
                 try:
                     # Get reference message if replying
                     reference = None
                     if message.reply:
                         reply_to_message = self._cfg("reply_to_message", True)
-                        reply_msg_id = message.metadata.get("message_id") if reply_to_message else None
+                        reply_msg_id = (
+                            message.metadata.get("message_id") if reply_to_message else None
+                        )
                         if reply_msg_id:
                             try:
                                 reference = await channel.fetch_message(int(reply_msg_id))
@@ -483,9 +490,13 @@ class DiscordChannel(BaseChannel):
                 now = asyncio.get_running_loop().time()
                 long_final = phase == StreamPhase.END and len(content) > MAX_MESSAGE_LEN
 
-                if not long_final and (phase == StreamPhase.END or (now - stream_state.get("last_edit_time", 0) >= 1.0)):
+                if not long_final and (
+                    phase == StreamPhase.END or (now - stream_state.get("last_edit_time", 0) >= 1.0)
+                ):
                     try:
-                        display = content[:MAX_MESSAGE_LEN] if len(content) > MAX_MESSAGE_LEN else content
+                        display = (
+                            content[:MAX_MESSAGE_LEN] if len(content) > MAX_MESSAGE_LEN else content
+                        )
                         msg = await channel.fetch_message(msg_id)
                         await msg.edit(content=display)
                         stream_state["last_edit_time"] = now
@@ -537,7 +548,9 @@ class DiscordChannel(BaseChannel):
         for media_path in media_paths:
             try:
                 with open(media_path, "rb") as f:
-                    sent = await channel.send(file=discord.File(f, filename=Path(media_path).name), reference=reference)
+                    sent = await channel.send(
+                        file=discord.File(f, filename=Path(media_path).name), reference=reference
+                    )
                     sent_message_id = sent.id
                     self._last_sent_message_id[channel_id] = sent.id
             except Exception as e:

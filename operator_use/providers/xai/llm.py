@@ -20,11 +20,11 @@ class ChatXai(ChatOpenAI):
     # Available models with context windows (tokens)
     # Source: https://docs.x.ai/docs/models
     MODELS = {
-        "grok-4": 2000000,          # Grok 4 (flagship, reasoning)
-        "grok-3": 2000000,          # Grok 3
-        "grok-3-mini": 2000000,     # Grok 3 Mini (reasoning)
-        "grok-3-fast": 2000000,     # Grok 3 Fast
-        "grok-3-mini-fast": 2000000, # Grok 3 Mini Fast (reasoning)
+        "grok-4": 2000000,  # Grok 4 (flagship, reasoning)
+        "grok-3": 2000000,  # Grok 3
+        "grok-3-mini": 2000000,  # Grok 3 Mini (reasoning)
+        "grok-3-fast": 2000000,  # Grok 3 Fast
+        "grok-3-mini-fast": 2000000,  # Grok 3 Mini Fast (reasoning)
     }
 
     # Models that support chain-of-thought reasoning

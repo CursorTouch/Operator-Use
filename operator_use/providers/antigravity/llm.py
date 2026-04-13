@@ -1,4 +1,4 @@
-﻿"""
+"""
 Antigravity LLM provider.
 
 Antigravity is Google's IDE that provides access to Gemini and Claude models
@@ -67,7 +67,9 @@ def _antigravity_headers(access_token: str) -> dict:
         "Content-Type": "application/json",
         "User-Agent": f"antigravity/{_ANTIGRAVITY_VERSION} {'windows/amd64' if os.name == 'nt' else 'darwin/arm64'}",
         "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-        "Client-Metadata": json.dumps({"ideType": "ANTIGRAVITY", "platform": platform, "pluginType": "GEMINI"}),
+        "Client-Metadata": json.dumps(
+            {"ideType": "ANTIGRAVITY", "platform": platform, "pluginType": "GEMINI"}
+        ),
         "accept": "text/event-stream",
     }
 
@@ -75,6 +77,7 @@ def _antigravity_headers(access_token: str) -> dict:
 # ---------------------------------------------------------------------------
 # Message / tool conversion  (Google Generative AI format)
 # ---------------------------------------------------------------------------
+
 
 def _convert_messages(messages: List[BaseMessage]) -> tuple[Optional[str], list]:
     """Return (system_instruction_text, contents_list) in Gemini format."""
@@ -111,10 +114,19 @@ def _convert_messages(messages: List[BaseMessage]) -> tuple[Optional[str], list]
                 fc_part["thoughtSignature"] = msg.thinking_signature
             model_parts.append(fc_part)
             raw_contents.append({"role": "model", "parts": model_parts})
-            raw_contents.append({
-                "role": "user",
-                "parts": [{"functionResponse": {"name": msg.name, "response": {"result": msg.content or ""}}}],
-            })
+            raw_contents.append(
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "functionResponse": {
+                                "name": msg.name,
+                                "response": {"result": msg.content or ""},
+                            }
+                        }
+                    ],
+                }
+            )
 
     # Merge consecutive same-role contents (Gemini requires strict alternation)
     contents: list = []
@@ -127,7 +139,15 @@ def _convert_messages(messages: List[BaseMessage]) -> tuple[Optional[str], list]
     return system_instruction, contents
 
 
-_UNSUPPORTED_SCHEMA_KEYS = {"examples", "default", "additionalProperties", "$schema", "$defs", "const"}
+_UNSUPPORTED_SCHEMA_KEYS = {
+    "examples",
+    "default",
+    "additionalProperties",
+    "$schema",
+    "$defs",
+    "const",
+}
+
 
 def _clean_schema(obj):
     """Recursively remove keys unsupported by the Gemini function calling schema."""
@@ -139,19 +159,28 @@ def _clean_schema(obj):
 
 
 def _convert_tools(tools: List[Tool]) -> list:
-    return [{
-        "functionDeclarations": [
-            {
-                "name": t.json_schema["name"],
-                "description": t.json_schema.get("description", ""),
-                "parameters": _clean_schema(t.json_schema.get("parameters", {})),
-            }
-            for t in tools
-        ]
-    }]
+    return [
+        {
+            "functionDeclarations": [
+                {
+                    "name": t.json_schema["name"],
+                    "description": t.json_schema.get("description", ""),
+                    "parameters": _clean_schema(t.json_schema.get("parameters", {})),
+                }
+                for t in tools
+            ]
+        }
+    ]
 
 
-def _build_body(model: str, project: str, system: Optional[str], contents: list, tools: list, generation_config: dict) -> dict:
+def _build_body(
+    model: str,
+    project: str,
+    system: Optional[str],
+    contents: list,
+    tools: list,
+    generation_config: dict,
+) -> dict:
     inner: dict = {"contents": contents}
     if system:
         inner["systemInstruction"] = {"parts": [{"text": system}]}
@@ -167,6 +196,7 @@ def _build_body(model: str, project: str, system: Optional[str], contents: list,
 # SSE response parsing
 # ---------------------------------------------------------------------------
 
+
 def _parse_sse_line(line: str) -> Optional[dict]:
     if line.startswith("data: "):
         data = line[6:].strip()
@@ -178,7 +208,9 @@ def _parse_sse_line(line: str) -> Optional[dict]:
     return None
 
 
-def _extract_from_chunk(chunk: dict) -> tuple[str, Optional[str], Optional[dict], Optional[str], Optional[dict]]:
+def _extract_from_chunk(
+    chunk: dict,
+) -> tuple[str, Optional[str], Optional[dict], Optional[str], Optional[dict]]:
     """Return (text, thinking_text, function_call, thought_signature, usage)."""
     # API wraps the response in a "response" key
     if "response" in chunk:
@@ -248,12 +280,18 @@ def _extract_final(chunks: list[dict]) -> LLMEvent:
                 args = {}
         # Generate a synthetic call ID
         import uuid
+
         call_id = f"call_{uuid.uuid4().hex[:8]}"
         return LLMEvent(
             type=LLMEventType.TOOL_CALL,
             tool_call=ToolCall(id=call_id, name=name, params=args),
             usage=usage,
-            thinking=Thinking(content="".join(thinking_parts) if thinking_parts else "", signature=thought_signature) if thinking_parts or thought_signature else None,
+            thinking=Thinking(
+                content="".join(thinking_parts) if thinking_parts else "",
+                signature=thought_signature,
+            )
+            if thinking_parts or thought_signature
+            else None,
         )
 
     thinking_obj = None
@@ -271,6 +309,7 @@ def _extract_final(chunks: list[dict]) -> LLMEvent:
 # ---------------------------------------------------------------------------
 # ChatAntigravity
 # ---------------------------------------------------------------------------
+
 
 class ChatAntigravity(BaseChatLLM):
     """
@@ -314,22 +353,23 @@ class ChatAntigravity(BaseChatLLM):
             self._auth = load_auth()
 
         if self._auth is None:
-            raise RuntimeError(
-                "No Antigravity credentials found. "
-                "Run: operator auth antigravity"
-            )
+            raise RuntimeError("No Antigravity credentials found. Run: operator auth antigravity")
 
         if self._auth.get("expires_at", 0) < time.time() + 60:
             logger.debug("Antigravity token expired, refreshing...")
             result = refresh_token(self._auth["refresh_token"])
             if result:
-                self._auth.update({
-                    "access_token": result["access_token"],
-                    "expires_at": time.time() + result.get("expires_in", 3600),
-                })
+                self._auth.update(
+                    {
+                        "access_token": result["access_token"],
+                        "expires_at": time.time() + result.get("expires_in", 3600),
+                    }
+                )
                 save_auth(self._auth)
             else:
-                raise RuntimeError("Failed to refresh Antigravity token. Run: operator auth antigravity")
+                raise RuntimeError(
+                    "Failed to refresh Antigravity token. Run: operator auth antigravity"
+                )
 
         return self._auth["access_token"]
 
@@ -341,22 +381,23 @@ class ChatAntigravity(BaseChatLLM):
             self._auth = load_auth()
 
         if self._auth is None:
-            raise RuntimeError(
-                "No Antigravity credentials found. "
-                "Run: operator auth antigravity"
-            )
+            raise RuntimeError("No Antigravity credentials found. Run: operator auth antigravity")
 
         if self._auth.get("expires_at", 0) < time.time() + 60:
             logger.debug("Antigravity token expired, refreshing async...")
             result = await async_refresh_token(self._auth["refresh_token"])
             if result:
-                self._auth.update({
-                    "access_token": result["access_token"],
-                    "expires_at": time.time() + result.get("expires_in", 3600),
-                })
+                self._auth.update(
+                    {
+                        "access_token": result["access_token"],
+                        "expires_at": time.time() + result.get("expires_in", 3600),
+                    }
+                )
                 save_auth(self._auth)
             else:
-                raise RuntimeError("Failed to refresh Antigravity token. Run: operator auth antigravity")
+                raise RuntimeError(
+                    "Failed to refresh Antigravity token. Run: operator auth antigravity"
+                )
 
         return self._auth["access_token"]
 
@@ -372,19 +413,33 @@ class ChatAntigravity(BaseChatLLM):
         gen_cfg: dict = {}
         if self._temperature is not None:
             gen_cfg["temperature"] = self._temperature
-        project = (self._auth or {}).get("project_id", DEFAULT_PROJECT_ID) if not self._static_token else DEFAULT_PROJECT_ID
-        body = _build_body(self._model, project, system, contents, _convert_tools(tools) if tools else [], gen_cfg)
+        project = (
+            (self._auth or {}).get("project_id", DEFAULT_PROJECT_ID)
+            if not self._static_token
+            else DEFAULT_PROJECT_ID
+        )
+        body = _build_body(
+            self._model, project, system, contents, _convert_tools(tools) if tools else [], gen_cfg
+        )
         return headers, body
 
-    async def _async_prepare(self, messages: List[BaseMessage], tools: List[Tool]) -> tuple[dict, dict]:
+    async def _async_prepare(
+        self, messages: List[BaseMessage], tools: List[Tool]
+    ) -> tuple[dict, dict]:
         token = await self._async_get_token()
         headers = _antigravity_headers(token)
         system, contents = _convert_messages(messages)
         gen_cfg: dict = {}
         if self._temperature is not None:
             gen_cfg["temperature"] = self._temperature
-        project = (self._auth or {}).get("project_id", DEFAULT_PROJECT_ID) if not self._static_token else DEFAULT_PROJECT_ID
-        body = _build_body(self._model, project, system, contents, _convert_tools(tools) if tools else [], gen_cfg)
+        project = (
+            (self._auth or {}).get("project_id", DEFAULT_PROJECT_ID)
+            if not self._static_token
+            else DEFAULT_PROJECT_ID
+        )
+        body = _build_body(
+            self._model, project, system, contents, _convert_tools(tools) if tools else [], gen_cfg
+        )
         return headers, body
 
     # ------------------------------------------------------------------
@@ -399,7 +454,13 @@ class ChatAntigravity(BaseChatLLM):
     def provider(self) -> str:
         return "antigravity"
 
-    def invoke(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> LLMEvent:
+    def invoke(
+        self,
+        messages: List[BaseMessage],
+        tools: List[Tool] = [],
+        structured_output=None,
+        json_mode: bool = False,
+    ) -> LLMEvent:
         headers, body = self._prepare(messages, tools)
         chunks: list[dict] = []
 
@@ -419,12 +480,20 @@ class ChatAntigravity(BaseChatLLM):
 
         return _extract_final(chunks)
 
-    async def ainvoke(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> LLMEvent:
+    async def ainvoke(
+        self,
+        messages: List[BaseMessage],
+        tools: List[Tool] = [],
+        structured_output=None,
+        json_mode: bool = False,
+    ) -> LLMEvent:
         headers, body = await self._async_prepare(messages, tools)
         chunks: list[dict] = []
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            async with client.stream("POST", self._endpoint + _STREAM, headers=headers, json=body) as r:
+            async with client.stream(
+                "POST", self._endpoint + _STREAM, headers=headers, json=body
+            ) as r:
                 if r.status_code >= 400:
                     await r.aread()
                     raise httpx.HTTPStatusError(
@@ -439,7 +508,13 @@ class ChatAntigravity(BaseChatLLM):
 
         return _extract_final(chunks)
 
-    def stream(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> Iterator[LLMStreamEvent]:
+    def stream(
+        self,
+        messages: List[BaseMessage],
+        tools: List[Tool] = [],
+        structured_output=None,
+        json_mode: bool = False,
+    ) -> Iterator[LLMStreamEvent]:
         headers, body = self._prepare(messages, tools)
 
         text_started = False
@@ -453,7 +528,9 @@ class ChatAntigravity(BaseChatLLM):
         with httpx.Client(timeout=self._timeout) as client:
             with client.stream("POST", self._endpoint + _STREAM, headers=headers, json=body) as r:
                 if r.status_code >= 400:
-                    logger.error(f"Antigravity stream 400+ error: {r.status_code}\n{r.read().decode()}")
+                    logger.error(
+                        f"Antigravity stream 400+ error: {r.status_code}\n{r.read().decode()}"
+                    )
                 for line in r.iter_lines():
                     chunk = _parse_sse_line(line)
                     if not chunk:
@@ -490,6 +567,7 @@ class ChatAntigravity(BaseChatLLM):
                             except json.JSONDecodeError:
                                 tool_args = {}
                         import uuid
+
                         tool_call_id = f"call_{uuid.uuid4().hex[:8]}"
 
         if think_started:
@@ -501,10 +579,18 @@ class ChatAntigravity(BaseChatLLM):
                 type=LLMStreamEventType.TOOL_CALL,
                 tool_call=ToolCall(id=tool_call_id, name=tool_name, params=tool_args),
                 usage=usage,
-                thinking=Thinking(content="", signature=thought_signature) if thought_signature else None,
+                thinking=Thinking(content="", signature=thought_signature)
+                if thought_signature
+                else None,
             )
 
-    async def astream(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> AsyncIterator[LLMStreamEvent]:
+    async def astream(
+        self,
+        messages: List[BaseMessage],
+        tools: List[Tool] = [],
+        structured_output=None,
+        json_mode: bool = False,
+    ) -> AsyncIterator[LLMStreamEvent]:
         headers, body = await self._async_prepare(messages, tools)
 
         text_started = False
@@ -516,9 +602,13 @@ class ChatAntigravity(BaseChatLLM):
         usage = None
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            async with client.stream("POST", self._endpoint + _STREAM, headers=headers, json=body) as r:
+            async with client.stream(
+                "POST", self._endpoint + _STREAM, headers=headers, json=body
+            ) as r:
                 if r.status_code >= 400:
-                    logger.error(f"Antigravity astream 400+ error: {r.status_code}\n{(await r.aread()).decode()}")
+                    logger.error(
+                        f"Antigravity astream 400+ error: {r.status_code}\n{(await r.aread()).decode()}"
+                    )
                 async for line in r.aiter_lines():
                     chunk = _parse_sse_line(line)
                     if not chunk:
@@ -555,6 +645,7 @@ class ChatAntigravity(BaseChatLLM):
                             except json.JSONDecodeError:
                                 tool_args = {}
                         import uuid
+
                         tool_call_id = f"call_{uuid.uuid4().hex[:8]}"
 
         if think_started:
@@ -566,7 +657,9 @@ class ChatAntigravity(BaseChatLLM):
                 type=LLMStreamEventType.TOOL_CALL,
                 tool_call=ToolCall(id=tool_call_id, name=tool_name, params=tool_args),
                 usage=usage,
-                thinking=Thinking(content="", signature=thought_signature) if thought_signature else None,
+                thinking=Thinking(content="", signature=thought_signature)
+                if thought_signature
+                else None,
             )
 
     def get_metadata(self) -> Metadata:

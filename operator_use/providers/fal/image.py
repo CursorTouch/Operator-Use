@@ -123,7 +123,9 @@ class ImageFal(BaseImage):
             }
         return endpoint, args
 
-    def generate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    def generate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         try:
             import fal_client
         except ImportError:
@@ -135,7 +137,9 @@ class ImageFal(BaseImage):
         urllib.request.urlretrieve(url, output_path)
         logger.debug(f"[ImageFal] Image saved to {output_path}")
 
-    async def agenerate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    async def agenerate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         try:
             import fal_client
         except ImportError:

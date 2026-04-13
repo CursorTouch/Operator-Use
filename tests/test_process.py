@@ -10,6 +10,7 @@ from operator_use.process.service import ProcessStore
 
 # --- ProcessSession (view) ---
 
+
 def make_mock_session(running: bool = True) -> ProcessSession:
     proc = MagicMock()
     proc.returncode = None if running else 0
@@ -74,6 +75,7 @@ def test_session_has_started_at():
 
 
 # --- ProcessStore ---
+
 
 def test_process_store_get_missing():
     store = ProcessStore()

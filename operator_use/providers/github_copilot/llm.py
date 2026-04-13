@@ -47,6 +47,7 @@ CHAT_PATH = "/chat/completions"
 # Message conversion
 # ---------------------------------------------------------------------------
 
+
 def _convert_messages(messages: List[BaseMessage]) -> list:
     result = []
     for msg in messages:
@@ -59,28 +60,36 @@ def _convert_messages(messages: List[BaseMessage]) -> list:
             if msg.content:
                 parts.append({"type": "text", "text": msg.content})
             for b64 in msg.convert_images(format="base64"):
-                parts.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{msg.mime_type};base64,{b64}"},
-                })
+                parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{msg.mime_type};base64,{b64}"},
+                    }
+                )
             result.append({"role": "user", "content": parts})
         elif isinstance(msg, AIMessage):
             result.append({"role": "assistant", "content": msg.content or ""})
         elif isinstance(msg, ToolMessage):
-            result.append({
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [{
-                    "id": msg.id,
-                    "type": "function",
-                    "function": {"name": msg.name, "arguments": json.dumps(msg.params)},
-                }],
-            })
-            result.append({
-                "role": "tool",
-                "tool_call_id": msg.id,
-                "content": msg.content or "",
-            })
+            result.append(
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": msg.id,
+                            "type": "function",
+                            "function": {"name": msg.name, "arguments": json.dumps(msg.params)},
+                        }
+                    ],
+                }
+            )
+            result.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": msg.id,
+                    "content": msg.content or "",
+                }
+            )
     return result
 
 
@@ -101,6 +110,7 @@ def _convert_tools(tools: List[Tool]) -> list:
 # ---------------------------------------------------------------------------
 # SSE parsing
 # ---------------------------------------------------------------------------
+
 
 def _parse_sse(line: str) -> Optional[dict]:
     if line.startswith("data: "):
@@ -163,6 +173,7 @@ def _extract_final(chunks: list[dict]) -> LLMEvent:
 # ChatGitHubCopilot
 # ---------------------------------------------------------------------------
 
+
 class ChatGitHubCopilot(BaseChatLLM):
     """
     LLM provider for GitHub Copilot via the Chat Completions API.
@@ -185,15 +196,9 @@ class ChatGitHubCopilot(BaseChatLLM):
         self._temperature = temperature
         self._base_url = (base_url or COPILOT_BASE_URL).rstrip("/")
         # Static token overrides OAuth flow
-        self._static_token = (
-            api_key
-            or os.environ.get("GITHUB_COPILOT_TOKEN")
-        )
+        self._static_token = api_key or os.environ.get("GITHUB_COPILOT_TOKEN")
         # GitHub token for exchanging to Copilot token
-        self._env_github_token = (
-            os.environ.get("GH_TOKEN")
-            or os.environ.get("GITHUB_TOKEN")
-        )
+        self._env_github_token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
         self._auth: Optional[dict] = None
 
     # ------------------------------------------------------------------
@@ -205,7 +210,9 @@ class ChatGitHubCopilot(BaseChatLLM):
             return self._static_token
 
         from operator_use.providers.github_copilot.auth import (
-            load_auth, get_copilot_token, _exchange_copilot_token
+            load_auth,
+            get_copilot_token,
+            _exchange_copilot_token,
         )
 
         # Try env GitHub token first (no stored auth needed)
@@ -237,7 +244,9 @@ class ChatGitHubCopilot(BaseChatLLM):
             return self._static_token
 
         from operator_use.providers.github_copilot.auth import (
-            load_auth, async_get_copilot_token, _async_exchange_copilot_token
+            load_auth,
+            async_get_copilot_token,
+            _async_exchange_copilot_token,
         )
 
         if self._env_github_token and self._auth is None:
@@ -300,13 +309,24 @@ class ChatGitHubCopilot(BaseChatLLM):
     def provider(self) -> str:
         return "github_copilot"
 
-    def invoke(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> LLMEvent:
+    def invoke(
+        self,
+        messages: List[BaseMessage],
+        tools: List[Tool] = [],
+        structured_output=None,
+        json_mode: bool = False,
+    ) -> LLMEvent:
         token = self._get_token()
         url = self._base_url + CHAT_PATH
         chunks: list[dict] = []
 
         with httpx.Client(timeout=self._timeout) as client:
-            with client.stream("POST", url, headers=self._headers(token), json=self._body(messages, tools, stream=True)) as response:
+            with client.stream(
+                "POST",
+                url,
+                headers=self._headers(token),
+                json=self._body(messages, tools, stream=True),
+            ) as response:
                 response.raise_for_status()
                 for line in response.iter_lines():
                     chunk = _parse_sse(line)
@@ -315,13 +335,24 @@ class ChatGitHubCopilot(BaseChatLLM):
 
         return _extract_final(chunks)
 
-    async def ainvoke(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> LLMEvent:
+    async def ainvoke(
+        self,
+        messages: List[BaseMessage],
+        tools: List[Tool] = [],
+        structured_output=None,
+        json_mode: bool = False,
+    ) -> LLMEvent:
         token = await self._async_get_token()
         url = self._base_url + CHAT_PATH
         chunks: list[dict] = []
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            async with client.stream("POST", url, headers=self._headers(token), json=self._body(messages, tools, stream=True)) as response:
+            async with client.stream(
+                "POST",
+                url,
+                headers=self._headers(token),
+                json=self._body(messages, tools, stream=True),
+            ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     chunk = _parse_sse(line)
@@ -330,7 +361,13 @@ class ChatGitHubCopilot(BaseChatLLM):
 
         return _extract_final(chunks)
 
-    def stream(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> Iterator[LLMStreamEvent]:
+    def stream(
+        self,
+        messages: List[BaseMessage],
+        tools: List[Tool] = [],
+        structured_output=None,
+        json_mode: bool = False,
+    ) -> Iterator[LLMStreamEvent]:
         token = self._get_token()
         url = self._base_url + CHAT_PATH
 
@@ -341,7 +378,12 @@ class ChatGitHubCopilot(BaseChatLLM):
         usage = None
 
         with httpx.Client(timeout=self._timeout) as client:
-            with client.stream("POST", url, headers=self._headers(token), json=self._body(messages, tools, stream=True)) as response:
+            with client.stream(
+                "POST",
+                url,
+                headers=self._headers(token),
+                json=self._body(messages, tools, stream=True),
+            ) as response:
                 response.raise_for_status()
                 for line in response.iter_lines():
                     chunk = _parse_sse(line)
@@ -354,7 +396,9 @@ class ChatGitHubCopilot(BaseChatLLM):
                             if not text_started:
                                 text_started = True
                                 yield LLMStreamEvent(type=LLMStreamEventType.TEXT_START)
-                            yield LLMStreamEvent(type=LLMStreamEventType.TEXT_DELTA, content=content)
+                            yield LLMStreamEvent(
+                                type=LLMStreamEventType.TEXT_DELTA, content=content
+                            )
                         for tc in delta.get("tool_calls", []):
                             if tc.get("id"):
                                 tool_call_id = tc["id"]
@@ -385,7 +429,13 @@ class ChatGitHubCopilot(BaseChatLLM):
                 usage=usage,
             )
 
-    async def astream(self, messages: List[BaseMessage], tools: List[Tool] = [], structured_output=None, json_mode: bool = False) -> AsyncIterator[LLMStreamEvent]:
+    async def astream(
+        self,
+        messages: List[BaseMessage],
+        tools: List[Tool] = [],
+        structured_output=None,
+        json_mode: bool = False,
+    ) -> AsyncIterator[LLMStreamEvent]:
         token = await self._async_get_token()
         url = self._base_url + CHAT_PATH
 
@@ -396,7 +446,12 @@ class ChatGitHubCopilot(BaseChatLLM):
         usage = None
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            async with client.stream("POST", url, headers=self._headers(token), json=self._body(messages, tools, stream=True)) as response:
+            async with client.stream(
+                "POST",
+                url,
+                headers=self._headers(token),
+                json=self._body(messages, tools, stream=True),
+            ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     chunk = _parse_sse(line)
@@ -409,7 +464,9 @@ class ChatGitHubCopilot(BaseChatLLM):
                             if not text_started:
                                 text_started = True
                                 yield LLMStreamEvent(type=LLMStreamEventType.TEXT_START)
-                            yield LLMStreamEvent(type=LLMStreamEventType.TEXT_DELTA, content=content)
+                            yield LLMStreamEvent(
+                                type=LLMStreamEventType.TEXT_DELTA, content=content
+                            )
                         for tc in delta.get("tool_calls", []):
                             if tc.get("id"):
                                 tool_call_id = tc["id"]

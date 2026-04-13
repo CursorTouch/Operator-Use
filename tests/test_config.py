@@ -23,6 +23,7 @@ from operator_use.config.service import (
 
 # --- Channel configs ---
 
+
 def test_telegram_config_defaults():
     c = TelegramConfig()
     assert c.enabled is False
@@ -73,6 +74,7 @@ def test_discord_config_snake_case():
 
 # --- LLM / STT / TTS ---
 
+
 def test_llm_config_defaults():
     c = LLMConfig()
     assert c.provider == "openai"
@@ -93,6 +95,7 @@ def test_tts_config_defaults():
 
 # --- AgentDefinition ---
 
+
 def test_agent_definition_valid():
     a = AgentDefinition(id="my-agent", description="General purpose manager")
     assert a.id == "my-agent"
@@ -102,18 +105,21 @@ def test_agent_definition_valid():
 
 def test_agent_definition_with_browser_plugin():
     from operator_use.config.service import PluginConfig
+
     a = AgentDefinition(id="web", plugins=[PluginConfig(id="browser_use", enabled=True)])
     assert any(p.id == "browser_use" and p.enabled for p in a.plugins)
 
 
 def test_agent_definition_with_computer_plugin():
     from operator_use.config.service import PluginConfig
+
     a = AgentDefinition(id="desk", plugins=[PluginConfig(id="computer_use", enabled=True)])
     assert any(p.id == "computer_use" and p.enabled for p in a.plugins)
 
 
 def test_agent_definition_plugin_disabled():
     from operator_use.config.service import PluginConfig
+
     a = AgentDefinition(id="op", plugins=[PluginConfig(id="browser_use", enabled=False)])
     assert a.plugins[0].enabled is False
 
@@ -124,6 +130,7 @@ def test_agent_definition_default_workspace_none():
 
 
 # --- AgentsConfig ---
+
 
 def test_agents_config_defaults():
     c = AgentsConfig()
@@ -138,6 +145,7 @@ def test_agent_defaults():
 
 
 # --- BindingMatch / AgentRouteBinding ---
+
 
 def test_binding_match_defaults():
     b = BindingMatch()
@@ -158,6 +166,7 @@ def test_agent_route_binding_defaults():
 
 # --- Config ---
 
+
 def test_config_defaults():
     c = Config()
     assert c.bindings == []
@@ -170,11 +179,14 @@ def test_config_default_agent_none_when_empty():
 
 
 def test_config_default_agent_first():
-    c = Config(agents=AgentsConfig(list=[AgentDefinition(id="first"), AgentDefinition(id="second")]))
+    c = Config(
+        agents=AgentsConfig(list=[AgentDefinition(id="first"), AgentDefinition(id="second")])
+    )
     assert c.default_agent.id == "first"
 
 
 # --- load_config ---
+
 
 def test_load_config_no_file(tmp_path):
     cfg = load_config(tmp_path)
@@ -182,11 +194,7 @@ def test_load_config_no_file(tmp_path):
 
 
 def test_load_config_from_json(tmp_path):
-    data = {
-        "agents": {
-            "list": [{"id": "json-agent"}]
-        }
-    }
+    data = {"agents": {"list": [{"id": "json-agent"}]}}
     (tmp_path / "config.json").write_text(json.dumps(data), encoding="utf-8")
     cfg = load_config(tmp_path)
     assert any(a.id == "json-agent" for a in cfg.agents.list)
@@ -199,6 +207,7 @@ def test_load_config_invalid_json_uses_defaults(tmp_path):
 
 
 # --- ACP id auto-generation ---
+
 
 def test_load_config_generates_id_when_missing(tmp_path):
     """id is auto-generated and persisted on first load."""

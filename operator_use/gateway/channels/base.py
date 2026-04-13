@@ -1,4 +1,4 @@
-﻿"""Base channel ABC for all channel implementations."""
+"""Base channel ABC for all channel implementations."""
 
 from operator_use.bus.views import OutgoingMessage, IncomingMessage
 from abc import ABC, abstractmethod
