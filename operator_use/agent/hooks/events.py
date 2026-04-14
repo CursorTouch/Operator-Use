@@ -26,6 +26,7 @@ class HookEvent(str, Enum):
 @dataclass
 class BeforeAgentStartContext:
     """Fired just before the agentic loop begins."""
+
     message: "IncomingMessage | None"
     session: "Session"
 
@@ -33,6 +34,7 @@ class BeforeAgentStartContext:
 @dataclass
 class AfterAgentStartContext:
     """Fired after the first LLM call is dispatched."""
+
     message: "IncomingMessage | None"
     session: "Session"
     iteration: int
@@ -44,6 +46,7 @@ class BeforeAgentEndContext:
 
     Modify ``response.content`` to override what gets sent.
     """
+
     message: "IncomingMessage | None"
     session: "Session"
     response: "AIMessage"
@@ -52,6 +55,7 @@ class BeforeAgentEndContext:
 @dataclass
 class AfterAgentEndContext:
     """Fired after session is saved and the final AIMessage is ready."""
+
     message: "IncomingMessage | None"
     session: "Session"
     response: "AIMessage"
@@ -63,6 +67,7 @@ class BeforeToolCallContext:
 
     Set ``skip=True`` and populate ``result`` to short-circuit execution.
     """
+
     session: "Session"
     tool_call: "LLMToolCall"
     skip: bool = False
@@ -72,6 +77,7 @@ class BeforeToolCallContext:
 @dataclass
 class AfterToolCallContext:
     """Fired after a tool executes (success or failure)."""
+
     session: "Session"
     tool_call: "LLMToolCall"
     tool_result: "ToolResult"
@@ -85,6 +91,7 @@ class BeforeLLMCallContext:
     Handlers may mutate ``messages`` to modify what the LLM receives
     (e.g. context compression, injection, filtering).
     """
+
     session: "Session"
     messages: "list[BaseMessage]"
     iteration: int
@@ -96,6 +103,7 @@ class AfterLLMCallContext:
 
     Handlers may inspect or mutate ``event`` to override the LLM response.
     """
+
     session: "Session"
     messages: "list[BaseMessage]"
     event: "LLMEvent"

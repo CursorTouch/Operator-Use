@@ -1,4 +1,4 @@
-﻿"""Patch tool: apply unified diffs to files using difflib for fuzzy matching."""
+"""Patch tool: apply unified diffs to files using difflib for fuzzy matching."""
 
 import difflib
 import re
@@ -64,7 +64,9 @@ def _extract_old_context(hunk_lines: list[str]) -> list[str]:
     ]
 
 
-def _apply_hunk(old_lines: list[str], hunk_lines: list[str], old_start: int, old_count: int) -> list[str]:
+def _apply_hunk(
+    old_lines: list[str], hunk_lines: list[str], old_start: int, old_count: int
+) -> list[str]:
     """
     Apply a single hunk to old_lines. Returns the new lines.
     old_start is 1-based, old_count is number of context/removal lines.
@@ -87,7 +89,9 @@ def _apply_hunk(old_lines: list[str], hunk_lines: list[str], old_start: int, old
     return old_lines[:start_idx] + replacement + old_lines[end_idx:]
 
 
-def _find_hunk_position(lines: list[str], hunk_lines: list[str], old_start: int, old_count: int) -> int | None:
+def _find_hunk_position(
+    lines: list[str], hunk_lines: list[str], old_start: int, old_count: int
+) -> int | None:
     """
     Find the best position to apply the hunk. Uses difflib.SequenceMatcher for fuzzy matching.
     Returns 0-based start index or None if no suitable match.
@@ -135,7 +139,9 @@ def apply_patch_to_text(original: str, patch_content: str) -> tuple[str, list[st
     for old_start, old_count, hunk_lines in hunks:
         pos = _find_hunk_position(work_lines, hunk_lines, old_start, old_count)
         if pos is None:
-            errors.append(f"Hunk @@ -{old_start},{old_count} could not be applied (no matching context)")
+            errors.append(
+                f"Hunk @@ -{old_start},{old_count} could not be applied (no matching context)"
+            )
             continue
 
         old_context = _extract_old_context(hunk_lines)
@@ -147,7 +153,9 @@ def apply_patch_to_text(original: str, patch_content: str) -> tuple[str, list[st
     return result, errors
 
 
-def create_unified_diff(old_lines: list[str], new_lines: list[str], fromfile: str = "a", tofile: str = "b") -> str:
+def create_unified_diff(
+    old_lines: list[str], new_lines: list[str], fromfile: str = "a", tofile: str = "b"
+) -> str:
     """Generate unified diff using difflib. Use the result with patch_file to apply changes."""
     return "".join(
         difflib.unified_diff(
@@ -162,7 +170,10 @@ def create_unified_diff(old_lines: list[str], new_lines: list[str], fromfile: st
 
 class PatchFile(BaseModel):
     path: str = Field(..., description="Absolute path or path relative to the codebase root.")
-    patch: str = Field(..., description="Unified diff in standard format (--- a/file, +++ b/file, @@ hunks). Generate with 'diff -u old new' or difflib.unified_diff(). Context lines (unchanged lines around edits) are required for fuzzy matching to work.")
+    patch: str = Field(
+        ...,
+        description="Unified diff in standard format (--- a/file, +++ b/file, @@ hunks). Generate with 'diff -u old new' or difflib.unified_diff(). Context lines (unchanged lines around edits) are required for fuzzy matching to work.",
+    )
 
 
 @Tool(

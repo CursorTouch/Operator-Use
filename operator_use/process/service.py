@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import os
@@ -67,10 +67,12 @@ class ProcessStore:
 # Stateless OS-level helpers (no store needed)
 # ---------------------------------------------------------------------------
 
+
 async def list_os(filter: str | None = None) -> tuple[list[str], int]:
     """List running OS processes. Returns (rows, total_count)."""
     try:
         import psutil
+
         rows = []
         for p in psutil.process_iter(["pid", "name", "status", "memory_info"]):
             try:
@@ -99,6 +101,7 @@ async def kill_os(pid: int | None, name: str | None) -> list[str]:
     """Kill OS processes by pid or name. Returns list of killed descriptions."""
     try:
         import psutil
+
         killed = []
         if pid is not None:
             p = psutil.Process(pid)

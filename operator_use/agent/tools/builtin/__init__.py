@@ -1,6 +1,6 @@
-from operator_use.agent.tools.builtin.filesystem import read_file,write_file,edit_file,list_dir
+from operator_use.agent.tools.builtin.filesystem import read_file, write_file, edit_file, list_dir
 from operator_use.agent.tools.builtin.patch import patch_file
-from operator_use.agent.tools.builtin.web import web_search,web_fetch
+from operator_use.agent.tools.builtin.web import web_search, web_fetch
 from operator_use.agent.tools.builtin.terminal import terminal
 from operator_use.agent.tools.builtin.message import intermediate_message, react_message, send_file
 from operator_use.agent.tools.builtin.cron import cron
@@ -14,19 +14,29 @@ from operator_use.agent.tools.builtin.imagegen import imagegen
 from operator_use.agent.tools.builtin.mcp import mcp as mcp_tool
 from operator_use.agent.tools.builtin.skill import skill
 
-FILESYSTEM_TOOLS = [read_file,write_file,edit_file,list_dir,patch_file]
-WEB_TOOLS = [web_search,web_fetch]
+FILESYSTEM_TOOLS = [read_file, write_file, edit_file, list_dir, patch_file]
+WEB_TOOLS = [web_search, web_fetch]
 TERMINAL_TOOLS = [terminal]
 MESSAGE_TOOLS = [intermediate_message, react_message, send_file]
 CRON_TOOLS = [cron]
 PROCESS_TOOLS = [process, control_center]
-OTHER_AGENT_TOOLS = [subagents,acpagents,localagents]
+OTHER_AGENT_TOOLS = [subagents, acpagents, localagents]
 CHANNEL_TOOLS = [channel]
 IMAGE_TOOLS = [imagegen]
 MCP_TOOLS = [mcp_tool]
 SKILL_TOOLS = [skill]
 
-AGENT_TOOLS = FILESYSTEM_TOOLS + WEB_TOOLS + TERMINAL_TOOLS + CRON_TOOLS + PROCESS_TOOLS + OTHER_AGENT_TOOLS + IMAGE_TOOLS + MCP_TOOLS + SKILL_TOOLS
+AGENT_TOOLS = (
+    FILESYSTEM_TOOLS
+    + WEB_TOOLS
+    + TERMINAL_TOOLS
+    + CRON_TOOLS
+    + PROCESS_TOOLS
+    + OTHER_AGENT_TOOLS
+    + IMAGE_TOOLS
+    + MCP_TOOLS
+    + SKILL_TOOLS
+)
 
 NON_AGENT_TOOLS = MESSAGE_TOOLS + CHANNEL_TOOLS
 
@@ -42,8 +52,8 @@ CODING_TOOLS = FILESYSTEM_TOOLS + WEB_TOOLS + TERMINAL_TOOLS
 # Tool profiles — base presets for per-agent tool configuration
 TOOL_PROFILES: dict[str, list] = {
     "minimal": MINIMAL_TOOLS,
-    "coding":  CODING_TOOLS,
-    "full":    ALL_TOOLS,
+    "coding": CODING_TOOLS,
+    "full": ALL_TOOLS,
 }
 
 

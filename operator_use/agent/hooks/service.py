@@ -31,9 +31,11 @@ class Hooks:
 
     def on(self, event: HookEvent):
         """Decorator form: @hooks.on(HookEvent.BEFORE_TOOL_CALL)"""
+
         def decorator(fn: HookHandler) -> HookHandler:
             self.register(event, fn)
             return fn
+
         return decorator
 
     async def emit(self, event: HookEvent, context: HookContext) -> HookContext:

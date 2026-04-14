@@ -61,6 +61,7 @@ def _exchange_copilot_token(github_token: str) -> dict:
     if expires_at_str:
         try:
             from datetime import datetime
+
             dt = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
             expires_at = dt.timestamp()
         except Exception:
@@ -86,6 +87,7 @@ async def _async_exchange_copilot_token(github_token: str) -> dict:
         if expires_at_str:
             try:
                 from datetime import datetime
+
                 dt = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
                 expires_at = dt.timestamp()
             except Exception:

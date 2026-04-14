@@ -6,7 +6,10 @@ import httpx
 
 def _html_to_markdown(html: str) -> str:
     from markdownify import markdownify
-    return markdownify(html, heading_style="ATX", strip=["script", "style", "nav", "footer", "header"])
+
+    return markdownify(
+        html, heading_style="ATX", strip=["script", "style", "nav", "footer", "header"]
+    )
 
 
 class DDGSSearch:
@@ -14,15 +17,18 @@ class DDGSSearch:
 
     async def search(self, query: str, max_results: int = 10) -> list[dict]:
         from ddgs import DDGS
+
         try:
-            results = await asyncio.to_thread(lambda: DDGS().text(
-                query,
-                region="us-en",
-                safesearch="off",
-                timelimit="3d",
-                backend="auto",
-                max_results=max_results,
-            ))
+            results = await asyncio.to_thread(
+                lambda: DDGS().text(
+                    query,
+                    region="us-en",
+                    safesearch="off",
+                    timelimit="3d",
+                    backend="auto",
+                    max_results=max_results,
+                )
+            )
         except Exception as e:
             raise RuntimeError(f"DuckDuckGo search failed: {e}") from e
 

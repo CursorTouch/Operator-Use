@@ -8,7 +8,11 @@ from operator_use.web.loop import LoopGuard
 
 
 class ComputerTask(BaseModel):
-    task: str = Field(..., description="Full description of the desktop automation task to perform.")
+    task: str = Field(
+        ..., description="Full description of the desktop automation task to perform."
+    )
+
+
 from operator_use.agent.tools import ToolRegistry
 from operator_use.messages import SystemMessage, HumanMessage, ToolMessage
 from operator_use.providers.events import LLMEventType
@@ -116,22 +120,30 @@ async def computer_task(task: str, **kwargs) -> ToolResult:
             match event.type:
                 case LLMEventType.TOOL_CALL:
                     tc = event.tool_call
-                    logger.info("[computer_task] iter=%d tool=%s params=%s", iteration, tc.name, tc.params)
+                    logger.info(
+                        "[computer_task] iter=%d tool=%s params=%s", iteration, tc.name, tc.params
+                    )
                     tr = await registry.aexecute(tc.name, tc.params)
-                    logger.info("[computer_task] iter=%d result=%s", iteration, tr.output if tr.success else f"ERROR: {tr.error}")
+                    logger.info(
+                        "[computer_task] iter=%d result=%s",
+                        iteration,
+                        tr.output if tr.success else f"ERROR: {tr.error}",
+                    )
 
                     # Record action for loop detection
                     loop_guard.record_action(tc.name, tc.params, tr.success)
                     # Note: no record_page for desktop (no URL/DOM equivalent)
 
                     thinking_signature = event.thinking.signature if event.thinking else None
-                    history.append(ToolMessage(
-                        id=tc.id,
-                        name=tc.name,
-                        params=tc.params,
-                        content=tr.output if tr.success else tr.error,
-                        thinking_signature=thinking_signature,
-                    ))
+                    history.append(
+                        ToolMessage(
+                            id=tc.id,
+                            name=tc.name,
+                            params=tc.params,
+                            content=tr.output if tr.success else tr.error,
+                            thinking_signature=thinking_signature,
+                        )
+                    )
                 case LLMEventType.TEXT:
                     result = event.content or "(no result)"
                     break

@@ -1,11 +1,17 @@
-﻿"""
+"""
 UIA Caching Utilities for Performance Optimization
 
 This module provides utilities for implementing UI Automation caching
 to reduce cross-process COM calls during tree traversal.
 """
 
-from operator_use.computer.windows.uia import CacheRequest, PropertyId, PatternId, TreeScope, Control
+from operator_use.computer.windows.uia import (
+    CacheRequest,
+    PropertyId,
+    PatternId,
+    TreeScope,
+    Control,
+)
 from typing import Optional
 import logging
 
@@ -95,11 +101,14 @@ class CacheRequestFactory:
 
         return cache_request
 
+
 class CachedControlHelper:
     """Helper class for working with cached controls."""
 
     @staticmethod
-    def build_cached_control(node: Control, cache_request: Optional[CacheRequest] = None) -> Control:
+    def build_cached_control(
+        node: Control, cache_request: Optional[CacheRequest] = None
+    ) -> Control:
         """
         Build a cached version of a control.
 
@@ -122,7 +131,9 @@ class CachedControlHelper:
             return node
 
     @staticmethod
-    def get_cached_children(node: Control, cache_request: Optional[CacheRequest] = None) -> list[Control]:
+    def get_cached_children(
+        node: Control, cache_request: Optional[CacheRequest] = None
+    ) -> list[Control]:
         """
         Get children with pre-cached properties.
 
@@ -144,7 +155,9 @@ class CachedControlHelper:
         # Note: We do NOT set this here to avoid modifying shared cache request objects
         # The caller is responsible for providing a CacheRequest with TreeScope_Children
         if (cache_request.TreeScope & TreeScope.TreeScope_Children) == 0:
-             logger.warning("Cache request passed to get_cached_children does not have Children scope!")
+            logger.warning(
+                "Cache request passed to get_cached_children does not have Children scope!"
+            )
 
         # Try to use existing cache first if available
         try:

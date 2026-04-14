@@ -1,7 +1,6 @@
 """browser_task tool — runs browser automation in an isolated context window."""
 
 import logging
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 from operator_use.tools import Tool, ToolResult
@@ -9,8 +8,14 @@ from operator_use.web.loop import LoopGuard
 
 
 class BrowserTask(BaseModel):
-    task: str = Field(..., description="Full description of the browser automation task to perform.")
-    keep_open: bool = Field(default=True, description="Keep the browser open after the task completes.")
+    task: str = Field(
+        ..., description="Full description of the browser automation task to perform."
+    )
+    keep_open: bool = Field(
+        default=True, description="Keep the browser open after the task completes."
+    )
+
+
 from operator_use.agent.tools import ToolRegistry
 from operator_use.messages import SystemMessage, HumanMessage, ToolMessage
 from operator_use.providers.events import LLMEventType
@@ -152,9 +157,15 @@ async def browser_task(task: str, keep_open: bool = True, **kwargs) -> ToolResul
             match event.type:
                 case LLMEventType.TOOL_CALL:
                     tc = event.tool_call
-                    logger.info("[browser_task] iter=%d tool=%s params=%s", iteration, tc.name, tc.params)
+                    logger.info(
+                        "[browser_task] iter=%d tool=%s params=%s", iteration, tc.name, tc.params
+                    )
                     tr = await registry.aexecute(tc.name, tc.params)
-                    logger.info("[browser_task] iter=%d result=%s", iteration, tr.output if tr.success else f"ERROR: {tr.error}")
+                    logger.info(
+                        "[browser_task] iter=%d result=%s",
+                        iteration,
+                        tr.output if tr.success else f"ERROR: {tr.error}",
+                    )
 
                     # Record action for loop detection
                     loop_guard.record_action(tc.name, tc.params, tr.success)
@@ -163,18 +174,24 @@ async def browser_task(task: str, keep_open: bool = True, **kwargs) -> ToolResul
                     try:
                         page_state = await browser.get_state()
                         if page_state and page_state.current_tab:
-                            loop_guard.record_page(page_state.current_tab.url, page_state.to_string())
+                            loop_guard.record_page(
+                                page_state.current_tab.url, page_state.to_string()
+                            )
                     except Exception as e:
-                        logger.debug("[browser_task] Failed to capture page state for loop detection: %s", e)
+                        logger.debug(
+                            "[browser_task] Failed to capture page state for loop detection: %s", e
+                        )
 
                     thinking_signature = event.thinking.signature if event.thinking else None
-                    history.append(ToolMessage(
-                        id=tc.id,
-                        name=tc.name,
-                        params=tc.params,
-                        content=tr.output if tr.success else tr.error,
-                        thinking_signature=thinking_signature,
-                    ))
+                    history.append(
+                        ToolMessage(
+                            id=tc.id,
+                            name=tc.name,
+                            params=tc.params,
+                            content=tr.output if tr.success else tr.error,
+                            thinking_signature=thinking_signature,
+                        )
+                    )
                 case LLMEventType.TEXT:
                     result = event.content or "(no result)"
                     break

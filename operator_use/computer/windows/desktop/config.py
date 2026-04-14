@@ -10,14 +10,14 @@ KEY_ALIASES: dict[str, str] = {
     "option": "Alt",
 }
 
-AVOIDED_APPS: Set[str] = set([
-    'AgentUI'
-])
+AVOIDED_APPS: Set[str] = set(["AgentUI"])
 
-EXCLUDED_APPS:Set[str]=set([
-    'Progman',
-    'Shell_TrayWnd',
-    'Shell_SecondaryTrayWnd',
-    'Microsoft.UI.Content.PopupWindowSiteBridge',
-    'Windows.UI.Core.CoreWindow',
-])
+EXCLUDED_APPS: Set[str] = set(
+    [
+        "Progman",
+        "Shell_TrayWnd",
+        "Shell_SecondaryTrayWnd",
+        "Microsoft.UI.Content.PopupWindowSiteBridge",
+        "Windows.UI.Core.CoreWindow",
+    ]
+)

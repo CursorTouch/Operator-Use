@@ -1,4 +1,4 @@
-﻿"""
+"""
 Antigravity (Google Cloud Code Assist) OAuth credential management.
 
 Uses Antigravity-specific OAuth credentials (from @mariozechner/pi-ai package)
@@ -66,6 +66,7 @@ _AUTH_PATH = Path.home() / ".config" / "operator" / "antigravity_auth.json"
 # PKCE helpers
 # ---------------------------------------------------------------------------
 
+
 def _pkce_pair() -> tuple[str, str]:
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
     digest = hashlib.sha256(verifier.encode()).digest()
@@ -76,6 +77,7 @@ def _pkce_pair() -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 # Credential file I/O
 # ---------------------------------------------------------------------------
+
 
 def load_auth() -> Optional[dict]:
     if _AUTH_PATH.exists():
@@ -94,6 +96,7 @@ def save_auth(data: dict) -> None:
 # ---------------------------------------------------------------------------
 # Token refresh
 # ---------------------------------------------------------------------------
+
 
 def refresh_token(refresh_tok: str) -> Optional[dict]:
     try:
@@ -144,21 +147,27 @@ def fetch_project_id(access_token: str) -> str:
         "Content-Type": "application/json",
         "User-Agent": f"antigravity/1.26.0 {ua_platform}",
         "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-        "Client-Metadata": json.dumps({
+        "Client-Metadata": json.dumps(
+            {
+                "ideType": "ANTIGRAVITY",
+                "platform": "PLATFORM_UNSPECIFIED",
+                "pluginType": "GEMINI",
+            }
+        ),
+    }
+    body = {
+        "metadata": {
             "ideType": "ANTIGRAVITY",
             "platform": "PLATFORM_UNSPECIFIED",
             "pluginType": "GEMINI",
-        }),
+        }
     }
-    body = {"metadata": {
-        "ideType": "ANTIGRAVITY",
-        "platform": "PLATFORM_UNSPECIFIED",
-        "pluginType": "GEMINI",
-    }}
 
     for endpoint in LOAD_CODE_ASSIST_ENDPOINTS:
         try:
-            r = httpx.post(f"{endpoint}/v1internal:loadCodeAssist", json=body, headers=headers, timeout=15.0)
+            r = httpx.post(
+                f"{endpoint}/v1internal:loadCodeAssist", json=body, headers=headers, timeout=15.0
+            )
             logger.debug("loadCodeAssist %s -> %s", endpoint, r.status_code)
             if r.status_code == 200:
                 data = r.json()
@@ -170,13 +179,16 @@ def fetch_project_id(access_token: str) -> str:
         except Exception:
             continue
 
-    env_project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT_ID", "")
+    env_project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get(
+        "GOOGLE_CLOUD_PROJECT_ID", ""
+    )
     return env_project or DEFAULT_PROJECT_ID
 
 
 # ---------------------------------------------------------------------------
 # Onboarding
 # ---------------------------------------------------------------------------
+
 
 def _onboard_user(access_token: str, project_id: str) -> None:
     """Call onboardUser to activate the account for API access (safe to call repeatedly)."""
@@ -186,20 +198,27 @@ def _onboard_user(access_token: str, project_id: str) -> None:
         "Content-Type": "application/json",
         "User-Agent": f"antigravity/1.26.0 {ua_platform}",
         "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-        "Client-Metadata": json.dumps({
+        "Client-Metadata": json.dumps(
+            {
+                "ideType": "ANTIGRAVITY",
+                "platform": "PLATFORM_UNSPECIFIED",
+                "pluginType": "GEMINI",
+            }
+        ),
+    }
+    body = {
+        "cloudaicompanionProject": project_id,
+        "metadata": {
             "ideType": "ANTIGRAVITY",
             "platform": "PLATFORM_UNSPECIFIED",
             "pluginType": "GEMINI",
-        }),
+        },
     }
-    body = {"cloudaicompanionProject": project_id, "metadata": {
-        "ideType": "ANTIGRAVITY",
-        "platform": "PLATFORM_UNSPECIFIED",
-        "pluginType": "GEMINI",
-    }}
     for endpoint in LOAD_CODE_ASSIST_ENDPOINTS:
         try:
-            r = httpx.post(f"{endpoint}/v1internal:onboardUser", json=body, headers=headers, timeout=15.0)
+            r = httpx.post(
+                f"{endpoint}/v1internal:onboardUser", json=body, headers=headers, timeout=15.0
+            )
             if r.status_code == 200:
                 logger.debug("Antigravity onboardUser succeeded via %s", endpoint)
                 return
@@ -211,6 +230,7 @@ def _onboard_user(access_token: str, project_id: str) -> None:
 # ---------------------------------------------------------------------------
 # Login
 # ---------------------------------------------------------------------------
+
 
 def login() -> dict:
     """
@@ -294,6 +314,7 @@ def login() -> dict:
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "login":
         login()
     else:

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ValidationError
-from dataclasses import dataclass,field
+from dataclasses import dataclass, field
 from typing import Any
 from abc import ABC
 import asyncio
@@ -11,20 +11,22 @@ MAX_TOOL_OUTPUT_LENGTH = 10000
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class ToolResult:
-    success: bool=False
-    output:str|None=None
-    error:str|None=None
-    metadata:dict[str,Any]=field(default_factory=dict)
+    success: bool = False
+    output: str | None = None
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def success_result(cls,output:str,metadata:dict[str,Any]=None) -> "ToolResult":
-        return cls(success=True,output=output,metadata=metadata)
+    def success_result(cls, output: str, metadata: dict[str, Any] = None) -> "ToolResult":
+        return cls(success=True, output=output, metadata=metadata)
 
     @classmethod
-    def error_result(cls,error:str,metadata:dict[str,Any]=None) -> "ToolResult":
-        return cls(success=False,error=error,metadata=metadata)
+    def error_result(cls, error: str, metadata: dict[str, Any] = None) -> "ToolResult":
+        return cls(success=False, error=error, metadata=metadata)
+
 
 class Tool(ABC):
     def __init__(self, name: str, description: str = None, model: BaseModel = None):
@@ -43,14 +45,12 @@ class Tool(ABC):
                 if "$ref" in obj:
                     ref = obj["$ref"]
                     if ref.startswith("#/$defs/"):
-                        def_name = ref[len("#/$defs/"):]
+                        def_name = ref[len("#/$defs/") :]
                         resolved = defs.get(def_name, {})
-                        return resolve_refs({k: v for k, v in resolved.items() if k not in EXCLUDED_PROPERTIES})
-                return {
-                    k: resolve_refs(v)
-                    for k, v in obj.items()
-                    if k not in EXCLUDED_PROPERTIES
-                }
+                        return resolve_refs(
+                            {k: v for k, v in resolved.items() if k not in EXCLUDED_PROPERTIES}
+                        )
+                return {k: resolve_refs(v) for k, v in obj.items() if k not in EXCLUDED_PROPERTIES}
             elif isinstance(obj, list):
                 return [resolve_refs(item) for item in obj]
             return obj
@@ -67,7 +67,7 @@ class Tool(ABC):
             "parameters": parameters,
         }
 
-    def validate_params(self, args: dict[str,Any])->list[str]:
+    def validate_params(self, args: dict[str, Any]) -> list[str]:
         try:
             self.model(**args)
             return []
@@ -84,14 +84,28 @@ class Tool(ABC):
                 elif err_type == "literal_error":
                     expected = ctx.get("expected", "")
                     msg = f"'{field}' must be one of {expected}, got {inp!r}"
-                elif err_type in ("greater_than", "greater_than_equal", "less_than", "less_than_equal"):
-                    op = {"greater_than": ">", "greater_than_equal": ">=", "less_than": "<", "less_than_equal": "<="}[err_type]
+                elif err_type in (
+                    "greater_than",
+                    "greater_than_equal",
+                    "less_than",
+                    "less_than_equal",
+                ):
+                    op = {
+                        "greater_than": ">",
+                        "greater_than_equal": ">=",
+                        "less_than": "<",
+                        "less_than_equal": "<=",
+                    }[err_type]
                     bound = ctx.get("gt") or ctx.get("ge") or ctx.get("lt") or ctx.get("le")
                     msg = f"'{field}' must be {op} {bound}, got {inp!r}"
                 elif err_type == "string_too_short":
-                    msg = f"'{field}' is too short (min length: {ctx.get('min_length')}), got {inp!r}"
+                    msg = (
+                        f"'{field}' is too short (min length: {ctx.get('min_length')}), got {inp!r}"
+                    )
                 elif err_type == "string_too_long":
-                    msg = f"'{field}' is too long (max length: {ctx.get('max_length')}), got {inp!r}"
+                    msg = (
+                        f"'{field}' is too long (max length: {ctx.get('max_length')}), got {inp!r}"
+                    )
                 elif err_type in ("int_type", "float_type", "str_type", "bool_type"):
                     expected_type = err_type.replace("_type", "")
                     msg = f"'{field}' must be a {expected_type}, got {type(inp).__name__} {inp!r}"

@@ -17,6 +17,7 @@ Usage by the LLM:
     acpagents(action="run", name="claude-code", input="continue", session_id="s1")
     acpagents(action="stream", name="gemini", input="summarise logs")
 """
+
 from __future__ import annotations
 from datetime import datetime
 import json
@@ -34,16 +35,18 @@ from operator_use.config.paths import get_userdata_dir
 
 
 class ACPAgents(BaseModel):
-    action: Literal["agents", "run", "spawn", "send", "stream", "sessions", "status", "cancel"] = Field(
-        description=(
-            "agents   — list all pre-configured ACP agents available to call. "
-            "run      — send a task to the named agent and wait for the full response. "
-            "spawn    — start a persistent session (generates a session_id if missing). "
-            "send     — send a message to an existing session (alias for run). "
-            "stream   — send a task and receive response as streamed text (chunks joined). "
-            "sessions — list active local sessions tracked by this agent. "
-            "status   — get the current status and output of an existing run by run_id. "
-            "cancel   — cancel a running task by run_id."
+    action: Literal["agents", "run", "spawn", "send", "stream", "sessions", "status", "cancel"] = (
+        Field(
+            description=(
+                "agents   — list all pre-configured ACP agents available to call. "
+                "run      — send a task to the named agent and wait for the full response. "
+                "spawn    — start a persistent session (generates a session_id if missing). "
+                "send     — send a message to an existing session (alias for run). "
+                "stream   — send a task and receive response as streamed text (chunks joined). "
+                "sessions — list active local sessions tracked by this agent. "
+                "status   — get the current status and output of an existing run by run_id. "
+                "cancel   — cancel a running task by run_id."
+            )
         )
     )
     name: Optional[str] = Field(
@@ -170,7 +173,6 @@ async def acpagents(
     cfg = _make_client_config(entry, timeout_override=timeout)
 
     match action:
-
         case "run" | "spawn" | "send":
             if not input:
                 return ToolResult.error_result(f"input is required for action='{action}'")
@@ -247,9 +249,7 @@ async def acpagents(
                 if run.error:
                     lines.append(f"error  : {run.error}")
                 if run.output:
-                    text = "".join(
-                        p.text for p in run.output if isinstance(p, TextMessagePart)
-                    )
+                    text = "".join(p.text for p in run.output if isinstance(p, TextMessagePart))
                     if text:
                         lines.append(f"\nOutput:\n{text}")
                 return ToolResult.success_result("\n".join(lines))

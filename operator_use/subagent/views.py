@@ -10,7 +10,7 @@ class SubagentRecord:
     channel: str
     chat_id: str
     account_id: str
-    status: str          # "running" | "completed" | "failed" | "cancelled"
+    status: str  # "running" | "completed" | "failed" | "cancelled"
     started_at: datetime
     finished_at: datetime | None = None
     result: str | None = None

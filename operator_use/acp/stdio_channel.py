@@ -179,20 +179,21 @@ class ACPStdioChannel(BaseChannel):
     # ------------------------------------------------------------------
 
     async def _handle_initialize(self, req_id: Any) -> None:
-        await self._write_result(req_id, {
-            "agent_id": self.config.agent_id,
-            "name": self.config.agent_name,
-            "description": self.config.agent_description,
-            "protocol": "jsonrpc/2.0",
-            "capabilities": {
-                "methods": ["initialize", "agent/run", "agent/stream"],
-                "streaming": True,
+        await self._write_result(
+            req_id,
+            {
+                "agent_id": self.config.agent_id,
+                "name": self.config.agent_name,
+                "description": self.config.agent_description,
+                "protocol": "jsonrpc/2.0",
+                "capabilities": {
+                    "methods": ["initialize", "agent/run", "agent/stream"],
+                    "streaming": True,
+                },
             },
-        })
+        )
 
-    async def _handle_run(
-        self, req_id: Any, params: dict, *, streaming: bool
-    ) -> None:
+    async def _handle_run(self, req_id: Any, params: dict, *, streaming: bool) -> None:
         text: str = params.get("text", "")
         session_id: str | None = params.get("session_id") or None
 
@@ -224,26 +225,30 @@ class ACPStdioChannel(BaseChannel):
         try:
             full_text_parts: list[str] = []
             while True:
-                chunk = await asyncio.wait_for(
-                    queue.get(), timeout=self.config.timeout
-                )
+                chunk = await asyncio.wait_for(queue.get(), timeout=self.config.timeout)
                 if chunk is None:
                     break
                 full_text_parts.append(chunk)
                 if streaming:
-                    await self._write_notification("agent/chunk", {
-                        "request_id": req_id,
-                        "text": chunk,
-                        "done": False,
-                    })
+                    await self._write_notification(
+                        "agent/chunk",
+                        {
+                            "request_id": req_id,
+                            "text": chunk,
+                            "done": False,
+                        },
+                    )
 
             # Final notification mark (streaming)
             if streaming and full_text_parts:
-                await self._write_notification("agent/chunk", {
-                    "request_id": req_id,
-                    "text": "",
-                    "done": True,
-                })
+                await self._write_notification(
+                    "agent/chunk",
+                    {
+                        "request_id": req_id,
+                        "text": "",
+                        "done": True,
+                    },
+                )
                 await self._write_result(req_id, {"done": True})
             else:
                 # Non-streaming: send full accumulated text
@@ -293,11 +298,13 @@ class ACPStdioChannel(BaseChannel):
         await self._write({"jsonrpc": "2.0", "id": req_id, "result": result})
 
     async def _write_error(self, req_id: Any, code: int, message: str) -> None:
-        await self._write({
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "error": {"code": code, "message": message},
-        })
+        await self._write(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {"code": code, "message": message},
+            }
+        )
 
     async def _write_notification(self, method: str, params: Any) -> None:
         await self._write({"jsonrpc": "2.0", "method": method, "params": params})
@@ -307,6 +314,7 @@ class ACPStdioChannel(BaseChannel):
 # Logging helper
 # ------------------------------------------------------------------
 
+
 def _redirect_logging_to_stderr() -> None:
     """Point all logging handlers at stderr so stdout stays clean JSON-RPC."""
     root = logging.getLogger()
@@ -315,7 +323,6 @@ def _redirect_logging_to_stderr() -> None:
             handler.stream = sys.stderr
     # Ensure at least one stderr handler exists
     if not any(
-        isinstance(h, logging.StreamHandler) and h.stream is sys.stderr
-        for h in root.handlers
+        isinstance(h, logging.StreamHandler) and h.stream is sys.stderr for h in root.handlers
     ):
         root.addHandler(logging.StreamHandler(sys.stderr))

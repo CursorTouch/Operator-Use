@@ -6,7 +6,9 @@ from operator_use.agent.tools.builtin.local_agents import LOCAL_AGENT_DELEGATION
 from operator_use.messages.service import AIMessage
 
 
-def make_target_agent(response_text: str = "delegated result", description: str = "Research specialist"):
+def make_target_agent(
+    response_text: str = "delegated result", description: str = "Research specialist"
+):
     agent = MagicMock()
     agent.description = description
     agent.get_plugin.side_effect = lambda name: None
@@ -95,6 +97,7 @@ async def test_localagents_refuses_indirect_circular_delegation():
 # Channel / chat_id propagation (fix: subagent result routing)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_localagents_propagates_parent_channel_and_chat_id():
     """IncomingMessage passed to target must carry the parent's real channel/chat_id
@@ -163,6 +166,6 @@ async def test_localagents_session_id_stays_isolated_despite_channel_propagation
     )
 
     call_kwargs = target.run.await_args.kwargs
-    assert call_kwargs["session_id"] != "telegram:99"          # isolated session
-    assert "manager-to-worker" in call_kwargs["session_id"]    # namespaced
-    assert call_kwargs["incoming"].channel == "telegram"       # but routing uses real channel
+    assert call_kwargs["session_id"] != "telegram:99"  # isolated session
+    assert "manager-to-worker" in call_kwargs["session_id"]  # namespaced
+    assert call_kwargs["incoming"].channel == "telegram"  # but routing uses real channel

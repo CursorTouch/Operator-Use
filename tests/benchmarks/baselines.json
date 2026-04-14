@@ -1,0 +1,9 @@
+{
+  "_comment": "Baseline performance measurements for regression detection. Values are in seconds.",
+  "_format": "{ 'test_name': { 'mean': float, 'stddev': float, 'recorded_at': iso8601 } }",
+  "example_string_join": {
+    "mean": 0.0001,
+    "stddev": 0.00002,
+    "recorded_at": "2026-04-13T00:00:00Z"
+  }
+}

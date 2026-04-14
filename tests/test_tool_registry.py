@@ -9,6 +9,7 @@ from operator_use.tools.service import Tool
 
 # --- Helpers ---
 
+
 class EchoParams(BaseModel):
     message: str
     repeat: int = 1
@@ -24,6 +25,7 @@ class EchoTool(Tool):
 
 
 echo_tool = EchoTool()
+
 
 @echo_tool
 def _echo(message: str, repeat: int = 1, **kwargs):
@@ -41,12 +43,14 @@ class NoModelTool(Tool):
 
 no_model_tool = NoModelTool()
 
+
 @no_model_tool
 def _no_model(**kwargs):
     return "raw"
 
 
 # --- Register / Unregister ---
+
 
 def test_register_and_list():
     reg = ToolRegistry()
@@ -99,6 +103,7 @@ def test_get_missing_returns_none():
 
 # --- Extensions ---
 
+
 def test_set_extension():
     reg = ToolRegistry()
     reg.set_extension("_workspace", "/tmp")
@@ -126,6 +131,7 @@ def test_extensions_merged_into_params():
 
 
 # --- execute ---
+
 
 def test_execute_success():
     reg = ToolRegistry()
@@ -159,6 +165,7 @@ def test_execute_no_model_tool():
 
 
 # --- aexecute ---
+
 
 @pytest.mark.asyncio
 async def test_aexecute_success():
@@ -209,6 +216,7 @@ async def test_aexecute_async_tool():
 
 
 # --- register_tools / unregister_tools ---
+
 
 def test_register_tools_list():
     reg = ToolRegistry()

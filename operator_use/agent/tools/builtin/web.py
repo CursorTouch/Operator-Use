@@ -16,7 +16,9 @@ async def _extract_relevant(text: str, prompt: str, llm) -> str:
 
     truncated = text[:_EXTRACT_LIMIT]
     messages = [
-        SystemMessage(content="You are a precise text extractor. Extract only the information relevant to the user's query from the provided page content. Be concise. If the information is not present, say so clearly."),
+        SystemMessage(
+            content="You are a precise text extractor. Extract only the information relevant to the user's query from the provided page content. Be concise. If the information is not present, say so clearly."
+        ),
         HumanMessage(content=f"Query: {prompt}\n\nPage content:\n{truncated}"),
     ]
     try:
@@ -29,15 +31,26 @@ async def _extract_relevant(text: str, prompt: str, llm) -> str:
 
 
 class WebSearch(BaseModel):
-    query: str = Field(..., description="The search query. Be specific — include names, versions, or error messages for better results.")
-    max_results: int = Field(default=10, description="Number of results to return (default 10). Increase to 20+ when you need broader coverage, decrease to 3-5 for quick lookups.")
+    query: str = Field(
+        ...,
+        description="The search query. Be specific — include names, versions, or error messages for better results.",
+    )
+    max_results: int = Field(
+        default=10,
+        description="Number of results to return (default 10). Increase to 20+ when you need broader coverage, decrease to 3-5 for quick lookups.",
+    )
 
 
-@Tool(name="web_search", description="Search the web and return titles, URLs, and snippets. Use for current events, documentation, package info, or error messages. Follow up with web_fetch to read the full content of a result.", model=WebSearch)
+@Tool(
+    name="web_search",
+    description="Search the web and return titles, URLs, and snippets. Use for current events, documentation, package info, or error messages. Follow up with web_fetch to read the full content of a result.",
+    model=WebSearch,
+)
 async def web_search(query: str, max_results: int = 10, **kwargs) -> ToolResult:
     provider = kwargs.get("_search")
     if provider is None:
         from operator_use.providers.ddgs import DDGSSearch
+
         provider = DDGSSearch()
 
     try:
@@ -60,7 +73,10 @@ async def web_search(query: str, max_results: int = 10, **kwargs) -> ToolResult:
 
 
 class WebFetch(BaseModel):
-    url: str = Field(..., description="Full URL to fetch (must start with http:// or https://). Redirects are followed automatically.")
+    url: str = Field(
+        ...,
+        description="Full URL to fetch (must start with http:// or https://). Redirects are followed automatically.",
+    )
     prompt: str | None = Field(
         default=None,
         description=(
@@ -69,7 +85,10 @@ class WebFetch(BaseModel):
             "Omit for APIs, JSON endpoints, or when you need the raw content."
         ),
     )
-    timeout: int = Field(default=10, description="Request timeout in seconds (default 10). Increase to 30+ for slow APIs or large pages.")
+    timeout: int = Field(
+        default=10,
+        description="Request timeout in seconds (default 10). Increase to 30+ for slow APIs or large pages.",
+    )
 
 
 @Tool(
@@ -90,6 +109,7 @@ async def web_fetch(url: str, prompt: str | None = None, timeout: int = 10, **kw
     provider = kwargs.get("_search")
     if provider is None:
         from operator_use.providers.ddgs import DDGSSearch
+
         provider = DDGSSearch()
 
     try:

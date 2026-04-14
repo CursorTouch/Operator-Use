@@ -13,8 +13,10 @@ from operator_use.orchestrator.commands import handle_command, COMMANDS, _HELP_T
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_agent(tmp_path):
     from operator_use.session.service import SessionStore
+
     store = SessionStore(tmp_path)
     agent = MagicMock()
     agent.sessions = store
@@ -41,6 +43,7 @@ def make_overrides() -> dict:
 # COMMANDS constant
 # ---------------------------------------------------------------------------
 
+
 def test_commands_contains_required():
     assert {"start", "stop", "restart"}.issubset(COMMANDS)
 
@@ -48,6 +51,7 @@ def test_commands_contains_required():
 # ---------------------------------------------------------------------------
 # /start — default session
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_start_new_session_greeting(tmp_path):
@@ -96,6 +100,7 @@ async def test_start_after_stop_starts_fresh(tmp_path):
 # ---------------------------------------------------------------------------
 # /start <name> — named sessions
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_start_named_session_greeting(tmp_path):
@@ -155,6 +160,7 @@ async def test_named_session_stored_separately(tmp_path):
 # /stop
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_stop_archives_session(tmp_path):
     bus = Bus()
@@ -206,6 +212,7 @@ async def test_stop_empty_session(tmp_path):
 # /restart
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_restart_sends_restarting_message(tmp_path):
     bus = Bus()
@@ -245,7 +252,12 @@ async def test_restart_saves_notification(tmp_path):
     with patch("operator_use.orchestrator.commands.asyncio.ensure_future") as mock_ensure:
         mock_ensure.side_effect = lambda coro: coro.close()
         with patch("operator_use.orchestrator.commands._save_restart_notification") as mock_save:
-            await handle_command(make_message("restart", channel="discord", chat_id="999"), agent, bus, make_overrides())
+            await handle_command(
+                make_message("restart", channel="discord", chat_id="999"),
+                agent,
+                bus,
+                make_overrides(),
+            )
             mock_save.assert_called_once_with("discord", "999", "")
 
 
@@ -265,13 +277,16 @@ async def test_restart_no_gateway_logs_warning(tmp_path):
 # Unknown command
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_unknown_command_does_nothing(tmp_path):
     import asyncio
+
     bus = Bus()
     agent = make_agent(tmp_path)
     msg = IncomingMessage(
-        channel="telegram", chat_id="123",
+        channel="telegram",
+        chat_id="123",
         parts=[TextPart(content="/unknown")],
         metadata={"_command": "unknown"},
     )
@@ -286,12 +301,15 @@ async def test_unknown_command_does_nothing(tmp_path):
 # Response routing
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_response_routed_to_correct_channel(tmp_path):
     bus = Bus()
     agent = make_agent(tmp_path)
 
-    await handle_command(make_message("stop", channel="discord", chat_id="456"), agent, bus, make_overrides())
+    await handle_command(
+        make_message("stop", channel="discord", chat_id="456"), agent, bus, make_overrides()
+    )
 
     outgoing: OutgoingMessage = await bus.consume_outgoing()
     assert outgoing.channel == "discord"

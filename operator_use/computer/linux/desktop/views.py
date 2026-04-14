@@ -4,21 +4,21 @@ from enum import Enum
 
 
 class Status(Enum):
-    MAXIMIZED = 'Maximized'
-    MINIMIZED = 'Minimized'
-    NORMAL    = 'Normal'
-    HIDDEN    = 'Hidden'
+    MAXIMIZED = "Maximized"
+    MINIMIZED = "Minimized"
+    NORMAL = "Normal"
+    HIDDEN = "Hidden"
 
 
 @dataclass
 class Window:
-    name:   str
+    name: str
     status: Status
-    x:      int
-    y:      int
-    width:  int
+    x: int
+    y: int
+    width: int
     height: int
-    handle: int   # X11 window ID (decimal)
+    handle: int  # X11 window ID (decimal)
 
     def to_row(self):
         return [self.name, self.status.value, self.width, self.height, hex(self.handle)]
@@ -27,31 +27,31 @@ class Window:
 @dataclass
 class DesktopState:
     active_desktop: dict
-    all_desktops:   list[dict]
-    active_window:  Optional[Window]
-    windows:        list[Window] = field(default_factory=list)
+    all_desktops: list[dict]
+    active_window: Optional[Window]
+    windows: list[Window] = field(default_factory=list)
 
     # ── formatters ────────────────────────────────────────────────────────
 
     def active_desktop_to_string(self):
-        return self.active_desktop.get('name', 'Desktop 0')
+        return self.active_desktop.get("name", "Desktop 0")
 
     def desktops_to_string(self):
         if not self.all_desktops:
             return "No desktops"
         header = "# name"
-        rows = [header] + [d.get('name', '') for d in self.all_desktops]
+        rows = [header] + [d.get("name", "") for d in self.all_desktops]
         return "\n".join(rows)
 
     def active_window_to_string(self):
         if not self.active_window:
-            return 'No active window found'
+            return "No active window found"
         w = self.active_window
         return f"# name|status|width|height|handle\n{w.name}|{w.status.value}|{w.width}|{w.height}|{hex(w.handle)}"
 
     def windows_to_string(self):
         if not self.windows:
-            return 'No windows found'
+            return "No windows found"
         header = "# name|status|width|height|handle"
         rows = [header]
         for w in self.windows:

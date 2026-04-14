@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 # Message parts (mirrors OpenAI content-part convention used by ACP spec)
 # ---------------------------------------------------------------------------
 
+
 class TextMessagePart(BaseModel):
     type: Literal["text"] = "text"
     text: str
@@ -48,6 +49,7 @@ MessagePart = TextMessagePart | ImageURLMessagePart | FileMessagePart
 # Run lifecycle
 # ---------------------------------------------------------------------------
 
+
 class RunStatus(str, Enum):
     CREATED = "created"
     IN_PROGRESS = "in_progress"
@@ -58,17 +60,19 @@ class RunStatus(str, Enum):
 
 
 class RunMode(str, Enum):
-    SYNC = "sync"       # Wait for completion, return full output
-    ASYNC = "async"     # Return run immediately, poll or SSE for result
-    STREAM = "stream"   # SSE stream output chunks as they arrive
+    SYNC = "sync"  # Wait for completion, return full output
+    ASYNC = "async"  # Return run immediately, poll or SSE for result
+    STREAM = "stream"  # SSE stream output chunks as they arrive
 
 
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------
 
+
 class RunCreateRequest(BaseModel):
     """POST /runs body."""
+
     agent_id: str = "operator"
     session_id: str | None = None
     mode: RunMode = RunMode.ASYNC
@@ -78,6 +82,7 @@ class RunCreateRequest(BaseModel):
 
 class Run(BaseModel):
     """Canonical run object returned by the API."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     agent_id: str = "operator"
     session_id: str | None = None
@@ -95,6 +100,7 @@ class Run(BaseModel):
 # Agent descriptor
 # ---------------------------------------------------------------------------
 
+
 class AgentCapabilities(BaseModel):
     streaming: bool = True
     async_mode: bool = True
@@ -103,6 +109,7 @@ class AgentCapabilities(BaseModel):
 
 class AgentMetadata(BaseModel):
     """GET /agents/{agent_id} response."""
+
     id: str
     name: str
     description: str = ""
@@ -112,7 +119,7 @@ class AgentMetadata(BaseModel):
 
 
 class AgentListResponse(BaseModel):
-    id: str = ""   # Stable UUID identifying this ACP server instance
+    id: str = ""  # Stable UUID identifying this ACP server instance
     agents: list[AgentMetadata]
 
 
@@ -120,9 +127,11 @@ class AgentListResponse(BaseModel):
 # SSE event shapes
 # ---------------------------------------------------------------------------
 
+
 class RunOutputEvent(BaseModel):
     """SSE event: output chunk or completed signal."""
+
     type: Literal["output", "completed", "error"] = "output"
     run_id: str
-    part: MessagePart | None = None   # present when type == "output"
-    error: str | None = None          # present when type == "error"
+    part: MessagePart | None = None  # present when type == "output"
+    error: str | None = None  # present when type == "error"

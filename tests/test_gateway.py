@@ -12,6 +12,7 @@ from operator_use.gateway.channels.base import BaseChannel
 
 # --- Concrete channel stub ---
 
+
 class StubChannel(BaseChannel):
     def __init__(self, channel_name: str, account_id: str = "", bus=None):
         config = MagicMock()
@@ -39,6 +40,7 @@ class StubChannel(BaseChannel):
 
 
 # --- add_channel / get_channel / list_channels ---
+
 
 def test_add_and_get_channel():
     bus = Bus()
@@ -84,6 +86,7 @@ def test_add_channel_sets_bus():
 
 
 # --- enable / disable channel ---
+
 
 @pytest.mark.asyncio
 async def test_enable_channel_not_found():
@@ -149,6 +152,7 @@ async def test_disable_channel_stops_it():
 
 # --- BaseChannel.receive ---
 
+
 @pytest.mark.asyncio
 async def test_base_channel_receive_publishes_to_bus():
     bus = Bus()
@@ -168,6 +172,7 @@ async def test_base_channel_receive_no_bus_no_error():
 
 
 # --- dispatch loop ---
+
 
 @pytest.mark.asyncio
 async def test_dispatch_routes_to_correct_channel():
@@ -204,7 +209,9 @@ async def test_dispatch_with_account_id_routes_correctly():
     gw._running = True
     dispatch_task = asyncio.create_task(gw._dispatch_loop())
 
-    msg = OutgoingMessage(channel="telegram", chat_id="1", account_id="bot1", parts=[TextPart(content="routed")])
+    msg = OutgoingMessage(
+        channel="telegram", chat_id="1", account_id="bot1", parts=[TextPart(content="routed")]
+    )
     await bus.publish_outgoing(msg)
     await asyncio.sleep(0.1)
 
@@ -230,7 +237,9 @@ async def test_dispatch_resolves_sent_id_future():
 
     loop = asyncio.get_event_loop()
     future = loop.create_future()
-    msg = OutgoingMessage(channel="telegram", chat_id="1", parts=[TextPart(content="hi")], sent_id_future=future)
+    msg = OutgoingMessage(
+        channel="telegram", chat_id="1", parts=[TextPart(content="hi")], sent_id_future=future
+    )
     await bus.publish_outgoing(msg)
     await asyncio.sleep(0.1)
 

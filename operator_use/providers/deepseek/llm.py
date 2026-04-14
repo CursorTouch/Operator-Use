@@ -1,4 +1,4 @@
-﻿"""DeepSeek LLM provider via OpenAI-compatible API."""
+"""DeepSeek LLM provider via OpenAI-compatible API."""
 
 import os
 from typing import Optional
@@ -20,10 +20,10 @@ class ChatDeepSeek(ChatOpenAI):
     # Available models with context windows (tokens)
     # Source: https://api-docs.deepseek.com/quick_start/pricing
     MODELS = {
-        "deepseek-chat": 128000,     # DeepSeek V3.2 (no reasoning)
-        "deepseek-reasoner": 128000, # DeepSeek V3.2 (reasoning/thinking)
-        "deepseek-r1": 128000,       # DeepSeek R1 (reasoning)
-        "deepseek-v3": 128000,       # DeepSeek V3
+        "deepseek-chat": 128000,  # DeepSeek V3.2 (no reasoning)
+        "deepseek-reasoner": 128000,  # DeepSeek V3.2 (reasoning/thinking)
+        "deepseek-r1": 128000,  # DeepSeek R1 (reasoning)
+        "deepseek-v3": 128000,  # DeepSeek V3
     }
 
     # Models that support chain-of-thought reasoning

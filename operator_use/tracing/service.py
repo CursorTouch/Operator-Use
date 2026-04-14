@@ -1,7 +1,6 @@
 """Tracer — unified observability system that hooks into agent execution."""
 
 import asyncio
-import inspect
 import logging
 import uuid
 from datetime import datetime
@@ -116,8 +115,7 @@ class Tracer:
         llm_spans = [
             (sid, data)
             for sid, data in self._pending.items()
-            if data.get("event_type") == TraceEventType.LLM_CALL
-            and "finished_at" not in data
+            if data.get("event_type") == TraceEventType.LLM_CALL and "finished_at" not in data
         ]
         if not llm_spans:
             return
@@ -164,8 +162,7 @@ class Tracer:
         tool_spans = [
             (sid, data)
             for sid, data in self._pending.items()
-            if data.get("event_type") == TraceEventType.TOOL_CALL
-            and "finished_at" not in data
+            if data.get("event_type") == TraceEventType.TOOL_CALL and "finished_at" not in data
         ]
         if not tool_spans:
             return

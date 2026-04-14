@@ -64,9 +64,7 @@ class ImageGoogle(BaseImage):
         self._model = model
         self.negative_prompt = negative_prompt
         self.api_key = (
-            api_key
-            or os.environ.get("GEMINI_API_KEY")
-            or os.environ.get("GOOGLE_API_KEY")
+            api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         )
 
     @property
@@ -75,12 +73,15 @@ class ImageGoogle(BaseImage):
 
     def _make_client(self):
         from google import genai
+
         return genai.Client(api_key=self.api_key)
 
     def _is_gemini_model(self) -> bool:
         return self._model.startswith(_GEMINI_PREFIX)
 
-    def _generate_gemini(self, prompt: str, output_path: str, images: list[str] | None, **kwargs) -> None:
+    def _generate_gemini(
+        self, prompt: str, output_path: str, images: list[str] | None, **kwargs
+    ) -> None:
         """Generate or edit using Gemini native image output."""
         from google.genai import types
 
@@ -89,6 +90,7 @@ class ImageGoogle(BaseImage):
 
         if images:
             from PIL import Image as PILImage
+
             for path in images:
                 contents.append(PILImage.open(path).convert("RGB"))
 
@@ -118,7 +120,9 @@ class ImageGoogle(BaseImage):
             f.write(image_bytes)
         logger.debug(f"[ImageGoogle] Gemini image saved to {output_path}")
 
-    def _generate_imagen(self, prompt: str, output_path: str, images: list[str] | None, **kwargs) -> None:
+    def _generate_imagen(
+        self, prompt: str, output_path: str, images: list[str] | None, **kwargs
+    ) -> None:
         """Generate using Imagen 4 (text-to-image only)."""
         from google.genai import types
 
@@ -149,11 +153,15 @@ class ImageGoogle(BaseImage):
             f.write(image_bytes)
         logger.debug(f"[ImageGoogle] Imagen image saved to {output_path}")
 
-    def generate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    def generate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         if self._is_gemini_model():
             self._generate_gemini(prompt, output_path, images, **kwargs)
         else:
             self._generate_imagen(prompt, output_path, images, **kwargs)
 
-    async def agenerate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    async def agenerate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         await asyncio.to_thread(self.generate, prompt, output_path, images, **kwargs)

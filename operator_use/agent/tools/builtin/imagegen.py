@@ -102,6 +102,7 @@ async def imagegen(
             gen_dir = workspace / "generated"
         else:
             import tempfile
+
             gen_dir = Path(tempfile.gettempdir()) / "operator_generated"
         gen_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -1,17 +1,18 @@
-﻿from operator_use.computer.macos.tree.views import BoundingBox
+from operator_use.computer.macos.tree.views import BoundingBox
 from operator_use.computer.macos.tree.views import TreeState
 from dataclasses import dataclass
 from PIL.Image import Image
 from typing import Union
 from enum import Enum
 
+
 class Status(Enum):
-    ACTIVE = 'Active'           # Frontmost app with visible windows
-    FULLSCREEN = 'Fullscreen'   # Frontmost app in fullscreen mode
-    VISIBLE = 'Visible'         # Has windows on screen, not frontmost
-    HIDDEN = 'Hidden'           # Hidden via Cmd+H
-    MINIMIZED = 'Minimized'     # All windows minimized to Dock
-    WINDOWLESS = 'Windowless'   # Running but no windows
+    ACTIVE = "Active"  # Frontmost app with visible windows
+    FULLSCREEN = "Fullscreen"  # Frontmost app in fullscreen mode
+    VISIBLE = "Visible"  # Has windows on screen, not frontmost
+    HIDDEN = "Hidden"  # Hidden via Cmd+H
+    MINIMIZED = "Minimized"  # All windows minimized to Dock
+    WINDOWLESS = "Windowless"  # Running but no windows
 
 
 @dataclass
@@ -20,7 +21,7 @@ class Size:
     height: int
 
     def to_string(self):
-        return f'({self.width},{self.height})'
+        return f"({self.width},{self.height})"
 
 
 @dataclass
@@ -32,12 +33,13 @@ class Window:
     pid: int
     bundle_id: str
 
+
 @dataclass
 class DesktopState:
-    active_window: Window|None
+    active_window: Window | None
     windows: list[Window]
-    screenshot: [Union[Image, bytes, None]]=None
-    tree_state: TreeState|None=None
+    screenshot: [Union[Image, bytes, None]] = None
+    tree_state: TreeState | None = None
 
     def windows_to_string(self) -> str:
         if not self.windows:
@@ -62,8 +64,8 @@ Opened Windows:
 {self.windows_to_string()}
 
 Interactive Elements:
-{self.tree_state.interactive_elements_to_string() if self.tree_state else 'No interactive elements found'}
+{self.tree_state.interactive_elements_to_string() if self.tree_state else "No interactive elements found"}
 
 Scrollable Elements:
-{self.tree_state.scrollable_elements_to_string() if self.tree_state else 'No scrollable elements found'}
+{self.tree_state.scrollable_elements_to_string() if self.tree_state else "No scrollable elements found"}
 """

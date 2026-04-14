@@ -12,6 +12,7 @@ from operator_use.bus.views import StreamPhase
 
 # --- _extract_file_content (pure function) ---
 
+
 def test_extract_file_not_found(tmp_path):
     result = _extract_file_content(str(tmp_path / "ghost.txt"))
     assert "not found" in result
@@ -57,6 +58,7 @@ def test_extract_unknown_binary_extension(tmp_path):
 
 # --- Mock Agent helper ---
 
+
 def make_mock_agent(response_text="mock response"):
     agent = MagicMock()
     agent.llm = MagicMock()
@@ -67,6 +69,7 @@ def make_mock_agent(response_text="mock response"):
 
 
 # --- Orchestrator._user_sent_voice ---
+
 
 def test_user_sent_voice_true():
     bus = Bus()
@@ -90,6 +93,7 @@ def test_user_sent_voice_empty_parts():
 
 
 # --- Orchestrator._resolve_agent ---
+
 
 def test_resolve_agent_default():
     bus = Bus()
@@ -143,6 +147,7 @@ def test_resolve_agent_no_match_raises():
 
 # --- Orchestrator._build_request_message ---
 
+
 @pytest.mark.asyncio
 async def test_build_request_text_message():
     bus = Bus()
@@ -158,8 +163,9 @@ async def test_build_request_multi_text_parts():
     bus = Bus()
     orch = Orchestrator(bus=bus, agents={"operator": make_mock_agent()})
     msg = IncomingMessage(
-        channel="telegram", chat_id="1",
-        parts=[TextPart(content="line 1"), TextPart(content="line 2")]
+        channel="telegram",
+        chat_id="1",
+        parts=[TextPart(content="line 1"), TextPart(content="line 2")],
     )
     built = await orch._build_request_message(msg)
     assert "line 1" in built.content
@@ -191,14 +197,14 @@ async def test_build_request_audio_no_stt():
     bus = Bus()
     orch = Orchestrator(bus=bus, agents={"operator": make_mock_agent()}, stt=None)
     msg = IncomingMessage(
-        channel="telegram", chat_id="1",
-        parts=[AudioPart(audio="transcribed text")]
+        channel="telegram", chat_id="1", parts=[AudioPart(audio="transcribed text")]
     )
     built = await orch._build_request_message(msg)
     assert "transcribed text" in built.content
 
 
 # --- Orchestrator._build_outgoing_message ---
+
 
 @pytest.mark.asyncio
 async def test_build_outgoing_text():

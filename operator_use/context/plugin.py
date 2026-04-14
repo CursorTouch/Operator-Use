@@ -36,10 +36,12 @@ class ContextPlugin(Plugin):
 
     def register_hooks(self, hooks: "Hooks") -> None:
         from operator_use.agent.hooks import HookEvent
+
         hooks.register(HookEvent.BEFORE_LLM_CALL, self._hook)
 
     def unregister_hooks(self, hooks: "Hooks") -> None:
         from operator_use.agent.hooks import HookEvent
+
         hooks.unregister(HookEvent.BEFORE_LLM_CALL, self._hook)
 
     async def _hook(self, ctx: "BeforeLLMCallContext") -> None:

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 
 class BaseWatchdog(ABC):
-    def __init__(self, session: 'Browser'):
+    def __init__(self, session: "Browser"):
         self.session = session
 
     @abstractmethod

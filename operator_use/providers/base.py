@@ -1,4 +1,4 @@
-﻿from typing import Protocol, runtime_checkable, overload, Iterator, AsyncIterator
+from typing import Protocol, runtime_checkable, overload, Iterator, AsyncIterator
 from operator_use.providers.events import LLMEvent, LLMStreamEvent
 from operator_use.providers.views import Metadata
 from operator_use.messages import BaseMessage
@@ -9,7 +9,6 @@ from pydantic import BaseModel
 
 @runtime_checkable
 class BaseChatLLM(Protocol):
-
     def sanitize_schema(self, tool_schema: dict) -> dict:
         """Convert full JSON schema into a minimal function schema.
 
@@ -53,32 +52,49 @@ class BaseChatLLM(Protocol):
         }
 
     @property
-    def model_name(self) -> str:
-        ...
+    def model_name(self) -> str: ...
 
     @property
-    def provider(self) -> str:
-        ...
+    def provider(self) -> str: ...
 
     @overload
-    def invoke(self, messages: list[BaseMessage]|Iterable[BaseMessage], tools: list[Tool] = [], structured_output: BaseModel | None = None, json_mode: bool = False) -> LLMEvent:
-        ...
+    def invoke(
+        self,
+        messages: list[BaseMessage] | Iterable[BaseMessage],
+        tools: list[Tool] = [],
+        structured_output: BaseModel | None = None,
+        json_mode: bool = False,
+    ) -> LLMEvent: ...
 
     @overload
-    async def ainvoke(self, messages: list[BaseMessage]|Iterable[BaseMessage], tools: list[Tool] = [], structured_output: BaseModel | None = None, json_mode: bool = False) -> LLMEvent:
-        ...
+    async def ainvoke(
+        self,
+        messages: list[BaseMessage] | Iterable[BaseMessage],
+        tools: list[Tool] = [],
+        structured_output: BaseModel | None = None,
+        json_mode: bool = False,
+    ) -> LLMEvent: ...
 
     @overload
-    def stream(self, messages: list[BaseMessage]|Iterable[BaseMessage], tools: list[Tool] = [], structured_output: BaseModel | None = None, json_mode: bool = False) -> Iterator[LLMStreamEvent]:
-        ...
+    def stream(
+        self,
+        messages: list[BaseMessage] | Iterable[BaseMessage],
+        tools: list[Tool] = [],
+        structured_output: BaseModel | None = None,
+        json_mode: bool = False,
+    ) -> Iterator[LLMStreamEvent]: ...
 
     @overload
-    async def astream(self, messages: list[BaseMessage]|Iterable[BaseMessage], tools: list[Tool] = [], structured_output: BaseModel | None = None, json_mode: bool = False) -> AsyncIterator[LLMStreamEvent]:
-        ...
+    async def astream(
+        self,
+        messages: list[BaseMessage] | Iterable[BaseMessage],
+        tools: list[Tool] = [],
+        structured_output: BaseModel | None = None,
+        json_mode: bool = False,
+    ) -> AsyncIterator[LLMStreamEvent]: ...
 
     @overload
-    def get_metadata(self) -> Metadata:
-        ...
+    def get_metadata(self) -> Metadata: ...
 
 
 @runtime_checkable
@@ -158,7 +174,9 @@ class BaseImage(Protocol):
         """The name of the image generation model being used."""
         ...
 
-    def generate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    def generate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         """Generate or edit an image and save it to a file.
 
         Args:
@@ -175,7 +193,9 @@ class BaseImage(Protocol):
         """
         ...
 
-    async def agenerate(self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs) -> None:
+    async def agenerate(
+        self, prompt: str, output_path: str, images: list[str] | None = None, **kwargs
+    ) -> None:
         """Asynchronously generate or edit an image and save it to a file.
 
         Args:

@@ -1,4 +1,4 @@
-﻿"""Process tool — list/kill OS processes and manage background shell sessions."""
+"""Process tool — list/kill OS processes and manage background shell sessions."""
 
 from __future__ import annotations
 
@@ -25,9 +25,15 @@ class Process(BaseModel):
     )
     filter: Optional[str] = Field(default=None, description="Filter process names (list action)")
     pid: Optional[int] = Field(default=None, description="PID to kill")
-    name: Optional[str] = Field(default=None, description="Process name to kill (kills all matches)")
-    cmd: Optional[str] = Field(default=None, description="Shell command to run in background (spawn action)")
-    session_id: Optional[str] = Field(default=None, description="Background session ID (from spawn)")
+    name: Optional[str] = Field(
+        default=None, description="Process name to kill (kills all matches)"
+    )
+    cmd: Optional[str] = Field(
+        default=None, description="Shell command to run in background (spawn action)"
+    )
+    session_id: Optional[str] = Field(
+        default=None, description="Background session ID (from spawn)"
+    )
     input: Optional[str] = Field(default=None, description="Text to send to stdin (write action)")
     lines: int = Field(default=30, description="Number of tail lines to return (poll/log actions)")
 
@@ -57,11 +63,12 @@ async def process(
     store = kwargs.get("_process_store")
 
     match action:
-
         case "list":
             rows, total = await list_os(filter)
             if not rows:
-                return ToolResult.success_result("No processes found" + (f" matching '{filter}'" if filter else ""))
+                return ToolResult.success_result(
+                    "No processes found" + (f" matching '{filter}'" if filter else "")
+                )
             header = f"{'PID':>6}  {'NAME':<30}  {'STATUS':<10}  MEMORY\n" + "-" * 70
             output = header + "\n" + "\n".join(rows)
             if len(output) > MAX_TOOL_OUTPUT_LENGTH:
@@ -102,7 +109,9 @@ async def process(
 
             match action:
                 case "poll":
-                    status = "running" if session.is_running else f"exited (code={session.exit_code})"
+                    status = (
+                        "running" if session.is_running else f"exited (code={session.exit_code})"
+                    )
                     age = (datetime.now() - session.started_at).seconds
                     tail = session.tail(lines)
                     return ToolResult.success_result(
@@ -121,14 +130,18 @@ async def process(
 
                 case "write":
                     if not session.is_running:
-                        return ToolResult.error_result(f"Session {session_id} is not running (exit_code={session.exit_code})")
+                        return ToolResult.error_result(
+                            f"Session {session_id} is not running (exit_code={session.exit_code})"
+                        )
                     if not input:
                         return ToolResult.error_result("Provide input text to write")
                     try:
                         payload = (input if input.endswith("\n") else input + "\n").encode()
                         session.process.stdin.write(payload)
                         await session.process.stdin.drain()
-                        return ToolResult.success_result(f"Sent {len(payload)} bytes to session {session_id}")
+                        return ToolResult.success_result(
+                            f"Sent {len(payload)} bytes to session {session_id}"
+                        )
                     except Exception as e:
                         return ToolResult.error_result(f"Write failed: {e}")
 

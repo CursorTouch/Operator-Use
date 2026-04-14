@@ -1,4 +1,8 @@
-from operator_use.web.browser.events import NavigationSettledEvent, NavigationStartedEvent, StateInvalidatedEvent
+from operator_use.web.browser.events import (
+    NavigationSettledEvent,
+    NavigationStartedEvent,
+    StateInvalidatedEvent,
+)
 
 
 def test_browser_event_names_are_stable():

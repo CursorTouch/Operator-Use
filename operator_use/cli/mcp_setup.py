@@ -2,11 +2,7 @@
 
 import json
 from typing import Optional
-from pathlib import Path
-from operator_use.config.service import MCPServerConfig
-from operator_use.cli.tui import (
-    clear_screen, print_start, select, text_input, confirm, console
-)
+from operator_use.cli.tui import clear_screen, print_start, select, text_input, confirm, console
 
 
 def show_mcp_menu(mcp_servers: dict[str, dict]) -> dict[str, dict]:
@@ -58,10 +54,7 @@ def add_mcp_server(existing: dict) -> Optional[str]:
     print_start("Add MCP Server")
 
     while True:
-        name = text_input(
-            "Server name (alphanumeric, lowercase):",
-            default=""
-        )
+        name = text_input("Server name (alphanumeric, lowercase):", default="")
 
         if not name:
             if confirm("Cancel adding server?"):
@@ -91,7 +84,7 @@ def create_mcp_config(name: str) -> dict:
         [
             "Stdio (local subprocess)",
             "HTTP/SSE (remote)",
-        ]
+        ],
     )
     transport = "stdio" if "Stdio" in transport_choice else "http"
 
@@ -99,14 +92,10 @@ def create_mcp_config(name: str) -> dict:
 
     if transport == "stdio":
         # Stdio configuration
-        config["command"] = text_input(
-            "Command to run (e.g., npx, uvx, python):",
-            default="uvx"
-        )
+        config["command"] = text_input("Command to run (e.g., npx, uvx, python):", default="uvx")
 
         args_str = text_input(
-            "Arguments (comma-separated, e.g., mcp-server-filesystem, /path):",
-            default=""
+            "Arguments (comma-separated, e.g., mcp-server-filesystem, /path):", default=""
         )
         config["args"] = [arg.strip() for arg in args_str.split(",") if arg.strip()]
 
@@ -125,8 +114,7 @@ def create_mcp_config(name: str) -> dict:
     else:
         # HTTP configuration
         config["url"] = text_input(
-            "Server URL (e.g., http://localhost:3000):",
-            default="http://localhost:3000"
+            "Server URL (e.g., http://localhost:3000):", default="http://localhost:3000"
         )
 
         if confirm("Add authentication token?"):
@@ -198,7 +186,9 @@ def edit_mcp_server(mcp_servers: dict[str, dict]) -> None:
                 current.pop("command", None)
                 current.pop("args", None)
                 current.pop("env", None)
-                current["url"] = text_input("URL:", default=current.get("url", "http://localhost:3000"))
+                current["url"] = text_input(
+                    "URL:", default=current.get("url", "http://localhost:3000")
+                )
 
     elif edit_choice == "Command/URL":
         if current.get("transport") == "stdio":
@@ -208,8 +198,7 @@ def edit_mcp_server(mcp_servers: dict[str, dict]) -> None:
 
     elif edit_choice == "Arguments":
         args_str = text_input(
-            "Arguments (comma-separated):",
-            default=", ".join(current.get("args", []))
+            "Arguments (comma-separated):", default=", ".join(current.get("args", []))
         )
         current["args"] = [arg.strip() for arg in args_str.split(",") if arg.strip()]
 

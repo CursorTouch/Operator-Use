@@ -120,7 +120,9 @@ class TestMCPManagerReferenceCounting:
         mock_session.initialize = AsyncMock()
         mock_session.list_tools = AsyncMock(return_value=MagicMock(tools=[mock_tool]))
 
-        with patch.object(manager, "_open_session", new_callable=AsyncMock, return_value=mock_session):
+        with patch.object(
+            manager, "_open_session", new_callable=AsyncMock, return_value=mock_session
+        ):
             # Initially count is 0
             assert manager._connection_count.get(server_name, 0) == 0
 
@@ -148,7 +150,9 @@ class TestMCPManagerReferenceCounting:
         mock_session.initialize = AsyncMock()
         mock_session.list_tools = AsyncMock(return_value=MagicMock(tools=[mock_tool]))
 
-        with patch.object(manager, "_open_session", new_callable=AsyncMock, return_value=mock_session):
+        with patch.object(
+            manager, "_open_session", new_callable=AsyncMock, return_value=mock_session
+        ):
             # Agent A connects
             await manager.connect("agent_a", server_name)
             assert manager._connection_count[server_name] == 1
@@ -173,7 +177,6 @@ class TestMCPManagerReferenceCounting:
         manager._agent_connections["agent_a"] = {server_name}
         manager._agent_connections["agent_b"] = {server_name}
 
-        mock_session = AsyncMock()
         manager._tools[server_name] = [MagicMock(name="tool")]
 
         # Mock stack to avoid actual closing
@@ -182,7 +185,7 @@ class TestMCPManagerReferenceCounting:
         manager._stacks[server_name] = mock_stack
 
         # Agent A disconnects
-        tool_names = await manager.disconnect("agent_a", server_name)
+        await manager.disconnect("agent_a", server_name)
 
         # Server should still be alive
         assert manager._connection_count[server_name] == 1
@@ -224,9 +227,7 @@ class TestMCPTool:
         mock_session = MagicMock()
         input_schema = {
             "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "File path"}
-            },
+            "properties": {"path": {"type": "string", "description": "File path"}},
             "required": ["path"],
         }
 

@@ -1,6 +1,6 @@
-﻿"""Session views."""
+"""Session views."""
 
-from dataclasses import dataclass,field
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -12,9 +12,9 @@ class Session:
     """Session data class."""
 
     id: str
-    messages: list[BaseMessage]=field(default_factory=list)
-    created_at: datetime=field(default_factory=datetime.now)
-    updated_at: datetime=field(default_factory=datetime.now)
+    messages: list[BaseMessage] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_message(self, message: BaseMessage) -> None:

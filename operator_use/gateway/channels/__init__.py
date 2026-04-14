@@ -1,4 +1,4 @@
-﻿"""Channels module: channel implementations."""
+"""Channels module: channel implementations."""
 
 from operator_use.gateway.channels.base import BaseChannel
 from operator_use.gateway.channels.telegram import TelegramChannel

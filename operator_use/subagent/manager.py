@@ -121,7 +121,6 @@ class SubagentManager:
         t.add_done_callback(lambda _: self._cleanup(task_id, session_key))
         return task_id
 
-
     def _notify_completion(self, task_id: str) -> None:
         """Signal that a task has completed so dependents can proceed."""
         if task_id in self._events:
@@ -182,4 +181,3 @@ class SubagentManager:
     def get_pool_stats(self) -> dict:
         """Return task pool statistics (pending, running, completed)."""
         return self._pool.stats()
-

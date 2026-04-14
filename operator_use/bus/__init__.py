@@ -1,4 +1,4 @@
-﻿"""Bus module: message bus for decentralized communication."""
+"""Bus module: message bus for decentralized communication."""
 
 from operator_use.bus.views import (
     AudioPart,

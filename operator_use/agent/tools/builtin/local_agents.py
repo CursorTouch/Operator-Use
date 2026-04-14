@@ -200,14 +200,16 @@ async def _run_detached(
         f"Result:\n{result}\n\n"
         f"Relay this result naturally in context. Do not mention task IDs or 'localagent'."
     )
-    await bus.publish_incoming(IncomingMessage(
-        channel=reply_channel,
-        chat_id=reply_chat_id,
-        account_id=reply_account_id,
-        parts=[TextPart(content=content)],
-        user_id="localagent",
-        metadata={"_localagent_result": True, "task_id": task_id, "from_agent": agent_name},
-    ))
+    await bus.publish_incoming(
+        IncomingMessage(
+            channel=reply_channel,
+            chat_id=reply_chat_id,
+            account_id=reply_account_id,
+            parts=[TextPart(content=content)],
+            user_id="localagent",
+            metadata={"_localagent_result": True, "task_id": task_id, "from_agent": agent_name},
+        )
+    )
 
 
 @Tool(
@@ -269,7 +271,9 @@ async def localagents(
         if current_agent is not None:
             task_reg = _get_task_registry(current_agent)
             if task_reg:
-                running = [e["record"] for e in task_reg.values() if e["record"]["status"] == "running"]
+                running = [
+                    e["record"] for e in task_reg.values() if e["record"]["status"] == "running"
+                ]
                 if running:
                     lines.append(f"\nActive detached runs ({len(running)} running):")
                     for r in running:
@@ -290,9 +294,9 @@ async def localagents(
         r = entry["record"]
         dur = _format_duration(r["started_at"], r.get("finished_at"))
         status_icon = {
-            "running":   "⏳",
+            "running": "⏳",
             "completed": "✅",
-            "failed":    "❌",
+            "failed": "❌",
             "cancelled": "🚫",
         }.get(r["status"], "?")
         lines = [
@@ -324,7 +328,9 @@ async def localagents(
                 f"Cannot cancel — agent '{r['name']}' run {task_id} is not running (status={r['status']})"
             )
         entry["asyncio_task"].cancel()
-        return ToolResult.success_result(f"Cancellation requested for agent '{r['name']}' (task_id={task_id}).")
+        return ToolResult.success_result(
+            f"Cancellation requested for agent '{r['name']}' (task_id={task_id})."
+        )
 
     if action == "sessions":
         if current_agent is None:
@@ -335,9 +341,7 @@ async def localagents(
         lines = ["Active named sessions:"]
         for sid, info in session_reg.items():
             age = _format_duration(info["created_at"], None)
-            lines.append(
-                f"  • {sid}  agent='{info['name']}'  label='{info['label']}'  age={age}"
-            )
+            lines.append(f"  • {sid}  agent='{info['name']}'  label='{info['label']}'  age={age}")
         return ToolResult.success_result("\n".join(lines))
 
     if action in ("spawn", "send"):
@@ -346,7 +350,9 @@ async def localagents(
         if action == "send" and not task:
             return ToolResult.error_result("task is required for action='send'")
         if action == "send" and not session_id:
-            return ToolResult.error_result("session_id is required for action='send' — use spawn first to create a session")
+            return ToolResult.error_result(
+                "session_id is required for action='send' — use spawn first to create a session"
+            )
 
     if action != "run" and action not in ("spawn", "send"):
         return ToolResult.error_result(f"Unknown action '{action}'")
@@ -362,7 +368,9 @@ async def localagents(
         return ToolResult.error_result(f"Unknown local agent '{name}'. Available: {available}.")
 
     if current_agent is not None and target is current_agent:
-        return ToolResult.error_result("Refusing to delegate to the current agent. Choose a different local agent.")
+        return ToolResult.error_result(
+            "Refusing to delegate to the current agent. Choose a different local agent."
+        )
 
     delegation_chain = _delegation_chain_from_metadata(current_metadata)
     if current_agent_id and (not delegation_chain or delegation_chain[-1] != current_agent_id):
@@ -378,7 +386,9 @@ async def localagents(
     elif action == "spawn":
         delegated_session_id = f"spawned_{name}_{uuid.uuid4().hex[:8]}"
     else:
-        delegated_session_id = f"{parent_session_id}__delegate__{current_agent_id or 'agent'}-to-{name}"
+        delegated_session_id = (
+            f"{parent_session_id}__delegate__{current_agent_id or 'agent'}-to-{name}"
+        )
 
     # Register the session for spawn
     if action == "spawn" and current_agent is not None:
@@ -491,7 +501,9 @@ async def localagents(
 
     # After child finishes, check if there were any pending requests that parent didn't respond to
     # and log them so parent can review
-    unresolved = [v for v in child_pending_replies.values() if isinstance(v, dict) and "future" in v]
+    unresolved = [
+        v for v in child_pending_replies.values() if isinstance(v, dict) and "future" in v
+    ]
     if unresolved:
         logger.warning(
             f"Child agent '{name}' left {len(unresolved)} unresolved parent requests. "

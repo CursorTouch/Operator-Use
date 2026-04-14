@@ -1,4 +1,4 @@
-﻿"""Gateway: unified channel management and outbound dispatch."""
+"""Gateway: unified channel management and outbound dispatch."""
 
 import asyncio
 import logging
@@ -30,8 +30,8 @@ class Gateway:
         self._channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task[None] | None = None
         self._running = False
-        self.on_ready = on_ready      # fired once all channels are live
-        self.on_stop = on_stop        # fired after all channels have stopped
+        self.on_ready = on_ready  # fired once all channels are live
+        self.on_stop = on_stop  # fired after all channels have stopped
         self.on_restart = on_restart  # fired when a restart is requested
 
     def add_channel(self, channel: BaseChannel) -> None:
@@ -55,6 +55,7 @@ class Gateway:
             channel.running = True
         tasks = [asyncio.create_task(channel.start()) for channel in self._channels.values()]
         from rich.console import Console as _C
+
         _C().print(f"└ [#abb2bf]{'Gateway':<10}[/#abb2bf] [#61afef]started[/#61afef]")
         if self.on_ready is not None:
             try:
@@ -81,6 +82,7 @@ class Gateway:
         await asyncio.gather(*tasks, return_exceptions=True)
         self._channels.clear()
         from rich.console import Console as _C
+
         _C().print(f"└ [#abb2bf]{'Gateway':<10}[/#abb2bf] [#61afef]stopped[/#61afef]")
         if self.on_stop is not None:
             try:
@@ -93,7 +95,11 @@ class Gateway:
         while self._running:
             try:
                 message = await asyncio.wait_for(self._bus.consume_outgoing(), timeout=5.0)
-                key = f"{message.channel}:{message.account_id}" if message.account_id else message.channel
+                key = (
+                    f"{message.channel}:{message.account_id}"
+                    if message.account_id
+                    else message.channel
+                )
                 channel = self._channels.get(key) or self._channels.get(message.channel)
                 if channel:
                     try:

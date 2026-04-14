@@ -1,4 +1,4 @@
-﻿"""Agent module: LLM loop + tool execution."""
+"""Agent module: LLM loop + tool execution."""
 
 from operator_use.agent.service import Agent
 from operator_use.agent.tools import ToolRegistry

@@ -13,9 +13,20 @@ import json
 
 class BrowserTool(BaseModel):
     action: Literal[
-        "goto", "back", "forward",
-        "click", "type", "key", "scroll", "menu", "upload",
-        "tab", "wait", "script", "scrape", "download",
+        "goto",
+        "back",
+        "forward",
+        "click",
+        "type",
+        "key",
+        "scroll",
+        "menu",
+        "upload",
+        "tab",
+        "wait",
+        "script",
+        "scrape",
+        "download",
     ] = Field(
         ...,
         description=(
@@ -37,34 +48,70 @@ class BrowserTool(BaseModel):
         ),
     )
     # Navigation
-    url: Optional[str] = Field(default=None, description="Full URL including protocol. Required for goto and download.")
+    url: Optional[str] = Field(
+        default=None, description="Full URL including protocol. Required for goto and download."
+    )
     # Coordinates
-    x: Optional[int] = Field(default=None, description="X coordinate. Required for click, type, scroll (optional), menu, upload.")
-    y: Optional[int] = Field(default=None, description="Y coordinate. Required for click, type, scroll (optional), menu, upload.")
+    x: Optional[int] = Field(
+        default=None,
+        description="X coordinate. Required for click, type, scroll (optional), menu, upload.",
+    )
+    y: Optional[int] = Field(
+        default=None,
+        description="Y coordinate. Required for click, type, scroll (optional), menu, upload.",
+    )
     # Type / key
-    text: Optional[str] = Field(default=None, description="Text to type (action=type) or key/combo to press (action=key), e.g. 'Control+A'.")
-    clear: bool = Field(default=False, description="Clear existing field content before typing (action=type).")
-    press_enter: bool = Field(default=False, description="Press Enter after typing to submit (action=type).")
+    text: Optional[str] = Field(
+        default=None,
+        description="Text to type (action=type) or key/combo to press (action=key), e.g. 'Control+A'.",
+    )
+    clear: bool = Field(
+        default=False, description="Clear existing field content before typing (action=type)."
+    )
+    press_enter: bool = Field(
+        default=False, description="Press Enter after typing to submit (action=type)."
+    )
     # Scroll
-    direction: Literal["up", "down"] = Field(default="down", description="Scroll direction (action=scroll).")
+    direction: Literal["up", "down"] = Field(
+        default="down", description="Scroll direction (action=scroll)."
+    )
     amount: int = Field(default=500, description="Pixels to scroll per action (action=scroll).")
     # Key repeat
     times: int = Field(default=1, description="Number of times to press the key (action=key).")
     # Tab management
-    tab_mode: Literal["open", "close", "switch"] = Field(default="open", description="Tab operation: open a new tab, close the current tab, or switch to a tab by index (action=tab).")
-    tab_index: Optional[int] = Field(default=None, description="Zero-based index of the tab to switch to (action=tab, tab_mode=switch).")
+    tab_mode: Literal["open", "close", "switch"] = Field(
+        default="open",
+        description="Tab operation: open a new tab, close the current tab, or switch to a tab by index (action=tab).",
+    )
+    tab_index: Optional[int] = Field(
+        default=None,
+        description="Zero-based index of the tab to switch to (action=tab, tab_mode=switch).",
+    )
     # Wait
     time: Optional[int] = Field(default=None, description="Seconds to pause (action=wait).")
     # Script
-    script: Optional[str] = Field(default=None, description="JavaScript to execute on the page (action=script). Always wrap in IIFE with try-catch.")
+    script: Optional[str] = Field(
+        default=None,
+        description="JavaScript to execute on the page (action=script). Always wrap in IIFE with try-catch.",
+    )
     # Scrape
-    prompt: Optional[str] = Field(default=None, description="Optional extraction hint for scrape. If omitted, full page markdown is returned.")
+    prompt: Optional[str] = Field(
+        default=None,
+        description="Optional extraction hint for scrape. If omitted, full page markdown is returned.",
+    )
     # Upload
-    filenames: Optional[list[str]] = Field(default=None, description="Filenames to upload from ./uploads directory (action=upload).")
+    filenames: Optional[list[str]] = Field(
+        default=None, description="Filenames to upload from ./uploads directory (action=upload)."
+    )
     # Menu / select
-    labels: Optional[list[str]] = Field(default=None, description="Visible option labels to select in a <select> dropdown (action=menu).")
+    labels: Optional[list[str]] = Field(
+        default=None,
+        description="Visible option labels to select in a <select> dropdown (action=menu).",
+    )
     # Download
-    filename: Optional[str] = Field(default=None, description="Local filename to save the downloaded file as (action=download).")
+    filename: Optional[str] = Field(
+        default=None, description="Local filename to save the downloaded file as (action=download)."
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -146,7 +193,9 @@ async def browser(
 ) -> ToolResult:
     browser = kwargs.get("browser")
     if browser is None:
-        return ToolResult.error_result("Browser is not available. Ensure browser_use plugin is enabled.")
+        return ToolResult.error_result(
+            "Browser is not available. Ensure browser_use plugin is enabled."
+        )
     if browser._client is None:
         await browser.init_browser()
         await browser.init_tabs()
@@ -191,7 +240,9 @@ async def browser(
 
         case "key":
             if not text:
-                return ToolResult.error_result("text is required for key (the key or combination to press, e.g. 'Enter', 'Control+A').")
+                return ToolResult.error_result(
+                    "text is required for key (the key or combination to press, e.g. 'Enter', 'Control+A')."
+                )
             for _ in range(times):
                 await page.key_press(text)
             return ToolResult.success_result(f"Pressed {text}.")
@@ -199,7 +250,9 @@ async def browser(
         case "scroll":
             if x is not None and y is not None:
                 await page.scroll_at(x, y, direction, amount)
-                return ToolResult.success_result(f"Scrolled {direction} at ({x}, {y}) by {amount}px.")
+                return ToolResult.success_result(
+                    f"Scrolled {direction} at ({x}, {y}) by {amount}px."
+                )
             pos = await page.get_scroll_position()
             scroll_y = pos.get("scrollY", 0)
             max_scroll = pos.get("scrollHeight", 0) - pos.get("innerHeight", 0)
@@ -225,12 +278,16 @@ async def browser(
                 case "switch":
                     tabs = await browser.get_all_tabs()
                     if tab_index is None or tab_index < 0 or tab_index >= len(tabs):
-                        return ToolResult.error_result(f"tab_index {tab_index} out of range. Available tabs: {len(tabs)}")
+                        return ToolResult.error_result(
+                            f"tab_index {tab_index} out of range. Available tabs: {len(tabs)}"
+                        )
                     await browser.switch_tab(tab_index)
                     await browser._wait_for_page(timeout=5.0)
                     return ToolResult.success_result(f"Switched to tab {tab_index}.")
                 case _:
-                    return ToolResult.error_result("Invalid tab_mode. Use 'open', 'close', or 'switch'.")
+                    return ToolResult.error_result(
+                        "Invalid tab_mode. Use 'open', 'close', or 'switch'."
+                    )
 
         case "wait":
             if time is None:
@@ -256,7 +313,9 @@ async def browser(
             if not labels:
                 return ToolResult.error_result("labels is required for menu.")
             await page.select_option_at(x, y, labels)
-            return ToolResult.success_result(f"Selected {', '.join(labels)} in dropdown at ({x}, {y}).")
+            return ToolResult.success_result(
+                f"Selected {', '.join(labels)} in dropdown at ({x}, {y})."
+            )
 
         case "script":
             if not script:

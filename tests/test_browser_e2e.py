@@ -93,8 +93,10 @@ def browser_site(tmp_path_factory):
     )
 
     port = _find_free_port()
+
     def handler(*args, **kwargs):
         return _QuietHandler(*args, directory=str(root), **kwargs)
+
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -159,7 +161,9 @@ async def test_browser_e2e_dom_mutation_flow(browser_instance: Browser, browser_
     assert "Clicked state updated" in html
 
 
-@pytest.mark.skip(reason="Popup/new-tab smoke remains flaky in local headless Chrome; popup behavior is covered by watchdog tests.")
+@pytest.mark.skip(
+    reason="Popup/new-tab smoke remains flaky in local headless Chrome; popup behavior is covered by watchdog tests."
+)
 @pytest.mark.asyncio
 async def test_browser_e2e_popup_creates_new_tab(browser_instance: Browser, browser_site: str):
     await browser_instance.navigate(f"{browser_site}/index.html")

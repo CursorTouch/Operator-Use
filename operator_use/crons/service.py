@@ -1,4 +1,4 @@
-﻿"""Cron service: persist and schedule cron jobs, invoke callback when jobs are due."""
+"""Cron service: persist and schedule cron jobs, invoke callback when jobs are due."""
 
 import asyncio
 import json
@@ -130,7 +130,7 @@ class Cron:
     def __init__(
         self,
         store_path: Path,
-        on_job: Callable[[CronJob], Coroutine[Any,Any,str|None]]|None=None,
+        on_job: Callable[[CronJob], Coroutine[Any, Any, str | None]] | None = None,
     ):
         self.store_path = Path(store_path)
         self.on_job = on_job
@@ -230,7 +230,9 @@ class Cron:
                 now = _ms()
                 j.updated_at_ms = now
                 j.state.next_run_at_ms = (
-                    _compute_next_run(j.schedule, now, j.state.last_run_at_ms) if j.enabled else None
+                    _compute_next_run(j.schedule, now, j.state.last_run_at_ms)
+                    if j.enabled
+                    else None
                 )
                 self._save()
                 return j

@@ -47,8 +47,8 @@ class ObservationMaskingStrategy(BaseContextStrategy):
         if len(non_system) <= self.keep_recent:
             return messages
 
-        to_mask = non_system[:-self.keep_recent]
-        to_keep = non_system[-self.keep_recent:]
+        to_mask = non_system[: -self.keep_recent]
+        to_keep = non_system[-self.keep_recent :]
 
         masked_count = 0
         processed: list = []

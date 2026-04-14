@@ -46,7 +46,9 @@ async def test_multi_agent_shared_connection_scenario():
 
     # --- SCENARIO: Agent A connects to MCP 1 ---
     print("\n[Agent A] Connecting to MCP 1...")
-    with patch.object(manager, "_open_session", new_callable=AsyncMock, return_value=mock_session_1):
+    with patch.object(
+        manager, "_open_session", new_callable=AsyncMock, return_value=mock_session_1
+    ):
         tools_a = await manager.connect("agent_a", "mcp_1")
 
     assert manager.is_connected("agent_a", "mcp_1"), "Agent A should be connected"
@@ -78,7 +80,7 @@ async def test_multi_agent_shared_connection_scenario():
     assert "mcp_1" in manager._stacks, "Server should still be alive"
     print(f"  [OK] Agent A disconnected, removed {len(tool_names_a)} tools")
     print(f"  [OK] Connection count: {manager._connection_count['mcp_1']}")
-    print(f"  [OK] Server still running (for Agent B)")
+    print("  [OK] Server still running (for Agent B)")
 
     # --- SCENARIO: Agent B disconnects (kills server) ---
     print("\n[Agent B] Disconnecting from MCP 1...")
@@ -90,7 +92,7 @@ async def test_multi_agent_shared_connection_scenario():
     assert "mcp_1" not in manager._stacks, "Server should be dead"
     print(f"  [OK] Agent B disconnected, removed {len(tool_names_b)} tools")
     print(f"  [OK] Connection count: {manager._connection_count['mcp_1']}")
-    print(f"  [OK] Server CLOSED (no more agents)")
+    print("  [OK] Server CLOSED (no more agents)")
 
     # --- VERIFY: List servers shows correct state ---
     print("\n[List Servers] Querying connection status...")

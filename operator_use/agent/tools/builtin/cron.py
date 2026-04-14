@@ -1,4 +1,4 @@
-﻿"""Cron tool: manage scheduled cron jobs (add, list, remove, update)."""
+"""Cron tool: manage scheduled cron jobs (add, list, remove, update)."""
 
 from typing import Literal
 
@@ -16,7 +16,9 @@ class Cron(BaseModel):
         default=None,
         description="The job's UUID. Required for 'remove' and 'update'. Get it from 'list'.",
     )
-    name: str | None = Field(default=None, description="Human-readable label for the job. Required for 'add'.")
+    name: str | None = Field(
+        default=None, description="Human-readable label for the job. Required for 'add'."
+    )
     schedule_mode: Literal["at", "every", "cron"] | None = Field(
         default=None,
         description="How to schedule: 'cron' or 'at' use a cron expression (schedule_expr), 'every' repeats on a fixed interval (schedule_interval_ms). Defaults to 'cron' for add.",
@@ -53,7 +55,10 @@ class Cron(BaseModel):
         default=False,
         description="If True, the job is automatically deleted after its first successful run. Use for one-shot reminders.",
     )
-    enabled: bool | None = Field(default=None, description="Enable or disable the job without deleting it. Only used in 'update' mode.")
+    enabled: bool | None = Field(
+        default=None,
+        description="Enable or disable the job without deleting it. Only used in 'update' mode.",
+    )
 
 
 @Tool(
@@ -95,7 +100,9 @@ async def cron(
                 sched_str = f"every {s.interval_ms}ms"
             else:
                 sched_str = f"{s.mode} {s.expr or ''} tz={s.tz or 'UTC'}"
-            lines.append(f"id={j.id} name={j.name} enabled={j.enabled} schedule={sched_str} next_run={next_str}")
+            lines.append(
+                f"id={j.id} name={j.name} enabled={j.enabled} schedule={sched_str} next_run={next_str}"
+            )
         return ToolResult.success_result("\n".join(lines))
 
     if mode == "remove":
@@ -153,7 +160,9 @@ async def cron(
             if mode == "every":
                 schedule = CronSchedule(
                     mode="every",
-                    interval_ms=schedule_interval_ms if schedule_interval_ms is not None else s.interval_ms,
+                    interval_ms=schedule_interval_ms
+                    if schedule_interval_ms is not None
+                    else s.interval_ms,
                 )
             else:
                 schedule = CronSchedule(

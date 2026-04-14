@@ -171,8 +171,8 @@ async def control_center(
     agent_id: Optional[str] = None,
     **kwargs,
 ) -> ToolResult:
-    caller_channel  = kwargs.get("_channel", "unknown")
-    caller_chat_id  = kwargs.get("_chat_id", "unknown")
+    caller_channel = kwargs.get("_channel", "unknown")
+    caller_chat_id = kwargs.get("_chat_id", "unknown")
     caller_agent_id = kwargs.get("_agent_id", "unknown")
 
     data = _load_config_raw()
@@ -181,7 +181,9 @@ async def control_center(
 
     entry, idx = _get_agent_entry(data, agent_id)
     if entry is None:
-        return ToolResult.error_result("No agents found in config.json. Run 'operator onboard' first.")
+        return ToolResult.error_result(
+            "No agents found in config.json. Run 'operator onboard' first."
+        )
 
     agent = kwargs.get("_agent")
 
@@ -215,11 +217,7 @@ async def control_center(
 
     cu = _get_plugin_enabled(entry, "computer_use")
     bu = _get_plugin_enabled(entry, "browser_use")
-    status = (
-        f"Agent: {entry.get('id', '?')}\n"
-        f"  computer_use : {cu}\n"
-        f"  browser_use  : {bu}"
-    )
+    status = f"Agent: {entry.get('id', '?')}\n  computer_use : {cu}\n  browser_use  : {bu}"
 
     if changes:
         msg = f"Updated — {', '.join(changes)}.\n{status}"
@@ -229,7 +227,9 @@ async def control_center(
     # Audit log — always emitted at WARNING so it appears in operator.log
     logger.warning(
         "control_center called | agent=%s channel=%s chat=%s | changes=[%s] restart=%s",
-        caller_agent_id, caller_channel, caller_chat_id,
+        caller_agent_id,
+        caller_channel,
+        caller_chat_id,
         ", ".join(changes) if changes else "none",
         restart,
     )
@@ -279,16 +279,18 @@ async def control_center(
                 RESTART_FILE.write_text(json.dumps(restart_data), encoding="utf-8")
                 logger.info(
                     "Saved continuation → %s (improvement_session=%s)",
-                    RESTART_FILE, improvement_session,
+                    RESTART_FILE,
+                    improvement_session,
                 )
             except Exception as e:
                 return ToolResult.error_result(f"Could not save restart continuation: {e}")
             msg += f"\nWill continue after restart: {continue_with[:100]}"
+        graceful_fn = kwargs.get("_graceful_restart_fn")
         on_restart = getattr(getattr(agent, "gateway", None), "on_restart", None)
         if callable(on_restart):
             asyncio.ensure_future(on_restart())
         else:
-            asyncio.ensure_future(_do_restart(graceful_fn=None))  # fallback: no gateway wired
+            asyncio.ensure_future(_do_restart(graceful_fn=graceful_fn))
         return ToolResult.success_result(f"{msg}\nRestart initiated.", metadata={"stop_loop": True})
 
     return ToolResult.success_result(msg)

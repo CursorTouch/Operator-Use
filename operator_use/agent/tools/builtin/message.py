@@ -1,4 +1,4 @@
-﻿"""Message tools: send messages and reactions to the channel."""
+"""Message tools: send messages and reactions to the channel."""
 
 import asyncio
 import logging
@@ -17,26 +17,26 @@ logger = logging.getLogger(__name__)
 # filtered to emojis that are also universally recognised on other platforms.
 # NOTE: Telegram requires bare ❤ (U+2764), NOT ❤️ (U+2764 U+FE0F).
 UNIVERSAL_REACTIONS: set[str] = {
-    "👍",   # thumbs up      — agree / approve
-    "👎",   # thumbs down    — disagree
-    "❤",    # heart (bare)   — love / care  ← Telegram requires no variation selector
-    "🔥",   # fire           — great / hot
-    "🎉",   # party popper   — celebrate / congrats
-    "🤣",   # ROFL           — very funny
-    "🤔",   # thinking       — hmm / considering
-    "😱",   # scream         — shocked / wow
-    "😢",   # crying         — sad / sorry
-    "😡",   # angry          — frustrated
-    "🥰",   # smiling face   — happy / sweet
-    "😍",   # heart eyes     — love it
-    "😎",   # cool           — no problem
-    "🏆",   # trophy         — winner / best
-    "💯",   # 100            — perfect / absolutely
-    "⚡",   # lightning      — fast / urgent
-    "🙏",   # pray           — thanks / please
-    "👏",   # clap           — well done
-    "🤩",   # star-struck    — amazing
-    "😇",   # angel          — innocent / kind
+    "👍",  # thumbs up      — agree / approve
+    "👎",  # thumbs down    — disagree
+    "❤",  # heart (bare)   — love / care  ← Telegram requires no variation selector
+    "🔥",  # fire           — great / hot
+    "🎉",  # party popper   — celebrate / congrats
+    "🤣",  # ROFL           — very funny
+    "🤔",  # thinking       — hmm / considering
+    "😱",  # scream         — shocked / wow
+    "😢",  # crying         — sad / sorry
+    "😡",  # angry          — frustrated
+    "🥰",  # smiling face   — happy / sweet
+    "😍",  # heart eyes     — love it
+    "😎",  # cool           — no problem
+    "🏆",  # trophy         — winner / best
+    "💯",  # 100            — perfect / absolutely
+    "⚡",  # lightning      — fast / urgent
+    "🙏",  # pray           — thanks / please
+    "👏",  # clap           — well done
+    "🤩",  # star-struck    — amazing
+    "😇",  # angel          — innocent / kind
 }
 
 _REACTIONS_HINT = " ".join(sorted(UNIVERSAL_REACTIONS))
@@ -155,7 +155,9 @@ async def intermediate_message(
             return ToolResult.success_result(f"Parent replied: {reply}")
         except asyncio.TimeoutError:
             parent_pending_replies.pop(child_request_key, None)
-            return ToolResult.error_result(f"Parent did not reply within {timeout}s — continuing without parent input.")
+            return ToolResult.error_result(
+                f"Parent did not reply within {timeout}s — continuing without parent input."
+            )
 
     # Handle parent responding to child
     if to_child:
@@ -164,9 +166,19 @@ async def intermediate_message(
 
         if child_request_key not in pending_replies_dict:
             # List available child requests for debugging
-            available = [k.replace("child_ask_", "") for k in pending_replies_dict.keys() if k.startswith("child_ask_")]
-            avail_str = f" Available: {', '.join(available)}" if available else " No child agents are waiting."
-            return ToolResult.error_result(f"No pending ask from child agent '{to_child}'.{avail_str}")
+            available = [
+                k.replace("child_ask_", "")
+                for k in pending_replies_dict.keys()
+                if k.startswith("child_ask_")
+            ]
+            avail_str = (
+                f" Available: {', '.join(available)}"
+                if available
+                else " No child agents are waiting."
+            )
+            return ToolResult.error_result(
+                f"No pending ask from child agent '{to_child}'.{avail_str}"
+            )
 
         request_info = pending_replies_dict[child_request_key]
         request_info["future"].set_result(content)
@@ -205,9 +217,13 @@ async def intermediate_message(
             return ToolResult.success_result(f"User replied: {reply}")
         except asyncio.TimeoutError:
             pending_replies.pop(session_id, None)
-            return ToolResult.error_result(f"No reply received within {timeout}s — continuing without user input.")
+            return ToolResult.error_result(
+                f"No reply received within {timeout}s — continuing without user input."
+            )
 
-    return ToolResult.success_result(f"Progress update sent to channel {target_channel} chat_id {target_chat_id}")
+    return ToolResult.success_result(
+        f"Progress update sent to channel {target_channel} chat_id {target_chat_id}"
+    )
 
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -298,7 +314,9 @@ async def send_file(
     )
 
     filename = os.path.basename(path)
-    return ToolResult.success_result(f"File '{filename}' sent to channel {target_channel} chat_id {target_chat_id}")
+    return ToolResult.success_result(
+        f"File '{filename}' sent to channel {target_channel} chat_id {target_chat_id}"
+    )
 
 
 class ReactMessage(BaseModel):
@@ -339,7 +357,13 @@ class ReactMessage(BaseModel):
     ),
     model=ReactMessage,
 )
-async def react_message(emoji: str, message_id: int | None = None, channel: str | None = None, chat_id: str | None = None, **kwargs) -> ToolResult:
+async def react_message(
+    emoji: str,
+    message_id: int | None = None,
+    channel: str | None = None,
+    chat_id: str | None = None,
+    **kwargs,
+) -> ToolResult:
     """React to a message with an emoji. Each channel handles reactions in its own way."""
     bus = kwargs.get("_bus")
     ctx_channel = kwargs.get("_channel")

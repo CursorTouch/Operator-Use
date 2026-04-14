@@ -16,6 +16,7 @@ from operator_use.acp.server import ACPServer
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_metadata(agent_id: str, description: str = "") -> AgentMetadata:
     return AgentMetadata(
         id=agent_id,
@@ -81,6 +82,7 @@ pytestmark = pytest.mark.asyncio
 # GET /agents — list
 # ---------------------------------------------------------------------------
 
+
 class TestListAgents:
     async def test_returns_all_agents_no_auth(self, two_agent_server):
         resp = await two_agent_server.get("/agents")
@@ -107,9 +109,7 @@ class TestListAgents:
         assert len(data["agents"]) == 2
 
     async def test_global_token_wrong_returns_401(self, global_auth_server):
-        resp = await global_auth_server.get(
-            "/agents", headers={"Authorization": "Bearer wrong"}
-        )
+        resp = await global_auth_server.get("/agents", headers={"Authorization": "Bearer wrong"})
         assert resp.status == 401
 
     async def test_per_agent_token_sees_only_own_agent(self, per_agent_auth_server):
@@ -145,6 +145,7 @@ class TestListAgents:
 # GET /agents/{agent_id}
 # ---------------------------------------------------------------------------
 
+
 class TestGetAgent:
     async def test_known_agent_no_auth(self, two_agent_server):
         resp = await two_agent_server.get("/agents/alpha")
@@ -173,6 +174,7 @@ class TestGetAgent:
 # POST /runs — routing and auth
 # ---------------------------------------------------------------------------
 
+
 class TestCreateRun:
     async def test_routes_to_correct_agent(self, two_agent_server):
         body = {"agent_id": "beta", "mode": "sync", "input": [{"type": "text", "text": "hello"}]}
@@ -185,7 +187,11 @@ class TestCreateRun:
         assert output_text == "echo:hello"
 
     async def test_falls_back_to_first_agent_when_id_unknown(self, two_agent_server):
-        body = {"agent_id": "nonexistent", "mode": "sync", "input": [{"type": "text", "text": "hi"}]}
+        body = {
+            "agent_id": "nonexistent",
+            "mode": "sync",
+            "input": [{"type": "text", "text": "hi"}],
+        }
         resp = await two_agent_server.post("/runs", json=body)
         assert resp.status == 200
         data = await resp.json()
@@ -239,6 +245,7 @@ class TestCreateRun:
 # ---------------------------------------------------------------------------
 # GET /runs/{run_id}
 # ---------------------------------------------------------------------------
+
 
 class TestGetRun:
     async def test_get_existing_run(self, two_agent_server):

@@ -76,6 +76,7 @@ class Agent:
         self.description = description
         if workspace is None:
             from operator_use.config.paths import get_named_workspace_dir
+
             workspace = get_named_workspace_dir("operator")
         self.workspace = workspace
         self.sessions = sessions or SessionStore(workspace=self.workspace)
@@ -87,7 +88,9 @@ class Agent:
         self.gateway = gateway
         self.bus = bus
         self.tracer = tracer
-        self.subagent_manager = SubagentManager(llm=llm, bus=bus, config=subagent_config, tracer=tracer)
+        self.subagent_manager = SubagentManager(
+            llm=llm, bus=bus, config=subagent_config, tracer=tracer
+        )
         self.process_store = ProcessStore()
         self.hooks = Hooks()
 
@@ -102,6 +105,7 @@ class Agent:
             self.tool_register.unregister_tools(exclude_tools)
 
         from operator_use.agent.workspace_tools import load_workspace_tools
+
         for ws_tool in load_workspace_tools(self.workspace / "tools"):
             try:
                 self.tool_register.register(ws_tool)
@@ -199,7 +203,13 @@ class Agent:
             self.tool_register.set_extension("_metadata", incoming.metadata or {})
             self.tool_register.set_extension("_session_id", session_id)
             from operator_use.bus.views import ImagePart as _ImagePart
-            _img_paths = [p for part in incoming.parts if isinstance(part, _ImagePart) for p in (part.paths or [])]
+
+            _img_paths = [
+                p
+                for part in incoming.parts
+                if isinstance(part, _ImagePart)
+                for p in (part.paths or [])
+            ]
             self.tool_register.set_extension("_incoming_image_paths", _img_paths or None)
         if pending_replies is not None:
             self.tool_register.set_extension("_pending_replies", pending_replies)
@@ -216,13 +226,18 @@ class Agent:
         effective_prompt = system_prompt if system_prompt is not None else self.system_prompt
         if publish_stream is not None:
             response_message = await self._loop_stream(
-                session=session, publish_stream=publish_stream, message=incoming,
-                prompt_mode=effective_mode, system_prompt=effective_prompt or None,
+                session=session,
+                publish_stream=publish_stream,
+                message=incoming,
+                prompt_mode=effective_mode,
+                system_prompt=effective_prompt or None,
             )
         else:
             response_message = await self._loop(
-                session=session, message=incoming,
-                prompt_mode=effective_mode, system_prompt=effective_prompt or None,
+                session=session,
+                message=incoming,
+                prompt_mode=effective_mode,
+                system_prompt=effective_prompt or None,
             )
 
         # Allow hooks to modify the final response before saving
@@ -263,17 +278,24 @@ class Agent:
                 if removed_emojis:
                     removed_set = set(removed_emojis)
                     msg.metadata["reactions"] = [
-                        r for r in reactions
-                        if not (r.get("user_id") == user_id and set(r.get("emojis", [])) & removed_set)
+                        r
+                        for r in reactions
+                        if not (
+                            r.get("user_id") == user_id and set(r.get("emojis", [])) & removed_set
+                        )
                     ]
-                    logger.info("Removed reaction %s from bot message %s", removed_emojis, bot_message_id)
+                    logger.info(
+                        "Removed reaction %s from bot message %s", removed_emojis, bot_message_id
+                    )
 
                 if emojis:
-                    msg.metadata["reactions"].append({
-                        "emojis": emojis,
-                        "user_id": user_id,
-                        "timestamp": datetime.now().isoformat(),
-                    })
+                    msg.metadata["reactions"].append(
+                        {
+                            "emojis": emojis,
+                            "user_id": user_id,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
                     logger.info("Stored reaction %s on bot message %s", emojis, bot_message_id)
                 break
         self.sessions.save(session)
@@ -291,10 +313,7 @@ class Agent:
     ) -> list:
         """Build the LLM message list: system prompt + history."""
         is_voice = (
-            any(
-                type(p).__name__ == "AudioPart"
-                for p in (message.parts or [])
-            )
+            any(type(p).__name__ == "AudioPart" for p in (message.parts or []))
             if message
             else False
         )
@@ -306,7 +325,14 @@ class Agent:
             system_prompt=system_prompt,
         )
 
-    async def _execute_tool(self, tool_call, thinking, thinking_signature, session: Session, error_messages: list[ToolMessage]):
+    async def _execute_tool(
+        self,
+        tool_call,
+        thinking,
+        thinking_signature,
+        session: Session,
+        error_messages: list[ToolMessage],
+    ):
         """Execute a tool call and manage error accumulation.
 
         Failed tool calls are added to error_messages list.
@@ -334,7 +360,9 @@ class Agent:
 
         await self.hooks.emit(
             HookEvent.AFTER_TOOL_CALL,
-            AfterToolCallContext(session=session, tool_call=tool_call, tool_result=tool_result, content=content),
+            AfterToolCallContext(
+                session=session, tool_call=tool_call, tool_result=tool_result, content=content
+            ),
         )
 
         tool_message = ToolMessage(
@@ -365,9 +393,10 @@ class Agent:
     def _clean_content(content: str) -> str:
         """Strip <think> blocks, leading message IDs, and control tags from LLM output."""
         import re
-        content = re.sub(r'<think>.*?</think>\s*', '', content, flags=re.DOTALL)
-        content = re.sub(r'^\[(bot_)?msg_id:\d+\]\s*', '', content)
-        content = re.sub(r'<ctrl\d+>', '', content)
+
+        content = re.sub(r"<think>.*?</think>\s*", "", content, flags=re.DOTALL)
+        content = re.sub(r"^\[(bot_)?msg_id:\d+\]\s*", "", content)
+        content = re.sub(r"<ctrl\d+>", "", content)
         return content.strip() or "(no response)"
 
     async def _loop(
@@ -388,7 +417,9 @@ class Agent:
             if error_messages:
                 messages.extend(error_messages)
 
-            logger.info(f"LLM call | model={self.llm.model_name} messages={len(messages)} tools={len(tools)}")
+            logger.info(
+                f"LLM call | model={self.llm.model_name} messages={len(messages)} tools={len(tools)}"
+            )
             if iteration == 0 and message:
                 await self.hooks.emit(
                     HookEvent.AFTER_AGENT_START,
@@ -404,14 +435,17 @@ class Agent:
 
             after_llm_ctx = await self.hooks.emit(
                 HookEvent.AFTER_LLM_CALL,
-                AfterLLMCallContext(session=session, messages=messages, event=llm_event, iteration=iteration),
+                AfterLLMCallContext(
+                    session=session, messages=messages, event=llm_event, iteration=iteration
+                ),
             )
             llm_event = after_llm_ctx.event
 
             logger.info(f"LLM response | {llm_event.type.name}")
             thinking, thinking_signature = (
                 (llm_event.thinking.content, llm_event.thinking.signature)
-                if llm_event.thinking else (None, None)
+                if llm_event.thinking
+                else (None, None)
             )
             match llm_event.type:
                 case LLMEventType.TOOL_CALL:
@@ -423,7 +457,9 @@ class Agent:
                 case LLMEventType.TEXT:
                     clean = self._clean_content(llm_event.content or "")
                     logger.info(f"Response | {clean[:120]!r}{'...' if len(clean) > 120 else ''}")
-                    msg = AIMessage(content=clean, thinking=thinking, thinking_signature=thinking_signature)
+                    msg = AIMessage(
+                        content=clean, thinking=thinking, thinking_signature=thinking_signature
+                    )
                     session.add_message(msg)
                     return msg
         raise RuntimeError(f"Agent exceeded max_iterations ({self.max_iterations})")
@@ -476,12 +512,15 @@ class Agent:
                         pass
                     case LLMStreamEventType.TOOL_CALL:
                         from operator_use.providers.events import LLMEvent, LLMEventType
+
                         await self.hooks.emit(
                             HookEvent.AFTER_LLM_CALL,
                             AfterLLMCallContext(
                                 session=session,
                                 messages=messages,
-                                event=LLMEvent(type=LLMEventType.TOOL_CALL, tool_call=event.tool_call),
+                                event=LLMEvent(
+                                    type=LLMEventType.TOOL_CALL, tool_call=event.tool_call
+                                ),
                                 iteration=iteration,
                             ),
                         )
@@ -504,6 +543,7 @@ class Agent:
                         )
                         content = self._clean_content(content or "(no response)")
                         from operator_use.providers.events import LLMEvent, LLMEventType, Thinking
+
                         await self.hooks.emit(
                             HookEvent.AFTER_LLM_CALL,
                             AfterLLMCallContext(
@@ -512,7 +552,11 @@ class Agent:
                                 event=LLMEvent(
                                     type=LLMEventType.TEXT,
                                     content=content,
-                                    thinking=Thinking(content=thinking, signature=thinking_signature) if thinking else None,
+                                    thinking=Thinking(
+                                        content=thinking, signature=thinking_signature
+                                    )
+                                    if thinking
+                                    else None,
                                     usage=event.usage,
                                 ),
                                 iteration=iteration,
@@ -521,9 +565,11 @@ class Agent:
                         if not stream_init_sent:
                             await publish_stream(content, False, init=True)
                         await publish_stream(content, True, init=False)
-                        msg = AIMessage(content=content, thinking=thinking, thinking_signature=thinking_signature)
+                        msg = AIMessage(
+                            content=content,
+                            thinking=thinking,
+                            thinking_signature=thinking_signature,
+                        )
                         session.add_message(msg)
                         return msg
         raise RuntimeError(f"Agent exceeded max_iterations ({self.max_iterations})")
-
-

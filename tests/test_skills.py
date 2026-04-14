@@ -18,6 +18,7 @@ def make_skill(base: Path, name: str, content: str, source: str = "workspace") -
 
 # --- list_skills ---
 
+
 def test_list_skills_empty(tmp_path):
     skills = Skills(workspace=tmp_path, builtin_skills_dir=tmp_path / "builtin")
     assert skills.list_skills() == []
@@ -67,6 +68,7 @@ def test_list_skills_both_sources(tmp_path):
 
 # --- load_skill_content ---
 
+
 def test_load_skill_content_workspace(tmp_path):
     make_skill(tmp_path, "greet", "Hello from workspace skill.")
     skills = Skills(workspace=tmp_path, builtin_skills_dir=tmp_path / "builtin")
@@ -95,6 +97,7 @@ def test_load_skill_content_not_found_returns_none(tmp_path):
 
 # --- _strip_skill_formatter ---
 
+
 def test_strip_formatter_with_frontmatter(tmp_path):
     skills = Skills(workspace=tmp_path)
     content = "---\nname: test\ndescription: A skill\n---\nActual content here."
@@ -115,6 +118,7 @@ def test_strip_formatter_preserves_body(tmp_path):
 
 
 # --- load_skill ---
+
 
 def test_load_skill_wraps_with_header(tmp_path):
     make_skill(tmp_path, "helper", "Do something useful.")
@@ -139,6 +143,7 @@ def test_load_skill_strips_frontmatter(tmp_path):
 
 # --- load_skills_for_context ---
 
+
 def test_load_skills_for_context_multiple(tmp_path):
     make_skill(tmp_path, "skill-a", "Content A.")
     make_skill(tmp_path, "skill-b", "Content B.")
@@ -162,6 +167,7 @@ def test_load_skills_for_context_empty_list(tmp_path):
 
 
 # --- get_skill_metadata ---
+
 
 def test_get_skill_metadata_parses_frontmatter(tmp_path):
     content = "---\nname: my-skill\ndescription: Does great things\nauthor: dev\n---\nBody."
@@ -193,6 +199,7 @@ def test_get_skill_metadata_value_with_colon(tmp_path):
 
 
 # --- build_skills_summary ---
+
 
 def test_build_skills_summary_empty(tmp_path):
     skills = Skills(workspace=tmp_path, builtin_skills_dir=tmp_path / "builtin")

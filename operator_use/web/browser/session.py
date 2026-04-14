@@ -40,13 +40,17 @@ class Session:
         self._sessions.clear()
         self._current_target_id = None
 
-    def register_target(self, target_id: str, session_id: str, url: str = "", title: str = "") -> None:
+    def register_target(
+        self, target_id: str, session_id: str, url: str = "", title: str = ""
+    ) -> None:
         self._targets[target_id] = {"url": url, "title": title}
         self._sessions[target_id] = session_id
         if self._current_target_id is None:
             self._current_target_id = target_id
 
-    def update_target(self, target_id: str, *, url: str | None = None, title: str | None = None) -> None:
+    def update_target(
+        self, target_id: str, *, url: str | None = None, title: str | None = None
+    ) -> None:
         if target_id not in self._targets:
             return
         if url is not None:
@@ -62,7 +66,9 @@ class Session:
         return session_id
 
     def find_target_by_session(self, session_id: str) -> str | None:
-        return next((target_id for target_id, sid in self._sessions.items() if sid == session_id), None)
+        return next(
+            (target_id for target_id, sid in self._sessions.items() if sid == session_id), None
+        )
 
     def current_session_id(self) -> str | None:
         if self._current_target_id is None:

@@ -1,6 +1,5 @@
 """Skill tool: load and invoke procedural skills from workspace."""
 
-from pathlib import Path
 import yaml
 from operator_use.tools.service import Tool, ToolResult
 from operator_use.config.paths import get_named_workspace_dir
@@ -89,7 +88,7 @@ async def skill(
         response_parts.append("")
 
     if args:
-        response_parts.append(f"## Arguments")
+        response_parts.append("## Arguments")
         response_parts.append(f"{args}")
         response_parts.append("")
 

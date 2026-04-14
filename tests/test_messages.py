@@ -13,6 +13,7 @@ from operator_use.messages.service import (
 
 # --- Usage ---
 
+
 def test_usage_basic():
     u = Usage(prompt_tokens=10, completion_tokens=20, total_tokens=30)
     assert u.total_tokens == 30
@@ -33,6 +34,7 @@ def test_usage_with_optional_fields():
 
 # --- SystemMessage ---
 
+
 def test_system_message():
     msg = SystemMessage(content="You are a helpful assistant.")
     assert msg.role == "system"
@@ -52,6 +54,7 @@ def test_system_message_repr():
 
 
 # --- HumanMessage ---
+
 
 def test_human_message():
     msg = HumanMessage(content="Hello!")
@@ -75,6 +78,7 @@ def test_human_message_empty_metadata_in_dict():
 
 
 # --- AIMessage ---
+
 
 def test_ai_message_basic():
     msg = AIMessage(content="I can help.")
@@ -101,6 +105,7 @@ def test_ai_message_to_dict():
 
 # --- ToolMessage ---
 
+
 def test_tool_message():
     msg = ToolMessage(id="t1", name="search", params={"query": "test"}, content="result")
     assert msg.role == "tool"
@@ -116,6 +121,7 @@ def test_tool_message_to_dict():
 
 
 # --- BaseMessage.from_dict dispatch ---
+
 
 def test_from_dict_system():
     msg = BaseMessage.from_dict({"role": "system", "content": "sys"})
@@ -139,11 +145,13 @@ def test_from_dict_tool():
 
 def test_from_dict_unknown_role_raises():
     from pydantic import ValidationError
+
     with pytest.raises(ValidationError):
         BaseMessage.from_dict({"role": "unknown", "content": "test"})
 
 
 # --- Roundtrip serialization ---
+
 
 def test_roundtrip_human():
     original = HumanMessage(content="hello", metadata={"x": 1})

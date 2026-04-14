@@ -70,8 +70,8 @@ class ACPServer:
         metadata: dict[str, AgentMetadata],
     ) -> None:
         self.config = config
-        self._runners = runners        # agent_id -> runner callable
-        self._metadata = metadata      # agent_id -> AgentMetadata
+        self._runners = runners  # agent_id -> runner callable
+        self._metadata = metadata  # agent_id -> AgentMetadata
         self._runs: dict[str, Run] = {}
         self._run_queues: dict[str, asyncio.Queue] = {}  # run_id -> chunk queue for SSE
         # Provenance: loaded lazily when sign_responses or verify_signatures is True
@@ -200,11 +200,13 @@ class ACPServer:
             return web.json_response({"error": "agent not found"}, status=404)
         if not self._provenance:
             return web.json_response({"error": "provenance not enabled"}, status=404)
-        return web.json_response({
-            "agent_id": agent_id,
-            "algorithm": "ed25519",
-            "public_key": self._provenance.public_key_b64,
-        })
+        return web.json_response(
+            {
+                "agent_id": agent_id,
+                "algorithm": "ed25519",
+                "public_key": self._provenance.public_key_b64,
+            }
+        )
 
     async def _handle_create_run(self, request: web.Request) -> web.Response:
         try:
@@ -219,7 +221,9 @@ class ACPServer:
         authed: str | None = request.get("_authed_agent")
 
         # Resolve target agent: use requested agent_id, fall back to first available
-        target_agent_id = req.agent_id if req.agent_id in self._runners else next(iter(self._runners))
+        target_agent_id = (
+            req.agent_id if req.agent_id in self._runners else next(iter(self._runners))
+        )
 
         # Per-agent token: caller may only target their own agent
         if authed is not None and target_agent_id != authed:
@@ -352,16 +356,12 @@ class ACPServer:
     async def start(self) -> None:
         if self.config.sign_responses or self.config.verify_signatures:
             self._provenance = self._load_provenance()
-            logger.info(
-                f"ACP provenance enabled — pubkey: {self._provenance.public_key_b64[:16]}…"
-            )
+            logger.info(f"ACP provenance enabled — pubkey: {self._provenance.public_key_b64[:16]}…")
         self._runner_obj = web.AppRunner(self._app)
         await self._runner_obj.setup()
         self._site = web.TCPSite(self._runner_obj, self.config.host, self.config.port)
         await self._site.start()
-        logger.info(
-            f"ACP server listening on http://{self.config.host}:{self.config.port}"
-        )
+        logger.info(f"ACP server listening on http://{self.config.host}:{self.config.port}")
 
     def _load_provenance(self) -> ACPProvenance:
         if self.config.key_path:
@@ -374,4 +374,3 @@ class ACPServer:
         if self._runner_obj:
             await self._runner_obj.cleanup()
         logger.info("ACP server stopped")
-

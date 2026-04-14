@@ -1,4 +1,4 @@
-﻿"""Session store service."""
+"""Session store service."""
 
 import json
 import uuid
@@ -125,11 +125,12 @@ class SessionStore:
                             updated_at = obj.get("updated_at", "")
             except (json.JSONDecodeError, OSError):
                 pass
-            result.append({
-                "id": session_id,
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "path": str(path),
-            })
+            result.append(
+                {
+                    "id": session_id,
+                    "created_at": created_at,
+                    "updated_at": updated_at,
+                    "path": str(path),
+                }
+            )
         return result
-

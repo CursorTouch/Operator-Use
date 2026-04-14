@@ -6,4 +6,12 @@ from operator_use.web.watchdog.download import DownloadWatchdog
 from operator_use.web.watchdog.popup import PopupWatchdog
 from operator_use.web.watchdog.state import StateWatchdog
 
-__all__ = ['BaseWatchdog', 'DOMWatchdog', 'DialogWatchdog', 'CrashWatchdog', 'DownloadWatchdog', 'PopupWatchdog', 'StateWatchdog']
+__all__ = [
+    "BaseWatchdog",
+    "DOMWatchdog",
+    "DialogWatchdog",
+    "CrashWatchdog",
+    "DownloadWatchdog",
+    "PopupWatchdog",
+    "StateWatchdog",
+]

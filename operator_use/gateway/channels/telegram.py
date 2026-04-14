@@ -1,4 +1,4 @@
-﻿"""Telegram channel using python-telegram-bot (polling or webhook)."""
+"""Telegram channel using python-telegram-bot (polling or webhook)."""
 
 import asyncio
 import logging
@@ -44,14 +44,79 @@ MAX_MESSAGE_LEN = 4000  # Telegram message character limit
 
 # Supported emoji for Telegram setMessageReaction (Bot API 7.0)
 TELEGRAM_ALLOWED_REACTIONS = {
-    "👍", "👎", "❤", "🔥", "🥰", "👏", "😁", "🤔", "🤯", "😱",
-    "🤬", "😢", "🎉", "🤩", "🤮", "💩", "🙏", "👌", "🕊", "🤡",
-    "🥱", "🥴", "😍", "🐳", "❤‍🔥", "🌚", "🌭", "💯", "🤣", "⚡",
-    "🍌", "🏆", "💔", "🤨", "😐", "🍓", "🍾", "💋", "🖕", "😈",
-    "😴", "😭", "🤓", "👻", "👨‍💻", "👀", "🎃", "🙈", "😇", "😨",
-    "🤝", "✍", "🤗", "🫡", "🎅", "🎄", "☃", "💅", "🤪", "🗿",
-    "🆒", "💘", "🙉", "🦄", "😘", "💊", "🙊", "😎", "👾", "🤷‍♂",
-    "🤷", "🤷‍♀", "😡",
+    "👍",
+    "👎",
+    "❤",
+    "🔥",
+    "🥰",
+    "👏",
+    "😁",
+    "🤔",
+    "🤯",
+    "😱",
+    "🤬",
+    "😢",
+    "🎉",
+    "🤩",
+    "🤮",
+    "💩",
+    "🙏",
+    "👌",
+    "🕊",
+    "🤡",
+    "🥱",
+    "🥴",
+    "😍",
+    "🐳",
+    "❤‍🔥",
+    "🌚",
+    "🌭",
+    "💯",
+    "🤣",
+    "⚡",
+    "🍌",
+    "🏆",
+    "💔",
+    "🤨",
+    "😐",
+    "🍓",
+    "🍾",
+    "💋",
+    "🖕",
+    "😈",
+    "😴",
+    "😭",
+    "🤓",
+    "👻",
+    "👨‍💻",
+    "👀",
+    "🎃",
+    "🙈",
+    "😇",
+    "😨",
+    "🤝",
+    "✍",
+    "🤗",
+    "🫡",
+    "🎅",
+    "🎄",
+    "☃",
+    "💅",
+    "🤪",
+    "🗿",
+    "🆒",
+    "💘",
+    "🙉",
+    "🦄",
+    "😘",
+    "💊",
+    "🙊",
+    "😎",
+    "👾",
+    "🤷‍♂",
+    "🤷",
+    "🤷‍♀",
+    "😡",
 }
 
 
@@ -176,11 +241,11 @@ class TelegramChannel(BaseChannel):
         self._media_group_buffers: dict[str, dict] = {}
         self._media_group_tasks: dict[str, asyncio.Task] = {}
         self._stream_state: dict[str, dict] = {}  # chat_id -> {message_id, last_edit_time}
-        self._last_sent_message_id: dict[str, int] = {}  # chat_id -> message_id (for streamed replies)
+        self._last_sent_message_id: dict[
+            str, int
+        ] = {}  # chat_id -> message_id (for streamed replies)
         media_dir = self._cfg("media_dir")
-        self._media_dir = (
-            Path(media_dir) if media_dir else Path.home() / ".operator" / "media"
-        )
+        self._media_dir = Path(media_dir) if media_dir else Path.home() / ".operator" / "media"
 
     def _cfg(self, key: str, default=None):
         """Get config value from TelegramConfig dataclass."""
@@ -206,7 +271,11 @@ class TelegramChannel(BaseChannel):
         media_types: list[str] | str,
     ) -> tuple[str, list[ContentPart]]:
         """Process media in channel: transcribe voice/audio, load images. Returns (content, parts)."""
-        types = media_types if isinstance(media_types, list) else [media_types] * max(len(media_paths), 1)
+        types = (
+            media_types
+            if isinstance(media_types, list)
+            else [media_types] * max(len(media_paths), 1)
+        )
         parts: list[TextPart | ImagePart | AudioPart | FilePart] = []
         result_lines: list[str] = []
 
@@ -238,7 +307,11 @@ class TelegramChannel(BaseChannel):
                 result_lines.append(line_stripped)
                 parts.append(TextPart(content=line_stripped))
 
-        content_str = "\n".join(result_lines) if result_lines else ("(image)" if any(isinstance(p, ImagePart) for p in parts) else "[empty message]")
+        content_str = (
+            "\n".join(result_lines)
+            if result_lines
+            else ("(image)" if any(isinstance(p, ImagePart) for p in parts) else "[empty message]")
+        )
         return content_str, parts
 
     @property
@@ -284,15 +357,17 @@ class TelegramChannel(BaseChannel):
         self._app.add_handler(CommandHandler("stop", self._on_stop))
         self._app.add_handler(CommandHandler("restart", self._on_restart))
         self._app.add_handler(CommandHandler("new", self._on_stop))  # /new kept as stop alias
-        self._app.add_handler(MessageHandler(
-            (
-                filters.TEXT|
-                filters.PHOTO|
-                filters.VOICE|
-                filters.AUDIO|
-                filters.Document.ALL
-            )& ~filters.COMMAND,
-            self._on_message,
+        self._app.add_handler(
+            MessageHandler(
+                (
+                    filters.TEXT
+                    | filters.PHOTO
+                    | filters.VOICE
+                    | filters.AUDIO
+                    | filters.Document.ALL
+                )
+                & ~filters.COMMAND,
+                self._on_message,
             )
         )
         self._app.add_handler(MessageReactionHandler(self._on_reaction))
@@ -364,15 +439,11 @@ class TelegramChannel(BaseChannel):
         webhook_port = int(self._cfg("webhook_port") or 8080)
 
         if not webhook_url:
-            logger.warning(
-                "Telegram channel: use_webhook=True but webhook_url not set, skipping"
-            )
+            logger.warning("Telegram channel: use_webhook=True but webhook_url not set, skipping")
             return
 
         full_url = f"{webhook_url.rstrip('/')}{webhook_path}"
-        await self._app.bot.set_webhook(
-            url=full_url, allowed_updates=Update.ALL_TYPES
-        )
+        await self._app.bot.set_webhook(url=full_url, allowed_updates=Update.ALL_TYPES)
         logger.info("Telegram webhook set to %s", full_url)
 
         async def handle_telegram(request: aiohttp.web.Request) -> aiohttp.web.Response:
@@ -389,9 +460,7 @@ class TelegramChannel(BaseChannel):
         app.router.add_post(webhook_path, handle_telegram)
         self._webhook_runner = aiohttp.web.AppRunner(app)
         await self._webhook_runner.setup()
-        self._webhook_site = aiohttp.web.TCPSite(
-            self._webhook_runner, "0.0.0.0", webhook_port
-        )
+        self._webhook_site = aiohttp.web.TCPSite(self._webhook_runner, "0.0.0.0", webhook_port)
         await self._webhook_site.start()
         logger.info(f"Telegram webhook server listening on port {webhook_port}")
 
@@ -465,9 +534,7 @@ class TelegramChannel(BaseChannel):
             try:
                 self._media_dir.mkdir(parents=True, exist_ok=True)
                 file = await self._app.bot.get_file(media_file.file_id)
-                ext = _get_media_extension(
-                    media_type, getattr(media_file, "mime_type", None)
-                )
+                ext = _get_media_extension(media_type, getattr(media_file, "mime_type", None))
                 file_path = self._media_dir / f"{media_file.file_id[:16]}{ext}"
                 await file.download_to_drive(str(file_path))
                 media_paths.append(str(file_path))
@@ -506,9 +573,7 @@ class TelegramChannel(BaseChannel):
             buf["media"].extend(media_paths)
             buf["media_types"].extend([media_type] * len(media_paths))
             if key not in self._media_group_tasks:
-                self._media_group_tasks[key] = asyncio.create_task(
-                    self._flush_media_group(key)
-                )
+                self._media_group_tasks[key] = asyncio.create_task(self._flush_media_group(key))
             return
 
         self._start_typing(str_chat_id)
@@ -554,7 +619,9 @@ class TelegramChannel(BaseChannel):
 
             if media_paths:
                 content, parts = await self._process_media_to_parts(
-                    content, media_paths, media_types or [self._get_media_type(p) for p in media_paths]
+                    content,
+                    media_paths,
+                    media_types or [self._get_media_type(p) for p in media_paths],
                 )
             else:
                 parts = [TextPart(content=content)] if content else []
@@ -605,10 +672,12 @@ class TelegramChannel(BaseChannel):
             if emoji and react_msg_id:
                 if emoji not in TELEGRAM_ALLOWED_REACTIONS:
                     logger.warning(
-                        "Emoji '%s' is not in Telegram's allowed reaction set — attempting anyway", emoji
+                        "Emoji '%s' is not in Telegram's allowed reaction set — attempting anyway",
+                        emoji,
                     )
                 try:
                     from telegram import ReactionTypeEmoji
+
                     await self._app.bot.set_message_reaction(
                         chat_id=chat_id_int,
                         message_id=int(react_msg_id),
@@ -617,9 +686,10 @@ class TelegramChannel(BaseChannel):
                     )
                     logger.debug("Reacted with %s to message %s", emoji, react_msg_id)
                 except Exception as e:
-                    logger.warning("Failed to set reaction %s on message %s: %s", emoji, react_msg_id, e)
+                    logger.warning(
+                        "Failed to set reaction %s on message %s: %s", emoji, react_msg_id, e
+                    )
             return
-
 
         # Streaming: stream_phase on OutgoingMessage
         phase = message.stream_phase
@@ -646,7 +716,9 @@ class TelegramChannel(BaseChannel):
                     except (ValueError, TypeError):
                         pass
 
-            if phase == StreamPhase.START and (not stream_state or stream_state.get("message_id") is None):
+            if phase == StreamPhase.START and (
+                not stream_state or stream_state.get("message_id") is None
+            ):
                 try:
                     html = _markdown_to_telegram_html(content)
                     sent = await self._app.bot.send_message(
@@ -690,9 +762,13 @@ class TelegramChannel(BaseChannel):
                 msg_id = stream_state.get("message_id")
                 now = asyncio.get_running_loop().time()
                 long_final = phase == StreamPhase.END and len(content) > MAX_MESSAGE_LEN
-                if not long_final and (phase == StreamPhase.END or (now - stream_state.get("last_edit_time", 0) >= 1.0)):
+                if not long_final and (
+                    phase == StreamPhase.END or (now - stream_state.get("last_edit_time", 0) >= 1.0)
+                ):
                     try:
-                        display = content[:MAX_MESSAGE_LEN] if len(content) > MAX_MESSAGE_LEN else content
+                        display = (
+                            content[:MAX_MESSAGE_LEN] if len(content) > MAX_MESSAGE_LEN else content
+                        )
                         html = _markdown_to_telegram_html(display)
                         await self._app.bot.edit_message_text(
                             chat_id=chat_id_int,
@@ -812,9 +888,7 @@ class TelegramChannel(BaseChannel):
                     sent_message_id = sent.message_id
                     self._last_sent_message_id[chat_id] = sent.message_id
                 except Exception as e:
-                    logger.warning(
-                        "Telegram HTML send failed, falling back to plain text: %s", e
-                    )
+                    logger.warning("Telegram HTML send failed, falling back to plain text: %s", e)
                     try:
                         sent = await self._app.bot.send_message(
                             chat_id=chat_id_int,
@@ -862,6 +936,7 @@ class TelegramChannel(BaseChannel):
         if chat.type in ("group", "supergroup"):
             try:
                 from operator_use.config.paths import get_userdata_dir
+
                 pending = {
                     "channel": "telegram",
                     "chat_id": str(chat.id),
@@ -952,8 +1027,6 @@ class TelegramChannel(BaseChannel):
         )
         await self.receive(incoming)
 
-    async def _on_error(
-        self, update: object, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
+    async def _on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Log polling/handler errors."""
         logger.error("Telegram error: %s", context.error)

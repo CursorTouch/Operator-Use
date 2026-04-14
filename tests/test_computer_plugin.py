@@ -17,6 +17,7 @@ from operator_use.agent.hooks.events import HookEvent
 # get_system_prompt — gated on _enabled
 # ---------------------------------------------------------------------------
 
+
 def test_disabled_plugin_has_no_prompt():
     assert ComputerPlugin(enabled=False).get_system_prompt() is None
 
@@ -35,6 +36,7 @@ def test_enabled_plugin_returns_system_prompt():
 # ---------------------------------------------------------------------------
 # register_hooks — BEFORE_LLM_CALL + AFTER_TOOL_CALL, gated on _enabled
 # ---------------------------------------------------------------------------
+
 
 def test_disabled_plugin_registers_no_hooks():
     plugin = ComputerPlugin(enabled=False)
@@ -67,6 +69,7 @@ def test_unregister_hooks_removes_both():
 # attach_prompt — gated on _enabled
 # ---------------------------------------------------------------------------
 
+
 def test_disabled_plugin_does_not_inject_prompt():
     plugin = ComputerPlugin(enabled=False)
     context = MagicMock()
@@ -95,6 +98,7 @@ def test_detach_prompt_removes_injected_prompt():
 # ---------------------------------------------------------------------------
 # enable() / disable() — full lifecycle (no Desktop/WatchDog init)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_enable_registers_both_hooks_and_prompt():
@@ -148,6 +152,7 @@ async def test_enable_then_disable_leaves_no_hooks():
 # _state_hook — gracefully handles desktop.get_state failures
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_state_hook_appends_desktop_state():
     plugin = ComputerPlugin(enabled=False)
@@ -156,9 +161,12 @@ async def test_state_hook_appends_desktop_state():
     plugin.desktop = MagicMock()
 
     import asyncio
+
     loop = asyncio.get_event_loop()
+
     async def _fake_executor(exc, fn):
         return fn()
+
     plugin.desktop.get_state = MagicMock(return_value=mock_state)
 
     ctx = MagicMock()
@@ -170,6 +178,7 @@ async def test_state_hook_appends_desktop_state():
 
     # Direct call with mocked executor
     from unittest.mock import patch
+
     with patch("asyncio.get_event_loop") as mock_loop:
         mock_loop.return_value.run_in_executor = AsyncMock(return_value=mock_state)
         await plugin._state_hook(ctx)
@@ -187,8 +196,11 @@ async def test_state_hook_handles_exception_gracefully():
     ctx.messages = []
 
     from unittest.mock import patch
+
     with patch("asyncio.get_event_loop") as mock_loop:
-        mock_loop.return_value.run_in_executor = AsyncMock(side_effect=RuntimeError("accessibility error"))
+        mock_loop.return_value.run_in_executor = AsyncMock(
+            side_effect=RuntimeError("accessibility error")
+        )
         result = await plugin._state_hook(ctx)
 
     assert result is ctx
@@ -198,6 +210,7 @@ async def test_state_hook_handles_exception_gracefully():
 # ---------------------------------------------------------------------------
 # _wait_for_ui_hook — watchdog not set → sleeps briefly
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_wait_for_ui_hook_no_watchdog_sleeps():
