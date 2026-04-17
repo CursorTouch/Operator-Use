@@ -101,7 +101,7 @@ async def _cmd_restart(agent: "Agent", message: IncomingMessage) -> str:
 def _save_restart_notification(channel: str, chat_id: str, account_id: str) -> None:
     """Persist the channel to notify after the process restarts."""
     try:
-        from operator_use.agent.tools.builtin.control_center import RESTART_FILE
+        from operator_use.tools.control_center import RESTART_FILE
 
         data = json.loads(RESTART_FILE.read_text()) if RESTART_FILE.exists() else {}
         data["notify_restart"] = {"channel": channel, "chat_id": chat_id, "account_id": account_id}

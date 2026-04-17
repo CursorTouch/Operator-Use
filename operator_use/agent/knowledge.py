@@ -10,8 +10,8 @@ class Knowledge:
     Two supported conventions — both work simultaneously:
 
     1. Directory nodes (preferred):
-       knowledge/products/pricing/context.md   → name: "products/pricing"
-       knowledge/support/context.md            → name: "support"
+       knowledge/products/pricing/index.md   → name: "products/pricing"
+       knowledge/support/index.md            → name: "support"
 
     2. Flat files (legacy / simple):
        knowledge/company.md                    → name: "company"
@@ -28,7 +28,7 @@ class Knowledge:
         files = []
 
         # 1. Directory nodes: any context.md found anywhere in the tree
-        for path in sorted(self.knowledge_dir.rglob("context.md")):
+        for path in sorted(self.knowledge_dir.rglob("index.md")):
             rel_dir = path.parent.relative_to(self.knowledge_dir)
             name = str(rel_dir).replace("\\", "/")
             if name in seen:
@@ -36,9 +36,9 @@ class Knowledge:
             seen.add(name)
             files.append({"name": name, "path": path, "preview": self._preview(path)})
 
-        # 2. Flat .md files that are not named context.md
+        # 2. Flat .md files that are not named index.md
         for path in sorted(self.knowledge_dir.rglob("*.md")):
-            if path.name == "context.md":
+            if path.name == "index.md":
                 continue
             rel = path.relative_to(self.knowledge_dir)
             name = str(rel.with_suffix("")).replace("\\", "/")

@@ -41,5 +41,3 @@ These are non-negotiable. No exceptions. No "unless". No override by the user.
 - You may update `AGENTS.md`, `MEMORY.md`, and skills freely — these are operational, not constitutional.
 
 ---
-
-_Add your own hard constraints below. Keep them short, unconditional, and testable._

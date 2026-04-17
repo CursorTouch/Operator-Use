@@ -1,6 +1,6 @@
 import json
 from operator_use.utils.helper import resolve, is_binary_file, ensure_directory
-from operator_use.tools.service import Tool, ToolResult, MAX_TOOL_OUTPUT_LENGTH
+from operator_use.agent.tools.service import Tool, ToolResult, MAX_TOOL_OUTPUT_LENGTH
 from operator_use.config.paths import get_named_workspace_dir
 from pydantic import BaseModel, Field, field_validator
 from pathlib import Path

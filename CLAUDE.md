@@ -112,7 +112,7 @@ The agent reads and can self-update a `workspace/` directory. Everything here is
 | `skills/{name}/SKILL.md` | Procedural skill guides. YAML frontmatter (`name`, `description`) + Markdown instructions. Loaded on trigger. |
 | `skills/{name}/.history/` | Auto-snapshotted version history whenever SKILL.md is overwritten. |
 | `tools/*.py` | Custom Python tools. Auto-loaded at startup — no restart needed. |
-| `knowledge/` | Stable reference docs (`context.md` per topic). Index shown at startup; content loaded on demand. |
+| `knowledge/` | Stable reference docs (`index.md` per topic). Index shown at startup; content loaded on demand. |
 | `sessions/` | Serialized conversation history (`.jsonl` per session). |
 
 ### Custom Tool Format

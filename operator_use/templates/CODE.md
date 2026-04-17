@@ -72,5 +72,3 @@ You can read and modify your own codebase. The path is injected into your system
 The goal: stay self-aware. An agent that doesn't know how it works can't improve itself.
 
 ---
-
-_Fill in the Structure section with your actual codebase path once you know it. Update flows when they change. This file is only useful if it's accurate._

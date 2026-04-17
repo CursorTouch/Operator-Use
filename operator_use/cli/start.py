@@ -265,7 +265,7 @@ def _build_agents(
     config: Config, cron, gateway, bus, image=None, search=None
 ) -> tuple[dict[str, Agent], "MCPManager | None"]:
     """Instantiate one Agent per agent definition in config."""
-    from operator_use.agent.tools.builtin import resolve_tools
+    from operator_use.agent.tools import resolve_tools
 
     defaults = config.agents.defaults
     agent_defs = config.agents.list
@@ -684,7 +684,7 @@ async def main():
                 task.cancel()
 
     async def _on_gateway_restart() -> None:
-        from operator_use.agent.tools.builtin.control_center import request_restart
+        from operator_use.tools.control_center import request_restart
 
         request_restart()
         await _graceful_restart()
@@ -1023,7 +1023,7 @@ def run(verbose: bool = False) -> None:
     import sys
 
     if os.getenv("IS_WORKER"):
-        from operator_use.agent.tools.builtin.control_center import requested_exit_code
+        from operator_use.tools.control_center import requested_exit_code
 
         try:
             asyncio.run(main())

@@ -19,5 +19,3 @@ This file stores important information that should persist across sessions.
 (Things to remember)
 
 ---
-
-*This file is automatically updated by nanobot when important information should be remembered.*

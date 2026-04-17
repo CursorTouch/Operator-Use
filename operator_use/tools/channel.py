@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from operator_use.tools.service import Tool, ToolResult
+from operator_use.agent.tools.service import Tool, ToolResult
 
 
 class Channel(BaseModel):

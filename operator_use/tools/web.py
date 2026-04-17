@@ -1,6 +1,6 @@
 import logging
 
-from operator_use.tools.service import Tool, ToolResult, MAX_TOOL_OUTPUT_LENGTH
+from operator_use.agent.tools.service import Tool, ToolResult, MAX_TOOL_OUTPUT_LENGTH
 from pydantic import BaseModel, Field
 from urllib.parse import urlparse
 

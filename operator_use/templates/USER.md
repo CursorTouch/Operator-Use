@@ -45,5 +45,3 @@ Information about the user to help personalize interactions.
 (Any specific instructions for how the assistant should behave)
 
 ---
-
-*Edit this file to customize nanobot's behavior for your needs.*

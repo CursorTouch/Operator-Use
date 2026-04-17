@@ -1,4 +1,5 @@
 from operator_use.tools import Tool, ToolResult, MAX_TOOL_OUTPUT_LENGTH
+from operator_use.config.paths import get_named_workspace_dir
 from pydantic import BaseModel, Field
 from pathlib import Path
 import asyncio
@@ -50,7 +51,7 @@ def _is_command_blocked(cmd: str) -> str | None:
 
 @Tool(
     name="terminal",
-    description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, checking processes, or any CLI task. Commands run from the codebase root. Destructive commands (rm -rf /, format, shutdown, etc.) are blocked. For long outputs, results are truncated — pipe through head/tail if needed.",
+    description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, checking processes, or any CLI task. Commands run from workspace/temp/ (your scratchpad — use it for temp files, scripts, and downloads). Destructive commands (rm -rf /, format, shutdown, etc.) are blocked. For long outputs, results are truncated — pipe through head/tail if needed.",
     model=Terminal,
 )
 async def terminal(cmd: str, timeout: int = 10, **kwargs) -> str:
@@ -65,8 +66,10 @@ async def terminal(cmd: str, timeout: int = 10, **kwargs) -> str:
     else:
         shell_cmd = ["/bin/bash", "-c", cmd]
 
-    workspace = Path.cwd()
-    cwd = str(workspace) if workspace.exists() else str(Path.cwd())
+    workspace = kwargs.get("_workspace") or get_named_workspace_dir("operator")
+    temp_dir = Path(workspace) / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    cwd = str(temp_dir)
     process = await asyncio.create_subprocess_exec(
         *shell_cmd,
         cwd=cwd,

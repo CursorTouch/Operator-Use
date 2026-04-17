@@ -4,7 +4,7 @@ import difflib
 import re
 
 from operator_use.utils.helper import resolve, is_binary_file
-from operator_use.tools.service import Tool, ToolResult
+from operator_use.agent.tools.service import Tool, ToolResult
 from pydantic import BaseModel, Field
 
 

@@ -97,6 +97,7 @@ Where you store your memory, skills and notes.
  - Custom Skills (Skills you can use to enhance your capabilities): {workspace_path}/skills/{{skill-name}}/SKILL.md
  - Knowledge (Persistent reference docs, read selectively): {workspace_path}/knowledge/
  - Custom Tools (Python tool scripts, auto-loaded at startup): {workspace_path}/tools/
+ - Temp (scratchpad, terminal CWD, intermediate files): {workspace_path}/temp/
 
 When you need to remember something, write to {workspace_path}/memory/MEMORY.md
 """
@@ -211,7 +212,7 @@ When you need to remember something, write to {workspace_path}/memory/MEMORY.md
         skills_summary = self.skills.build_skills_summary() or "(No skills available)"
         parts.append(f"""## Skills
 
-You have access to the following skills to enhance your capabilities, to use a skill, read the SKILL.md file for the skill.
+You have access to the following skills to enhance your capabilities. Use the `skill` tool to invoke a skill: `skill(name="skill-name")`.
 
 Available Skills:
 {skills_summary}

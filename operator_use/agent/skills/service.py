@@ -14,6 +14,7 @@ class Skills:
         self.workspace = workspace
         self.workspace_skills = workspace / "skills"
         self.builtin_skills = builtin_skills_dir or BUILTIN_SKILLS_DIR
+        self._summary_cache: str | None = None
 
     def list_skills(self) -> list[str]:
         skills = []
@@ -50,15 +51,20 @@ class Skills:
     def load_skill_content(self, name: str) -> str | None:
         workspace_skill = self.workspace_skills / name / "SKILL.md"
         if workspace_skill.exists():
-            logger.info(f"Skill loaded | name={name} source=workspace")
             return workspace_skill.read_text(encoding="utf-8")
 
         builtin_skill = self.builtin_skills / name / "SKILL.md"
         if builtin_skill.exists():
-            logger.info(f"Skill loaded | name={name} source=builtin")
             return builtin_skill.read_text(encoding="utf-8")
         logger.warning(f"Skill not found | name={name}")
         return None
+
+    def invoke_skill(self, name: str) -> str | None:
+        content = self.load_skill_content(name)
+        if content is not None:
+            source = "workspace" if (self.workspace_skills / name / "SKILL.md").exists() else "builtin"
+            logger.info(f"Skill invoked | name={name} source={source}")
+        return content
 
     def _strip_skill_formatter(self, skill_content: str) -> str:
         if skill_content.startswith("---"):
@@ -150,10 +156,16 @@ class Skills:
             # Match pattern: .../skills/{name}/SKILL.md
             if p.name == "SKILL.md" and p.parent.parent.name == "skills":
                 self.snapshot(p)
+                self.invalidate_cache()
 
         hooks.register(HookEvent.BEFORE_TOOL_CALL, _skill_history)
 
+    def invalidate_cache(self) -> None:
+        self._summary_cache = None
+
     def build_skills_summary(self) -> str:
+        if self._summary_cache is not None:
+            return self._summary_cache
         lines = []
         skills = self.list_skills()
         logger.info(f"Available skills | {[s['name'] + '(' + s['source'] + ')' for s in skills]}")
@@ -164,4 +176,5 @@ class Skills:
             lines.append(f"### {name}")
             lines.append(f" - Description: {metadata.get('description', '')}")
             lines.append(f" - Path: {path}")
-        return "\n".join(lines)
+        self._summary_cache = "\n".join(lines)
+        return self._summary_cache

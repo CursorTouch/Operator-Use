@@ -35,7 +35,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from operator_use.agent.tools import ToolRegistry
-from operator_use.agent.tools.builtin import FILESYSTEM_TOOLS, WEB_TOOLS, TERMINAL_TOOLS
+from operator_use.agent.tools import FILESYSTEM_TOOLS, WEB_TOOLS, TERMINAL_TOOLS
 from operator_use.bus import Bus, IncomingMessage
 from operator_use.bus.views import TextPart
 from operator_use.messages.service import SystemMessage, HumanMessage, ToolMessage
@@ -98,7 +98,7 @@ class Subagent:
             # Store the event so we can update it at the end
             self._trace_event = trace_event
 
-        from operator_use.agent.tools.builtin import resolve_tools
+        from operator_use.agent.tools import resolve_tools
 
         if self.config and self.config.tools:
             tools_cfg = self.config.tools

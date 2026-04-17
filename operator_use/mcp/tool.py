@@ -3,7 +3,7 @@
 import json
 from typing import TYPE_CHECKING
 
-from operator_use.tools.service import Tool, ToolResult
+from operator_use.agent.tools.service import Tool, ToolResult
 
 if TYPE_CHECKING:
     from fastmcp import Client

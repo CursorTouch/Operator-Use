@@ -1101,7 +1101,7 @@ def agent_repl(
         raise typer.Exit(1)
 
     # Restrict to CLI-appropriate tools (no channel, messaging, cron, or multi-agent tools)
-    from operator_use.agent.tools.builtin import CLI_TOOLS
+    from operator_use.agent.tools import CLI_TOOLS
     from operator_use.agent.tools.registry import ToolRegistry
 
     agent.tool_register = ToolRegistry()

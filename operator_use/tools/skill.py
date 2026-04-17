@@ -1,7 +1,7 @@
 """Skill tool: load and invoke procedural skills from workspace."""
 
 import yaml
-from operator_use.tools.service import Tool, ToolResult
+from operator_use.agent.tools.service import Tool, ToolResult
 from operator_use.config.paths import get_named_workspace_dir
 from operator_use.agent.skills.service import Skills, BUILTIN_SKILLS_DIR
 from pydantic import BaseModel, Field
@@ -54,7 +54,7 @@ async def skill(
 
     # Use Skills service to load from workspace or builtin
     skills_service = Skills(workspace)
-    content = skills_service.load_skill_content(name)
+    content = skills_service.invoke_skill(name)
 
     if content is None:
         workspace_skill = workspace / "skills" / name / "SKILL.md"
