@@ -221,13 +221,24 @@ async def list_dir(path: str = ".", **kwargs) -> ToolResult:
     if not items:
         return ToolResult.success_result(f"Directory is empty: {resolved_path}")
 
+    def _human_size(n: int) -> str:
+        for unit in ("B", "K", "M", "G", "T"):
+            if n < 1024:
+                return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
+            n /= 1024
+        return f"{n:.1f}P"
+
     lines = []
+    total_bytes = 0
     for item in items:
+        stat = item.stat()
+        mtime = __import__("datetime").datetime.fromtimestamp(stat.st_mtime).strftime("%b %d %H:%M")
         if item.is_dir():
-            lines.append(f"📁 {item.name}/")
+            lines.append(f"{'drwxr-xr-x':10s}  {'':>6}  {mtime}  {item.name}/")
         else:
-            lines.append(f"📄 {item.name}")
+            size = stat.st_size
+            total_bytes += size
+            lines.append(f"{'-rw-r--r--':10s}  {_human_size(size):>6}  {mtime}  {item.name}")
 
-    output = "\n".join(lines)
-
-    return ToolResult.success_result(output)
+    header = f"total {_human_size(total_bytes)}"
+    return ToolResult.success_result(header + "\n" + "\n".join(lines))
