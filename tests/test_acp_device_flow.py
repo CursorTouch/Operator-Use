@@ -237,6 +237,15 @@ async def test_post_auth_token_invalid_body_returns_400(df_server):
 
 
 @pytest.mark.asyncio
+async def test_post_auth_token_unknown_code_returns_400(df_server):
+    async with TestClient(TestServer(df_server._app)) as client:
+        resp = await client.post("/auth/token", json={"device_code": "nonexistent"})
+        assert resp.status == 400
+        data = await resp.json()
+        assert data["error"] == "expired_token"
+
+
+@pytest.mark.asyncio
 async def test_post_auth_approve_expired_code_returns_404(df_server):
     import time
     async with TestClient(TestServer(df_server._app)) as client:

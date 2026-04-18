@@ -84,6 +84,17 @@ class DeviceFlowManager:
             return None
         return entry.access_token
 
+    def get_code_status(self, device_code: str) -> str:
+        """Return 'approved', 'pending', or 'unknown_or_expired'."""
+        entry = self._pending.get(device_code)
+        if entry is None:
+            return "unknown_or_expired"
+        if time.monotonic() > entry.expires_at:
+            return "unknown_or_expired"
+        if entry.access_token:
+            return "approved"
+        return "pending"
+
     def validate_token(self, token: str) -> bool:
         return token in self._tokens
 

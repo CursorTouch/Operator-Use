@@ -124,9 +124,9 @@ class ACPClient:
             data = await resp.json()
         code_info = DeviceCodeResponse(**data)
 
-        logger.info(
-            f"Visit {code_info.verification_uri} and enter code: {code_info.user_code} — waiting for approval"
-        )
+        msg = f"Visit {code_info.verification_uri} and enter code: {code_info.user_code}"
+        print(f"\n{msg}\nWaiting for approval...")
+        logger.info(msg)
 
         interval = poll_interval if poll_interval is not None else float(code_info.interval)
 

@@ -352,10 +352,14 @@ class ACPServer:
         except Exception:
             return web.json_response({"error": "invalid request"}, status=400)
 
-        token = self._device_flow.poll(device_code)
-        if token is None:
-            return web.Response(status=202)  # still pending
-        return web.json_response(TokenResponse(access_token=token).model_dump())
+        status = self._device_flow.get_code_status(device_code)
+        if status == "approved":
+            token = self._device_flow.poll(device_code)
+            return web.json_response(TokenResponse(access_token=token).model_dump())
+        if status == "unknown_or_expired":
+            return web.json_response({"error": "expired_token"}, status=400)
+        # pending
+        return web.Response(status=202)
 
     async def _handle_approve_page(self, request: web.Request) -> web.Response:
         pending = self._device_flow.list_pending()
