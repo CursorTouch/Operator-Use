@@ -72,7 +72,6 @@ async def test_enable_browser_use_calls_agent(tmp_path):
 
     mock_agent = MagicMock()
     mock_agent.enable_browser_use = AsyncMock()
-    mock_agent.disable_computer_use = AsyncMock()
 
     with patch("operator_use.agent.tools.builtin.control_center.CONFIG_PATH", cfg_file):
         result = await _call_cc(browser_use=True, _agent=mock_agent)
@@ -82,24 +81,24 @@ async def test_enable_browser_use_calls_agent(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_enable_computer_use_disables_browser_in_config(tmp_path):
-    cfg = _make_config(plugins=[{"id": "browser_use", "enabled": True}])
+async def test_enable_both_computer_use_and_browser_use_independently(tmp_path):
+    cfg = _make_config()
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps(cfg))
 
     mock_agent = MagicMock()
     mock_agent.enable_computer_use = AsyncMock()
-    mock_agent.disable_browser_use = AsyncMock()
+    mock_agent.enable_browser_use = AsyncMock()
 
     with patch("operator_use.agent.tools.builtin.control_center.CONFIG_PATH", cfg_file):
-        result = await _call_cc(computer_use=True, _agent=mock_agent)
+        result = await _call_cc(computer_use=True, browser_use=True, _agent=mock_agent)
 
     saved = json.loads(cfg_file.read_text())
     plugins = saved["agents"]["list"][0]["plugins"]
     cu = next(p for p in plugins if p["id"] == "computer_use")
     bu = next(p for p in plugins if p["id"] == "browser_use")
     assert cu["enabled"] is True
-    assert bu["enabled"] is False
+    assert bu["enabled"] is True
     assert result.success
 
 

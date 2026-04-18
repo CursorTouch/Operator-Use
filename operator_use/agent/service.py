@@ -145,7 +145,6 @@ class Agent:
         return None
 
     async def enable_browser_use(self) -> None:
-        await self.disable_computer_use()
         plugin = self.get_plugin("browser_use")
         if plugin:
             await plugin.enable()
@@ -156,7 +155,6 @@ class Agent:
             await plugin.disable()
 
     async def enable_computer_use(self) -> None:
-        await self.disable_browser_use()
         plugin = self.get_plugin("computer_use")
         if plugin:
             await plugin.enable()

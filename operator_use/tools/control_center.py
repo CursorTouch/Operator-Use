@@ -15,7 +15,7 @@ import os
 import sys
 from typing import Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from operator_use.config.paths import get_userdata_dir
 from operator_use.tools import Tool, ToolResult
@@ -44,11 +44,11 @@ def request_restart() -> None:
 class ControlCenter(BaseModel):
     computer_use: Optional[bool] = Field(
         default=None,
-        description="Enable or disable computer_use (Windows GUI automation). Cannot be true when browser_use is true.",
+        description="Enable or disable computer_use (Windows GUI automation).",
     )
     browser_use: Optional[bool] = Field(
         default=None,
-        description="Enable or disable browser_use (Chrome DevTools automation). Cannot be true when computer_use is true.",
+        description="Enable or disable browser_use (Chrome DevTools automation).",
     )
     restart: bool = Field(
         default=False,
@@ -69,12 +69,6 @@ class ControlCenter(BaseModel):
         default=None,
         description="Target agent ID. Defaults to the first agent in config.",
     )
-
-    @model_validator(mode="after")
-    def check_exclusive(self) -> "ControlCenter":
-        if self.computer_use and self.browser_use:
-            raise ValueError("computer_use and browser_use cannot both be true.")
-        return self
 
 
 def _load_config_raw() -> dict:
@@ -151,9 +145,7 @@ async def _do_restart(graceful_fn=None) -> None:
     description=(
         "Control Center for Operator capabilities.\n\n"
         "Dynamically toggle computer_use (GUI automation) and browser_use (Browser automation via CDP). "
-        "They are mutually exclusive — enabling one "
-        "immediately disables the other, registers the relevant tools into the agent, "
-        "and connects the state (desktop or browser) into the LLM context. "
+        "Both can be enabled or disabled independently. "
         "No restart needed for capability toggles.\n\n"
         "- computer_use=true  → enable desktop automation tools + desktop state in context\n"
         "- browser_use=true   → enable browser tools + browser state in context\n"
@@ -191,8 +183,7 @@ async def control_center(
     if computer_use is not None:
         _set_plugin_enabled(entry, "computer_use", computer_use)
         if computer_use:
-            _set_plugin_enabled(entry, "browser_use", False)
-            changes.append("computer_use=true, browser_use=false")
+            changes.append("computer_use=true")
             if agent is not None:
                 await agent.enable_computer_use()
         else:
@@ -203,8 +194,7 @@ async def control_center(
     if browser_use is not None:
         _set_plugin_enabled(entry, "browser_use", browser_use)
         if browser_use:
-            _set_plugin_enabled(entry, "computer_use", False)
-            changes.append("browser_use=true, computer_use=false")
+            changes.append("browser_use=true")
             if agent is not None:
                 await agent.enable_browser_use()
         else:
