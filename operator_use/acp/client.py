@@ -12,6 +12,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -105,6 +106,52 @@ class ACPClient:
         run = await self._create_run(req)
         async for chunk in self._await_run_sse(run.id):
             yield chunk
+
+    async def device_auth(self, poll_interval: float | None = None) -> str:
+        """Run the Device Authorization Grant flow.
+
+        Requests a device code, prints the verification URI and user code,
+        then polls until the human approves. On success, sets
+        self.config.auth_token and returns the access token.
+        """
+        from operator_use.acp.models import DeviceCodeResponse, TokenRequest
+
+        session = self._ensure_session()
+
+        # Step 1: Request a device code
+        async with session.post("/auth/device") as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+        code_info = DeviceCodeResponse(**data)
+
+        print(
+            f"\nVisit {code_info.verification_uri} and enter code: {code_info.user_code}\n"
+            f"Waiting for approval..."
+        )
+
+        interval = poll_interval if poll_interval is not None else float(code_info.interval)
+
+        # Step 2: Poll until approved or expired
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + code_info.expires_in
+        while loop.time() < deadline:
+            await asyncio.sleep(interval)
+            async with session.post(
+                "/auth/token",
+                json=TokenRequest(device_code=code_info.device_code).model_dump(),
+            ) as resp:
+                if resp.status == 202:
+                    continue  # still pending
+                if resp.status == 200:
+                    token_data = await resp.json()
+                    token = token_data["access_token"]
+                    self.config.auth_token = token
+                    # Update session headers so subsequent calls use the new token
+                    self._session._default_headers.update({"Authorization": f"Bearer {token}"})
+                    return token
+                resp.raise_for_status()
+
+        raise TimeoutError("Device authorization timed out — code expired before approval")
 
     # ------------------------------------------------------------------
     # Agent discovery

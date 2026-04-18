@@ -246,3 +246,35 @@ async def test_post_auth_approve_expired_code_returns_404(df_server):
         df_server._device_flow._pending[device_code].expires_at = time.monotonic() - 1
         approve_resp = await client.post(f"/auth/approve/{device_code}")
         assert approve_resp.status == 404
+
+
+# ---------------------------------------------------------------------------
+# Client device_auth() integration test
+# ---------------------------------------------------------------------------
+
+from operator_use.acp.client import ACPClient
+from operator_use.acp.config import ACPClientConfig
+
+
+@pytest.mark.asyncio
+async def test_client_device_auth_completes(tmp_path):
+    """Full device_auth() flow: request code, auto-approve server-side, poll until done."""
+    df_server = _make_df_server(tmp_path)
+    async with TestClient(TestServer(df_server._app)) as http_client:
+        base_url = str(http_client.make_url("/")).rstrip("/")
+        cfg = ACPClientConfig(base_url=base_url, agent_id="operator")
+        acp = ACPClient(cfg)
+
+        # Simulate: as soon as code is created, auto-approve it (what a human would do)
+        original_create = df_server._device_flow.create_code
+        def auto_approve_create(verification_uri):
+            code = original_create(verification_uri)
+            df_server._device_flow.approve(code.device_code)
+            return code
+        df_server._device_flow.create_code = auto_approve_create
+
+        async with acp:
+            token = await acp.device_auth(poll_interval=0.05)
+
+        assert token.startswith("op_")
+        assert acp.config.auth_token == token
