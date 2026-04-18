@@ -87,3 +87,12 @@ def test_approve_unknown_code_returns_none(tmp_path):
 def test_poll_unknown_code_returns_none(tmp_path):
     mgr = DeviceFlowManager(tokens_path=str(tmp_path / "tokens.json"))
     assert mgr.poll("bad-device-code") is None
+
+
+def test_approve_expired_code_returns_none(tmp_path):
+    import time
+    mgr = DeviceFlowManager(tokens_path=str(tmp_path / "tokens.json"))
+    code = mgr.create_code(verification_uri="http://localhost/auth/approve")
+    mgr._pending[code.device_code].expires_at = time.monotonic() - 1
+    assert mgr.approve(code.device_code) is None
+    assert mgr.poll(code.device_code) is None

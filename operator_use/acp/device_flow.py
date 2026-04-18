@@ -7,7 +7,6 @@ import logging
 import os
 import random
 import secrets
-import string
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -16,7 +15,7 @@ from operator_use.acp.models import DeviceCodeResponse
 
 logger = logging.getLogger(__name__)
 
-_CODE_CHARS = string.ascii_uppercase + string.digits
+_CODE_CHARS = "BCDFGHJKLMNPQRSTVWXYZ23456789"  # excludes 0/O/I/1
 _EXPIRES_IN = 600  # seconds
 
 
@@ -42,7 +41,12 @@ class DeviceFlowManager:
     # Public API
     # ------------------------------------------------------------------
 
+    def _purge_expired(self) -> None:
+        now = time.monotonic()
+        self._pending = {k: v for k, v in self._pending.items() if v.expires_at > now}
+
     def create_code(self, verification_uri: str) -> DeviceCodeResponse:
+        self._purge_expired()
         device_code = secrets.token_hex(24)
         user_code = self._gen_user_code()
         entry = _PendingCode(
