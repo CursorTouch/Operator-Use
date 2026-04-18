@@ -37,7 +37,7 @@ from typing import Any, Optional, Literal
 
 from pydantic import BaseModel, Field
 
-from operator_use.bus.views import IncomingMessage, TextPart, OutgoingMessage
+from operator_use.bus.views import IncomingMessage, TextPart, OutgoingMessage, StreamPhase
 from operator_use.messages import HumanMessage
 from operator_use.tools import Tool, ToolResult
 
@@ -156,6 +156,7 @@ async def _run_detached(
     async def publish_intermediate(content: str, is_final: bool, init: bool = False) -> None:
         if not reply_channel or not reply_chat_id or not bus:
             return
+        phase = StreamPhase.START if init else (StreamPhase.END if is_final else StreamPhase.CHUNK)
         await bus.publish_outgoing(
             OutgoingMessage(
                 chat_id=reply_chat_id,
@@ -163,7 +164,7 @@ async def _run_detached(
                 account_id=reply_account_id,
                 parts=[TextPart(content=content)],
                 reply=False,
-                continue_typing=not is_final,
+                stream_phase=phase,
             )
         )
 
@@ -476,7 +477,7 @@ async def localagents(
     async def publish_intermediate(content: str, is_final: bool, init: bool = False) -> None:
         if not parent_channel or not parent_chat_id or not bus:
             return
-        # Publish intermediate messages to the parent channel while the subagent runs
+        phase = StreamPhase.START if init else (StreamPhase.END if is_final else StreamPhase.CHUNK)
         await bus.publish_outgoing(
             OutgoingMessage(
                 chat_id=parent_chat_id,
@@ -484,7 +485,7 @@ async def localagents(
                 account_id=parent_account_id,
                 parts=[TextPart(content=content)],
                 reply=False,
-                continue_typing=not is_final,
+                stream_phase=phase,
             )
         )
 
