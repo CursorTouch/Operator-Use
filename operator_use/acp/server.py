@@ -32,6 +32,7 @@ from typing import Callable
 from aiohttp import web
 
 from operator_use.acp.config import ACPServerConfig
+from operator_use.acp.device_flow import DeviceFlowManager
 from operator_use.acp.provenance import ACPProvenance, fetch_public_key
 from operator_use.acp.models import (
     AgentListResponse,
@@ -43,6 +44,7 @@ from operator_use.acp.models import (
     RunOutputEvent,
     RunStatus,
     TextMessagePart,
+    TokenResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,13 @@ class ACPServer:
         self._provenance: ACPProvenance | None = None
         # Cache of fetched peer public keys: agent_id -> public_key_b64
         self._peer_pubkeys: dict[str, str] = dict(config.trusted_agents)
+        self._device_flow: DeviceFlowManager | None = (
+            DeviceFlowManager(
+                tokens_path=config.tokens_path or ".operator_use/acp_tokens.json"
+            )
+            if config.device_flow_enabled
+            else None
+        )
         self._app = self._build_app()
         self._site: web.TCPSite | None = None
         self._runner_obj: web.AppRunner | None = None
@@ -95,6 +104,11 @@ class ACPServer:
         app.router.add_get("/runs/{run_id}", self._handle_get_run)
         app.router.add_delete("/runs/{run_id}", self._handle_cancel_run)
         app.router.add_get("/runs/{run_id}/await", self._handle_await_run)
+        if self.config.device_flow_enabled:
+            app.router.add_post("/auth/device", self._handle_device_request)
+            app.router.add_post("/auth/token", self._handle_device_token)
+            app.router.add_get("/auth/approve", self._handle_approve_page)
+            app.router.add_post("/auth/approve/{device_code}", self._handle_approve_action)
         return app
 
     @web.middleware
@@ -124,7 +138,11 @@ class ACPServer:
                 return web.Response(status=401, text="Unauthorized")
             request["_authed_agent"] = None  # global — all agents accessible
         else:
-            request["_authed_agent"] = None  # no auth configured — open access
+            # No static auth configured — check device-flow tokens
+            if self._device_flow and provided:
+                if not self._device_flow.validate_token(provided):
+                    return web.Response(status=401, text="Unauthorized")
+            request["_authed_agent"] = None
 
         return await handler(request)
 
@@ -311,6 +329,54 @@ class ACPServer:
         )
         await response.write_eof()
         return response
+
+    # ------------------------------------------------------------------
+    # Device Authorization Grant handlers (RFC 8628)
+    # ------------------------------------------------------------------
+
+    async def _handle_device_request(self, request: web.Request) -> web.Response:
+        base = self.config.public_url or f"http://{self.config.host}:{self.config.port}"
+        code = self._device_flow.create_code(verification_uri=f"{base}/auth/approve")
+        return web.json_response(code.model_dump())
+
+    async def _handle_device_token(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+            device_code = body.get("device_code", "")
+        except Exception:
+            return web.json_response({"error": "invalid request"}, status=400)
+
+        token = self._device_flow.poll(device_code)
+        if token is None:
+            return web.Response(status=202)  # still pending
+        return web.json_response(TokenResponse(access_token=token).model_dump())
+
+    async def _handle_approve_page(self, request: web.Request) -> web.Response:
+        import time
+        pending = self._device_flow.list_pending()
+        if not pending:
+            body = "<h1>No pending device requests</h1>"
+        else:
+            rows = []
+            now = time.monotonic()
+            for p in pending:
+                mins = max(0, int((p.expires_at - now) / 60))
+                rows.append(
+                    f"<form method='POST' action='/auth/approve/{p.device_code}' style='margin:1em 0'>"
+                    f"<p>Code: <strong>{p.user_code}</strong> &mdash; expires in ~{mins} min</p>"
+                    f"<button type='submit'>Approve</button></form>"
+                )
+            body = "<h1>Pending Device Connections</h1>" + "".join(rows)
+
+        html = f"<!DOCTYPE html><html><head><title>Approve Device</title></head><body>{body}</body></html>"
+        return web.Response(text=html, content_type="text/html")
+
+    async def _handle_approve_action(self, request: web.Request) -> web.Response:
+        device_code = request.match_info["device_code"]
+        token = self._device_flow.approve(device_code)
+        if token is None:
+            return web.Response(text="Code not found or expired.", status=404)
+        return web.Response(text="Approved. The remote device is now connected.", content_type="text/html")
 
     # ------------------------------------------------------------------
     # Run execution

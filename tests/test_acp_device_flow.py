@@ -96,3 +96,127 @@ def test_approve_expired_code_returns_none(tmp_path):
     mgr._pending[code.device_code].expires_at = time.monotonic() - 1
     assert mgr.approve(code.device_code) is None
     assert mgr.poll(code.device_code) is None
+
+
+# ---------------------------------------------------------------------------
+# Server endpoint tests
+# ---------------------------------------------------------------------------
+
+import pytest_asyncio
+from aiohttp.test_utils import TestClient, TestServer
+
+from operator_use.acp.config import ACPServerConfig
+from operator_use.acp.models import AgentCapabilities, AgentMetadata
+from operator_use.acp.server import ACPServer
+
+
+def _make_df_server(tmp_path) -> ACPServer:
+    async def _echo(text, session_id):
+        yield f"echo:{text}"
+
+    config = ACPServerConfig(
+        device_flow_enabled=True,
+        tokens_path=str(tmp_path / "tokens.json"),
+        id="test-df-server",
+    )
+    meta = AgentMetadata(
+        id="operator",
+        name="Operator",
+        capabilities=AgentCapabilities(streaming=True, async_mode=True, session=True),
+    )
+    return ACPServer(config=config, runners={"operator": _echo}, metadata={"operator": meta})
+
+
+@pytest.fixture
+def df_server(tmp_path):
+    return _make_df_server(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_post_auth_device_returns_code(df_server):
+    async with TestClient(TestServer(df_server._app)) as client:
+        resp = await client.post("/auth/device")
+        assert resp.status == 200
+        data = await resp.json()
+        assert "device_code" in data
+        assert "user_code" in data
+        assert "-" in data["user_code"]
+        assert "verification_uri" in data
+        assert data["interval"] == 5
+
+
+@pytest.mark.asyncio
+async def test_post_auth_token_pending_returns_202(df_server):
+    async with TestClient(TestServer(df_server._app)) as client:
+        resp = await client.post("/auth/device")
+        data = await resp.json()
+        token_resp = await client.post("/auth/token", json={"device_code": data["device_code"]})
+        assert token_resp.status == 202
+
+
+@pytest.mark.asyncio
+async def test_post_auth_token_approved_returns_token(df_server):
+    async with TestClient(TestServer(df_server._app)) as client:
+        resp = await client.post("/auth/device")
+        data = await resp.json()
+        device_code = data["device_code"]
+
+        # Approve directly via manager
+        df_server._device_flow.approve(device_code)
+
+        token_resp = await client.post("/auth/token", json={"device_code": device_code})
+        assert token_resp.status == 200
+        token_data = await token_resp.json()
+        assert token_data["access_token"].startswith("op_")
+
+
+@pytest.mark.asyncio
+async def test_get_auth_approve_shows_pending(df_server):
+    async with TestClient(TestServer(df_server._app)) as client:
+        await client.post("/auth/device")
+        resp = await client.get("/auth/approve")
+        assert resp.status == 200
+        text = await resp.text()
+        assert "XXXX" not in text   # rendered, not template literal
+        assert "<form" in text
+
+
+@pytest.mark.asyncio
+async def test_post_auth_approve_approves_code(df_server):
+    async with TestClient(TestServer(df_server._app)) as client:
+        resp = await client.post("/auth/device")
+        device_code = (await resp.json())["device_code"]
+
+        approve_resp = await client.post(f"/auth/approve/{device_code}")
+        assert approve_resp.status == 200
+
+        token_resp = await client.post("/auth/token", json={"device_code": device_code})
+        assert token_resp.status == 200
+
+
+@pytest.mark.asyncio
+async def test_device_flow_token_accepted_as_bearer(df_server):
+    async with TestClient(TestServer(df_server._app)) as client:
+        resp = await client.post("/auth/device")
+        device_code = (await resp.json())["device_code"]
+        await client.post(f"/auth/approve/{device_code}")
+
+        token_resp = await client.post("/auth/token", json={"device_code": device_code})
+        token = (await token_resp.json())["access_token"]
+
+        agents_resp = await client.get("/agents", headers={"Authorization": f"Bearer {token}"})
+        assert agents_resp.status == 200
+
+
+@pytest.mark.asyncio
+async def test_device_flow_disabled_returns_404():
+    async def _echo(text, session_id):
+        yield text
+
+    config = ACPServerConfig(device_flow_enabled=False, id="test-no-df")
+    meta = AgentMetadata(id="operator", name="Operator")
+    server = ACPServer(config=config, runners={"operator": _echo}, metadata={"operator": meta})
+
+    async with TestClient(TestServer(server._app)) as client:
+        resp = await client.post("/auth/device")
+        assert resp.status == 404
