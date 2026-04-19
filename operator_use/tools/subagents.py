@@ -105,8 +105,8 @@ async def subagents(
             msg = f"Subagent created (task_id={tid}  label='{display}')\n"
             if depends_on:
                 msg += f"Dependencies: {', '.join(depends_on)}\n"
-            msg += "Running in background — result will be delivered automatically when done."
-            return ToolResult.success_result(msg, metadata={"stop_loop": True})
+            msg += "Running in background — result will be delivered automatically when done.\nEND YOUR TURN NOW. Do not call list or any other tool. Inform the user and stop."
+            return ToolResult.success_result(msg)
 
         case "agents":
             records = subagent_manager.list_all()

@@ -308,20 +308,11 @@ class Orchestrator:
                 built_message.metadata = dict(request_message.metadata)
 
             # Decide streaming: orchestrator knows channel type + voice flag
-            # Disable for agent result delivery — avoids partial streams for whitespace-only responses
-            _is_agent_result = bool(
-                request_message.metadata
-                and (
-                    request_message.metadata.get("_localagent_result")
-                    or request_message.metadata.get("_subagent_result")
-                )
-            )
             use_streaming = (
                 self.streaming
                 and request_message.channel not in ("direct", "cli")
                 and hasattr(agent.llm, "astream")
                 and not self._user_sent_voice(request_message)
-                and not _is_agent_result
             )
 
             streamed = False
@@ -355,10 +346,6 @@ class Orchestrator:
                 publish_stream=publish_stream if use_streaming else None,
                 pending_replies=self._pending_replies,
             )
-
-            # Skip sending if the agent ended silently (e.g. detached delegation)
-            if not (response_message.content or "").strip() and not streamed:
-                return
 
             # Build OutgoingMessage (runs TTS if needed)
             outgoing = await self._build_outgoing_message(

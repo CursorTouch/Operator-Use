@@ -465,8 +465,8 @@ async def localagents(
         return ToolResult.success_result(
             f"Agent '{name}' is running in the background (task_id={run_task_id}).\n"
             f"Task: {task_preview}\n"
-            f"Result will be delivered automatically when done.",
-            metadata={"stop_loop": True},
+            f"Result will be delivered automatically when done.\n"
+            f"END YOUR TURN NOW. Do not poll or call any other tool. Inform the user and stop."
         )
 
     if action == "spawn" and not task:

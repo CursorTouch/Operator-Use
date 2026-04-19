@@ -449,7 +449,7 @@ class Agent:
                         llm_event.tool_call, thinking, thinking_signature, session, error_messages
                     )
                     if tool_result.metadata and tool_result.metadata.get("stop_loop"):
-                        return AIMessage(content="")
+                        return AIMessage(content=content or "")
                 case LLMEventType.TEXT:
                     clean = self._clean_content(llm_event.content or "")
                     logger.info(f"Response | {clean[:120]!r}{'...' if len(clean) > 120 else ''}")
