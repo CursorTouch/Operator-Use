@@ -186,7 +186,7 @@ async def test_agent_run_with_tool_call_then_text(tmp_path):
 
     # Register a simple echo tool
     from pydantic import BaseModel
-    from operator_use.tools.service import Tool
+    from operator_use.agent.tools.service import Tool
 
     class EchoParams(BaseModel):
         message: str

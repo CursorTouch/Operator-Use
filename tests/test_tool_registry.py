@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel
 
 from operator_use.agent.tools.registry import ToolRegistry
-from operator_use.tools.service import Tool
+from operator_use.agent.tools.service import Tool
 
 
 # --- Helpers ---
