@@ -235,6 +235,7 @@ class ACPAgentEntry(Base):
     auth_token: str = ""  # Bearer token for the remote server
     timeout: float = 120.0
     description: str = ""  # Human-readable hint shown to the LLM
+    capabilities: list[str] = Field(default_factory=list)  # e.g. ["browser_use", "computer_use"]
 
 
 class ACPServerSettings(Base):

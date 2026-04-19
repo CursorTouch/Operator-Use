@@ -1311,7 +1311,7 @@ def agents_add(
 ):
     """Add a new agent and create its workspace."""
     from operator_use.cli.start import copy_templates_to_workspace, _resolve_agent_workspace, write_identity_md
-    from operator_use.config import AgentDefinition, LLMConfig
+    from operator_use.config import AgentDefinition, LLMConfig, load_config
 
     defn = AgentDefinition(
         id=agent_id,
@@ -1321,7 +1321,16 @@ def agents_add(
     )
     ws_path = _resolve_agent_workspace(defn)
     copy_templates_to_workspace(USERDATA_DIR, workspace=ws_path)
-    write_identity_md(ws_path, defn)
+
+    try:
+        existing_config = load_config(USERDATA_DIR)
+        local_agents = existing_config.agents.list + [defn]
+        acp_agents = existing_config.acp_agents
+    except Exception:
+        local_agents = [defn]
+        acp_agents = {}
+
+    write_identity_md(ws_path, defn, local_agents=local_agents, acp_agents=acp_agents)
 
     def mutate(data: dict):
         agents = data.setdefault("agents", {})

@@ -403,7 +403,12 @@ def copy_templates_to_workspace(user_data_dir: Path, workspace: Path) -> None:
                         shutil.copy2(f, dest_file)
 
 
-def write_identity_md(workspace: Path, defn: "AgentDefinition") -> None:
+def write_identity_md(
+    workspace: Path,
+    defn: "AgentDefinition",
+    local_agents: "list[AgentDefinition] | None" = None,
+    acp_agents: "dict | None" = None,
+) -> None:
     """Write (or update) IDENTITY.md from the AgentDefinition in config."""
     from datetime import date
 
@@ -450,6 +455,29 @@ def write_identity_md(workspace: Path, defn: "AgentDefinition") -> None:
         f"Plugins: {', '.join(enabled_plugins) or 'none'}\n"
         f"Skills: {', '.join(skill_names) or 'none'}\n"
     )
+
+    peers = [a for a in (local_agents or []) if a.id != defn.id]
+    if peers or acp_agents:
+        lines = ["\n## Agents You Have Access To\n"]
+        if peers:
+            lines.append("### Local Agents\n")
+            for a in peers:
+                caps = [p.id for p in a.plugins if p.enabled]
+                caps_str = ", ".join(caps) or "general"
+                lines.append(
+                    f"- Name: {a.id}  "
+                    f"Description: {(a.description or 'none').strip()}  "
+                    f"Capabilities: {caps_str}"
+                )
+        if acp_agents:
+            lines.append("\n### ACP Agents\n")
+            for name, entry in acp_agents.items():
+                desc = (getattr(entry, "description", "") or "").strip() or "none"
+                url = getattr(entry, "base_url", "") or ""
+                caps = getattr(entry, "capabilities", []) or []
+                caps_str = ", ".join(caps) or "general"
+                lines.append(f"- Name: {name}  Description: {desc}  Capabilities: {caps_str}  URL: {url}")
+        content += "\n".join(lines) + "\n"
 
     workspace.mkdir(parents=True, exist_ok=True)
     identity_path.write_text(content, encoding="utf-8")

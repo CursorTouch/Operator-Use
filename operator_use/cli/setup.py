@@ -568,7 +568,7 @@ def _save_config(
     for defn in agent_list:
         ws_path = _resolve_agent_workspace(defn)
         ws_path.mkdir(parents=True, exist_ok=True)
-        write_identity_md(ws_path, defn)
+        write_identity_md(ws_path, defn, local_agents=agent_list, acp_agents=acp_agents)
 
 
 def run_first_install():
@@ -1208,11 +1208,16 @@ def run_initial_setup():
                                 description = text_input(
                                     "Description (shown to LLM):", default=""
                                 ).strip()
+                                caps_raw = text_input(
+                                    "Capabilities (comma-separated, e.g. browser_use,computer_use):", default=""
+                                ).strip()
+                                capabilities = [c.strip() for c in caps_raw.split(",") if c.strip()]
                                 acp_agents[name] = ACPAgentEntry(
                                     base_url=base_url,
                                     agent_id=agent_id,
                                     auth_token=auth_token,
                                     description=description,
+                                    capabilities=capabilities,
                                 )
 
                             else:
