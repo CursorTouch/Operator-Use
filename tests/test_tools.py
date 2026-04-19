@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel
 from typing import Literal
 
-from operator_use.tools.service import Tool, ToolResult
+from operator_use.agent.tools.service import Tool, ToolResult
 
 
 # --- ToolResult ---
