@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from operator_use.agent.tools.builtin.local_agents import LOCAL_AGENT_DELEGATION_CHAIN, localagents
+from operator_use.tools.local_agents import LOCAL_AGENT_DELEGATION_CHAIN, localagents
 from operator_use.messages.service import AIMessage
 
 
