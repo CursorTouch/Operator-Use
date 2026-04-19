@@ -93,13 +93,14 @@ class LocalAgents(BaseModel):
     )
 
 
-def _agent_capabilities(agent) -> str:
-    caps: list[str] = []
-    if agent.get_plugin("browser_use") is not None:
-        caps.append("browser")
-    if agent.get_plugin("computer_use") is not None:
-        caps.append("computer")
-    return ", ".join(caps) if caps else "general"
+def _agent_summary(agent) -> str:
+    """One-line summary of an agent: description + enabled plugins."""
+    description = (getattr(agent, "description", "") or "").strip()
+    plugins = [
+        p.name for p in getattr(agent, "plugins", []) if getattr(p, "_enabled", False)
+    ]
+    suffix = f" [{', '.join(plugins)}]" if plugins else ""
+    return (description or "No description provided.") + suffix
 
 
 def _delegation_chain_from_metadata(metadata: dict[str, Any] | None) -> list[str]:
@@ -266,11 +267,7 @@ async def localagents(
         lines = ["Available local agents:"]
         for agent_id, agent in registry.items():
             marker = " (current)" if agent_id == current_agent_id else ""
-            description = getattr(agent, "description", "") or "No description provided."
-            lines.append(
-                f"  • {agent_id}{marker} — {description} "
-                f"[capabilities: {_agent_capabilities(agent)}]"
-            )
+            lines.append(f"  • {agent_id}{marker} — {_agent_summary(agent)}")
 
         # Show any active detached runs from this agent
         if current_agent is not None:
