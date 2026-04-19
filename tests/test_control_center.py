@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from operator_use.agent.tools.builtin.control_center import (
+from operator_use.tools.control_center import (
     control_center,
     _set_plugin_enabled,
     _get_plugin_enabled,
