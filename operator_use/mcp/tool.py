@@ -1,6 +1,5 @@
 """MCP Tool — a Tool backed by a remote MCP server."""
 
-import json
 from typing import TYPE_CHECKING
 
 from operator_use.agent.tools.service import Tool, ToolResult
