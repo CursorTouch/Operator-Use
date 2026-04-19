@@ -97,7 +97,7 @@ class ImageOpenAI(BaseImage):
         elif data.url:
             import urllib.request
 
-            urllib.request.urlretrieve(data.url, output_path)
+            urllib.request.urlretrieve(data.url, output_path)  # nosec B310 — URL from OpenAI API response (HTTPS only)
         else:
             raise RuntimeError("No image data in response")
 

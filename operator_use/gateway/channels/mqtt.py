@@ -31,8 +31,7 @@ class MQTTChannel(BaseChannel):
         self._client: Optional[aiomqtt.Client] = None
         self._stop_event = asyncio.Event()
 
-    def _cfg(self, key, default=None):
-        return getattr(self.config, key, default)
+    # _cfg inherited from BaseChannel
 
     @property
     def name(self) -> str:

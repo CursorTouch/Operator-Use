@@ -7,8 +7,58 @@ from typing import Literal, Optional
 from asyncio import sleep
 from pathlib import Path
 from os import getcwd
+from urllib.parse import urlparse as _urlparse
+import os as _os
 import httpx
 import json
+
+_MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024  # 100MB
+
+# Sensitive browser APIs the LLM must not access via script execution.
+# These could exfiltrate cookies, tokens, or stored credentials.
+_BLOCKED_JS_APIS = [
+    "document.cookie",
+    "localStorage",
+    "sessionStorage",
+    "indexedDB",
+    "XMLHttpRequest",
+    "navigator.credentials",
+    "crypto.subtle",
+    "chrome.identity",
+]
+
+
+def _check_script_safety(script_content: str) -> str | None:
+    """Return an error message if the script accesses sensitive browser APIs, else None."""
+    lower = script_content.lower()
+    for api in _BLOCKED_JS_APIS:
+        if api.lower() in lower:
+            return (
+                f"Script blocked: accesses sensitive browser API {api!r}. "
+                "This API could expose cookies, auth tokens, or stored credentials. "
+                "Remove the sensitive API access and try again."
+            )
+    return None
+
+
+def _validate_download(url: str, filename: str, downloads_dir: Path) -> str | None:
+    """Validate a download request. Returns error message if invalid, None if safe."""
+    # Scheme check — only http/https
+    parsed = _urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return f"Download blocked: only http/https URLs allowed, got scheme {parsed.scheme!r}"
+
+    # Filename sanitization — strip path components, reject traversal
+    safe_name = _os.path.basename(filename) if filename else _os.path.basename(parsed.path) or "download"
+    if not safe_name or safe_name in (".", ".."):
+        return f"Download blocked: invalid filename {filename!r}"
+
+    # Path containment — resolved target must stay inside downloads dir
+    target = (downloads_dir / safe_name).resolve()
+    if not target.is_relative_to(downloads_dir.resolve()):
+        return f"Download blocked: path traversal in filename {filename!r}"
+
+    return None
 
 
 class BrowserTool(BaseModel):
@@ -320,6 +370,9 @@ async def browser(
         case "script":
             if not script:
                 return ToolResult.error_result("script is required for script.")
+            _safety_err = _check_script_safety(script)
+            if _safety_err:
+                return ToolResult.error_result(_safety_err)
             result = await page.execute_script(script, truncate=True, repair=True)
             return ToolResult.success_result(f"Script result: {result}")
 
@@ -334,13 +387,29 @@ async def browser(
             if not filename:
                 return ToolResult.error_result("filename is required for download.")
             folder_path = Path(browser.config.downloads_dir)
+            _err = _validate_download(url or "", filename or "", folder_path)
+            if _err:
+                return ToolResult.error_result(_err)
+            # Use sanitized basename — never the raw filename from the LLM
+            safe_name = _os.path.basename(filename) or _os.path.basename(url.split("?")[0]) or "download"
             async with httpx.AsyncClient() as client:
+                # Preflight size check via Content-Length header
+                head_resp = await client.head(url)
+                content_length = int(head_resp.headers.get("content-length", 0))
+                if content_length > _MAX_DOWNLOAD_SIZE:
+                    return ToolResult.error_result(
+                        f"Download blocked: Content-Length {content_length} bytes exceeds 100MB limit."
+                    )
                 response = await client.get(url)
                 response.raise_for_status()
-            path = folder_path / filename
+                if len(response.content) > _MAX_DOWNLOAD_SIZE:
+                    return ToolResult.error_result(
+                        "Download blocked: response body exceeds 100MB size limit."
+                    )
+            path = folder_path / safe_name
             with open(path, "wb") as f:
                 f.write(response.content)
-            return ToolResult.success_result(f"Downloaded {filename} from {url} to {path}.")
+            return ToolResult.success_result(f"Downloaded {safe_name} from {url} to {path}.")
 
         case _:
             return ToolResult.error_result(f"Unknown action: {action!r}.")

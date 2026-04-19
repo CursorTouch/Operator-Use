@@ -12,17 +12,19 @@ def is_binary_file(path: Path) -> bool:
     except (OSError, IOError):
         return False
 
-
 def resolve(base: str | Path, path: str | Path) -> Path:
+    """Resolve *path* relative to *base*, blocking traversal outside the workspace.
+
+    Uses is_relative_to() (Python 3.12+) rather than startswith() to avoid
+    prefix-collision bypasses (e.g. /workspace_evil passes startswith(/workspace)).
     """
-    Resolves a path relative to a base path.
-    If the path is absolute, it returns the path as is.
-    Otherwise, it joins the path with the base path and returns the resolved path.
-    """
-    path = Path(path)
-    if path.is_absolute():
-        return path.resolve()
-    return Path(base).joinpath(path).resolve()
+    base_resolved = Path(base).resolve()
+    resolved = (base_resolved / Path(path)).resolve()
+    if not resolved.is_relative_to(base_resolved):
+        raise PermissionError(
+            f"Path traversal blocked: {path!r} resolves outside workspace {base_resolved}"
+        )
+    return resolved
 
 
 def ensure_directory(path: str) -> str:

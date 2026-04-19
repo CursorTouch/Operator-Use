@@ -1,5 +1,7 @@
 """Run Operator with channels and agents."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 import shutil
@@ -84,7 +86,6 @@ from operator_use.bus import OutgoingMessage, IncomingMessage, TextPart
 from operator_use.config import Config, load_config, AgentDefinition
 from operator_use.config.paths import get_named_workspace_dir
 from typing import Optional
-from pathlib import Path
 
 LLM_CLASS_MAP = {
     "openai": "ChatOpenAI",
