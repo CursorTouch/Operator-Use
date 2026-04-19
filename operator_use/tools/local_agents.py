@@ -461,7 +461,13 @@ async def localagents(
         )
         task_reg[run_task_id] = {"record": record, "asyncio_task": at}
 
-        return ToolResult.success_result("", metadata={"stop_loop": True})
+        task_preview = (task[:120] + "…") if task and len(task) > 120 else (task or "")
+        return ToolResult.success_result(
+            f"Agent '{name}' is running in the background (task_id={run_task_id}).\n"
+            f"Task: {task_preview}\n"
+            f"Result will be delivered automatically when done.",
+            metadata={"stop_loop": True},
+        )
 
     if action == "spawn" and not task:
         return ToolResult.success_result(
