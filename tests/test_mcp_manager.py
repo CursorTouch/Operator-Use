@@ -110,18 +110,18 @@ class TestMCPManagerReferenceCounting:
         agent_id = "agent_a"
         server_name = "server_1"
 
-        # Mock the _open_session to avoid actual connection
-        mock_session = AsyncMock()
+        # Mock the _open_client to avoid actual connection
+        mock_client = AsyncMock()
         mock_tool = MagicMock()
         mock_tool.name = "test_tool"
         mock_tool.description = "Test"
         mock_tool.inputSchema = {"type": "object"}
 
-        mock_session.initialize = AsyncMock()
-        mock_session.list_tools = AsyncMock(return_value=MagicMock(tools=[mock_tool]))
+        # fastmcp Client.list_tools() returns a list directly
+        mock_client.list_tools = AsyncMock(return_value=[mock_tool])
 
         with patch.object(
-            manager, "_open_session", new_callable=AsyncMock, return_value=mock_session
+            MCPManager, "_open_client", new_callable=AsyncMock, return_value=mock_client
         ):
             # Initially count is 0
             assert manager._connection_count.get(server_name, 0) == 0
@@ -133,7 +133,7 @@ class TestMCPManagerReferenceCounting:
             assert manager._connection_count[server_name] == 1
             assert manager.is_connected(agent_id, server_name)
             assert len(tools) == 1
-            assert server_name in manager._stacks
+            assert server_name in manager._clients
 
     @pytest.mark.asyncio
     async def test_connect_second_agent_reuses_connection(self, manager):
@@ -141,29 +141,29 @@ class TestMCPManagerReferenceCounting:
         server_name = "server_1"
 
         # Set up first agent's connection
-        mock_session = AsyncMock()
+        mock_client = AsyncMock()
         mock_tool = MagicMock()
         mock_tool.name = "test_tool"
         mock_tool.description = "Test"
         mock_tool.inputSchema = {"type": "object"}
 
-        mock_session.initialize = AsyncMock()
-        mock_session.list_tools = AsyncMock(return_value=MagicMock(tools=[mock_tool]))
+        # fastmcp Client.list_tools() returns a list directly
+        mock_client.list_tools = AsyncMock(return_value=[mock_tool])
 
         with patch.object(
-            manager, "_open_session", new_callable=AsyncMock, return_value=mock_session
+            MCPManager, "_open_client", new_callable=AsyncMock, return_value=mock_client
         ):
             # Agent A connects
             await manager.connect("agent_a", server_name)
             assert manager._connection_count[server_name] == 1
-            stack_count_1 = len(manager._stacks)
+            client_count_1 = len(manager._clients)
 
             # Agent B connects to same server
             await manager.connect("agent_b", server_name)
 
-            # Should reuse connection (no new stack opened)
+            # Should reuse connection (no new client opened)
             assert manager._connection_count[server_name] == 2
-            assert len(manager._stacks) == stack_count_1  # Same number of stacks
+            assert len(manager._clients) == client_count_1  # Same number of clients
             assert manager.is_connected("agent_a", server_name)
             assert manager.is_connected("agent_b", server_name)
 
@@ -179,10 +179,10 @@ class TestMCPManagerReferenceCounting:
 
         manager._tools[server_name] = [MagicMock(name="tool")]
 
-        # Mock stack to avoid actual closing
-        mock_stack = MagicMock()
-        mock_stack.aclose = AsyncMock()
-        manager._stacks[server_name] = mock_stack
+        # Mock client to avoid actual closing
+        mock_client = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        manager._clients[server_name] = mock_client
 
         # Agent A disconnects
         await manager.disconnect("agent_a", server_name)
@@ -191,8 +191,8 @@ class TestMCPManagerReferenceCounting:
         assert manager._connection_count[server_name] == 1
         assert not manager.is_connected("agent_a", server_name)
         assert manager.is_connected("agent_b", server_name)
-        assert server_name in manager._stacks  # Still there!
-        mock_stack.aclose.assert_not_called()  # Not closed
+        assert server_name in manager._clients  # Still there!
+        mock_client.__aexit__.assert_not_called()  # Not closed
 
     @pytest.mark.asyncio
     async def test_disconnect_last_agent_kills_server(self, manager):
@@ -204,10 +204,10 @@ class TestMCPManagerReferenceCounting:
         manager._agent_connections["agent_a"] = {server_name}
         manager._tools[server_name] = [MagicMock(name="tool")]
 
-        # Mock stack to track if it's closed
-        mock_stack = MagicMock()
-        mock_stack.aclose = AsyncMock()
-        manager._stacks[server_name] = mock_stack
+        # Mock client to track if it's closed
+        mock_client = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        manager._clients[server_name] = mock_client
 
         # Agent A disconnects
         await manager.disconnect("agent_a", server_name)
@@ -215,8 +215,8 @@ class TestMCPManagerReferenceCounting:
         # Server should be dead
         assert manager._connection_count[server_name] == 0
         assert not manager.is_server_connected(server_name)
-        assert server_name not in manager._stacks  # Removed!
-        mock_stack.aclose.assert_called_once()  # Was closed
+        assert server_name not in manager._clients  # Removed!
+        mock_client.__aexit__.assert_called_once()  # Was closed
 
 
 class TestMCPTool:
@@ -224,7 +224,7 @@ class TestMCPTool:
 
     def test_json_schema_returns_mcp_schema(self):
         """Test that json_schema returns MCP's inputSchema directly."""
-        mock_session = MagicMock()
+        mock_client = MagicMock()
         input_schema = {
             "type": "object",
             "properties": {"path": {"type": "string", "description": "File path"}},
@@ -236,7 +236,7 @@ class TestMCPTool:
             mcp_tool_name="read_file",
             description="Read a file",
             input_schema=input_schema,
-            session=mock_session,
+            client=mock_client,
         )
 
         schema = tool.json_schema
@@ -246,14 +246,14 @@ class TestMCPTool:
 
     def test_tool_name_namespacing(self):
         """Test that tool names are properly namespaced."""
-        mock_session = MagicMock()
+        mock_client = MagicMock()
 
         tool = MCPTool(
             server_name="github",
             mcp_tool_name="create_issue",
             description="Create a GitHub issue",
             input_schema={"type": "object"},
-            session=mock_session,
+            client=mock_client,
         )
 
         assert tool.name == "mcp_github_create_issue"
@@ -261,17 +261,18 @@ class TestMCPTool:
     @pytest.mark.asyncio
     async def test_ainvoke_strips_extensions(self):
         """Test that ainvoke strips extension kwargs before calling tool."""
-        mock_session = AsyncMock()
-        mock_session.call_tool = AsyncMock(
-            return_value=MagicMock(content=[MagicMock(text="result")])
-        )
+        mock_client = AsyncMock()
+        # fastmcp Client.call_tool() returns list[Content] directly
+        mock_content = MagicMock()
+        mock_content.text = "result"
+        mock_client.call_tool = AsyncMock(return_value=[mock_content])
 
         tool = MCPTool(
             server_name="test",
             mcp_tool_name="tool",
             description="Test",
             input_schema={"type": "object"},
-            session=mock_session,
+            client=mock_client,
         )
 
         # Call with extensions + real params
@@ -282,23 +283,23 @@ class TestMCPTool:
             _mcp_manager=MagicMock(),
         )
 
-        # Should only pass param1 to session.call_tool
-        mock_session.call_tool.assert_called_once_with("tool", {"param1": "value1"})
+        # Should only pass param1 to client.call_tool
+        mock_client.call_tool.assert_called_once_with("tool", {"param1": "value1"})
         assert result.success
         assert result.output == "result"
 
     @pytest.mark.asyncio
     async def test_ainvoke_handles_error(self):
         """Test that ainvoke catches errors."""
-        mock_session = AsyncMock()
-        mock_session.call_tool = AsyncMock(side_effect=Exception("Connection lost"))
+        mock_client = AsyncMock()
+        mock_client.call_tool = AsyncMock(side_effect=Exception("Connection lost"))
 
         tool = MCPTool(
             server_name="test",
             mcp_tool_name="tool",
             description="Test",
             input_schema={"type": "object"},
-            session=mock_session,
+            client=mock_client,
         )
 
         result = await tool.ainvoke(param="value")
