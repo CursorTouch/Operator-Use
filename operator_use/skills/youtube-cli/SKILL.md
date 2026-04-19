@@ -9,10 +9,10 @@ This skill uses `yt-dlp` to fetch metadata (title, uploader, views, duration) an
 ## Steps
 1. Use the script `skills/youtube-cli/scripts/yt_processor.py` via the terminal.
 2. Run the command: `python skills/youtube-cli/scripts/yt_processor.py <video_id> [flags]`
-3. Available flags: `--title`, `--uploader`, `--duration`, `--views`, `--transcript`, `--output` (`-o`).
+3. Available flags: `--title`, `--uploader`, `--duration`, `--views`, `--transcript`, `--description`, `--output` (`-o`).
 4. If no flags are specified, it defaults to: `--title`, `--uploader`, `--duration`, `--views`.
 5. Run `python skills/youtube-cli/scripts/yt_processor.py --help` for usage details.
-6. The script outputs the requested information in JSON format. Use `--output <path>` to save the result to a file and avoid terminal truncation for long transcripts.
+6. The script outputs the requested information in JSON format. Use `--output <path>` to save the transcript text or description text directly to a file. Use this to avoid terminal truncation for long transcripts.
 
 ## Common Failures
 - **400 Bad Request**: Often caused by outdated `pytube` libraries; this skill uses `yt-dlp` as a more robust alternative.

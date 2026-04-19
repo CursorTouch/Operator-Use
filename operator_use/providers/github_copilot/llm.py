@@ -32,7 +32,6 @@ from operator_use.providers.events import (
     LLMEventType,
     LLMStreamEvent,
     LLMStreamEventType,
-    StopReason,
     ToolCall,
     map_openai_stop_reason,
 )

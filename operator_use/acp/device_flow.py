@@ -132,5 +132,6 @@ class DeviceFlowManager:
 
     @staticmethod
     def _gen_user_code() -> str:
-        part = lambda: "".join(random.choices(_CODE_CHARS, k=4))
+        def part() -> str:
+            return "".join(random.choices(_CODE_CHARS, k=4))
         return f"{part()}-{part()}"

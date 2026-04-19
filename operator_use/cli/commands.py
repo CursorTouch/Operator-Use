@@ -1389,7 +1389,7 @@ def agents_update(
     tools_profile: str = typer.Option(None, "--tools-profile", help="Tool profile: minimal, coding, or full."),
 ):
     """Update an existing agent's configuration and regenerate its IDENTITY.md."""
-    from operator_use.config import load_config, AgentDefinition
+    from operator_use.config import load_config
     from operator_use.cli.start import write_identity_md, _resolve_agent_workspace
 
     def mutate(data: dict):

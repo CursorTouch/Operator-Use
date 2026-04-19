@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-import json
-import os
 import time
 import pytest
+from aiohttp.test_utils import TestClient, TestServer
 
+from operator_use.acp.client import ACPClient
+from operator_use.acp.config import ACPClientConfig, ACPServerConfig
 from operator_use.acp.device_flow import DeviceFlowManager
+from operator_use.acp.models import AgentCapabilities, AgentMetadata
+from operator_use.acp.server import ACPServer
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +93,6 @@ def test_poll_unknown_code_returns_none(tmp_path):
 
 
 def test_approve_expired_code_returns_none(tmp_path):
-    import time
     mgr = DeviceFlowManager(tokens_path=str(tmp_path / "tokens.json"))
     code = mgr.create_code(verification_uri="http://localhost/auth/approve")
     mgr._pending[code.device_code].expires_at = time.monotonic() - 1
@@ -101,14 +103,6 @@ def test_approve_expired_code_returns_none(tmp_path):
 # ---------------------------------------------------------------------------
 # Server endpoint tests
 # ---------------------------------------------------------------------------
-
-import pytest_asyncio
-from aiohttp.test_utils import TestClient, TestServer
-
-from operator_use.acp.config import ACPServerConfig
-from operator_use.acp.models import AgentCapabilities, AgentMetadata
-from operator_use.acp.server import ACPServer
-
 
 def _make_df_server(tmp_path) -> ACPServer:
     async def _echo(text, session_id):
@@ -247,7 +241,6 @@ async def test_post_auth_token_unknown_code_returns_400(df_server):
 
 @pytest.mark.asyncio
 async def test_post_auth_approve_expired_code_returns_404(df_server):
-    import time
     async with TestClient(TestServer(df_server._app)) as client:
         resp = await client.post("/auth/device")
         device_code = (await resp.json())["device_code"]
@@ -260,10 +253,6 @@ async def test_post_auth_approve_expired_code_returns_404(df_server):
 # ---------------------------------------------------------------------------
 # Client device_auth() integration test
 # ---------------------------------------------------------------------------
-
-from operator_use.acp.client import ACPClient
-from operator_use.acp.config import ACPClientConfig
-
 
 @pytest.mark.asyncio
 async def test_client_device_auth_completes(tmp_path):

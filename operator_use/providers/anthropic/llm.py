@@ -22,7 +22,6 @@ from operator_use.providers.events import (
     LLMStreamEventType,
     ToolCall,
     Thinking,
-    StopReason,
     map_anthropic_stop_reason,
 )
 

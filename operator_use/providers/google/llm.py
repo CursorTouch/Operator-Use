@@ -24,7 +24,6 @@ from operator_use.providers.events import (
     LLMStreamEventType,
     ToolCall,
     Thinking,
-    StopReason,
     map_google_stop_reason,
 )
 

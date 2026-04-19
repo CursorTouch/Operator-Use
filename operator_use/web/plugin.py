@@ -4,7 +4,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from operator_use.plugins.base import Plugin
-from operator_use.agent.hooks.events import HookEvent
 
 if TYPE_CHECKING:
     from operator_use.agent.hooks import Hooks

@@ -15,7 +15,7 @@ from operator_use.agent.context import Context
 from operator_use.agent.context.service import PromptMode
 from operator_use.agent.tools import ToolRegistry, BUILTIN_TOOLS
 from operator_use.bus import IncomingMessage
-from operator_use.providers.events import LLMEvent, LLMEventType, LLMStreamEvent, LLMStreamEventType, Thinking
+from operator_use.providers.events import LLMEvent, LLMEventType, LLMStreamEventType, Thinking
 from operator_use.session import SessionStore, Session
 from operator_use.subagent.manager import SubagentManager
 from operator_use.process import ProcessManager
