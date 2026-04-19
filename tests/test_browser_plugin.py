@@ -61,7 +61,9 @@ def test_unregister_tools_removes_browser_tool():
 
 
 # ---------------------------------------------------------------------------
-# register_hooks — BEFORE_LLM_CALL gated on _enabled
+# register_hooks — no hooks registered on BEFORE_LLM_CALL
+# (BEFORE_LLM_CALL registration was removed in 9f5d002: browser state is
+# now captured inside the browser_task loop, not on every main-agent LLM call)
 # ---------------------------------------------------------------------------
 
 
@@ -69,7 +71,8 @@ def test_disabled_plugin_registers_no_hooks():
     plugin = BrowserPlugin(enabled=False)
     hooks = Hooks()
     plugin.register_hooks(hooks)
-    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    # register_hooks stores the hooks reference but does not register any handler
+    assert plugin._hooks is hooks
 
 
 def test_enabled_plugin_registers_state_hook():
@@ -77,7 +80,8 @@ def test_enabled_plugin_registers_state_hook():
     plugin._enabled = True
     hooks = Hooks()
     plugin.register_hooks(hooks)
-    assert plugin._state_hook in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    # No hook is registered on BEFORE_LLM_CALL; hook reference is stored only
+    assert plugin._hooks is hooks
 
 
 def test_unregister_hooks_removes_state_hook():
@@ -86,7 +90,8 @@ def test_unregister_hooks_removes_state_hook():
     hooks = Hooks()
     plugin.register_hooks(hooks)
     plugin.unregister_hooks(hooks)
-    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    # unregister_hooks is a no-op; _hooks reference is preserved
+    assert plugin._hooks is hooks
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +140,8 @@ async def test_enable_registers_hooks_and_injects_prompt():
     await plugin.enable()
 
     assert plugin._enabled is True
-    assert plugin._state_hook in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
+    # _state_hook is not registered on BEFORE_LLM_CALL (see 9f5d002)
+    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
     context.register_plugin_prompt.assert_called_once_with(SYSTEM_PROMPT)
 
 
@@ -151,6 +157,7 @@ async def test_disable_unregisters_hooks_and_removes_prompt():
     await plugin.disable()
 
     assert plugin._enabled is False
+    # _state_hook was never in BEFORE_LLM_CALL (see 9f5d002)
     assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
     context.unregister_plugin_prompt.assert_called_once_with(SYSTEM_PROMPT)
 

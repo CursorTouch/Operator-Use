@@ -34,7 +34,9 @@ def test_enabled_plugin_returns_system_prompt():
 
 
 # ---------------------------------------------------------------------------
-# register_hooks — BEFORE_LLM_CALL + AFTER_TOOL_CALL, gated on _enabled
+# register_hooks — AFTER_TOOL_CALL only, gated on _enabled
+# (BEFORE_LLM_CALL was removed in 9f5d002: state captured inside
+# computer_task loop, not on every main-agent LLM call)
 # ---------------------------------------------------------------------------
 
 
@@ -42,7 +44,6 @@ def test_disabled_plugin_registers_no_hooks():
     plugin = ComputerPlugin(enabled=False)
     hooks = Hooks()
     plugin.register_hooks(hooks)
-    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
     assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
 
 
@@ -51,7 +52,6 @@ def test_enabled_plugin_registers_both_hooks():
     plugin._enabled = True
     hooks = Hooks()
     plugin.register_hooks(hooks)
-    assert plugin._state_hook in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
     assert plugin._wait_for_ui_hook in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
 
 
@@ -61,7 +61,6 @@ def test_unregister_hooks_removes_both():
     hooks = Hooks()
     plugin.register_hooks(hooks)
     plugin.unregister_hooks(hooks)
-    assert plugin._state_hook not in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
     assert plugin._wait_for_ui_hook not in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
 
 
@@ -111,7 +110,6 @@ async def test_enable_registers_both_hooks_and_prompt():
     await plugin.enable()
 
     assert plugin._enabled is True
-    assert plugin._state_hook in hooks._handlers[HookEvent.BEFORE_LLM_CALL]
     assert plugin._wait_for_ui_hook in hooks._handlers[HookEvent.AFTER_TOOL_CALL]
     context.register_plugin_prompt.assert_called_once_with(SYSTEM_PROMPT)
 

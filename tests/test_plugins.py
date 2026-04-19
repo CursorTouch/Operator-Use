@@ -7,7 +7,7 @@ from operator_use.plugins.base import Plugin
 from operator_use.agent.tools.registry import ToolRegistry
 from operator_use.agent.hooks.service import Hooks
 from operator_use.agent.hooks.events import HookEvent
-from operator_use.tools.service import Tool
+from operator_use.agent.tools.service import Tool
 from pydantic import BaseModel
 
 
