@@ -1290,6 +1290,7 @@ def agents_add(
         "-w",
         help="Custom workspace path (default: ~/.operator-use/workspaces/<id>).",
     ),
+    description: str = typer.Option("", "--description", "-d", help="Short role/purpose summary for this agent."),
     provider: str = typer.Option("", "--provider", "-p", help="LLM provider (e.g. 'anthropic')."),
     model: str = typer.Option("", "--model", "-m", help="LLM model (e.g. 'claude-opus-4-6')."),
     prompt_mode: str = typer.Option(
@@ -1309,16 +1310,18 @@ def agents_add(
     ),
 ):
     """Add a new agent and create its workspace."""
-    from operator_use.cli.start import copy_templates_to_workspace, _resolve_agent_workspace
+    from operator_use.cli.start import copy_templates_to_workspace, _resolve_agent_workspace, write_identity_md
     from operator_use.config import AgentDefinition, LLMConfig
 
     defn = AgentDefinition(
         id=agent_id,
+        description=description,
         workspace=workspace or None,
         llm_config=LLMConfig(provider=provider, model=model) if provider and model else None,
     )
     ws_path = _resolve_agent_workspace(defn)
     copy_templates_to_workspace(USERDATA_DIR, workspace=ws_path)
+    write_identity_md(ws_path, defn)
 
     def mutate(data: dict):
         agents = data.setdefault("agents", {})
@@ -1327,6 +1330,8 @@ def agents_add(
             console.print(f"[yellow]Agent '{agent_id}' already exists.[/yellow]")
             raise typer.Exit(0)
         entry: dict = {"id": agent_id}
+        if description:
+            entry["description"] = description
         if workspace:
             entry["workspace"] = workspace
         if provider and model:

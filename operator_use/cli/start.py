@@ -403,6 +403,58 @@ def copy_templates_to_workspace(user_data_dir: Path, workspace: Path) -> None:
                         shutil.copy2(f, dest_file)
 
 
+def write_identity_md(workspace: Path, defn: "AgentDefinition") -> None:
+    """Write (or update) IDENTITY.md from the AgentDefinition in config."""
+    from datetime import date
+
+    identity_path = workspace / "IDENTITY.md"
+
+    # Preserve birthday on updates
+    birthday = date.today().strftime("%d/%m/%Y")
+    if identity_path.exists():
+        for line in identity_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("BIRTHDAY"):
+                _, _, existing = line.partition(":")
+                existing = existing.strip()
+                if existing:
+                    birthday = existing
+                break
+
+    llm = defn.llm_config
+    llm_label = f"{llm.provider} / {llm.model}" if llm and llm.provider and llm.model else "not configured"
+
+    ch = defn.channels
+    active_channels: list[str] = []
+    if ch:
+        if ch.telegram and ch.telegram.enabled and ch.telegram.token:
+            active_channels.append("telegram")
+        if ch.discord and ch.discord.enabled and ch.discord.token:
+            active_channels.append("discord")
+        if ch.slack and ch.slack.enabled and ch.slack.bot_token:
+            active_channels.append("slack")
+        if ch.twitch and ch.twitch.enabled and ch.twitch.token:
+            active_channels.append("twitch")
+
+    enabled_plugins = [p.id for p in defn.plugins if p.enabled]
+
+    skills_dir = workspace / "skills"
+    skill_names = sorted(d.name for d in skills_dir.iterdir() if d.is_dir()) if skills_dir.exists() else []
+
+    content = (
+        f"## AGENT:\n\n"
+        f"NAME: {defn.id}\n"
+        f"Description: {defn.description or ''}\n"
+        f"BIRTHDAY(DD/MM/YYYY): {birthday}\n"
+        f"Model (LLM): {llm_label}\n"
+        f"Channels: {', '.join(active_channels) or 'none'}\n"
+        f"Plugins: {', '.join(enabled_plugins) or 'none'}\n"
+        f"Skills: {', '.join(skill_names) or 'none'}\n"
+    )
+
+    workspace.mkdir(parents=True, exist_ok=True)
+    identity_path.write_text(content, encoding="utf-8")
+
+
 async def _build_recovery_message(
     deferred_task: str,
     improvement_session: str,

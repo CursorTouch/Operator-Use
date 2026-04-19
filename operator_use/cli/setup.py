@@ -470,6 +470,8 @@ def _save_config(
     agent_list = []
     for a in agent_defs:
         defn_kwargs: dict = {"id": a["id"]}
+        if a.get("description"):
+            defn_kwargs["description"] = a["description"]
         if a["llm_provider_key"] and a["llm_model"]:
             defn_kwargs["llm_config"] = LLMConfig(
                 provider=a["llm_provider_key"], model=a["llm_model"]
@@ -559,6 +561,14 @@ def _save_config(
             f.write("\n")
             for k, v in env_vars.items():
                 f.write(f"{k}={v}\n")
+
+    # Write IDENTITY.md for each agent workspace
+    from operator_use.cli.start import write_identity_md, _resolve_agent_workspace
+
+    for defn in agent_list:
+        ws_path = _resolve_agent_workspace(defn)
+        ws_path.mkdir(parents=True, exist_ok=True)
+        write_identity_md(ws_path, defn)
 
 
 def run_first_install():
@@ -765,6 +775,7 @@ def run_initial_setup():
         agent_defs.append(
             {
                 "id": a.get("id", ""),
+                "description": a.get("description", ""),
                 "llm_provider_key": _a_llm.get("provider") or None,
                 "llm_model": _a_llm.get("model") or None,
                 "channels": {
@@ -790,6 +801,7 @@ def run_initial_setup():
         agent_defs.append(
             {
                 "id": "operator",
+                "description": "",
                 "llm_provider_key": None,
                 "llm_model": None,
                 "channels": {"telegram": "", "discord": "", "slack_bot": "", "slack_app": ""},
@@ -844,6 +856,9 @@ def run_initial_setup():
                 plugins_list = a.get("plugins", [])
                 enabled_plugin_ids = [p["id"] for p in plugins_list if p.get("enabled", True)]
                 plugins_label = ", ".join(enabled_plugin_ids) if enabled_plugin_ids else "none"
+                desc_label = a.get("description") or "not set"
+                if len(desc_label) > 40:
+                    desc_label = desc_label[:37] + "..."
                 pm_label = a.get("prompt_mode", "full")
                 sp_label = "set" if a.get("system_prompt") else "not set"
                 tools_profile = a.get("tools_profile", "full")
@@ -859,6 +874,7 @@ def run_initial_setup():
                     f"Configure agent: {a['id']}",
                     [
                         f"Rename         {a['id']}",
+                        f"Description    {desc_label}",
                         f"LLM            {a_llm_label}",
                         f"Channels       {ch_label}",
                         f"Plugins        {plugins_label}",
@@ -881,6 +897,10 @@ def run_initial_setup():
                         console.print(f"│  [red]Name '{new_id}' is already taken.[/red]")
                     else:
                         agent_defs[idx]["id"] = new_id
+
+                elif choice.startswith("Description"):
+                    val = text_input("Agent description:", default=a.get("description", ""))
+                    agent_defs[idx]["description"] = val.strip()
 
                 elif choice.startswith("LLM"):
                     prov_choice = select(
@@ -1088,6 +1108,7 @@ def run_initial_setup():
                         agent_defs.append(
                             {
                                 "id": new_id,
+                                "description": "",
                                 "llm_provider_key": None,
                                 "llm_model": None,
                                 "channels": {
