@@ -38,6 +38,10 @@ class Terminal(BaseModel):
         description="Timeout in seconds before the command is killed (1-60, default 10). Increase for slow operations like installs or builds.",
         default=10,
     )
+    cwd: str | None = Field(
+        default=None,
+        description="Working directory for the command. Absolute path or workspace-relative path (e.g. 'skills/youtube-cli/scripts'). Defaults to workspace root.",
+    )
 
 
 def _is_command_blocked(cmd: str) -> str | None:
@@ -51,10 +55,10 @@ def _is_command_blocked(cmd: str) -> str | None:
 
 @Tool(
     name="terminal",
-    description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, checking processes, or any CLI task. Commands run from workspace/temp/ (your scratchpad — use it for temp files, scripts, and downloads). Destructive commands (rm -rf /, format, shutdown, etc.) are blocked. For long outputs, results are truncated — pipe through head/tail if needed.",
+    description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, checking processes, or any CLI task. CWD is the workspace root — use the same paths as write_file/list_dir (e.g. 'python temp/script.py'). Destructive commands (rm -rf /, format, shutdown, etc.) are blocked. For long outputs, results are truncated — pipe through head/tail if needed.",
     model=Terminal,
 )
-async def terminal(cmd: str, timeout: int = 10, **kwargs) -> str:
+async def terminal(cmd: str, timeout: int = 10, cwd: str | None = None, **kwargs) -> str:
     blocked = _is_command_blocked(cmd)
     if blocked:
         return ToolResult.error_result(f"Command blocked: contains forbidden pattern '{blocked}'")
@@ -67,9 +71,12 @@ async def terminal(cmd: str, timeout: int = 10, **kwargs) -> str:
         shell_cmd = ["/bin/bash", "-c", cmd]
 
     workspace = kwargs.get("_workspace") or get_named_workspace_dir("operator")
-    temp_dir = Path(workspace) / "temp"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    cwd = str(temp_dir)
+    Path(workspace, "temp").mkdir(parents=True, exist_ok=True)
+    if cwd:
+        resolved = Path(cwd) if Path(cwd).is_absolute() else Path(workspace) / cwd
+        cwd = str(resolved)
+    else:
+        cwd = str(workspace)
     process = await asyncio.create_subprocess_exec(
         *shell_cmd,
         cwd=cwd,
@@ -88,8 +95,8 @@ async def terminal(cmd: str, timeout: int = 10, **kwargs) -> str:
         await process.wait()
         return ToolResult.error_result(f"Command timed out after {timeout} seconds")
 
-    stdout = stdout.decode("utf-8").strip()
-    stderr = stderr.decode("utf-8").strip()
+    stdout = stdout.decode("utf-8", errors="replace").strip()
+    stderr = stderr.decode("utf-8", errors="replace").strip()
     exit_code = process.returncode
 
     lines = []
