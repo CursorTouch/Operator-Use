@@ -1,6 +1,6 @@
 ---
 name: youtube-cli
-description: Extract information and transcript from a YouTube video given its ID. Use when the agent needs to analyze video content, summarize videos, or retrieve specific details from YouTube URLs.
+description: Search for videos, extract metadata, retrieve transcripts, and fetch comments from YouTube. Use when analyzing video content for research, summarizing long-form content, or gathering information from YouTube URLs.
 ---
 
 ## What This Skill Does
@@ -13,13 +13,17 @@ This skill uses `yt-dlp` to fetch metadata (title, uploader, views, duration) an
 4. The script outputs the top search results in JSON format. Use `--output <path>` to save the results to a file.
 
 ## Steps
-1. Use the script `skills/youtube-cli/scripts/video.py` via the terminal.
-2. Run the command: `python skills/youtube-cli/scripts/video.py <video_id> [flags]`
-3. Available flags: `--title`, `--uploader`, `--duration`, `--views`, `--likes`, `--transcript`, `--description`, `--comments`, `--output` (`-o`).
-4. If no flags are specified, it defaults to: `--title`, `--uploader`, `--duration`, `--views`.
-5. Run `python skills/youtube-cli/scripts/video.py --help` for usage details.
-6. The script outputs the requested information in JSON format. Use `--output <path>` to save the transcript text, description text, or comments (as JSON) directly to a file. Use this to avoid terminal truncation for long transcripts or descriptions.
+1. Use the script `skills/youtube-cli/scripts/search.py` via the terminal. Run `python skills/youtube-cli/scripts/search.py --help` for usage details.
+2. Use the script `skills/youtube-cli/scripts/video.py` via the terminal. Run `python skills/youtube-cli/scripts/video.py --help` for usage details.
+3. For long transcripts, descriptions, or comment threads, always use the `--output` flag to save the data to a file rather than printing to the terminal to avoid truncation.
+4. If a video is part of a series or you need to process multiple videos, chain these calls as necessary.
 
 ## Common Failures
-- **400 Bad Request**: Often caused by outdated `pytube` libraries; this skill uses `yt-dlp` as a more robust alternative.
-- **No transcript available**: Some videos do not have captions or the transcript service is disabled for that video.
+- **400 Bad Request**: Often caused by outdated `yt-dlp` or dependency issues.
+- **No transcript available**: Some videos do not have captions, or the transcript service is disabled.
+- **Terminal Truncation**: For long outputs, always use the `--output` flag.
+
+## Pro-Tips for Research
+- When researching, first search for the topic using `search.py` to identify the most relevant videos.
+- Use `video.py` on the top results to extract metadata and assess relevance before extracting full transcripts.
+- If you need to analyze a large number of videos, script the interaction using the terminal to batch process them.

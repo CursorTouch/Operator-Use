@@ -331,7 +331,13 @@ class Agent:
         Successful tool calls are added to session, and error_messages are cleared.
         """
         # Format tool call nicely: tool_name(param1=value1, param2=value2, ...)
-        params_str = ", ".join(f"{k}={repr(v)[:50]}" for k, v in tool_call.params.items())
+        def _fmt(v: object, limit: int = 80) -> str:
+            if isinstance(v, str):
+                return f'"{v[:limit]}..."' if len(v) > limit else f'"{v}"'
+            s = repr(v)
+            return s if len(s) <= limit else s[:limit] + "..."
+
+        params_str = ", ".join(f"{k}={_fmt(v)}" for k, v in tool_call.params.items())
         logger.info(f"Tool call | {tool_call.name}({params_str})")
 
         pre_ctx = await self.hooks.emit(
@@ -348,7 +354,7 @@ class Agent:
         if tool_result.success:
             logger.info(f"Tool success | {str(content)[:200]}")
         else:
-            logger.warning(f"Tool error | {str(content)[:200]}")
+            logger.warning(f"Tool error | {content}")
 
         await self.hooks.emit(
             HookEvent.AFTER_TOOL_CALL,
