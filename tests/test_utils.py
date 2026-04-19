@@ -3,8 +3,6 @@
 import pytest
 from pathlib import Path
 
-import pytest
-
 from operator_use.utils.helper import is_binary_file, resolve, ensure_directory
 
 
