@@ -196,10 +196,14 @@ async def _run_detached(
 
     logger.info(f"[{task_id}] detached local agent '{agent_name}' done — status={status}")
 
+    task_text = (message.content or "")
+    task_preview = (task_text[:120] + "…") if len(task_text) > 120 else task_text
     content = (
-        f"[localagent:{task_id}] Agent '{agent_name}' has finished.\n\n"
+        f"[localagent:{task_id}] Agent '{agent_name}' has finished.\n"
+        f"Task: {task_preview}\n\n"
         f"Result:\n{result}\n\n"
-        f"Relay this result naturally in context. Do not mention task IDs or 'localagent'."
+        f"Summarize this result naturally for the user in 1-2 sentences. "
+        f"Do not mention task IDs, agent names, or technical terms."
     )
     await bus.publish_incoming(
         IncomingMessage(
@@ -460,10 +464,12 @@ async def localagents(
         )
         task_reg[run_task_id] = {"record": record, "asyncio_task": at}
 
+        task_preview = (task[:120] + "…") if task and len(task) > 120 else (task or "")
         return ToolResult.success_result(
-            f"Agent '{name}' started in background (task_id={run_task_id}).\n"
+            f"Agent '{name}' is running in the background (task_id={run_task_id}).\n"
+            f"Task: {task_preview}\n"
             f"Result will be delivered automatically when done.\n"
-            f"END YOUR TURN. Inform the user and stop."
+            f"END YOUR TURN NOW. Do not poll or call any other tool. Inform the user and stop."
         )
 
     if action == "spawn" and not task:
