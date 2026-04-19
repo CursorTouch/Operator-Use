@@ -308,11 +308,21 @@ class Orchestrator:
                 built_message.metadata = dict(request_message.metadata)
 
             # Decide streaming: orchestrator knows channel type + voice flag
+            # Disable for agent result delivery — result messages may produce empty/whitespace
+            # responses that would leave a dangling stream placeholder in the channel.
+            _is_agent_result = bool(
+                request_message.metadata
+                and (
+                    request_message.metadata.get("_localagent_result")
+                    or request_message.metadata.get("_subagent_result")
+                )
+            )
             use_streaming = (
                 self.streaming
                 and request_message.channel not in ("direct", "cli")
                 and hasattr(agent.llm, "astream")
                 and not self._user_sent_voice(request_message)
+                and not _is_agent_result
             )
 
             streamed = False
