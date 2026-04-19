@@ -87,7 +87,7 @@ class RestartInterceptor(Interceptor):
             return  # first snapshot wins
 
         original = file_path.read_text(encoding="utf-8")
-        file_hash = hashlib.md5(str(file_path).encode()).hexdigest()[:10]
+        file_hash = hashlib.md5(str(file_path).encode()).hexdigest()[:10]  # nosec B324 — used for filename only, not security
         snapshot_file = self._session_dir / f"{file_hash}.original"
         snapshot_file.write_text(original, encoding="utf-8")
 

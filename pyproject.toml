@@ -14,10 +14,10 @@ dependencies = [
     "mistralai==1.9.11",
     "cerebras-cloud-sdk>=1.50.1",
     "fastmcp>=2.0.0",
-    "pillow>=11.2.1",
+    "pillow>=12.2.0",
     "python-telegram-bot>=22.0",
     "slack-bolt>=1.18.0",
-    "aiohttp>=3.9.0",
+    "aiohttp>=3.13.4",
     "discord.py>=2.0.0",
     "twitchio>=2.0.0,<3.0.0",
     "ipykernel>=7.2.0",
@@ -51,10 +51,13 @@ operator-use = "operator_use.cli.commands:app"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
+    "pytest>=9.0.3",
     "pytest-asyncio>=0.24.0",
     "pytest-benchmark>=4.0.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.9.0",
+    "bandit>=1.8.0",
+    "pip-audit>=2.7.0",
 ]
 fal = [
     "fal-client>=0.5.0",
@@ -68,6 +71,17 @@ tavily = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
+
+[tool.bandit]
+# B104: Binding to 0.0.0.0 is intentional — Operator-Use is a local agent
+# server designed to accept LAN connections. Suppressed project-wide.
+skips = ["B104"]
+# Exclude generated/vendored code from scan
+exclude_dirs = [
+    "operator_use/web/cdp",
+    "operator_use/computer/macos/ax",
+    "operator_use/computer/windows",
+]
 
 [tool.ruff]
 line-length = 100
@@ -94,6 +108,14 @@ ignore = ["E501"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "cryptography>=46.0.7",
+    "pyasn1>=0.6.3",
+    "requests>=2.33.0",
+    "tornado>=6.5.5",
+]
 
 [tool.hatch.build]
 packages = ["operator_use"]

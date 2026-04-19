@@ -7,25 +7,7 @@ import sys
 import os
 import signal
 
-BLOCKED_COMMANDS = {
-    "rm -rf /",
-    "rm -rf ~",
-    "rm -rf /*",
-    "dd if=/dev/zero",
-    "dd if=/dev/random",
-    "mkfs",
-    "fdisk",
-    "parted",
-    ":(){:|:&};:",
-    "chmod 777 /",
-    "chmod -R 777",
-    "shutdown",
-    "reboot",
-    "halt",
-    "poweroff",
-    "init 0",
-    "init 6",
-}
+from operator_use.tools._terminal_guards import _is_command_allowed
 
 
 class Terminal(BaseModel):
@@ -44,24 +26,15 @@ class Terminal(BaseModel):
     )
 
 
-def _is_command_blocked(cmd: str) -> str | None:
-    """Return blocked pattern if cmd matches, else None."""
-    normalized = " ".join(cmd.strip().split())
-    for blocked in BLOCKED_COMMANDS:
-        if blocked in normalized:
-            return blocked
-    return None
-
-
 @Tool(
     name="terminal",
-    description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, checking processes, or any CLI task. CWD is the workspace root — use the same paths as write_file/list_dir (e.g. 'python temp/script.py'). Destructive commands (rm -rf /, format, shutdown, etc.) are blocked. For long outputs, results are truncated — pipe through head/tail if needed.",
+    description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, checking processes, or any CLI task. CWD is the workspace root — use the same paths as write_file/list_dir (e.g. 'python temp/script.py'). Commands not in the allowlist are blocked. For long outputs, results are truncated — pipe through head/tail if needed.",
     model=Terminal,
 )
 async def terminal(cmd: str, timeout: int = 10, cwd: str | None = None, **kwargs) -> str:
-    blocked = _is_command_blocked(cmd)
-    if blocked:
-        return ToolResult.error_result(f"Command blocked: contains forbidden pattern '{blocked}'")
+    allowed, reason = _is_command_allowed(cmd)
+    if not allowed:
+        return ToolResult.error_result(reason)
 
     env = os.environ.copy()
 
