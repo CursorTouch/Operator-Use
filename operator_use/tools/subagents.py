@@ -101,12 +101,7 @@ async def subagents(
             except ValueError as e:
                 return ToolResult.error_result(f"Cannot create subagent: {e}")
 
-            display = label or task[:60]
-            msg = f"Subagent created (task_id={tid}  label='{display}')\n"
-            if depends_on:
-                msg += f"Dependencies: {', '.join(depends_on)}\n"
-            msg += "Running in background — result will be delivered automatically when done.\nEND YOUR TURN NOW. Do not call list or any other tool. Inform the user and stop."
-            return ToolResult.success_result(msg)
+            return ToolResult.success_result("", metadata={"stop_loop": True})
 
         case "agents":
             records = subagent_manager.list_all()
