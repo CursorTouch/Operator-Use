@@ -184,23 +184,23 @@ async def control_center(
         _set_plugin_enabled(entry, "computer_use", computer_use)
         if computer_use:
             changes.append("computer_use=true")
-            if agent is not None:
-                await agent.enable_computer_use()
         else:
             changes.append("computer_use=false")
-            if agent is not None:
-                await agent.disable_computer_use()
+        if agent is not None:
+            plugin = agent.get_plugin("computer_use")
+            if plugin:
+                await (plugin.enable() if computer_use else plugin.disable())
 
     if browser_use is not None:
         _set_plugin_enabled(entry, "browser_use", browser_use)
         if browser_use:
             changes.append("browser_use=true")
-            if agent is not None:
-                await agent.enable_browser_use()
         else:
             changes.append("browser_use=false")
-            if agent is not None:
-                await agent.disable_browser_use()
+        if agent is not None:
+            plugin = agent.get_plugin("browser_use")
+            if plugin:
+                await (plugin.enable() if browser_use else plugin.disable())
 
     agents_list[idx] = entry
     _save_config_raw(data)

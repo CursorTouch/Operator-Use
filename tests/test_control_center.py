@@ -65,18 +65,21 @@ def test_get_plugin_returns_correct_value():
 
 
 @pytest.mark.asyncio
-async def test_enable_browser_use_calls_agent(tmp_path):
+async def test_enable_browser_use_calls_plugin(tmp_path):
     cfg = _make_config()
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps(cfg))
 
+    mock_plugin = MagicMock()
+    mock_plugin.enable = AsyncMock()
     mock_agent = MagicMock()
-    mock_agent.enable_browser_use = AsyncMock()
+    mock_agent.get_plugin = MagicMock(return_value=mock_plugin)
 
     with patch("operator_use.agent.tools.builtin.control_center.CONFIG_PATH", cfg_file):
         result = await _call_cc(browser_use=True, _agent=mock_agent)
 
-    mock_agent.enable_browser_use.assert_awaited_once()
+    mock_agent.get_plugin.assert_called_with("browser_use")
+    mock_plugin.enable.assert_awaited_once()
     assert result.success
 
 
@@ -86,9 +89,10 @@ async def test_enable_both_computer_use_and_browser_use_independently(tmp_path):
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps(cfg))
 
+    mock_plugin = MagicMock()
+    mock_plugin.enable = AsyncMock()
     mock_agent = MagicMock()
-    mock_agent.enable_computer_use = AsyncMock()
-    mock_agent.enable_browser_use = AsyncMock()
+    mock_agent.get_plugin = MagicMock(return_value=mock_plugin)
 
     with patch("operator_use.agent.tools.builtin.control_center.CONFIG_PATH", cfg_file):
         result = await _call_cc(computer_use=True, browser_use=True, _agent=mock_agent)
@@ -103,18 +107,21 @@ async def test_enable_both_computer_use_and_browser_use_independently(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_disable_browser_use_calls_agent(tmp_path):
+async def test_disable_browser_use_calls_plugin(tmp_path):
     cfg = _make_config(plugins=[{"id": "browser_use", "enabled": True}])
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps(cfg))
 
+    mock_plugin = MagicMock()
+    mock_plugin.disable = AsyncMock()
     mock_agent = MagicMock()
-    mock_agent.disable_browser_use = AsyncMock()
+    mock_agent.get_plugin = MagicMock(return_value=mock_plugin)
 
     with patch("operator_use.agent.tools.builtin.control_center.CONFIG_PATH", cfg_file):
         result = await _call_cc(browser_use=False, _agent=mock_agent)
 
-    mock_agent.disable_browser_use.assert_awaited_once()
+    mock_agent.get_plugin.assert_called_with("browser_use")
+    mock_plugin.disable.assert_awaited_once()
     assert result.success
 
 
@@ -145,8 +152,10 @@ async def test_audit_log_emitted_on_plugin_change(tmp_path, caplog):
     cfg_file = tmp_path / "config.json"
     cfg_file.write_text(json.dumps(cfg))
 
+    mock_plugin = MagicMock()
+    mock_plugin.enable = AsyncMock()
     mock_agent = MagicMock()
-    mock_agent.enable_browser_use = AsyncMock()
+    mock_agent.get_plugin = MagicMock(return_value=mock_plugin)
 
     with patch("operator_use.agent.tools.builtin.control_center.CONFIG_PATH", cfg_file):
         with caplog.at_level(

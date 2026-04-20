@@ -134,7 +134,7 @@ class Agent:
         logger.debug(f"Registered tools: {[t.name for t in self.tool_register.list_tools()]}")
 
     # ------------------------------------------------------------------
-    # Plugin access + runtime capability toggles (called by control_center)
+    # Plugin access
     # ------------------------------------------------------------------
 
     def get_plugin(self, name: str) -> "Plugin | None":
@@ -143,26 +143,6 @@ class Agent:
             if p.name == name:
                 return p
         return None
-
-    async def enable_browser_use(self) -> None:
-        plugin = self.get_plugin("browser_use")
-        if plugin:
-            await plugin.enable()
-
-    async def disable_browser_use(self) -> None:
-        plugin = self.get_plugin("browser_use")
-        if plugin:
-            await plugin.disable()
-
-    async def enable_computer_use(self) -> None:
-        plugin = self.get_plugin("computer_use")
-        if plugin:
-            await plugin.enable()
-
-    async def disable_computer_use(self) -> None:
-        plugin = self.get_plugin("computer_use")
-        if plugin:
-            await plugin.disable()
 
     # ------------------------------------------------------------------
     # Public entry point
