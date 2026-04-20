@@ -72,12 +72,9 @@ class Context:
 
     def _build_workspace_context(self) -> str:
         workspace_path = self.workspace.expanduser().resolve().as_posix()
-        codebase_path = self.codebase.expanduser().resolve().as_posix()
         return (
             f"## Workspace: {workspace_path}\n\n"
-            f"- RULES.md — hard constraints (always enforced)\n"
             f"- HEARTBEAT.md — periodic maintenance tasks\n"
-            f"- CODE.md — codebase architecture map (for self-modification); codebase at {codebase_path}\n"
             f"- memory/MEMORY.md — long-term memory (write here to remember things)\n"
             f"- memory/YYYY-MM-DD.md — daily session log (append during sessions)\n"
             f"- skills/{{name}}/SKILL.md — skill guides (invoked via `skill` tool)\n"
