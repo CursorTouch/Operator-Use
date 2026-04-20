@@ -262,10 +262,14 @@ class Context:
 
             if isinstance(msg, (HumanMessage, ImageMessage)) and msg.metadata:
                 msg_id = msg.metadata.get("message_id")
+                replied_to = msg.metadata.get("replied_to_message_id")
                 if msg_id is not None:
+                    prefix = f"[msg_id:{msg_id}]"
+                    if replied_to is not None:
+                        prefix += f" [reply_to:{replied_to}]"
                     hydrated.append(
                         HumanMessage(
-                            content=f"[msg_id:{msg_id}] {msg.content}",
+                            content=f"{prefix} {msg.content}",
                             metadata=msg.metadata,
                         )
                     )

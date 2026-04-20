@@ -379,10 +379,12 @@ class SlackChannel(BaseChannel):
             return
 
         # Build metadata with Slack-specific info
+        _thread_ts = event.get("thread_ts")
         metadata = {
             "message_id": event.get("ts"),
             "channel_id": channel_id,
             "user_id": sender_id,
+            **( {"replied_to_message_id": _thread_ts} if _thread_ts and _thread_ts != event.get("ts") else {}),
         }
 
         # Session control commands
@@ -476,10 +478,12 @@ class SlackChannel(BaseChannel):
             if allowed and sender_id not in allowed:
                 return
 
+            _thread_ts = event.get("thread_ts")
             metadata = {
                 "message_id": event.get("ts"),
                 "channel_id": channel_id,
                 "user_id": sender_id,
+                **( {"replied_to_message_id": _thread_ts} if _thread_ts and _thread_ts != event.get("ts") else {}),
             }
 
             # Session control commands

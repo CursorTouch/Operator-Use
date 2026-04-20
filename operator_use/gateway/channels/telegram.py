@@ -564,6 +564,7 @@ class TelegramChannel(BaseChannel):
                         "first_name": user.first_name,
                         "is_group": msg.chat.type != "private",
                         "thread_id": thread_id,
+                        **({"replied_to_message_id": msg.reply_to_message.message_id} if msg.reply_to_message else {}),
                     },
                 }
                 self._start_typing(str_chat_id)
@@ -587,6 +588,7 @@ class TelegramChannel(BaseChannel):
             "is_group": msg.chat.type != "private",
             "chat_type": msg.chat.type,
             "thread_id": thread_id,
+            **({"replied_to_message_id": msg.reply_to_message.message_id} if msg.reply_to_message else {}),
         }
 
         if media_paths:

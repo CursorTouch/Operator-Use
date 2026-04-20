@@ -291,6 +291,7 @@ class DiscordChannel(BaseChannel):
             "username": message.author.name,
             "is_group": isinstance(message.channel, discord.TextChannel),
             "channel_type": type(message.channel).__name__,
+            **({"replied_to_message_id": message.reference.message_id} if message.reference and message.reference.message_id else {}),
         }
 
         # Session control commands — no typing indicator, no agent call
