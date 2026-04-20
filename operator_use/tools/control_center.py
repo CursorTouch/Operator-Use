@@ -143,14 +143,12 @@ async def _do_restart(graceful_fn=None) -> None:
 @Tool(
     name="control_center",
     description=(
-        "Control Center for Operator capabilities.\n\n"
-        "Dynamically toggle computer_use (GUI automation) and browser_use (Browser automation via CDP). "
-        "Both can be enabled or disabled independently. "
-        "No restart needed for capability toggles.\n\n"
-        "- computer_use=true  → enable desktop automation tools + desktop state in context\n"
-        "- browser_use=true   → enable browser tools + browser state in context\n"
-        "- computer_use=false / browser_use=false → disable and remove from context\n"
-        "- restart=true       → restart Operator (use for code/config changes)\n"
+        "Control Center for Operator plugins.\n\n"
+        "Enable or disable plugins (computer_use, browser_use) and restart. "
+        "Plugin changes are saved to config and take effect after restart.\n\n"
+        "- computer_use=true/false → enable/disable desktop automation\n"
+        "- browser_use=true/false  → enable/disable browser automation\n"
+        "- restart=true            → restart Operator to apply changes\n"
         "- Call with no arguments to get current status."
     ),
     model=ControlCenter,
@@ -177,30 +175,14 @@ async def control_center(
             "No agents found in config.json. Run 'operator onboard' first."
         )
 
-    agent = kwargs.get("_agent")
-
     changes = []
     if computer_use is not None:
         _set_plugin_enabled(entry, "computer_use", computer_use)
-        if computer_use:
-            changes.append("computer_use=true")
-        else:
-            changes.append("computer_use=false")
-        if agent is not None:
-            plugin = agent.get_plugin("computer_use")
-            if plugin:
-                await (plugin.enable() if computer_use else plugin.disable())
+        changes.append(f"computer_use={'true' if computer_use else 'false'}")
 
     if browser_use is not None:
         _set_plugin_enabled(entry, "browser_use", browser_use)
-        if browser_use:
-            changes.append("browser_use=true")
-        else:
-            changes.append("browser_use=false")
-        if agent is not None:
-            plugin = agent.get_plugin("browser_use")
-            if plugin:
-                await (plugin.enable() if browser_use else plugin.disable())
+        changes.append(f"browser_use={'true' if browser_use else 'false'}")
 
     agents_list[idx] = entry
     _save_config_raw(data)

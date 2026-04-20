@@ -102,10 +102,6 @@ class ComputerPlugin(Plugin):
         if self._context is not None:
             self._context.unregister_plugin_prompt(SYSTEM_PROMPT)
 
-    # ------------------------------------------------------------------
-    # Enable / disable
-    # ------------------------------------------------------------------
-
     def _init_sync(self) -> None:
         """Synchronously initialise Desktop and WatchDog (safe to call at startup)."""
         if sys.platform == "win32":
@@ -128,30 +124,6 @@ class ComputerPlugin(Plugin):
             if self.watchdog is None:
                 self.watchdog = WatchDog()
                 self.watchdog.start()
-
-    async def enable(self) -> None:
-        """Dynamically enable computer_use at runtime."""
-        self._enabled = True
-        if self._hooks is not None:
-            self._hooks.register(HookEvent.AFTER_TOOL_CALL, self._wait_for_ui_hook)
-        if self._registry is not None:
-            for tool in self.get_tools():
-                if self._registry.get(tool.name) is None:
-                    self._registry.register(tool)
-        if self._context is not None:
-            self._context.register_plugin_prompt(SYSTEM_PROMPT)
-        logger.info("computer_use enabled")
-
-    async def disable(self) -> None:
-        """Dynamically disable computer_use at runtime."""
-        self._enabled = False
-        if self._hooks is not None:
-            self.unregister_hooks(self._hooks)
-        if self._registry is not None:
-            self.unregister_tools(self._registry)
-        if self._context is not None:
-            self._context.unregister_plugin_prompt(SYSTEM_PROMPT)
-        logger.info("computer_use disabled")
 
     # ------------------------------------------------------------------
     # Hook handlers

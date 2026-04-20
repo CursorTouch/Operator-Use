@@ -112,33 +112,6 @@ class BrowserPlugin(Plugin):
         if self.browser is None:
             self.browser = Browser(config=BrowserConfig(use_system_profile=True))
 
-    async def enable(self) -> None:
-        """Dynamically enable browser_use at runtime."""
-        self._enabled = True
-        if self._hooks is not None:
-            pass
-        if self._registry is not None:
-            if self.browser is not None:
-                self._registry.set_extension("browser", self.browser)
-                self._registry.set_extension("_browser", self.browser)
-            for tool in self.get_tools():
-                if self._registry.get(tool.name) is None:
-                    self._registry.register(tool)
-        if self._context is not None:
-            self._context.register_plugin_prompt(SYSTEM_PROMPT)
-        logger.info("browser_use enabled")
-
-    async def disable(self) -> None:
-        """Dynamically disable browser_use at runtime."""
-        self._enabled = False
-        if self._hooks is not None:
-            self.unregister_hooks(self._hooks)
-        if self._registry is not None:
-            self.unregister_tools(self._registry)
-        if self._context is not None:
-            self._context.unregister_plugin_prompt(SYSTEM_PROMPT)
-        logger.info("browser_use disabled")
-
     # ------------------------------------------------------------------
     # Hook handlers
     # ------------------------------------------------------------------
