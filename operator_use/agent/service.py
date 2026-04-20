@@ -416,7 +416,7 @@ class Agent:
             if error_messages:
                 messages.extend(error_messages)
 
-            thinking = None
+            thinking_parts: list[str] = []
             thinking_signature = None
             content = ""
             last_publish_len = 0
@@ -438,11 +438,20 @@ class Agent:
             try:
                 async for event in self.llm.astream(messages=messages, tools=tools):
                     if event.thinking:
-                        thinking = event.thinking.content
-                        thinking_signature = event.thinking.signature
+                        if event.thinking.content:
+                            thinking_parts.append(event.thinking.content)
+                        if event.thinking.signature:
+                            thinking_signature = event.thinking.signature
 
                     match event.type:
                         case LLMStreamEventType.TEXT_START:
+                            pass
+                        case LLMStreamEventType.THINK_START:
+                            pass
+                        case LLMStreamEventType.THINK_DELTA:
+                            if event.content:
+                                thinking_parts.append(event.content)
+                        case LLMStreamEventType.THINK_END:
                             pass
                         case LLMStreamEventType.TOOL_CALL:
                             await self.hooks.emit(
@@ -456,8 +465,13 @@ class Agent:
                                     iteration=iteration,
                                 ),
                             )
+                            thinking = "".join(thinking_parts) or None
                             tool_result, content = await self._execute_tool(
-                                event.tool_call, thinking, thinking_signature, session, error_messages
+                                event.tool_call,
+                                thinking,
+                                thinking_signature,
+                                session,
+                                error_messages,
                             )
                             if tool_result.metadata and tool_result.metadata.get("stop_loop"):
                                 return AIMessage(content=content or "")
@@ -482,6 +496,11 @@ class Agent:
                             )
                             from operator_use.agent.loop import AgentLoop
                             content = AgentLoop._clean_content(content or "(no response)")
+                            thinking = "".join(thinking_parts) or None
+                            if thinking:
+                                logger.info(
+                                    f"Thinking | {thinking[:120]!r}{'...' if len(thinking) > 120 else ''}"
+                                )
                             await self.hooks.emit(
                                 HookEvent.AFTER_LLM_CALL,
                                 AfterLLMCallContext(
@@ -493,7 +512,7 @@ class Agent:
                                         thinking=Thinking(
                                             content=thinking, signature=thinking_signature
                                         )
-                                        if thinking
+                                        if (thinking or thinking_signature)
                                         else None,
                                         usage=event.usage,
                                     ),
