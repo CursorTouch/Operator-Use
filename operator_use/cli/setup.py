@@ -1209,7 +1209,7 @@ def run_initial_setup():
                                     "Description (shown to LLM):", default=""
                                 ).strip()
                                 caps_raw = text_input(
-                                    "Capabilities (comma-separated, e.g. browser_use,computer_use):", default=""
+                                    "Plugins (comma-separated, e.g. browser_use,computer_use):", default=""
                                 ).strip()
                                 capabilities = [c.strip() for c in caps_raw.split(",") if c.strip()]
                                 acp_agents[name] = ACPAgentEntry(

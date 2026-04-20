@@ -467,7 +467,7 @@ def write_identity_md(
                 lines.append(
                     f"- Name: {a.id}  "
                     f"Description: {(a.description or 'none').strip()}  "
-                    f"Capabilities: {caps_str}"
+                    f"Plugins: {caps_str}"
                 )
         if acp_agents:
             lines.append("\n### ACP Agents\n")
@@ -476,7 +476,7 @@ def write_identity_md(
                 url = getattr(entry, "base_url", "") or ""
                 caps = getattr(entry, "capabilities", []) or []
                 caps_str = ", ".join(caps) or "general"
-                lines.append(f"- Name: {name}  Description: {desc}  Capabilities: {caps_str}  URL: {url}")
+                lines.append(f"- Name: {name}  Description: {desc}  Plugins: {caps_str}  URL: {url}")
         content += "\n".join(lines) + "\n"
 
     workspace.mkdir(parents=True, exist_ok=True)
@@ -840,7 +840,7 @@ async def main():
         _console.print(f"│ [{_P}]{defn.id}[/{_P}]")
         _console.print(f"│   [{_M}]{'llm':<10}[/{_M}] [{_S}]{llm_str}[/{_S}]")
         _console.print(f"│   [{_M}]{'channels':<10}[/{_M}] [{_S}]{ch_str}[/{_S}]")
-        _console.print(f"│   [{_M}]{'use':<10}[/{_M}] [{_S}]{caps_str}[/{_S}]")
+        _console.print(f"│   [{_M}]{'plugins':<10}[/{_M}] [{_S}]{caps_str}[/{_S}]")
         _console.print("│")
 
     if stt_conf.enabled and stt_conf.provider:
