@@ -562,11 +562,11 @@ def _save_config(
             for k, v in env_vars.items():
                 f.write(f"{k}={v}\n")
 
-    # Write IDENTITY.md for each agent workspace
-    from operator_use.cli.start import write_identity_md, _resolve_agent_workspace
+    # Write IDENTITY.md for each agent profile
+    from operator_use.cli.start import write_identity_md, _resolve_agent_profile
 
     for defn in agent_list:
-        ws_path = _resolve_agent_workspace(defn)
+        ws_path = _resolve_agent_profile(defn)
         ws_path.mkdir(parents=True, exist_ok=True)
         write_identity_md(ws_path, defn, local_agents=agent_list, acp_agents=acp_agents)
 
@@ -580,7 +580,7 @@ def run_first_install():
         print_start()
         if step == 0:
             print_step(
-                1, 3, "Your agent", "Give your agent a name — used for its workspace folder."
+                1, 3, "Your agent", "Give your agent a name — used for its profile folder."
             )
         elif step == 1:
             print_step(
@@ -1408,3 +1408,4 @@ def run_initial_setup():
 
 if __name__ == "__main__":
     run_initial_setup()
+

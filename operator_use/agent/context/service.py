@@ -70,10 +70,10 @@ class Context:
             f"- Documents: {(home / 'Documents').as_posix()}"
         )
 
-    def _build_workspace_context(self) -> str:
+    def _build_profile_context(self) -> str:
         workspace_path = self.workspace.expanduser().resolve().as_posix()
         return (
-            f"## Workspace: {workspace_path}\n\n"
+            f"## Profile: {workspace_path}\n\n"
             f"- HEARTBEAT.md — periodic maintenance tasks\n"
             f"- memory/MEMORY.md — long-term memory (write here to remember things)\n"
             f"- memory/YYYY-MM-DD.md — daily session log (append during sessions)\n"
@@ -194,8 +194,8 @@ class Context:
         # 3. Runtime environment
         parts.append(self._build_environment_context())
 
-        # 4. Workspace file map
-        parts.append(self._build_workspace_context())
+        # 4. Profile file map
+        parts.append(self._build_profile_context())
 
         # 5. Available skills
         skills_summary = self.skills.build_skills_summary() or "(No skills available)"

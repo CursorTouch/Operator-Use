@@ -14,14 +14,19 @@ def get_config_file() -> Path:
     return get_userdata_dir() / _CONFIG_FILE_NAME
 
 
-def get_workspaces_dir() -> Path:
-    """Return the multi-agent workspaces directory: ~/.operator-use/workspaces"""
-    return get_userdata_dir() / "workspaces"
+def get_profiles_dir() -> Path:
+    """Return the multi-agent profiles directory: ~/.operator-use/profiles"""
+    return get_userdata_dir() / "profiles"
+
+
+def get_named_profile_dir(name: str) -> Path:
+    """Return a named agent's profile directory: ~/.operator-use/profiles/<name>"""
+    return get_profiles_dir() / name
 
 
 def get_named_workspace_dir(name: str) -> Path:
-    """Return a named agent's workspace directory: ~/.operator-use/workspaces/<name>"""
-    return get_workspaces_dir() / name
+    """Backward-compatible alias for get_named_profile_dir()."""
+    return get_named_profile_dir(name)
 
 
 def get_media_dir() -> Path:

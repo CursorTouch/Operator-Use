@@ -4,7 +4,7 @@ Design contract
 ---------------
 A subagent is the opposite of a local agent:
 
-* **No identity** — no workspace, no session store, no memory, no hooks, no
+* **No identity** — no profile, no session store, no memory, no hooks, no
   plugins.  It is a blank executor: system prompt + tool registry + loop →
   result → gone.
 * **No persistence** — once the task finishes (or fails) the Subagent instance
@@ -24,7 +24,7 @@ Use a **subagent** (``subagents`` tool) when:
 
 Use a **local agent** (``localagents`` tool) when:
   - The target is a named, persistent peer already running in the Orchestrator.
-  - The peer has its own workspace, memory, and specialised tools/plugins.
+  - The peer has its own profile, memory, and specialised tools/plugins.
   - You want to delegate to a known capability (e.g. a "research" or "coding"
     agent defined in config) rather than spinning up an anonymous worker.
 """
@@ -62,7 +62,7 @@ class Subagent:
     """Ephemeral worker that runs an isolated LLM loop for one delegated task.
 
     Lifecycle: created by SubagentManager → runs → announces result via bus →
-    discarded.  Has no workspace, sessions, memory, or hooks of its own.
+    discarded.  Has no profile, sessions, memory, or hooks of its own.
     """
 
     def __init__(
@@ -203,3 +203,4 @@ class Subagent:
                 metadata={"_subagent_result": True, "task_id": record.task_id},
             )
         )
+

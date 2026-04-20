@@ -1,10 +1,10 @@
 """Subagents tool — spawn ephemeral anonymous workers for parallel or background tasks.
 
 Use this tool when you need to fire off self-contained work without caring about
-who does it.  Each subagent is a blank executor: no name, no workspace, no memory.
+who does it.  Each subagent is a blank executor: no name, no profile, no memory.
 It runs its task with a fresh tool registry and disappears when done.
 
-For delegating to a *named, persistent* peer agent that has its own workspace and
+For delegating to a *named, persistent* peer agent that has its own profile and
 specialisation, use the ``localagents`` tool instead.
 """
 
@@ -55,11 +55,11 @@ def _format_duration(started: datetime, finished: datetime | None) -> str:
     name="subagents",
     description=(
         "Spawn ephemeral anonymous workers for parallel or fire-and-forget tasks.\n\n"
-        "A subagent has no identity, no workspace, and no memory — it is a blank executor "
+        "A subagent has no identity, no profile, and no memory — it is a blank executor "
         "that runs a task with filesystem, web, and terminal tools, then disappears. "
         "Use this when you want parallel workers for self-contained work and don't need "
         "the worker to remember anything.\n\n"
-        "To delegate to a named peer agent that has its own workspace and specialisation, "
+        "To delegate to a named peer agent that has its own profile and specialisation, "
         "use the 'localagents' tool instead.\n\n"
         "Actions:\n"
         "  create — spawn a new background worker (returns task_id immediately). "

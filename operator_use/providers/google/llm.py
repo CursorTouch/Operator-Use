@@ -64,6 +64,7 @@ class ChatGoogle(BaseChatLLM):
         api_key: Optional[str] = None,
         temperature: Optional[float] = None,
         thinking_budget: Optional[int] = None,
+        include_thoughts: bool = True,
         **kwargs,
     ):
         """
@@ -74,6 +75,7 @@ class ChatGoogle(BaseChatLLM):
             api_key: Google API key. Falls back to GEMINI_API_KEY or GOOGLE_API_KEY env vars.
             temperature: Sampling temperature.
             thinking_budget: Token budget for extended thinking (Gemini 2.5 models).
+            include_thoughts: If True, request provider-visible thought summaries when supported.
             **kwargs: Additional arguments for GenerateContentConfig.
         """
         self._model = model
@@ -82,6 +84,7 @@ class ChatGoogle(BaseChatLLM):
         )
         self.temperature = temperature
         self.thinking_budget = thinking_budget
+        self.include_thoughts = include_thoughts
 
         self.client = genai.Client(api_key=self.api_key)
         self.kwargs = kwargs
@@ -244,11 +247,15 @@ class ChatGoogle(BaseChatLLM):
         if self.temperature is not None:
             config_params["temperature"] = self.temperature
 
-        # Thinking budget for 2.5 models
-        if self._is_thinking_model() and self.thinking_budget is not None:
-            config_params["thinking_config"] = types.ThinkingConfig(
-                thinking_budget=self.thinking_budget
-            )
+        # Thinking config for 2.5+/3.x models
+        if self._is_thinking_model():
+            thinking_kwargs: dict[str, Any] = {}
+            if self.thinking_budget is not None:
+                thinking_kwargs["thinking_budget"] = self.thinking_budget
+            if self.include_thoughts:
+                thinking_kwargs["include_thoughts"] = True
+            if thinking_kwargs:
+                config_params["thinking_config"] = types.ThinkingConfig(**thinking_kwargs)
 
         if structured_output:
             config_params["response_mime_type"] = "application/json"
@@ -265,12 +272,43 @@ class ChatGoogle(BaseChatLLM):
         if not usage_metadata:
             return TokenUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0)
 
-        thinking_tokens = getattr(usage_metadata, "thoughts_token_count", None)
+        if isinstance(usage_metadata, dict):
+            prompt_tokens = usage_metadata.get("prompt_token_count", 0) or usage_metadata.get(
+                "promptTokenCount", 0
+            )
+            completion_tokens = usage_metadata.get(
+                "candidates_token_count", 0
+            ) or usage_metadata.get("candidatesTokenCount", 0)
+            total_tokens = usage_metadata.get("total_token_count", 0) or usage_metadata.get(
+                "totalTokenCount", 0
+            )
+            thinking_tokens = (
+                usage_metadata.get("thoughts_token_count")
+                or usage_metadata.get("thoughtsTokenCount")
+                or usage_metadata.get("thinking_token_count")
+                or usage_metadata.get("thinkingTokenCount")
+            )
+        else:
+            prompt_tokens = getattr(usage_metadata, "prompt_token_count", 0) or getattr(
+                usage_metadata, "promptTokenCount", 0
+            )
+            completion_tokens = getattr(
+                usage_metadata, "candidates_token_count", 0
+            ) or getattr(usage_metadata, "candidatesTokenCount", 0)
+            total_tokens = getattr(usage_metadata, "total_token_count", 0) or getattr(
+                usage_metadata, "totalTokenCount", 0
+            )
+            thinking_tokens = (
+                getattr(usage_metadata, "thoughts_token_count", None)
+                or getattr(usage_metadata, "thoughtsTokenCount", None)
+                or getattr(usage_metadata, "thinking_token_count", None)
+                or getattr(usage_metadata, "thinkingTokenCount", None)
+            )
 
         return TokenUsage(
-            prompt_tokens=usage_metadata.prompt_token_count or 0,
-            completion_tokens=usage_metadata.candidates_token_count or 0,
-            total_tokens=usage_metadata.total_token_count or 0,
+            prompt_tokens=prompt_tokens or 0,
+            completion_tokens=completion_tokens or 0,
+            total_tokens=total_tokens or 0,
             thinking_tokens=thinking_tokens,
         )
 

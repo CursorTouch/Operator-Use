@@ -209,7 +209,7 @@ class AgentDefinition(Base):
 
     id: str
     description: str = ""  # Short role/capability summary used for delegation and routing hints
-    workspace: Optional[str] = None  # Defaults to ~/.operator-use/workspaces/<id>
+    workspace: Optional[str] = None  # Defaults to ~/.operator-use/profiles/<id>
     llm_config: Optional[LLMConfig] = None  # Overrides agents.defaults.llm_config
     max_tool_iterations: Optional[int] = None  # Overrides agents.defaults
     channels: Optional["ChannelsConfig"] = None  # Per-agent dedicated channel bots

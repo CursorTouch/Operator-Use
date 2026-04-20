@@ -47,7 +47,7 @@ class ImageGen(BaseModel):
         default=None,
         description=(
             "Where to save the generated image. "
-            "If omitted, a unique file is created inside the agent workspace."
+            "If omitted, a unique file is created inside the agent profile."
         ),
     )
     caption: Optional[str] = Field(
@@ -95,11 +95,11 @@ async def imagegen(
     elif images == []:
         images = None
 
-    # Build output path inside workspace if not provided
+    # Build output path inside profile if not provided
     if not output_path:
-        workspace: Path | None = kwargs.get("_workspace")
-        if workspace:
-            gen_dir = workspace / "generated"
+        profile_root: Path | None = kwargs.get("_profile") or kwargs.get("_workspace")
+        if profile_root:
+            gen_dir = profile_root / "generated"
         else:
             import tempfile
 

@@ -58,7 +58,7 @@ def help_cmd(ctx: typer.Context):
     table.add_row("operator agents list", "List all configured agents")
     table.add_row(
         "operator agents add <id>",
-        "Add a new agent  [dim](--provider / --model / --workspace)[/dim]",
+        "Add a new agent  [dim](--provider / --model / --profile)[/dim]",
     )
     table.add_row(
         "operator agents update <id>",
@@ -66,7 +66,7 @@ def help_cmd(ctx: typer.Context):
     )
     table.add_row(
         "operator agents remove <id>",
-        "Remove an agent  [dim](--delete-workspace to also wipe files)[/dim]",
+        "Remove an agent  [dim](--delete-profile to also wipe files)[/dim]",
     )
     table.add_row("operator status", "Show config and agent status")
     table.add_row("operator sessions", "List conversation sessions")
@@ -138,13 +138,13 @@ def status():
     llm = agent.get("llmConfig", agent.get("llm_config", agent.get("llm", {})))
     channels = config.get("channels", {})
     crons_path = USERDATA_DIR / "crons.json"
-    workspaces_dir = USERDATA_DIR / "workspaces"
+    profiles_dir = USERDATA_DIR / "profiles"
     sessions_dir = (
         next(
-            (d / "sessions" for d in sorted(workspaces_dir.iterdir()) if (d / "sessions").exists()),
+            (d / "sessions" for d in sorted(profiles_dir.iterdir()) if (d / "sessions").exists()),
             None,
         )
-        if workspaces_dir.exists()
+        if profiles_dir.exists()
         else None
     )
     log_file = USERDATA_DIR / "operator.log"
@@ -191,10 +191,10 @@ def status():
 @app.command("sessions")
 def sessions(limit: int = typer.Option(20, "--limit", "-n", help="Max sessions to show.")):
     """List stored conversation sessions."""
-    workspaces_dir = USERDATA_DIR / "workspaces"
+    profiles_dir = USERDATA_DIR / "profiles"
     files = []
-    if workspaces_dir.exists():
-        for agent_dir in workspaces_dir.iterdir():
+    if profiles_dir.exists():
+        for agent_dir in profiles_dir.iterdir():
             sd = agent_dir / "sessions"
             if sd.exists():
                 files.extend(sd.rglob("*.jsonl"))
@@ -1273,7 +1273,7 @@ def agents_list():
 
     table = Table(box=box.SIMPLE, show_header=True, padding=(0, 1))
     table.add_column("ID", style="bold")
-    table.add_column("Workspace")
+    table.add_column("Profile")
     table.add_column("LLM")
 
     for defn in agent_defs:
@@ -1292,7 +1292,8 @@ def agents_add(
         "",
         "--workspace",
         "-w",
-        help="Custom workspace path (default: ~/.operator-use/workspaces/<id>).",
+        "--profile",
+        help="Custom profile path (default: ~/.operator-use/profiles/<id>).",
     ),
     description: str = typer.Option("", "--description", "-d", help="Short role/purpose summary for this agent."),
     provider: str = typer.Option("", "--provider", "-p", help="LLM provider (e.g. 'anthropic')."),
@@ -1313,7 +1314,7 @@ def agents_add(
         [], "--tools-deny", help="Tool names to remove from the profile."
     ),
 ):
-    """Add a new agent and create its workspace."""
+    """Add a new agent and create its profile directory."""
     from operator_use.cli.start import copy_templates_to_workspace, _resolve_agent_workspace, write_identity_md
     from operator_use.config import AgentDefinition, LLMConfig, load_config
 
@@ -1375,7 +1376,7 @@ def agents_add(
     except Exception:
         pass
 
-    console.print(f"[green]Agent '{agent_id}' added.[/green] Workspace: {ws_path}")
+    console.print(f"[green]Agent '{agent_id}' added.[/green] Profile: {ws_path}")
 
 
 @agents_app.command("update")
@@ -1431,10 +1432,10 @@ def agents_update(
 def agents_remove(
     agent_id: str = typer.Argument(..., help="Agent ID to remove."),
     delete_workspace: bool = typer.Option(
-        False, "--delete-workspace", "-d", help="Also delete the workspace directory."
+        False, "--delete-profile", "--delete-workspace", "-d", help="Also delete the profile directory."
     ),
 ):
-    """Remove an agent from config and optionally delete its workspace."""
+    """Remove an agent from config and optionally delete its profile directory."""
     from operator_use.config import load_config
     from operator_use.cli.start import _resolve_agent_workspace
 
@@ -1457,9 +1458,9 @@ def agents_remove(
         import shutil
 
         shutil.rmtree(ws_path)
-        console.print(f"[green]Agent '{agent_id}' removed.[/green] Workspace deleted: {ws_path}")
+        console.print(f"[green]Agent '{agent_id}' removed.[/green] Profile deleted: {ws_path}")
     else:
-        console.print(f"[green]Agent '{agent_id}' removed.[/green] Workspace kept: {ws_path}")
+        console.print(f"[green]Agent '{agent_id}' removed.[/green] Profile kept: {ws_path}")
 
 
 # ---------------------------------------------------------------------------

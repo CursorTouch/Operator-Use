@@ -33,7 +33,7 @@ Channel
 | `gateway/` | Manages all channel instances. Routes inbound messages to bus; dispatches outbound messages to the right channel. Channels live in `gateway/channels/`. |
 | `orchestrator/` | Pipeline layer between bus and agents. Owns STT/TTS, message construction, agent routing, and the main `ainvoke()` consume loop. Also handles session control commands (`/start`, `/stop`, `/restart`) and pending-reply coordination. |
 | `agent/` | LLM agentic loop. Receives a pre-built message, builds system prompt + history, calls LLM, handles tool calls iteratively. Has no knowledge of channels, bus, or STT/TTS. |
-| `context/` | Builds the full system prompt from workspace files (SOUL.md, RULES.md, MEMORY.md, skills index, knowledge index, CODE.md). |
+| `context/` | Builds the full system prompt from profile files (SOUL.md, RULES.md, MEMORY.md, skills index, knowledge index, CODE.md). |
 | `providers/` | Adapters for 14+ LLMs (OpenAI, Anthropic, Google, Mistral, Groq, Ollama, Cerebras…) and STT/TTS providers. All implement `BaseChatLLM` / `BaseSTT` / `BaseTTS`. |
 | `computer/` | Desktop control via native accessibility APIs. **Windows:** Windows UI Automation (UIA) via `comtypes`/`pywin32`. **macOS:** Accessibility Framework via `pyobjc` (`ax/` module). **Linux:** WIP. Exposed as tools via plugins. |
 | `tools/` | Built-in tool implementations (filesystem, terminal, web search/browse). Auto-registered at startup. |
@@ -41,7 +41,7 @@ Channel
 | `config/` | Pydantic settings loaded from `.operator_use/config.json`, merged with `OPERATOR_` env vars. One config class per channel and provider. |
 | `messages/` | Core message models: `HumanMessage`, `AIMessage`, `ImageMessage`, `ToolMessage`. |
 | `plugins/` | Optional capability bundles (e.g. `computer_use`, `browser_use`). Each registers tools and hooks on an Agent at init time, and can be enabled/disabled at runtime. |
-| `skills/` | Markdown procedural guides. Loaded from `workspace/skills/{name}/SKILL.md`. Available immediately without restart. |
+| `skills/` | Markdown procedural guides. Loaded from `profile/skills/{name}/SKILL.md`. Available immediately without restart. |
 | `acp/` | ACP (Agent Communication Protocol) — multi-agent server/client. Routes messages to named agents with per-agent token isolation. |
 | `subagent/` | Spawns child agents for parallel or delegated tasks within a single agentic loop. |
 | `crons/` | Cron-scheduled tasks. Persisted to `.operator_use/crons.json`. When `deliver=True`, publishes `OutgoingMessage` directly to bus at fire time. |
@@ -67,7 +67,7 @@ for iteration in range(max_iterations):
         return AIMessage              # done
 ```
 
-Hooks fire at `BEFORE/AFTER_AGENT_START/END`, `BEFORE/AFTER_LLM_CALL`, and `BEFORE/AFTER_TOOL_CALL`. Plugins register tools and hooks on the Agent at init. Tool extensions (like `_channel`, `_chat_id`, `_workspace`, `_gateway`) are injected into the registry so tools have access to runtime context.
+Hooks fire at `BEFORE/AFTER_AGENT_START/END`, `BEFORE/AFTER_LLM_CALL`, and `BEFORE/AFTER_TOOL_CALL`. Plugins register tools and hooks on the Agent at init. Tool extensions (like `_channel`, `_chat_id`, `_profile`, `_gateway`) are injected into the registry so tools have access to runtime context.
 
 **Streaming** works identically but uses `llm.astream()`: chunks are published to the bus as `StreamPhase.START → CHUNK → END → DONE`, allowing channels like Telegram and Discord to edit a message in-place as text arrives.
 
@@ -77,7 +77,7 @@ Hooks fire at `BEFORE/AFTER_AGENT_START/END`, `BEFORE/AFTER_LLM_CALL`, and `BEFO
 
 ### macOS — `computer/macos/ax/`
 
-A Pythonic wrapper over native macOS Accessibility (`AXUIElement`), Quartz (`CGEvent`), and `NSWorkspace`. Organized in layers:
+A Pythonic wrapper over native macOS Accessibility (`AXUIElement`), Quartz (`CGEvent`), and `NSprofile`. Organized in layers:
 
 ```
 core.py      — low-level AXUIElement/CGEvent functions
@@ -95,9 +95,9 @@ Uses Windows UI Automation (UIA) via `comtypes` + `pywin32`. Also includes VDM (
 
 ---
 
-## Workspace (runtime directory)
+## profile (runtime directory)
 
-The agent reads and can self-update a `workspace/` directory. Everything here is live — the agent is expected to write to these files as part of normal operation.
+The agent reads and can self-update a `profile/` directory. Everything here is live — the agent is expected to write to these files as part of normal operation.
 
 | File/Dir | Purpose |
 |---|---|
@@ -118,7 +118,7 @@ The agent reads and can self-update a `workspace/` directory. Everything here is
 ### Custom Tool Format
 
 ```python
-# workspace/tools/my_tool.py
+# profile/tools/my_tool.py
 from operator_use.tools import Tool, ToolResult
 from pydantic import BaseModel
 
@@ -136,7 +136,7 @@ Async tools (`async def`) are also supported. Name conflicts with built-in tools
 ### Skill Structure
 
 ```
-workspace/skills/my-skill/
+profile/skills/my-skill/
 ├── SKILL.md          # required — YAML frontmatter + instructions
 ├── scripts/          # executable Python/Bash for deterministic ops
 ├── references/       # docs loaded on demand (schemas, API specs)
@@ -197,7 +197,7 @@ Inherit `BaseChatLLM`, implement `ainvoke()` and optionally `astream()`, then ad
 ├── sessions/            — conversation history per channel+chat_id (.jsonl)
 ├── crons.json           — persisted cron jobs
 ├── restart.json         — written before restart; auto-deleted on next startup
-└── workspace/           — agent identity, memory, skills, tools, knowledge
+└── profile/           — agent identity, memory, skills, tools, knowledge
 ```
 
 ---
@@ -208,3 +208,4 @@ Inherit `BaseChatLLM`, implement `ainvoke()` and optionally `astream()`, then ad
 - LLMs: OpenAI, Anthropic, Google, Mistral, Groq, Ollama, Cerebras
 - Channels: `python-telegram-bot`, `discord.py`, `slack-bolt`, `twitchio`, `aiomqtt`
 - Desktop: `comtypes` + `pywin32` (Windows UIA), `pyobjc` (macOS Accessibility)
+

@@ -131,6 +131,8 @@ def main():
     parser = argparse.ArgumentParser(description="YouTube video info")
     parser.add_argument("video_id", nargs="?", help="YouTube video ID")
     parser.add_argument("--url", help="YouTube video URL")
+    # Accepted as a no-op for compatibility with toolchains that may append yt-dlp-style flags.
+    parser.add_argument("--js-runtimes", nargs="?", help=argparse.SUPPRESS)
     parser.add_argument("--title", action="store_true", help="Extract title")
     parser.add_argument("--uploader", action="store_true", help="Extract uploader/channel")
     parser.add_argument("--duration", action="store_true", help="Extract duration")
@@ -142,7 +144,7 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output raw JSON instead of markdown")
     parser.add_argument("-o", "--output", help="Output file path")
 
-    args = parser.parse_args()
+    args, _unknown = parser.parse_known_args()
     resolved_video_id = args.video_id or extract_video_id(args.url or "")
     if not resolved_video_id:
         parser.error("Provide a video ID or a valid YouTube URL via --url")

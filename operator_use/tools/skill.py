@@ -1,8 +1,8 @@
-"""Skill tool: load and invoke procedural skills from workspace."""
+"""Skill tool: load and invoke procedural skills from profile."""
 
 import yaml
 from operator_use.agent.tools.service import Tool, ToolResult
-from operator_use.config.paths import get_named_workspace_dir
+from operator_use.config.paths import get_named_profile_dir
 from operator_use.agent.skills.service import Skills, BUILTIN_SKILLS_DIR
 from pydantic import BaseModel, Field
 
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class SkillParams(BaseModel):
     name: str = Field(
         ...,
-        description="Skill name to load. Skills can be in workspace/skills/{name}/SKILL.md or builtin skills directory. Examples: 'my-skill', 'debug-flow', 'google-workspace-cli'",
+        description="Skill name to load. Skills can be in profile/skills/{name}/SKILL.md or builtin skills directory. Examples: 'my-skill', 'debug-flow', 'google-workspace-cli'",
     )
     args: str | None = Field(
         default=None,
@@ -41,7 +41,7 @@ def _parse_skill_metadata(content: str) -> tuple[dict, str]:
 
 @Tool(
     name="skill",
-    description="Load and invoke a procedural skill from workspace. Skills are Markdown files with YAML metadata at workspace/skills/{name}/SKILL.md. They can contain instructions, scripts (in skills/{name}/scripts/), or references (in skills/{name}/references/). Returns the skill's full content and metadata so you can follow it step-by-step.",
+    description="Load and invoke a procedural skill from profile. Skills are Markdown files with YAML metadata at profile/skills/{name}/SKILL.md. They can contain instructions, scripts (in skills/{name}/scripts/), or references (in skills/{name}/references/). Returns the skill's full content and metadata so you can follow it step-by-step.",
     model=SkillParams,
 )
 async def skill(
@@ -49,29 +49,29 @@ async def skill(
     args: str | None = None,
     **kwargs,
 ) -> ToolResult:
-    """Load and present a skill from workspace or builtin skills."""
-    workspace = kwargs.get("_workspace") or get_named_workspace_dir("operator")
+    """Load and present a skill from profile or builtin skills."""
+    profile_root = kwargs.get("_profile") or kwargs.get("_workspace") or get_named_profile_dir("operator")
 
-    # Use Skills service to load from workspace or builtin
-    skills_service = Skills(workspace)
+    # Use Skills service to load from profile or builtin
+    skills_service = Skills(profile_root)
     content = skills_service.invoke_skill(name)
 
     if content is None:
-        workspace_skill = workspace / "skills" / name / "SKILL.md"
+        profile_skill = profile_root / "skills" / name / "SKILL.md"
         builtin_skill = BUILTIN_SKILLS_DIR / name / "SKILL.md"
         return ToolResult.error_result(
             f"Skill not found: {name}\n"
-            f"Expected path: {workspace_skill}\n"
+            f"Expected path: {profile_skill}\n"
             f"or builtin: {builtin_skill}\n"
-            f"Create it at workspace/skills/{name}/SKILL.md"
+            f"Create it at profile/skills/{name}/SKILL.md"
         )
 
-    # Determine which skill_dir was used (workspace takes precedence)
-    workspace_skill_dir = workspace / "skills" / name
+    # Determine which skill_dir was used (profile takes precedence)
+    profile_skill_dir = profile_root / "skills" / name
     builtin_skill_dir = BUILTIN_SKILLS_DIR / name
 
-    if workspace_skill_dir.exists():
-        skill_dir = workspace_skill_dir
+    if profile_skill_dir.exists():
+        skill_dir = profile_skill_dir
     else:
         skill_dir = builtin_skill_dir
 

@@ -82,7 +82,7 @@ from operator_use.crons.views import CronJob
 from operator_use.crons import Cron
 from operator_use.bus import OutgoingMessage, IncomingMessage, TextPart
 from operator_use.config import Config, load_config, AgentDefinition
-from operator_use.config.paths import get_named_workspace_dir
+from operator_use.config.paths import get_named_profile_dir
 from typing import Optional
 from pathlib import Path
 
@@ -242,7 +242,7 @@ def _make_models(
 def _resolve_agent_workspace(defn: AgentDefinition) -> Path:
     if defn.workspace:
         return Path(defn.workspace).expanduser().resolve()
-    return get_named_workspace_dir(defn.id)
+    return get_named_profile_dir(defn.id)
 
 
 PLUGIN_REGISTRY: dict[str, type] = {}

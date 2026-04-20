@@ -10,7 +10,7 @@ HEARTBEAT_INTERVAL = 0.5 * 60 * 60  # 30 minutes
 HEARTBEAT_FILENAME = "HEARTBEAT.md"
 
 HEARTBEAT_PROMPT = """
-Read the HEARTBEAT.md file in your workspace (if it exists).
+Read the HEARTBEAT.md file in your profile (if it exists).
 Follow any instructions or tasks mentioned in there.
 If there are no instructions or tasks, do nothing.
 """
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class Heartbeat:
-    """Background task that reads HEARTBEAT.md from the workspace on a schedule."""
+    """Background task that reads HEARTBEAT.md from the profile on a schedule."""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class Heartbeat:
     ):
         """
         Args:
-            workspace: Agent workspace directory containing HEARTBEAT.md.
+            workspace: Agent profile directory containing HEARTBEAT.md.
             interval: Seconds between ticks (default 1800 = 30 minutes).
             on_heartbeat: Optional async callback called with markdown content on each heartbeat.
         """

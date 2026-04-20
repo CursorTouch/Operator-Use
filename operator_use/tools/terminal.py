@@ -1,5 +1,4 @@
 from operator_use.tools import Tool, ToolResult, MAX_TOOL_OUTPUT_LENGTH
-from operator_use.config.paths import get_named_workspace_dir
 from pydantic import BaseModel, Field
 from pathlib import Path
 import asyncio
@@ -39,7 +38,7 @@ class Terminal(BaseModel):
     )
     cwd: str | None = Field(
         default=None,
-        description="Working directory for the command. Absolute path or workspace-relative path (e.g. 'skills/youtube-cli/scripts'). Defaults to workspace root.",
+        description="Working directory for the command. Absolute path or profile-relative path (e.g. 'skills/youtube-cli/scripts'). Defaults to profile root.",
     )
 
 
@@ -54,7 +53,7 @@ def _is_command_blocked(cmd: str) -> str | None:
 
 @Tool(
     name="terminal",
-    description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, checking processes, or any CLI task. CWD is the workspace root — use the same paths as write_file/list_dir (e.g. 'python temp/script.py'). Destructive commands (rm -rf /, format, shutdown, etc.) are blocked. For long outputs, results are truncated — pipe through head/tail if needed.",
+    description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, checking processes, or any CLI task. CWD is the profile root — use the same paths as write_file/list_dir (e.g. 'python temp/script.py'). Destructive commands (rm -rf /, format, shutdown, etc.) are blocked. For long outputs, results are truncated — pipe through head/tail if needed.",
     model=Terminal,
 )
 async def terminal(cmd: str, timeout: int = 10, cwd: str | None = None, **kwargs) -> str:
@@ -69,12 +68,12 @@ async def terminal(cmd: str, timeout: int = 10, cwd: str | None = None, **kwargs
     else:
         shell_cmd = ["/bin/bash", "-c", cmd]
 
-    workspace = kwargs.get("_workspace")
+    profile_root = kwargs.get("_profile") or kwargs.get("_workspace") or "."
     if cwd:
-        resolved = Path(cwd) if Path(cwd).is_absolute() else Path(workspace) / cwd
+        resolved = Path(cwd) if Path(cwd).is_absolute() else Path(profile_root) / cwd
         cwd = str(resolved)
     else:
-        cwd = str(workspace)
+        cwd = str(profile_root)
     process = await asyncio.create_subprocess_exec(
         *shell_cmd,
         cwd=cwd,

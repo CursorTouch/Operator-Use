@@ -182,7 +182,8 @@ class PatchFile(BaseModel):
     model=PatchFile,
 )
 async def patch_file(path: str, patch: str, **kwargs) -> ToolResult:
-    resolved_path = resolve(base="./workspace", path=path)
+    profile_root = kwargs.get("_profile") or kwargs.get("_workspace") or "."
+    resolved_path = resolve(base=profile_root, path=path)
 
     if not resolved_path.exists():
         return ToolResult.error_result(f"File not found: {resolved_path}")

@@ -6,7 +6,7 @@ Local agents are **persistent, named agents** that live for the lifetime of the
 Operator process.  They are defined in config (``agents.list``), built at
 startup, and held in the Orchestrator's agents registry.  Each one has:
 
-* A dedicated workspace (files, memory, skills)
+* A dedicated profile (files, memory, skills)
 * Its own session store (per-user conversation history)
 * Its own LLM config, tool profile, plugins, and prompt mode
 * Its own channels (optional — a local agent may have no public channel)
@@ -17,7 +17,7 @@ spawning a subagent (``subagents`` tool):
 | | Local agent | Subagent |
 |---|---|---|
 | Lifetime | Process lifetime | Per-task |
-| Workspace | Dedicated | None |
+| Profile | Dedicated | None |
 | Memory / sessions | Persistent | None |
 | Identity | Named, configured | Anonymous |
 | Created | At startup from config | On demand by SubagentManager |
@@ -223,7 +223,7 @@ async def _run_detached(
     description=(
         "Delegate a task to a persistent peer agent running in this Operator instance.\n\n"
         "Local agents are long-lived, named agents defined in config — each has its own "
-        "workspace, memory, tool profile, and specialisation. Use this tool when you want "
+        "profile, memory, tool profile, and specialisation. Use this tool when you want "
         "to hand off work to a specific named peer (e.g. a 'research' or 'coding' agent) "
         "rather than spinning up an anonymous background worker.\n\n"
         "Actions:\n"

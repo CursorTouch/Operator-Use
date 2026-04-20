@@ -1,18 +1,18 @@
-# AGENTS.md - Your Workspace
+# AGENTS.md - Your profile
 
 This folder is home. Treat it that way.
 
 ## Session Startup
 
-All workspace files are already injected into your context — you don't need to read them manually.
+All profile files are already injected into your context — you don't need to read them manually.
 
 - `IDENTITY.md`, `SOUL.md`, `USER.md`, `AGENTS.md` — fully loaded in your system prompt
 - `memory/MEMORY.md` — injected automatically in direct sessions
 
-## Workspace Layout
+## profile Layout
 
 ```
-{workspace}/
+{profile}/
 ├── IDENTITY.md           — Who you are (name, description, persona)
 ├── SOUL.md               — Your values and work ethic
 ├── USER.md               — User profile and preferences
@@ -38,16 +38,16 @@ All workspace files are already injected into your context — you don't need to
 
 ## Agent-Specific vs Shared
 
-**Store in this workspace** when the skill, tool, or knowledge is specific to this agent's role, persona, or domain.
+**Store in this profile** when the skill, tool, or knowledge is specific to this agent's role, persona, or domain.
 
 **Store in the project's builtin directories** when it is generic and useful across many agents:
 - Skills → `operator_use/skills/{name}/SKILL.md` (builtin skills, available to all agents)
 - Tools → `operator_use/tools/{name}.py` (builtin tools, available to all agents — mirrors the skills pattern)
-- Knowledge → no project-level shared knowledge yet; duplicate to each agent's workspace if needed
+- Knowledge → no project-level shared knowledge yet; duplicate to each agent's profile if needed
 
-Workspace always takes precedence over builtin when names conflict — so agent-specific overrides are safe.
+profile always takes precedence over builtin when names conflict — so agent-specific overrides are safe.
 
-## Workspace Files
+## profile Files
 
 - **IDENTITY.md** — Who you are (name, description, persona). Auto-generated at setup.
 - **SOUL.md** — Your values, work ethic, and personality.
@@ -126,9 +126,9 @@ restart(continue_with="Send the user a message confirming the new Groq provider 
 
 ## Skills — Building and Using
 
-### Workspace Skills
+### profile Skills
 
-Skills are Markdown files in `workspace/skills/{name}/SKILL.md`. They document how to accomplish a specific type of task — the steps, the tools to use, the gotchas. Once written, they're automatically available every session without a restart. Use the `skill` tool to invoke a skill: `skill(name="skill-name")`.
+Skills are Markdown files in `profile/skills/{name}/SKILL.md`. They document how to accomplish a specific type of task — the steps, the tools to use, the gotchas. Once written, they're automatically available every session without a restart. Use the `skill` tool to invoke a skill: `skill(name="skill-name")`.
 
 ### When to build a skill
 
@@ -144,7 +144,7 @@ Don't wait to be asked. If you just learned something reusable, encode it.
 
 ### How to build a skill
 
-1. Create `workspace/skills/{skill-name}/SKILL.md`
+1. Create `profile/skills/{skill-name}/SKILL.md`
 2. Write it with enough detail that you could follow it cold, with no memory of today
 3. Include: what the skill is for, step-by-step approach, tools used, common failures and fixes, example inputs/outputs if helpful
 
@@ -273,7 +273,7 @@ Also scan recent session files (`sessions/*.jsonl`) for facts you had to look up
 ### Format
 
 ```python
-# workspace/tools/my_tool.py
+# profile/tools/my_tool.py
 from operator_use.tools import Tool, ToolResult
 from pydantic import BaseModel, Field
 
@@ -313,7 +313,7 @@ Always include `**kwargs` in your function signature. The registry injects these
 
 | Key | Type | What it is |
 |---|---|---|
-| `_workspace` | `Path` | Path to this agent's workspace directory |
+| `_profile` | `Path` | Path to this agent's profile directory |
 | `_channel` | `str` | Channel name (e.g. `"telegram"`) |
 | `_chat_id` | `str` | Chat/user ID on that channel |
 | `_llm` | `BaseChatLLM` | The agent's LLM instance (for tools that need to call the LLM) |
@@ -449,3 +449,5 @@ When installing a new dependency, use `uv add <package>` (not `pip install`) so 
 ## Make It Yours
 
 Add your own rules, conventions, and habits below as you figure out what works.
+
+

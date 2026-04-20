@@ -235,7 +235,7 @@ operator
 
 - Go to [api.slack.com/apps](https://api.slack.com/apps) → Create New App → From scratch
 - Under **OAuth & Permissions**, add bot token scopes: `chat:write`, `im:history`, `im:read`
-- Install the app to your workspace and copy the **Bot User OAuth Token**
+- Install the app to your profile and copy the **Bot User OAuth Token**
 
 **2. Enable Socket Mode**
 
@@ -407,3 +407,4 @@ If you use Operator-Use in your research or project, please cite it as:
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+

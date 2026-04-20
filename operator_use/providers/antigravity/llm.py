@@ -247,10 +247,17 @@ def _extract_from_chunk(
 def _make_usage(meta: Optional[dict]) -> Optional[TokenUsage]:
     if not meta:
         return None
+    thinking_tokens = (
+        meta.get("thoughtsTokenCount")
+        or meta.get("thoughts_token_count")
+        or meta.get("thinkingTokenCount")
+        or meta.get("thinking_token_count")
+    )
     return TokenUsage(
         prompt_tokens=meta.get("promptTokenCount", 0),
         completion_tokens=meta.get("candidatesTokenCount", 0),
         total_tokens=meta.get("totalTokenCount", 0),
+        thinking_tokens=thinking_tokens,
     )
 
 
@@ -343,11 +350,13 @@ class ChatAntigravity(BaseChatLLM):
         base_url: Optional[str] = None,
         timeout: float = 600.0,
         temperature: Optional[float] = None,
+        include_thoughts: bool = True,
         **kwargs,
     ):
         self._model = model
         self._timeout = timeout
         self._temperature = temperature
+        self._include_thoughts = include_thoughts
         self._static_token = api_key or os.environ.get("ANTIGRAVITY_ACCESS_TOKEN")
         self._endpoint = base_url or _ENDPOINTS[0]
         self._auth: Optional[dict] = None
@@ -424,6 +433,8 @@ class ChatAntigravity(BaseChatLLM):
         gen_cfg: dict = {}
         if self._temperature is not None:
             gen_cfg["temperature"] = self._temperature
+        if self._include_thoughts and self._model.startswith("gemini"):
+            gen_cfg["thinkingConfig"] = {"includeThoughts": True}
         project = (
             (self._auth or {}).get("project_id", DEFAULT_PROJECT_ID)
             if not self._static_token
@@ -443,6 +454,8 @@ class ChatAntigravity(BaseChatLLM):
         gen_cfg: dict = {}
         if self._temperature is not None:
             gen_cfg["temperature"] = self._temperature
+        if self._include_thoughts and self._model.startswith("gemini"):
+            gen_cfg["thinkingConfig"] = {"includeThoughts": True}
         project = (
             (self._auth or {}).get("project_id", DEFAULT_PROJECT_ID)
             if not self._static_token

@@ -1,19 +1,19 @@
 import json
 from operator_use.utils.helper import resolve, is_binary_file, ensure_directory
 from operator_use.agent.tools.service import Tool, ToolResult, MAX_TOOL_OUTPUT_LENGTH
-from operator_use.config.paths import get_named_workspace_dir
+from operator_use.config.paths import get_named_profile_dir
 from pydantic import BaseModel, Field, field_validator
 from pathlib import Path
 
 
-def _get_workspace(**kwargs) -> Path:
-    return kwargs.get("_workspace") or get_named_workspace_dir("operator")
+def _get_profile_root(**kwargs) -> Path:
+    return kwargs.get("_profile") or kwargs.get("_workspace") or get_named_profile_dir("operator")
 
 
 class ReadFile(BaseModel):
     path: str = Field(
         ...,
-        description="Absolute path (anywhere on the filesystem) or path relative to the workspace root. Use list_dir first if you're unsure where the file is.",
+        description="Absolute path (anywhere on the filesystem) or path relative to the profile root. Use list_dir first if you're unsure where the file is.",
     )
     start_line: int | None = Field(
         default=None,
@@ -35,8 +35,8 @@ class ReadFile(BaseModel):
 async def read_file(
     path: str, start_line: int | None = None, end_line: int | None = None, **kwargs
 ) -> ToolResult:
-    workspace = _get_workspace(**kwargs)
-    resolved_path = resolve(base=workspace, path=path)
+    profile_root = _get_profile_root(**kwargs)
+    resolved_path = resolve(base=profile_root, path=path)
     if not resolved_path.exists():
         return ToolResult.error_result(f"File not found: {resolved_path}")
 
@@ -69,7 +69,7 @@ async def read_file(
 class WriteFile(BaseModel):
     path: str = Field(
         ...,
-        description="Absolute path (anywhere on the filesystem) or path relative to the workspace root. Parent directories are created automatically.",
+        description="Absolute path (anywhere on the filesystem) or path relative to the profile root. Parent directories are created automatically.",
     )
     content: str = Field(
         ...,
@@ -93,8 +93,8 @@ class WriteFile(BaseModel):
 async def write_file(
     path: str, content: str, overwrite: bool = True, empty: bool = False, **kwargs
 ) -> ToolResult:
-    workspace = _get_workspace(**kwargs)
-    resolved_path = resolve(base=workspace, path=path)
+    profile_root = _get_profile_root(**kwargs)
+    resolved_path = resolve(base=profile_root, path=path)
     file_exists = resolved_path.exists()
     if file_exists and not overwrite:
         return ToolResult.error_result(f"File exists and overwrite=False: {resolved_path}")
@@ -123,7 +123,7 @@ class Edit(BaseModel):
 
 
 class EditFile(BaseModel):
-    path: str = Field(..., description="Absolute path (anywhere on the filesystem) or path relative to the workspace root.")
+    path: str = Field(..., description="Absolute path (anywhere on the filesystem) or path relative to the profile root.")
     edits: list[Edit] = Field(
         ...,
         description="One or more edits to apply in order. Each entry finds old_content and replaces it with new_content. Applied sequentially — one read, one write.",
@@ -154,8 +154,8 @@ async def edit_file(path: str, edits: list[dict], **kwargs) -> ToolResult:
             edits = json.loads(edits)
         except json.JSONDecodeError as e:
             return ToolResult.error_result(f"edits must be a list, got invalid JSON string: {e}")
-    workspace = _get_workspace(**kwargs)
-    resolved_path = resolve(base=workspace, path=path)
+    profile_root = _get_profile_root(**kwargs)
+    resolved_path = resolve(base=profile_root, path=path)
     if not resolved_path.exists():
         return ToolResult.error_result(f"File not found: {resolved_path}")
     if not resolved_path.is_file():
@@ -194,7 +194,7 @@ async def edit_file(path: str, edits: list[dict], **kwargs) -> ToolResult:
 class ListDir(BaseModel):
     path: str = Field(
         default=".",
-        description="Absolute path (anywhere on the filesystem) or path relative to the workspace root. Omit to list the workspace root.",
+        description="Absolute path (anywhere on the filesystem) or path relative to the profile root. Omit to list the profile root.",
     )
 
 
@@ -204,8 +204,8 @@ class ListDir(BaseModel):
     model=ListDir,
 )
 async def list_dir(path: str = ".", **kwargs) -> ToolResult:
-    workspace = _get_workspace(**kwargs)
-    resolved_path = resolve(base=workspace, path=path)
+    profile_root = _get_profile_root(**kwargs)
+    resolved_path = resolve(base=profile_root, path=path)
 
     if not resolved_path.exists():
         return ToolResult.error_result(f"Directory not found: {resolved_path}")

@@ -75,9 +75,9 @@ class Agent:
         self.agent_id = agent_id
         self.description = description
         if workspace is None:
-            from operator_use.config.paths import get_named_workspace_dir
+            from operator_use.config.paths import get_named_profile_dir
 
-            workspace = get_named_workspace_dir("operator")
+            workspace = get_named_profile_dir("operator")
         self.workspace = workspace
         self.sessions = sessions or SessionStore(workspace=self.workspace)
         self.context = Context(workspace=self.workspace, mcp_servers=mcp_servers)
@@ -104,12 +104,14 @@ class Agent:
         if exclude_tools:
             self.tool_register.unregister_tools(exclude_tools)
 
-        self.tool_register.register_workspace_tools(self.workspace / "tools")
+        self.tool_register.register_profile_tools(self.workspace / "tools")
 
         self.context.skills.register_history_hook(self.hooks)
         self.context.interceptor.register_history_hook(self.hooks)
 
         # Set stable tool extensions (don't change per message)
+        self.tool_register.set_extension("_profile", self.workspace)
+        # Backward-compatible extension key used by existing tools.
         self.tool_register.set_extension("_workspace", self.workspace)
         self.tool_register.set_extension("_bus", self.bus)
         self.tool_register.set_extension("_gateway", self.gateway)

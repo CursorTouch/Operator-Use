@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 
 class Knowledge:
-    """Manages reference documents in workspace/knowledge/.
+    """Manages reference documents in profile/knowledge/.
 
     Two supported conventions — both work simultaneously:
 
@@ -87,6 +87,6 @@ class Knowledge:
         logger.info(f"Knowledge files indexed | count={len(files)}")
         return (
             "## Knowledge\n\n"
-            "Reference documents in your workspace. Read them when relevant to the task.\n"
+            "Reference documents in your profile. Read them when relevant to the task.\n"
             + "\n".join(lines)
         )

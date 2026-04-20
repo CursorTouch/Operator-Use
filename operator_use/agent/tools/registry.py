@@ -44,13 +44,13 @@ class ToolRegistry:
             raise ValueError(f"Tool '{name}' not found")
         self._tools.pop(name, None)
 
-    def register_workspace_tools(self, tools_dir: Path, skip_existing: bool = True) -> None:
+    def register_profile_tools(self, tools_dir: Path, skip_existing: bool = True) -> None:
         """Dynamically load and register Tool instances from all *.py files in a directory."""
         if not tools_dir.exists():
             return
         for path in sorted(tools_dir.glob("*.py")):
             try:
-                spec = importlib.util.spec_from_file_location(f"_workspace_tool_{path.stem}", path)
+                spec = importlib.util.spec_from_file_location(f"_profile_tool_{path.stem}", path)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 for attr_name in dir(module):
@@ -58,11 +58,15 @@ class ToolRegistry:
                     if isinstance(attr, Tool) and attr.function is not None:
                         try:
                             self.register(attr)
-                            logger.info(f"Workspace tool loaded | name={attr.name} file={path.name}")
+                            logger.info(f"Profile tool loaded | name={attr.name} file={path.name}")
                         except ValueError:
-                            logger.warning(f"Workspace tool skipped (name conflict) | name={attr.name}")
+                            logger.warning(f"Profile tool skipped (name conflict) | name={attr.name}")
             except Exception as e:
-                logger.warning(f"Failed to load workspace tool | file={path.name} error={e}")
+                logger.warning(f"Failed to load profile tool | file={path.name} error={e}")
+
+    def register_workspace_tools(self, tools_dir: Path, skip_existing: bool = True) -> None:
+        """Backward-compatible alias for register_profile_tools()."""
+        self.register_profile_tools(tools_dir=tools_dir, skip_existing=skip_existing)
 
     def list_tools(self) -> list[Tool]:
         """Return all registered tools."""
