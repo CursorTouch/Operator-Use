@@ -95,7 +95,7 @@ key findings or results, and any URLs or sources referenced.\
     name="browser_task",
     description=(
         "Delegate a browser automation task to an isolated agent with its own context window. "
-        "Requires Chrome running with --remote-debugging-port=9222. "
+        "Chrome launches automatically if not already running. "
         "Describe the full task — the agent handles all browser interactions and returns a clean result. "
         "The browser stays open by default so the user can see the result."
     ),
@@ -119,8 +119,16 @@ async def browser_task(task: str, keep_open: bool = True, **kwargs) -> ToolResul
         browser = existing_browser
         owns_browser = False
     else:
-        # Attach to running Chrome on port 9222 (must be started with --remote-debugging-port=9222)
-        config = BrowserConfig(attach_to_existing=True, cdp_port=9222)
+        import os
+
+        # Persistent profile so logins survive across sessions.
+        # Auto-launches Chrome with --remote-debugging-port if not already running.
+        profile_dir = os.path.join(
+            os.environ.get("LOCALAPPDATA", os.path.expanduser("~/.local/share")),
+            "Operator",
+            "chrome-debug-profile",
+        )
+        config = BrowserConfig(attach_to_existing=True, cdp_port=9222, user_data_dir=profile_dir)
         browser = Browser(config=config)
         owns_browser = True
 

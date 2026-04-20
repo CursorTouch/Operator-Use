@@ -36,19 +36,10 @@ the browser subagent handles navigation, clicking, typing, and scraping internal
 - If a task fails, inspect the returned error and retry with a clearer description.
 </execution_principles>
 
-**Setup:**
-
-Start Chrome with remote debugging enabled:
-1. Close all Chrome windows
-2. Create profile directory (first time only):
-   - `mkdir %LOCALAPPDATA%/Operator/chrome-debug-profile`
-3. Start Chrome:
-   - `chrome.exe --remote-debugging-port=9222 --user-data-dir=%LOCALAPPDATA%/Operator/chrome-debug-profile`
-4. Sign into your accounts (Gmail, YouTube, etc.) - logins persist
-5. Use browser_task - agent attaches directly to your Chrome with full access
-
 **Example:**
-"Go to Gmail and check my inbox for messages from alice@example.com"\
+"Go to Gmail and check my inbox for messages from alice@example.com"
+
+**Note:** Chrome launches automatically with a persistent profile (`%LOCALAPPDATA%/Operator/chrome-debug-profile`) if not already running. Sign into your accounts once — logins persist across sessions.\
 """
 
 

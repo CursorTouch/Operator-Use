@@ -242,10 +242,12 @@ class Browser:
                 self._resolved_attach_ws_url = ws_url
                 return
             if not await self._is_port_responsive(port):
-                raise RuntimeError(
-                    f"attach_to_existing=True but nothing is listening on port {port}. "
-                    f"Launch your browser with --remote-debugging-port={port} first."
+                # No browser running — launch one with the debug port instead of failing.
+                logger.info(
+                    "No browser on port %d — launching with --remote-debugging-port=%d", port, port
                 )
+                self._process = self._launch_process()
+                await self._wait_for_browser(port=port, timeout=15.0)
             return
         if await self._is_port_responsive(port):
             if await self._is_correct_browser(port):
