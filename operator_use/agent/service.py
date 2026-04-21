@@ -16,7 +16,7 @@ from operator_use.agent.context.service import PromptMode
 from operator_use.agent.tools import ToolRegistry, BUILTIN_TOOLS
 from operator_use.bus import IncomingMessage
 from operator_use.providers.events import LLMEvent, LLMEventType, LLMStreamEventType, Thinking
-from operator_use.session import SessionStore, Session
+from operator_use.session import SessionManager, Session
 from operator_use.subagent.manager import SubagentManager
 from operator_use.process import ProcessManager
 from operator_use.agent.hooks import Hooks, HookEvent
@@ -54,7 +54,7 @@ class Agent:
         agent_id: str = "operator",
         description: str = "",
         workspace: Path | None = None,
-        sessions: SessionStore | None = None,
+        sessions: SessionManager | None = None,
         max_iterations: int = 100,
         userdata_dir: Path | None = None,
         cron: "Cron | None" = None,
@@ -79,7 +79,7 @@ class Agent:
 
             workspace = get_named_profile_dir("operator")
         self.workspace = workspace
-        self.sessions = sessions or SessionStore(workspace=self.workspace)
+        self.sessions = sessions or SessionManager(workspace=self.workspace)
         self.context = Context(workspace=self.workspace, mcp_servers=mcp_servers)
         self.tool_register = ToolRegistry()
         self.max_iterations = max_iterations

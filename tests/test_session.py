@@ -1,9 +1,9 @@
-"""Tests for Session and SessionStore."""
+"""Tests for Session and SessionManager."""
 
 from datetime import datetime
 
 from operator_use.session.views import Session
-from operator_use.session.service import SessionStore
+from operator_use.session.manager import SessionManager
 from operator_use.messages.service import HumanMessage, AIMessage
 
 
@@ -52,52 +52,52 @@ def test_session_message_order():
     assert history[1].content == "second"
 
 
-# --- SessionStore ---
+# --- SessionManager ---
 
 
 def test_session_id_sanitization(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     safe = store._session_id_to_filename("telegram:123:456")
     assert ":" not in safe
     assert safe == "telegram_123_456"
 
 
 def test_sessions_path(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     path = store._sessions_path("user:123")
     assert path.suffix == ".jsonl"
     assert ":" not in path.name
 
 
 def test_get_or_create_new(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create("my-session")
     assert session.id == "my-session"
     assert session.messages == []
 
 
 def test_get_or_create_returns_same_instance(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     s1 = store.get_or_create("abc")
     s2 = store.get_or_create("abc")
     assert s1 is s2
 
 
 def test_get_or_create_generates_id_when_none(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create(None)
     assert session.id is not None
     assert len(session.id) > 0
 
 
 def test_save_and_load_roundtrip(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create("roundtrip")
     session.add_message(HumanMessage(content="hello"))
     session.add_message(AIMessage(content="world"))
     store.save(session)
 
-    store2 = SessionStore(tmp_path)
+    store2 = SessionManager(tmp_path)
     loaded = store2.load("roundtrip")
     assert loaded is not None
     assert loaded.id == "roundtrip"
@@ -107,7 +107,7 @@ def test_save_and_load_roundtrip(tmp_path):
 
 
 def test_save_uses_date_folder(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create("dated-session")
     store.save(session)
 
@@ -117,13 +117,13 @@ def test_save_uses_date_folder(tmp_path):
 
 
 def test_load_nonexistent_returns_none(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     result = store.load("nonexistent-session")
     assert result is None
 
 
 def test_delete_removes_session(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create("del-me")
     store.save(session)
     result = store.delete("del-me")
@@ -132,12 +132,12 @@ def test_delete_removes_session(tmp_path):
 
 
 def test_delete_nonexistent_returns_false(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     assert store.delete("ghost") is False
 
 
 def test_list_sessions(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     for sid in ["s1", "s2", "s3"]:
         s = store.get_or_create(sid)
         store.save(s)
@@ -147,22 +147,22 @@ def test_list_sessions(tmp_path):
 
 
 def test_get_or_create_loads_from_disk(tmp_path):
-    store1 = SessionStore(tmp_path)
+    store1 = SessionManager(tmp_path)
     session = store1.get_or_create("persist")
     session.add_message(HumanMessage(content="persisted"))
     store1.save(session)
 
-    store2 = SessionStore(tmp_path)
+    store2 = SessionManager(tmp_path)
     loaded = store2.get_or_create("persist")
     assert len(loaded.messages) == 1
     assert loaded.messages[0].content == "persisted"
 
 
-# --- SessionStore.archive ---
+# --- SessionManager.archive ---
 
 
 def test_archive_renames_file(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create("telegram:99")
     session.add_message(HumanMessage(content="hi"))
     store.save(session)
@@ -178,7 +178,7 @@ def test_archive_renames_file(tmp_path):
 
 
 def test_archive_removes_from_memory_cache(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create("telegram:99")
     store.save(session)
     assert "telegram:99" in store._sessions
@@ -189,12 +189,12 @@ def test_archive_removes_from_memory_cache(tmp_path):
 
 
 def test_archive_nonexistent_returns_false(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     assert store.archive("ghost:000") is False
 
 
 def test_archive_allows_fresh_session_after(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create("telegram:99")
     session.add_message(HumanMessage(content="old message"))
     store.save(session)
@@ -206,7 +206,7 @@ def test_archive_allows_fresh_session_after(tmp_path):
 
 
 def test_archive_preserves_history_in_file(tmp_path):
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     session = store.get_or_create("slack:42")
     session.add_message(HumanMessage(content="saved message"))
     store.save(session)

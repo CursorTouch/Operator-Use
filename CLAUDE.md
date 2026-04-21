@@ -37,7 +37,7 @@ Channel
 | `providers/` | Adapters for 14+ LLMs (OpenAI, Anthropic, Google, Mistral, Groq, Ollama, Cerebras…) and STT/TTS providers. All implement `BaseChatLLM` / `BaseSTT` / `BaseTTS`. |
 | `computer/` | Desktop control via native accessibility APIs. **Windows:** Windows UI Automation (UIA) via `comtypes`/`pywin32`. **macOS:** Accessibility Framework via `pyobjc` (`ax/` module). **Linux:** WIP. Exposed as tools via plugins. |
 | `tools/` | Built-in tool implementations (filesystem, terminal, web search/browse). Auto-registered at startup. |
-| `session/` | Per-user conversation history (`SessionStore` → `Session`). Persisted as `.jsonl` files at `.operator_use/sessions/{channel}_{chat_id}.jsonl`. |
+| `session/` | Per-user conversation history (`SessionManager` → `Session`). Persisted as `.jsonl` files at `.operator_use/sessions/{channel}_{chat_id}.jsonl`. |
 | `config/` | Pydantic settings loaded from `.operator_use/config.json`, merged with `OPERATOR_` env vars. One config class per channel and provider. |
 | `messages/` | Core message models: `HumanMessage`, `AIMessage`, `ImageMessage`, `ToolMessage`. |
 | `plugins/` | Optional capability bundles (e.g. `computer_use`, `browser_use`). Each registers tools and hooks on an Agent at init time, and can be enabled/disabled at runtime. |

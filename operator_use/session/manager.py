@@ -1,4 +1,4 @@
-"""Session store service."""
+"""Session manager service."""
 
 import json
 import uuid
@@ -11,8 +11,8 @@ from operator_use.utils.helper import ensure_directory
 from operator_use.session.views import Session
 
 
-class SessionStore:
-    """Store for sessions, keyed by session id. Persists to JSONL files."""
+class SessionManager:
+    """Manager for sessions, keyed by session id. Persists to JSONL files."""
 
     def __init__(self, workspace: Path):
         self.workspace = Path(workspace)

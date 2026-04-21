@@ -15,9 +15,9 @@ from operator_use.orchestrator.commands import handle_command, COMMANDS, _HELP_T
 
 
 def make_agent(tmp_path):
-    from operator_use.session.service import SessionStore
+    from operator_use.session.manager import SessionManager
 
-    store = SessionStore(tmp_path)
+    store = SessionManager(tmp_path)
     agent = MagicMock()
     agent.sessions = store
     agent.gateway = None
