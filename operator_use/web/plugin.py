@@ -110,7 +110,10 @@ class BrowserPlugin(Plugin):
         from operator_use.web.browser.config import BrowserConfig
 
         if self.browser is None:
-            self.browser = Browser(config=BrowserConfig(use_system_profile=True))
+            self.browser = Browser(config=BrowserConfig(
+                use_system_profile=True,
+                headless=False  # Show browser window so you can see automation
+            ))
 
     # ------------------------------------------------------------------
     # Hook handlers

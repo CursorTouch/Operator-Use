@@ -48,7 +48,7 @@ class AgentLoop:
         name: Label used in log lines (e.g. ``"browser_task"``, agent id).
         before_call: async (messages, iteration) → messages.
             Inject state (browser/desktop) before each LLM call.
-        after_tool: async (tc, tr) → None.
+        after_tool: async (tool_call, tr) → None.
             Called after each tool execution (e.g. browser page recording).
         loop_guard: Optional LoopGuard for repetition/stagnation detection.
         hooks: Hooks object — fires BEFORE/AFTER_LLM_CALL and
@@ -192,31 +192,31 @@ class AgentLoop:
                 event = after_ctx.event
 
             thinking = event.thinking.content if event.thinking else None
-            thinking_sig = event.thinking.signature if event.thinking else None
+            thinking_signature = event.thinking.signature if event.thinking else None
 
             match event.type:
                 case LLMEventType.TOOL_CALL:
-                    tc = event.tool_call
+                    tool_call = event.tool_call
 
                     # BEFORE_TOOL_CALL (with skip/override support)
                     tool_result = None
                     if self.hooks:
                         pre_ctx = await self.hooks.emit(
                             HookEvent.BEFORE_TOOL_CALL,
-                            BeforeToolCallContext(session=session, tool_call=tc),
+                            BeforeToolCallContext(session=session, tool_call=tool_call),
                         )
                         if pre_ctx.skip:
                             tool_result = pre_ctx.result
 
                     if tool_result is None:
-                        tool_result = await self.registry.aexecute(tc.name, tc.params)
+                        tool_result = await self.registry.aexecute(tool_call.name, tool_call.params)
 
                     content = tool_result.output if tool_result.success else tool_result.error
 
                     if tool_result.success:
-                        logger.info("[%s] tool=%s -> %s", self.name, tc.name, (content or "")[:200])
+                        logger.info("[%s] tool=%s -> %s", self.name, tool_call.name, (content or "")[:200])
                     else:
-                        logger.warning("[%s] tool=%s ERROR: %s", self.name, tc.name, content)
+                        logger.warning("[%s] tool=%s ERROR: %s", self.name, tool_call.name, content)
 
                     # AFTER_TOOL_CALL
                     if self.hooks:
@@ -224,25 +224,25 @@ class AgentLoop:
                             HookEvent.AFTER_TOOL_CALL,
                             AfterToolCallContext(
                                 session=session,
-                                tool_call=tc,
+                                tool_call=tool_call,
                                 tool_result=tool_result,
                                 content=content,
                             ),
                         )
 
                     if self.loop_guard is not None:
-                        self.loop_guard.record_action(tc.name, tc.params, tool_result.success)
+                        self.loop_guard.record_action(tool_call.name, tool_call.params, tool_result.success)
 
                     if self.after_tool is not None:
-                        await self.after_tool(tc, tool_result)
+                        await self.after_tool(tool_call, tool_result)
 
                     tool_message = ToolMessage(
-                        id=tc.id,
-                        name=tc.name,
-                        params=tc.params,
+                        id=tool_call.id,
+                        name=tool_call.name,
+                        params=tool_call.params,
                         content=content,
                         thinking=thinking,
-                        thinking_signature=thinking_sig,
+                        thinking_signature=thinking_signature,
                     )
 
                     if self.accumulate_errors:
@@ -268,7 +268,7 @@ class AgentLoop:
                         self.name, text[:120], "..." if len(text) > 120 else "",
                     )
                     msg = AIMessage(
-                        content=text, thinking=thinking, thinking_signature=thinking_sig
+                        content=text, thinking=thinking, thinking_signature=thinking_signature
                     )
                     if session:
                         session.add_message(msg)
