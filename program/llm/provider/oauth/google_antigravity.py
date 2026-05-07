@@ -305,7 +305,7 @@ async def refresh_antigravity_token(credentials: OAuthCredentials) -> OAuthCrede
 class GoogleAntigravityOAuthProvider(OAuthProvider):
     @property
     def id(self) -> str:
-        return "google-antigravity"
+        return "antigravity"
 
     @property
     def name(self) -> str:
@@ -336,6 +336,11 @@ class GoogleAntigravityOAuthProvider(OAuthProvider):
 
     def get_api_key(self, credentials: OAuthCredentials) -> str:
         return credentials.access
+
+    @property
+    def api(self):
+        from program.llm.api.google_antigravity import GoogleAntigravityAPI
+        return GoogleAntigravityAPI
 
     async def validate(self, credentials: OAuthCredentials) -> bool:
         if self.is_expired(credentials):

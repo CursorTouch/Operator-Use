@@ -42,6 +42,10 @@ class OAuthProvider(ABC):
     @abstractmethod
     async def validate(self, credentials: OAuthCredentials) -> bool: ...
 
+    @property
+    @abstractmethod
+    def api(self) -> Type[BaseAPI]: ...
+
     def is_expired(self, credentials: OAuthCredentials) -> bool:
         return int(time.time() * 1000) + 30_000 >= credentials.expires
 

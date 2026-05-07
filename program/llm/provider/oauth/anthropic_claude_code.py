@@ -329,6 +329,11 @@ class AnthropicClaudeCodeOAuthProvider(OAuthProvider):
     def get_api_key(self, credentials: OAuthCredentials) -> str:
         return credentials.access
 
+    @property
+    def api(self):
+        from program.llm.api.anthropic_claude_code import AnthropicClaudeCodeAPI
+        return AnthropicClaudeCodeAPI
+
     async def validate(self, credentials: OAuthCredentials) -> bool:
         if self.is_expired(credentials):
             return False

@@ -1,29 +1,27 @@
 import asyncio
 import os
-from program.llm.provider.builtins import API_PROVIDERS
+from program.llm.service import LLM
 from program.llm.types import Options, DoneEvent, ErrorEvent, TextDeltaEvent
 from program.message.types import UserMessage, TextContent
 from dotenv import load_dotenv
 load_dotenv()
 
 async def main():
-    provider = next(p for p in API_PROVIDERS if p.name == "nvidia")
-
     api_key = os.environ.get("NVIDIA_API_KEY", "")
     if not api_key:
         api_key = input("Enter your NVIDIA API key: ").strip()
 
-    options = Options(
-        api_key=api_key,
-        base_url=provider.options.base_url,
+    model_id = "nvidia/llama-3.3-nemotron-super-49b-v1"
+    llm = LLM(
+        model_id=model_id,
+        provider="nvidia",
+        options=Options(api_key=api_key),
     )
-    api = provider.api(options)
 
     messages = [UserMessage(contents=[TextContent(content="Say hello in one sentence.")])]
 
-    model = "nvidia/llama-3.3-nemotron-super-49b-v1"
-    print(f"Streaming response from {model}:")
-    async for event in api.stream(messages, model=model):
+    print(f"Streaming response from {model_id}:")
+    async for event in llm.stream(messages):
         if isinstance(event, TextDeltaEvent):
             print(event.data.text, end="", flush=True)
         elif isinstance(event, DoneEvent):

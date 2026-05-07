@@ -9,7 +9,8 @@ class ProviderRegistry:
         self._providers: dict[str, Provider] = {}
 
     def register(self, provider: Provider) -> None:
-        self._providers[provider.name] = provider
+        key = provider.id if isinstance(provider, OAuthProvider) else provider.name
+        self._providers[key] = provider
 
     def unregister(self, name: str) -> None:
         self._providers.pop(name, None)

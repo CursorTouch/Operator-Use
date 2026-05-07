@@ -343,6 +343,11 @@ class OpenAICodexOAuthProvider(OAuthProvider):
     def get_api_key(self, credentials: OAuthCredentials) -> str:
         return credentials.access
 
+    @property
+    def api(self):
+        from program.llm.api.openai_codex_responses import OpenAICodexResponsesAPI
+        return OpenAICodexResponsesAPI
+
     async def validate(self, credentials: OAuthCredentials) -> bool:
         if self.is_expired(credentials):
             return False

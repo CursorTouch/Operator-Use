@@ -329,3 +329,8 @@ class GitHubCopilotOAuthProvider(OAuthProvider):
             except Exception:
                 return False
         return True
+
+    @property
+    def api(self):
+        from program.llm.api.github_copilot_chat import GitHubCopilotChatAPI
+        return GitHubCopilotChatAPI
