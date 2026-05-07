@@ -1,0 +1,194 @@
+from __future__ import annotations
+import json
+from collections.abc import AsyncIterator
+from typing import Any
+from google import genai
+from google.genai import types as genai_types
+from program.llm.api.base import BaseAPI
+from program.llm.types import (
+    LLMEvent, Options, StopReason, ThinkingLevel,
+    StartEvent, DoneEvent, ErrorEvent,
+    TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
+    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
+)
+from program.message.types import (
+    BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
+    TextContent, ImageContent, ThinkingContent, ToolCallContent,
+)
+
+_STOP_REASON: dict[str, StopReason] = {
+    "STOP": StopReason.Stop,
+    "MAX_TOKENS": StopReason.Length,
+    "SAFETY": StopReason.ContentFilter,
+    "RECITATION": StopReason.ContentFilter,
+}
+
+_THINKING_BUDGET: dict[ThinkingLevel, int] = {
+    ThinkingLevel.Minimal: 512,
+    ThinkingLevel.Low: 1024,
+    ThinkingLevel.Medium: 4096,
+    ThinkingLevel.High: 8192,
+    ThinkingLevel.XHigh: 16384,
+    ThinkingLevel.Max: 32768,
+}
+
+
+def _messages_to_gemini(
+    messages: list[BaseMessage],
+) -> tuple[str | None, list[genai_types.Content]]:
+    system: str | None = None
+    contents: list[genai_types.Content] = []
+
+    for msg in messages:
+        if isinstance(msg, SystemMessage):
+            system = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
+        elif isinstance(msg, UserMessage):
+            parts: list[genai_types.Part] = []
+            for item in msg.contents:
+                if isinstance(item, TextContent):
+                    parts.append(genai_types.Part(text=item.content))
+                elif isinstance(item, ImageContent):
+                    for b64 in item.to_base64():
+                        parts.append(genai_types.Part(
+                            inline_data=genai_types.Blob(mime_type="image/png", data=b64),
+                        ))
+            if parts:
+                contents.append(genai_types.Content(role="user", parts=parts))
+        elif isinstance(msg, AssistantMessage):
+            parts = []
+            for item in msg.contents:
+                if isinstance(item, TextContent):
+                    parts.append(genai_types.Part(text=item.content))
+                elif isinstance(item, ToolCallContent):
+                    parts.append(genai_types.Part(
+                        function_call=genai_types.FunctionCall(
+                            name=item.name,
+                            args=item.args,
+                        ),
+                    ))
+            if parts:
+                contents.append(genai_types.Content(role="model", parts=parts))
+        elif isinstance(msg, ToolMessage):
+            text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
+            parts = [genai_types.Part(
+                function_response=genai_types.FunctionResponse(
+                    name=msg.id,
+                    response={"result": text},
+                ),
+            )]
+            contents.append(genai_types.Content(role="user", parts=parts))
+
+    return system, contents
+
+
+class GeminiGenerateAPI(BaseAPI):
+    def __init__(self, options: Options) -> None:
+        super().__init__(options)
+        self._client = genai.Client(api_key=options.api_key)
+
+    def _build_config(self) -> genai_types.GenerateContentConfig:
+        params: dict[str, Any] = {
+            "temperature": self.options.temperature,
+        }
+        if self.options.max_tokens is not None:
+            params["max_output_tokens"] = self.options.max_tokens
+
+        budget = self.options.thinking_budget
+        if budget is None and self.options.thinking_level is not None:
+            budget = _THINKING_BUDGET.get(self.options.thinking_level)
+        if budget is not None:
+            params["thinking_config"] = genai_types.ThinkingConfig(
+                thinking_budget=budget,
+                include_thoughts=True,
+            )
+
+        return genai_types.GenerateContentConfig(**params)
+
+    async def stream(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        system, contents = _messages_to_gemini(messages)
+        config = self._build_config()
+        if system:
+            config.system_instruction = system
+
+        text_index = 0
+        thinking_index = 0
+        tool_index = 0
+        text_started = False
+        thinking_started = False
+        text_buf = ""
+        thinking_buf = ""
+
+        yield StartEvent()
+
+        try:
+            async for chunk in await self._client.aio.models.generate_content_stream(
+                model=model,
+                contents=contents,
+                config=config,
+            ):
+                if not chunk.candidates:
+                    continue
+
+                candidate = chunk.candidates[0]
+                if candidate.content and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        if getattr(part, "thought", False) and part.text:
+                            if not thinking_started:
+                                yield ThinkingStartEvent(data=ThinkingEventData(index=thinking_index))
+                                thinking_started = True
+                            thinking_buf += part.text
+                            yield ThinkingDeltaEvent(data=ThinkingEventData(index=thinking_index, thinking=part.text))
+                        elif part.text:
+                            if thinking_started:
+                                yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+                                thinking_started = False
+                                thinking_index += 1
+                                thinking_buf = ""
+                            if not text_started:
+                                yield TextStartEvent(data=TextEventData(index=text_index))
+                                text_started = True
+                            text_buf += part.text
+                            yield TextDeltaEvent(data=TextEventData(index=text_index, text=part.text))
+                        elif part.function_call:
+                            fc = part.function_call
+                            tool_id = fc.name
+                            args_str = json.dumps(dict(fc.args)) if fc.args else ""
+                            yield ToolCallStartEvent(data=ToolCallEventData(
+                                index=tool_index, id=tool_id, name=fc.name,
+                            ))
+                            yield ToolCallDeltaEvent(data=ToolCallEventData(
+                                index=tool_index, id=tool_id, args=args_str,
+                            ))
+                            yield ToolCallEndEvent(data=ToolCallEventData(
+                                index=tool_index, id=tool_id, name=fc.name, args=args_str,
+                            ))
+                            tool_index += 1
+
+                finish_reason = getattr(candidate, "finish_reason", None)
+                if finish_reason and str(finish_reason) not in ("", "FINISH_REASON_UNSPECIFIED"):
+                    if thinking_started:
+                        yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+                        thinking_index += 1
+                    if text_started:
+                        yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
+                        text_index += 1
+                    reason_str = finish_reason.name if hasattr(finish_reason, "name") else str(finish_reason)
+                    yield DoneEvent(reason=_STOP_REASON.get(reason_str, StopReason.Stop))
+                    return
+
+        except Exception as exc:
+            yield ErrorEvent(reason=StopReason.Abort, message=str(exc))
+            return
+
+        if thinking_started:
+            yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+        if text_started:
+            yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
+        yield DoneEvent(reason=StopReason.Stop)
+
+    async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash") -> list[LLMEvent]:
+        events: list[LLMEvent] = []
+        async for event in self.stream(messages, model=model):
+            events.append(event)
+        return events

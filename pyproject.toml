@@ -1,0 +1,17 @@
+[project]
+name = "program"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=0.100.0",
+    "google-genai>=1.75.0",
+    "httpx>=0.28.1",
+    "mistralai>=2.4.4",
+    "ollama>=0.6.2",
+    "openai>=2.35.1",
+    "pillow>=12.2.0",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
+]
