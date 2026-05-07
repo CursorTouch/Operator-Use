@@ -9,7 +9,7 @@ import asyncio
 if TYPE_CHECKING:
     from program.llm.service import LLM
     from program.llm.types import ThinkingLevel
-    from program.tool.types import Tool, ExecutionMode
+    from program.tool.types import Tool, ToolExecutionMode
 
 from program.message.types import BaseMessage, ToolCallContent
 from program.tool.types import ToolInvocation, ToolResult
@@ -39,20 +39,21 @@ TransformContextCallback = Callable[[list[BaseMessage], Optional[AbortSignal]], 
 class AgentState:
     system_prompt: Optional[str] = None
     messages: list[BaseMessage] = field(default_factory=list)
-    pending_messages: deque[BaseMessage] = field(default_factory=deque)
     pending_tool_calls: list[ToolCallContent] = field(default_factory=list)
     is_streaming: bool = False
     llm: Optional[LLM] = None
     thinking_level: Optional[ThinkingLevel] = None
     error_message: Optional[str] = None
     tools: list[Tool] = field(default_factory=list)
+    follow_up_queue: Optional[FollowupQueue] = None
+    steering_queue: Optional[SteeringQueue] = None
 
 
 @dataclass
 class Options:
     after_tool_call: Optional[AfterToolCallCallback] = None
     before_tool_call: Optional[BeforeToolCallCallback] = None
-    execution_mode: Optional[ExecutionMode] = None
+    execution_mode: Optional[ToolExecutionMode] = None
     steering_mode: SteeringMode = SteeringMode.OneAtATime
     followup_mode: FollowupMode = FollowupMode.OneAtATime
     get_follow_up_messages: Optional[GetFollowUpMessagesCallback] = None
@@ -65,6 +66,25 @@ class Options:
 class FollowupQueue:
     mode: FollowupMode
     queue: Queue[BaseMessage] = field(default_factory=Queue)
+
+    def clear(self):
+        self.queue = Queue()
+
+    async def add(self, message: BaseMessage):
+        await self.queue.put(message)
+    
+    def is_empty(self) -> bool:
+        return self.queue.empty()
+
+    async def drain(self) -> list[BaseMessage]:
+        messages = []
+        if self.mode == FollowupMode.OneAtATime:
+            if not self.is_empty():
+                messages.append(await self.queue.get())
+        else:
+            while not self.is_empty():
+                messages.append(await self.queue.get())
+        return messages
 
 
 @dataclass
