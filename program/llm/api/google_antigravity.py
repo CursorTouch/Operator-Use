@@ -14,6 +14,7 @@ from typing import Any, Optional
 import httpx
 
 from program.llm.api.base import BaseAPI
+from program.llm.api.types import APIResponse
 from program.llm.types import (
     LLMEvent, Options, StopReason,
     StartEvent, DoneEvent, ErrorEvent,
@@ -231,7 +232,7 @@ class GoogleAntigravityAPI(BaseAPI):
                     content=json.dumps(body),
                 ) as response:
                     if self.options.on_response:
-                        self.options.on_response(response.status_code, dict(response.headers))
+                        self.options.on_response(APIResponse(response.status_code, dict(response.headers)))
 
                     if not response.is_success:
                         error_body = (await response.aread()).decode(errors="replace")

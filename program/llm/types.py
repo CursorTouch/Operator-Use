@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from typing import Any, Callable, Optional
+from program.llm.api.types import APIResponse
 import asyncio
 
 
@@ -28,9 +29,10 @@ class ThinkingLevel(str, Enum):
     Max = "max"
 
 
+
 AbortSignal = asyncio.Event
 PayloadCallback = Callable[[dict[str, Any]], Optional[dict[str, Any]]]
-ResponseCallback = Callable[[int, dict[str, str]], None]
+ResponseCallback = Callable[[APIResponse], None]
 
 
 @dataclass

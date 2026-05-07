@@ -11,6 +11,7 @@ import websockets
 import websockets.asyncio.client
 
 from program.llm.api.base import BaseAPI
+from program.llm.api.types import APIResponse
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, DoneEvent, ErrorEvent,
@@ -328,7 +329,7 @@ class OpenAICodexResponsesAPI(BaseAPI):
                     "POST", self._http_url, content=body_bytes, headers=headers,
                 ) as response:
                     if self.options.on_response:
-                        self.options.on_response(response.status_code, dict(response.headers))
+                        self.options.on_response(APIResponse(response.status_code, dict(response.headers)))
 
                     if not response.is_success:
                         text = (await response.aread()).decode(errors="replace")
