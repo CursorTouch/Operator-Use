@@ -1,4 +1,5 @@
 from __future__ import annotations
+from asyncio import Queue
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
@@ -58,6 +59,18 @@ class Options:
     get_steering_messages: Optional[GetSteeringMessagesCallback] = None
     should_stop_after_turn: Optional[ShouldStopAfterTurnCallback] = None
     transform_context: Optional[TransformContextCallback] = None
+
+
+@dataclass
+class FollowupQueue:
+    mode: FollowupMode
+    queue: Queue[BaseMessage] = field(default_factory=Queue)
+
+
+@dataclass
+class SteeringQueue:
+    mode: SteeringMode
+    queue: Queue[BaseMessage] = field(default_factory=Queue)
 
 
 # Agent lifecycle

@@ -15,6 +15,8 @@ from program.agent.types import (
     ExecutionMode,
     SteeringMode,
     FollowupMode,
+    FollowupQueue,
+    SteeringQueue,
 )
 from program.agent.service import Agent
 
@@ -36,4 +38,6 @@ __all__ = [
     "ExecutionMode",
     "SteeringMode",
     "FollowupMode",
+    "FollowupQueue",
+    "SteeringQueue",
 ]

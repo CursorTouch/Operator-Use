@@ -6,7 +6,13 @@ if TYPE_CHECKING:
     from program.llm.service import LLM
     from program.tool.types import Tool
 
-from program.agent.types import AgentState, Options, AgentEvent
+from program.agent.types import (
+    AgentState,
+    Options,
+    AgentEvent,
+    FollowupQueue,
+    SteeringQueue,
+)
 from program.message.types import BaseMessage
 
 
@@ -27,3 +33,5 @@ class Agent:
             tools=tools,
             system_prompt=system_prompt,
         )
+        self.follow_up_queue = FollowupQueue(mode=self.options.followup_mode)
+        self.steering_queue = SteeringQueue(mode=self.options.steering_mode)
