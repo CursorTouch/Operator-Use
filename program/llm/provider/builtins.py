@@ -4,36 +4,36 @@ from program.llm.api.anthropic_messages import AnthropicMessagesAPI
 from program.llm.api.gemini_generate import GeminiGenerateAPI
 from program.llm.api.mistral_chat import MistralChatAPI
 from program.llm.api.ollama_chat import OllamaChatAPI
-from program.llm.provider.types import Provider
+from program.llm.provider.types import APIProvider
 from program.llm.types import Options
 
-PROVIDERS: list[Provider] = [
-    Provider(
+PROVIDERS: list[APIProvider] = [
+    APIProvider(
         name="openai",
         api=OpenAIResponsesAPI,
         options=Options(),
     ),
-    Provider(
+    APIProvider(
         name="anthropic",
         api=AnthropicMessagesAPI,
         options=Options(),
     ),
-    Provider(
+    APIProvider(
         name="google",
         api=GeminiGenerateAPI,
         options=Options(),
     ),
-    Provider(
+    APIProvider(
         name="nvidia",
         api=OpenAICompletionsAPI,
         options=Options(base_url="https://integrate.api.nvidia.com/v1"),
     ),
-    Provider(
+    APIProvider(
         name="mistral",
         api=MistralChatAPI,
         options=Options(),
     ),
-    Provider(
+    APIProvider(
         name="ollama",
         api=OllamaChatAPI,
         options=Options(base_url="http://localhost:11434"),

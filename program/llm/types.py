@@ -40,7 +40,6 @@ class Options:
     thinking_level: Optional[ThinkingLevel] = None
     thinking_budget: Optional[int] = None
     signal: Optional[asyncio.Event] = None
-    auth_type: AuthType = AuthType.ApiKey
 
 
 @dataclass

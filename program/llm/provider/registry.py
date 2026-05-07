@@ -1,5 +1,7 @@
 from __future__ import annotations
-from program.llm.provider.types import Provider
+from program.llm.provider.types import APIProvider, OAuthProvider
+
+Provider = APIProvider | OAuthProvider
 
 
 class ProviderRegistry:
