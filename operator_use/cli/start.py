@@ -15,6 +15,11 @@ if TYPE_CHECKING:
 
 load_dotenv()
 
+from operator_use.config.paths import get_auth_file
+from operator_use.auth import AuthStore
+
+AuthStore(get_auth_file()).inject_env()
+
 logger = logging.getLogger(__name__)
 
 _console = Console()

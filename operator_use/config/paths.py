@@ -14,6 +14,11 @@ def get_config_file() -> Path:
     return get_userdata_dir() / _CONFIG_FILE_NAME
 
 
+def get_auth_file() -> Path:
+    """Return the credential store path: ~/.operator-use/auth.json"""
+    return get_userdata_dir() / "auth.json"
+
+
 def get_profiles_dir() -> Path:
     """Return the multi-agent profiles directory: ~/.operator-use/profiles"""
     return get_userdata_dir() / "profiles"

@@ -8,6 +8,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from operator_use.config.paths import get_auth_file
+from operator_use.auth import AuthStore
+
+AuthStore(get_auth_file()).inject_env()
 from operator_use.cli.tui import (
     BackRequest,
     NavigateBack,
@@ -539,28 +544,14 @@ def _save_config(
             config_obj.model_dump(by_alias=True, exclude_none=True), f, indent=4, ensure_ascii=False
         )
 
-    key_to_env = {
-        "groq": "GROQ_API_KEY",
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-        "google": "GEMINI_API_KEY",
-        "nvidia": "NVIDIA_API_KEY",
-        "deepseek": "DEEPSEEK_API_KEY",
-        "xai": "XAI_API_KEY",
-        "cerebras": "CEREBRAS_API_KEY",
-        "open_router": "OPENROUTER_API_KEY",
-        "elevenlabs": "ELEVENLABS_API_KEY",
-        "deepgram": "DEEPGRAM_API_KEY",
-        "mistral": "MISTRAL_API_KEY",
-        "azure_openai": "AZURE_OPENAI_API_KEY",
-        "sarvam": "SARVAM_API_KEY",
-    }
-    env_vars = {key_to_env[k]: v for k, v in api_keys_dict.items() if k in key_to_env}
-    if env_vars:
-        with open(".env", "a") as f:
-            f.write("\n")
-            for k, v in env_vars.items():
-                f.write(f"{k}={v}\n")
+    from operator_use.config.paths import get_auth_file
+    from operator_use.auth import AuthStore
+    from operator_use.auth.service import PROVIDER_ENV_MAP
+
+    auth = AuthStore(get_auth_file())
+    for provider, key in api_keys_dict.items():
+        if key and provider in PROVIDER_ENV_MAP:
+            auth.set_key(provider, key)
 
     # Write IDENTITY.md for each agent profile
     from operator_use.cli.start import write_identity_md, _resolve_agent_profile
