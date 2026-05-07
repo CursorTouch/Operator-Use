@@ -16,14 +16,7 @@ from program.message.types import (
     TextContent, ImageContent, ThinkingContent, ToolCallContent,
 )
 
-_THINK_LEVEL: dict[ThinkingLevel, str] = {
-    ThinkingLevel.Low: "low",
-    ThinkingLevel.Minimal: "low",
-    ThinkingLevel.Medium: "medium",
-    ThinkingLevel.High: "high",
-    ThinkingLevel.XHigh: "high",
-    ThinkingLevel.Max: "high",
-}
+_MINIMAL_LEVELS = {ThinkingLevel.Low, ThinkingLevel.Minimal}
 
 _STOP_REASON: dict[str, StopReason] = {
     "stop": StopReason.Stop,
@@ -96,9 +89,9 @@ class OllamaChatAPI(BaseAPI):
     async def stream(self, messages: list[BaseMessage], model: str = "llama3.2") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         ollama_messages = _messages_to_ollama(messages)
 
-        think: str | bool | None = None
+        think: bool | None = None
         if self.options.thinking_level is not None:
-            think = _THINK_LEVEL[self.options.thinking_level]
+            think = self.options.thinking_level not in _MINIMAL_LEVELS
 
         text_started = False
         text_buf = ""
