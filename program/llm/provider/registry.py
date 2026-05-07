@@ -20,3 +20,6 @@ class ProviderRegistry:
 
     def get(self, name: str) -> Provider | None:
         return self._providers.get(name)
+
+    def reset(self) -> None:
+        self._providers.clear()

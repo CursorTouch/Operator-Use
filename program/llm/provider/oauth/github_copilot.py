@@ -23,6 +23,7 @@ from typing import Optional
 
 import certifi
 
+from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
 from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
 
@@ -295,18 +296,11 @@ async def refresh_github_copilot_token(credentials: OAuthCredentials, enterprise
     )
 
 
+@dataclass
 class GitHubCopilotOAuthProvider(OAuthProvider):
-    @property
-    def id(self) -> str:
-        return "github-copilot"
-
-    @property
-    def name(self) -> str:
-        return "GitHub Copilot"
-
-    @property
-    def uses_callback_server(self) -> bool:
-        return False
+    id: str = "github-copilot"
+    name: str = "GitHub Copilot"
+    uses_callback_server: bool = False
 
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
         return await login_github_copilot(callbacks)

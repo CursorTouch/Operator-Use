@@ -18,3 +18,6 @@ class APIRegistry:
 
     def get(self, name: str) -> Type[BaseAPI] | None:
         return self._apis.get(name)
+
+    def reset(self) -> None:
+        self._apis.clear()

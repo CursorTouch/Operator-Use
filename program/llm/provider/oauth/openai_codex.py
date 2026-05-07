@@ -21,6 +21,7 @@ import certifi
 
 _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
+from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
 from program.llm.provider.oauth.pkce import generate_pkce
 from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
@@ -318,18 +319,11 @@ async def refresh_openai_codex_token(credentials: OAuthCredentials) -> OAuthCred
     return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
 
 
+@dataclass
 class OpenAICodexOAuthProvider(OAuthProvider):
-    @property
-    def id(self) -> str:
-        return "openai-codex"
-
-    @property
-    def name(self) -> str:
-        return "ChatGPT Plus/Pro (Codex Subscription)"
-
-    @property
-    def uses_callback_server(self) -> bool:
-        return True
+    id: str = "openai-codex"
+    name: str = "ChatGPT Plus/Pro (Codex Subscription)"
+    uses_callback_server: bool = True
 
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
         return await login_openai_codex(callbacks)

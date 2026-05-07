@@ -18,6 +18,7 @@ from typing import Optional
 
 import certifi
 
+from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
 from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
 
@@ -302,18 +303,11 @@ async def refresh_antigravity_token(credentials: OAuthCredentials) -> OAuthCrede
     return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
 
 
+@dataclass
 class GoogleAntigravityOAuthProvider(OAuthProvider):
-    @property
-    def id(self) -> str:
-        return "antigravity"
-
-    @property
-    def name(self) -> str:
-        return "Google Antigravity"
-
-    @property
-    def uses_callback_server(self) -> bool:
-        return True
+    id: str = "antigravity"
+    name: str = "Google Antigravity"
+    uses_callback_server: bool = True
 
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
         return await login_antigravity(callbacks)

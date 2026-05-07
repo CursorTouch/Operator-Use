@@ -17,3 +17,6 @@ class ModelRegistry:
 
     def get(self, model_id: str) -> Model | None:
         return self._models.get(model_id)
+
+    def reset(self) -> None:
+        self._models.clear()

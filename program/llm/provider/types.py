@@ -12,20 +12,16 @@ from program.llm.types import AuthType, Options
 __all__ = ["AuthType", "APIProvider", "OAuthProvider"]
 
 
+@dataclass
 class OAuthProvider(ABC):
+    id: str
+    name: str
     auth_type: AuthType = AuthType.OAuth
+    uses_callback_server: bool = False
 
     @property
     @abstractmethod
-    def id(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def name(self) -> str: ...
-
-    @property
-    def uses_callback_server(self) -> bool:
-        return False
+    def api(self) -> Type[BaseAPI]: ...
 
     @abstractmethod
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials: ...
@@ -41,10 +37,6 @@ class OAuthProvider(ABC):
 
     @abstractmethod
     async def validate(self, credentials: OAuthCredentials) -> bool: ...
-
-    @property
-    @abstractmethod
-    def api(self) -> Type[BaseAPI]: ...
 
     def is_expired(self, credentials: OAuthCredentials) -> bool:
         return int(time.time() * 1000) + 30_000 >= credentials.expires

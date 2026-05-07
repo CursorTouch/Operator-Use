@@ -18,6 +18,7 @@ from typing import Optional
 
 import certifi
 
+from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
 from program.llm.provider.oauth.pkce import generate_pkce
 from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
@@ -303,18 +304,11 @@ async def refresh_anthropic_token(credentials: OAuthCredentials) -> OAuthCredent
     return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
 
 
+@dataclass
 class AnthropicClaudeCodeOAuthProvider(OAuthProvider):
-    @property
-    def id(self) -> str:
-        return "anthropic-claude-code"
-
-    @property
-    def name(self) -> str:
-        return "Anthropic (Claude Pro/Max)"
-
-    @property
-    def uses_callback_server(self) -> bool:
-        return True
+    id: str = "anthropic-claude-code"
+    name: str = "Anthropic (Claude Pro/Max)"
+    uses_callback_server: bool = True
 
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
         return await login_anthropic(callbacks)

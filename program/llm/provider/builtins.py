@@ -1,13 +1,9 @@
 from program.llm.api.openai_responses import OpenAIResponsesAPI
 from program.llm.api.openai_completions import OpenAICompletionsAPI
-from program.llm.api.openai_codex_responses import OpenAICodexResponsesAPI
 from program.llm.api.anthropic_messages import AnthropicMessagesAPI
-from program.llm.api.anthropic_claude_code import AnthropicClaudeCodeAPI
-from program.llm.api.github_copilot_chat import GitHubCopilotChatAPI
 from program.llm.api.gemini_generate import GeminiGenerateAPI
 from program.llm.api.mistral_chat import MistralChatAPI
 from program.llm.api.ollama_chat import OllamaChatAPI
-from program.llm.api.google_antigravity import GoogleAntigravityAPI
 from program.llm.provider.oauth.openai_codex import OpenAICodexOAuthProvider
 from program.llm.provider.oauth.anthropic_claude_code import AnthropicClaudeCodeOAuthProvider
 from program.llm.provider.oauth.github_copilot import GitHubCopilotOAuthProvider
@@ -22,23 +18,8 @@ API_PROVIDERS: list[APIProvider] = [
         options=Options(),
     ),
     APIProvider(
-        name="openai-codex",
-        api=OpenAICodexResponsesAPI,
-        options=Options(),
-    ),
-    APIProvider(
         name="anthropic",
         api=AnthropicMessagesAPI,
-        options=Options(),
-    ),
-    APIProvider(
-        name="anthropic-claude-code",
-        api=AnthropicClaudeCodeAPI,
-        options=Options(),
-    ),
-    APIProvider(
-        name="github-copilot",
-        api=GitHubCopilotChatAPI,
         options=Options(),
     ),
     APIProvider(
@@ -60,11 +41,6 @@ API_PROVIDERS: list[APIProvider] = [
         name="ollama",
         api=OllamaChatAPI,
         options=Options(base_url="http://localhost:11434"),
-    ),
-    APIProvider(
-        name="antigravity",
-        api=GoogleAntigravityAPI,
-        options=Options(),
     ),
 ]
 
