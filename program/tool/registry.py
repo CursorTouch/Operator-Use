@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import Any
 from program.tool.types import Tool, ToolInvocation, ToolResult
+from typing import Any
 
 
 class ToolRegistry:
@@ -19,17 +19,19 @@ class ToolRegistry:
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
-    async def execute(self, name: str, args: dict[str, Any]) -> ToolResult:
+    async def execute(self, name: str, params: dict[str, Any]) -> ToolResult:
         tool = self.get(name)
         if tool is None:
-            return ToolResult(content=f"Tool '{name}' not found.", is_error=True)
+            return ToolResult.error(content=f"Tool '{name}' not found.")
 
-        ok, errors = tool.validate(args)
-        if not ok:
-            return ToolResult(content="\n".join(errors), is_error=True)
+        is_valid, errors = tool.validate(params=params)
+        if not is_valid:
+            content = f"Invalid parameters:\n{chr(10).join(errors)}"
+            return ToolResult.error(content=content)
 
         try:
-            invocation = ToolInvocation(params=args)
-            return await tool.execute(invocation)
+            invocation = ToolInvocation(params=params)
+            return await tool.execute(invocation=invocation)
         except Exception as e:
-            return ToolResult(content=str(e), is_error=True)
+            content = f"Tool '{name}' execution failed:\nError:\n{str(e)}"
+            return ToolResult.error(content=content)

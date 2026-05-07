@@ -5,7 +5,7 @@ from program.llm.model.builtins import MODELS
 from program.llm.model.registry import ModelRegistry
 from program.llm.api.builtins import APIS
 from program.llm.api.registry import APIRegistry
-from program.llm.provider.builtins import API_PROVIDERS, OAUTH_PROVIDERS
+from program.llm.provider.builtins import PROVIDERS
 from program.llm.provider.registry import ProviderRegistry
 from program.llm.provider.types import APIProvider, OAuthProvider
 from program.llm.provider.oauth.store import load_credentials, save_credentials
@@ -92,10 +92,7 @@ class LLM:
 for _name, _api in APIS:
     LLM._apis.register(_name, _api)
 
-for _provider in API_PROVIDERS:
-    LLM._providers.register(_provider)
-
-for _provider in OAUTH_PROVIDERS:
+for _provider in PROVIDERS:
     LLM._providers.register(_provider)
 
 for _model in MODELS:

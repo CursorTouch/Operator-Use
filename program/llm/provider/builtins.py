@@ -74,3 +74,5 @@ OAUTH_PROVIDERS: list[OAuthProvider] = [
     GitHubCopilotOAuthProvider(),
     GoogleAntigravityOAuthProvider(),
 ]
+
+PROVIDERS = API_PROVIDERS + OAUTH_PROVIDERS

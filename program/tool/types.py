@@ -25,6 +25,22 @@ class ToolResult:
     is_error: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def ok(
+        cls,
+        content: Any = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ToolResult:
+        return cls(content=content, is_error=False, metadata=metadata or {})
+
+    @classmethod
+    def error(
+        cls,
+        content: Any = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ToolResult:
+        return cls(content=content, is_error=True, metadata=metadata or {})
+
 
 class Tool(ABC):
     def __init__(
