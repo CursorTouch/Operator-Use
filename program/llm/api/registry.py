@@ -21,3 +21,11 @@ class APIRegistry:
 
     def reset(self) -> None:
         self._apis.clear()
+
+    @classmethod
+    def from_builtins(cls) -> APIRegistry:
+        from program.llm.api.builtins import APIS
+        instance = cls()
+        for name, api in APIS:
+            instance.register(name, api)
+        return instance

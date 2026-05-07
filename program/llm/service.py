@@ -1,11 +1,8 @@
 from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import fields
-from program.llm.model.builtins import MODELS
 from program.llm.model.registry import ModelRegistry
-from program.llm.api.builtins import APIS
 from program.llm.api.registry import APIRegistry
-from program.llm.provider.builtins import PROVIDERS
 from program.llm.provider.registry import ProviderRegistry
 from program.llm.provider.types import APIProvider, OAuthProvider
 from program.llm.provider.oauth.store import load_credentials, save_credentials
@@ -14,9 +11,9 @@ from program.message.types import BaseMessage
 
 
 class LLM:
-    _apis = APIRegistry()
-    _models = ModelRegistry()
-    _providers = ProviderRegistry()
+    _apis = APIRegistry.from_builtins()
+    _models = ModelRegistry.from_builtins()
+    _providers = ProviderRegistry.from_builtins()
 
     def __init__(
         self,
@@ -89,11 +86,3 @@ class LLM:
         return await self.api.invoke(messages, model=self.model.id)
 
 
-for _name, _api in APIS:
-    LLM._apis.register(_name, _api)
-
-for _provider in PROVIDERS:
-    LLM._providers.register(_provider)
-
-for _model in MODELS:
-    LLM._models.register(_model)

@@ -23,3 +23,11 @@ class ProviderRegistry:
 
     def reset(self) -> None:
         self._providers.clear()
+
+    @classmethod
+    def from_builtins(cls) -> ProviderRegistry:
+        from program.llm.provider.builtins import PROVIDERS
+        instance = cls()
+        for provider in PROVIDERS:
+            instance.register(provider)
+        return instance

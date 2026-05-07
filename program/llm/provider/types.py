@@ -3,11 +3,13 @@ from __future__ import annotations
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Type, Union
+from typing import Optional, Type, Union, TYPE_CHECKING
 
 from program.llm.api.base import BaseAPI
-from program.llm.provider.oauth.types import OAuthCredentials, OAuthLoginCallbacks
 from program.llm.types import AuthType, Options
+
+if TYPE_CHECKING:
+    from program.llm.provider.oauth.types import OAuthCredentials, OAuthLoginCallbacks
 
 __all__ = ["AuthType", "APIProvider", "OAuthProvider"]
 
