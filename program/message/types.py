@@ -2,8 +2,11 @@ from __future__ import annotations
 import base64
 import io
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Optional, TYPE_CHECKING
 from PIL import Image
+
+if TYPE_CHECKING:
+    from program.llm.types import StopReason
 
 
 @dataclass
@@ -85,6 +88,7 @@ class UserMessage(BaseMessage):
 class AssistantMessage(BaseMessage):
     role: Literal["assistant"] = field(default="assistant", init=False)
     usage: Usage = field(default_factory=Usage)
+    stop_reason: Optional[StopReason] = None
 
 
 @dataclass
