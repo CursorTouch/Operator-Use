@@ -132,6 +132,9 @@ class MistralChatAPI(BaseAPI):
 
             async with await self._client.chat.stream_async(**kwargs) as stream:
                 async for event in stream:
+                    if self._cancelled():
+                        yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                        return
                     chunk = event.data
                     if not chunk.choices:
                         continue

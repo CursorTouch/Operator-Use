@@ -108,6 +108,9 @@ class OllamaChatAPI(BaseAPI):
                 think=think,
                 options=self._inference_options(),
             ):
+                if self._cancelled():
+                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    return
                 msg = chunk.message
 
                 if msg.thinking:

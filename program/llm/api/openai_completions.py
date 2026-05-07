@@ -128,6 +128,9 @@ class OpenAICompletionsAPI(BaseAPI):
 
         async with self._client.chat.completions.stream(**params) as stream:
             async for chunk in stream:
+                if self._cancelled():
+                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    return
                 choice = chunk.choices[0] if chunk.choices else None
                 if choice is None:
                     continue

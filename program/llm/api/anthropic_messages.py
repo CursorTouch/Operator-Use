@@ -113,6 +113,9 @@ class AnthropicMessagesAPI(BaseAPI):
 
         async with self._client.messages.stream(**params) as stream:
             async for event in stream:
+                if self._cancelled():
+                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    return
                 etype = event.type
 
                 if etype == "content_block_start":

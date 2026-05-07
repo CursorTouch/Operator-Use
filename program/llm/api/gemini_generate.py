@@ -127,6 +127,9 @@ class GeminiGenerateAPI(BaseAPI):
                 contents=contents,
                 config=config,
             ):
+                if self._cancelled():
+                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    return
                 if not chunk.candidates:
                     continue
 

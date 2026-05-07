@@ -382,10 +382,16 @@ class OpenAICodexResponsesAPI(BaseAPI):
             ws_headers = _build_headers(token, account_id, websocket=True)
             async for event in self._stream_ws(body, ws_headers):
                 yield event
+                if self._cancelled():
+                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    return
         except Exception:
             sse_headers = _build_headers(token, account_id, websocket=False)
             async for event in self._stream_sse(body, sse_headers):
                 yield event
+                if self._cancelled():
+                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    return
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o") -> list[LLMEvent]:
         events: list[LLMEvent] = []

@@ -151,6 +151,9 @@ class GoogleAntigravityAPI(BaseAPI):
                     response.raise_for_status()
 
                     async for line in response.aiter_lines():
+                        if self._cancelled():
+                            yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                            return
                         if not line.startswith("data: "):
                             continue
                         raw = line[6:].strip()

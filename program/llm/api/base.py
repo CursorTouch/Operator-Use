@@ -8,6 +8,9 @@ class BaseAPI(ABC):
     def __init__(self, options: Options) -> None:
         self.options = options
 
+    def _cancelled(self) -> bool:
+        return self.options.signal is not None and self.options.signal.is_set()
+
     @abstractmethod
     def stream(
         self, messages: list[BaseMessage], model: str
