@@ -14,6 +14,11 @@ class ToolKind(str, Enum):
     Web = "web"
 
 
+class ExecutionMode(str, Enum):
+    Sequential = "sequential"
+    Parallel = "parallel"
+
+
 @dataclass
 class ToolInvocation:
     params: dict[str, Any] = field(default_factory=dict)
@@ -54,11 +59,13 @@ class Tool(ABC):
         description: str,
         schema: Type[BaseModel],
         kind: ToolKind,
+        execution_mode: ExecutionMode = ExecutionMode.Parallel,
     ) -> None:
         self.name = name
         self.description = description
         self.schema = schema
         self.kind = kind
+        self.execution_mode = execution_mode
 
     def validate(self, params: dict[str, Any]) -> tuple[bool, list[str]]:
         try:
