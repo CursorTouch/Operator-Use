@@ -551,6 +551,7 @@ dependencies = [
     { name = "pillow" },
     { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -564,6 +565,7 @@ requires-dist = [
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "websockets", specifier = ">=16.0" },
 ]
 
 [[package]]
