@@ -118,69 +118,68 @@ class GitHubCopilotChatAPI(BaseAPI):
 
         yield StartEvent()
 
-        async with self._client.chat.completions.stream(**params) as stream:
-            async for chunk in stream:
-                if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
-                    return
-                choice = chunk.choices[0] if chunk.choices else None
-                if choice is None:
-                    continue
+        async for chunk in await self._client.chat.completions.create(**params, stream=True):
+            if self._cancelled():
+                yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                return
+            choice = chunk.choices[0] if chunk.choices else None
+            if choice is None:
+                continue
 
-                delta = choice.delta
+            delta = choice.delta
 
-                if delta.content:
-                    if not text_started:
-                        yield TextStartEvent(data=TextEventData(index=text_index))
-                        text_started = True
-                    text_buf += delta.content
-                    yield TextDeltaEvent(data=TextEventData(index=text_index, text=delta.content))
+            if delta.content:
+                if not text_started:
+                    yield TextStartEvent(data=TextEventData(index=text_index))
+                    text_started = True
+                text_buf += delta.content
+                yield TextDeltaEvent(data=TextEventData(index=text_index, text=delta.content))
 
-                if delta.tool_calls:
-                    for tc in delta.tool_calls:
-                        idx = tc.index
-                        if idx not in tool_started:
-                            tool_started[idx] = True
-                            tool_bufs[idx] = ""
-                            tool_meta[idx] = {
-                                "id": tc.id or "",
-                                "name": tc.function.name or "" if tc.function else "",
-                            }
-                            yield ToolCallStartEvent(data=ToolCallEventData(
-                                index=tool_index + idx,
-                                id=tool_meta[idx]["id"],
-                                name=tool_meta[idx]["name"],
-                            ))
-                        if tc.function and tc.function.arguments:
-                            tool_bufs[idx] += tc.function.arguments
-                            yield ToolCallDeltaEvent(data=ToolCallEventData(
-                                index=tool_index + idx,
-                                id=tool_meta[idx]["id"],
-                                args=tc.function.arguments,
-                            ))
-
-                if choice.finish_reason:
-                    if text_started:
-                        yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
-                        text_index += 1
-                        text_started = False
-                        text_buf = ""
-
-                    for idx in sorted(tool_started):
-                        yield ToolCallEndEvent(data=ToolCallEventData(
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_started:
+                        tool_started[idx] = True
+                        tool_bufs[idx] = ""
+                        tool_meta[idx] = {
+                            "id": tc.id or "",
+                            "name": tc.function.name or "" if tc.function else "",
+                        }
+                        yield ToolCallStartEvent(data=ToolCallEventData(
                             index=tool_index + idx,
                             id=tool_meta[idx]["id"],
                             name=tool_meta[idx]["name"],
-                            args=tool_bufs[idx],
                         ))
-                    if tool_started:
-                        tool_index += len(tool_started)
-                        tool_started.clear()
-                        tool_bufs.clear()
-                        tool_meta.clear()
+                    if tc.function and tc.function.arguments:
+                        tool_bufs[idx] += tc.function.arguments
+                        yield ToolCallDeltaEvent(data=ToolCallEventData(
+                            index=tool_index + idx,
+                            id=tool_meta[idx]["id"],
+                            args=tc.function.arguments,
+                        ))
 
-                    stop_reason = _STOP_REASON.get(choice.finish_reason, StopReason.Stop)
-                    yield DoneEvent(reason=stop_reason)
+            if choice.finish_reason:
+                if text_started:
+                    yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
+                    text_index += 1
+                    text_started = False
+                    text_buf = ""
+
+                for idx in sorted(tool_started):
+                    yield ToolCallEndEvent(data=ToolCallEventData(
+                        index=tool_index + idx,
+                        id=tool_meta[idx]["id"],
+                        name=tool_meta[idx]["name"],
+                        args=tool_bufs[idx],
+                    ))
+                if tool_started:
+                    tool_index += len(tool_started)
+                    tool_started.clear()
+                    tool_bufs.clear()
+                    tool_meta.clear()
+
+                stop_reason = _STOP_REASON.get(choice.finish_reason, StopReason.Stop)
+                yield DoneEvent(reason=stop_reason)
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o") -> list[LLMEvent]:
         events: list[LLMEvent] = []
