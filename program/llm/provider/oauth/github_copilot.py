@@ -25,7 +25,7 @@ import certifi
 
 from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
-from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
+from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
 
 __all__ = ["GitHubCopilotOAuthProvider", "get_copilot_base_url"]
 
@@ -281,7 +281,7 @@ async def login_github_copilot(callbacks: OAuthLoginCallbacks) -> OAuthCredentia
     return credentials
 
 
-async def refresh_github_copilot_token(credentials: OAuthCredentials, enterprise_domain: Optional[str] = None) -> OAuthCredentials:
+async def refresh_github_copilot_token(credentials: OAuthCredentials, enterprise_domain: Optional[str] = None, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
     domain = enterprise_domain or "github.com"
     copilot_data = await asyncio.to_thread(_fetch_copilot_token, credentials.refresh, domain)
     token = copilot_data.get("token")
@@ -305,8 +305,8 @@ class GitHubCopilotOAuthProvider(OAuthProvider):
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
         return await login_github_copilot(callbacks)
 
-    async def refresh_token(self, credentials: OAuthCredentials) -> OAuthCredentials:
-        return await refresh_github_copilot_token(credentials)
+    async def refresh_token(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
+        return await refresh_github_copilot_token(credentials, signal=signal)
 
     async def logout(self, credentials: OAuthCredentials) -> None:
         # GitHub does not expose a token revocation endpoint for device flow tokens
@@ -315,13 +315,15 @@ class GitHubCopilotOAuthProvider(OAuthProvider):
     def get_api_key(self, credentials: OAuthCredentials) -> str:
         return credentials.access
 
-    async def validate(self, credentials: OAuthCredentials) -> bool:
+    async def validate(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> bool:
         if self.is_expired(credentials):
             try:
-                await self.refresh_token(credentials)
+                await self.refresh_token(credentials, signal=signal)
                 return True
             except Exception:
                 return False
+        if signal and signal.is_set():
+            return False
         return True
 
     @property

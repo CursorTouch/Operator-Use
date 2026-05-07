@@ -115,6 +115,11 @@ class OpenAICompletionsAPI(BaseAPI):
         chat_messages = _messages_to_chat(messages)
         params = self._build_params(model, chat_messages)
 
+        if self.options.on_payload:
+            modified = self.options.on_payload(params)
+            if modified is not None:
+                params = modified
+
         text_started = False
         text_buf = ""
         text_index = 0

@@ -101,13 +101,20 @@ class OllamaChatAPI(BaseAPI):
         yield StartEvent()
 
         try:
-            async for chunk in await self._client.chat(
-                model=model,
-                messages=ollama_messages,
-                stream=True,
-                think=think,
-                options=self._inference_options(),
-            ):
+            payload: dict[str, Any] = {
+                "model": model,
+                "messages": ollama_messages,
+                "stream": True,
+                "think": think,
+                "options": self._inference_options(),
+            }
+
+            if self.options.on_payload:
+                modified = self.options.on_payload(payload)
+                if modified is not None:
+                    payload = modified
+
+            async for chunk in await self._client.chat(**payload):
                 if self._cancelled():
                     yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
                     return

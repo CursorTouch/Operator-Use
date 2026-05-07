@@ -21,7 +21,7 @@ import certifi
 from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
 from program.llm.provider.oauth.pkce import generate_pkce
-from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
+from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
 
 __all__ = ["AnthropicClaudeCodeOAuthProvider"]
 
@@ -297,7 +297,7 @@ async def login_anthropic(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
     return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
 
 
-async def refresh_anthropic_token(credentials: OAuthCredentials) -> OAuthCredentials:
+async def refresh_anthropic_token(credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
     data = await asyncio.to_thread(_refresh_token_sync, credentials.refresh)
     access, refresh, expires_ms = _parse_token_response(data)
     account_id = _get_account_id(access) or credentials.account_id
@@ -313,8 +313,8 @@ class AnthropicClaudeCodeOAuthProvider(OAuthProvider):
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
         return await login_anthropic(callbacks)
 
-    async def refresh_token(self, credentials: OAuthCredentials) -> OAuthCredentials:
-        return await refresh_anthropic_token(credentials)
+    async def refresh_token(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
+        return await refresh_anthropic_token(credentials, signal=signal)
 
     async def logout(self, credentials: OAuthCredentials) -> None:
         # Anthropic OAuth does not expose a token revocation endpoint
@@ -328,8 +328,10 @@ class AnthropicClaudeCodeOAuthProvider(OAuthProvider):
         from program.llm.api.anthropic_claude_code import AnthropicClaudeCodeAPI
         return AnthropicClaudeCodeAPI
 
-    async def validate(self, credentials: OAuthCredentials) -> bool:
+    async def validate(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> bool:
         if self.is_expired(credentials):
+            return False
+        if signal and signal.is_set():
             return False
         return await asyncio.to_thread(_validate_token_sync, credentials.access)
 

@@ -327,6 +327,9 @@ class OpenAICodexResponsesAPI(BaseAPI):
                 async with self._http_client.stream(
                     "POST", self._http_url, content=body_bytes, headers=headers,
                 ) as response:
+                    if self.options.on_response:
+                        self.options.on_response(response.status_code, dict(response.headers))
+
                     if not response.is_success:
                         text = (await response.aread()).decode(errors="replace")
                         if attempt < _MAX_RETRIES and _is_retryable(response.status_code, text):
@@ -367,6 +370,11 @@ class OpenAICodexResponsesAPI(BaseAPI):
         account_id = _extract_account_id(token)
         instructions, input_items = _messages_to_input(messages)
         body = _build_body(model, instructions, input_items, self.options)
+
+        if self.options.on_payload:
+            modified = self.options.on_payload(body)
+            if modified is not None:
+                body = modified
 
         yield StartEvent()
 

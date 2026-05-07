@@ -71,7 +71,9 @@ class LLM:
         if self._oauth_provider is None or self._credentials is None:
             return
         if self._oauth_provider.is_expired(self._credentials):
-            self._credentials = await self._oauth_provider.refresh_token(self._credentials)
+            self._credentials = await self._oauth_provider.refresh_token(
+                self._credentials, signal=self.api.options.signal
+            )
             save_credentials(self._oauth_provider.id, self._credentials)
             api_key = self._oauth_provider.get_api_key(self._credentials)
             self.api.options.api_key = api_key

@@ -114,6 +114,11 @@ class OpenAIResponsesAPI(BaseAPI):
         instructions, input_items = _messages_to_input(messages)
         params = self._build_params(model, instructions, input_items)
 
+        if self.options.on_payload:
+            modified = self.options.on_payload(params)
+            if modified is not None:
+                params = modified
+
         text_index = 0
         thinking_index = 0
         tool_index = 0

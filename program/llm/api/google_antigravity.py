@@ -207,6 +207,11 @@ class GoogleAntigravityAPI(BaseAPI):
         body = self._build_request_body(model, project, system, contents)
         headers = _antigravity_headers(self.options.api_key or "")
 
+        if self.options.on_payload:
+            modified = self.options.on_payload(body)
+            if modified is not None:
+                body = modified
+
         text_index = 0
         thinking_index = 0
         tool_index = 0
@@ -225,6 +230,9 @@ class GoogleAntigravityAPI(BaseAPI):
                     headers=headers,
                     content=json.dumps(body),
                 ) as response:
+                    if self.options.on_response:
+                        self.options.on_response(response.status_code, dict(response.headers))
+
                     if not response.is_success:
                         error_body = (await response.aread()).decode(errors="replace")
                         yield ErrorEvent(reason=StopReason.Abort, message=f"HTTP {response.status_code}: {error_body}")

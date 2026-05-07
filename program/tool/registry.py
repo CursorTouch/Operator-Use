@@ -1,6 +1,6 @@
 from __future__ import annotations
-from program.tool.types import Tool, ToolInvocation, ToolResult
-from typing import Any
+from program.tool.types import Tool, ToolInvocation, ToolResult, OnUpdateCallback, AbortSignal
+from typing import Any, Optional
 
 
 class ToolRegistry:
@@ -19,7 +19,7 @@ class ToolRegistry:
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
-    async def execute(self, name: str, params: dict[str, Any]) -> ToolResult:
+    async def execute(self, name: str, params: dict[str, Any], on_update: Optional[OnUpdateCallback] = None, signal: Optional[AbortSignal] = None) -> ToolResult:
         tool = self.get(name)
         if tool is None:
             return ToolResult.error(content=f"Tool '{name}' not found.")
@@ -31,7 +31,7 @@ class ToolRegistry:
 
         try:
             invocation = ToolInvocation(params=params)
-            return await tool.execute(invocation=invocation)
+            return await tool.execute(invocation=invocation, on_update=on_update, signal=signal)
         except Exception as e:
             content = f"Tool '{name}' execution failed:\nError:\n{str(e)}"
             return ToolResult.error(content=content)

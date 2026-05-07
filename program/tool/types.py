@@ -1,8 +1,9 @@
 from __future__ import annotations
+import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Type
+from typing import Any, Callable, Optional, Type
 from pydantic import BaseModel
 
 
@@ -41,6 +42,10 @@ class ToolResult:
     ) -> ToolResult:
         return cls(content=content, is_error=True, metadata=metadata or {})
 
+OnUpdateCallback = Callable[[ToolResult], None]
+
+AbortSignal = asyncio.Event
+
 
 class Tool(ABC):
     def __init__(
@@ -77,6 +82,9 @@ class Tool(ABC):
             "input_schema": self.schema.model_json_schema(),
         }
 
+    def _is_cancelled(self, signal: Optional[AbortSignal]) -> bool:
+        return signal is not None and signal.is_set()
+
     @abstractmethod
-    async def execute(self, invocation: ToolInvocation) -> ToolResult:
+    async def execute(self, invocation: ToolInvocation, on_update: Optional[OnUpdateCallback] = None, signal: Optional[AbortSignal] = None) -> ToolResult:
         ...

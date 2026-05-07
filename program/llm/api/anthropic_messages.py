@@ -102,6 +102,11 @@ class AnthropicMessagesAPI(BaseAPI):
         system, anthropic_messages = _messages_to_anthropic(messages)
         params = self._build_params(model, system, anthropic_messages)
 
+        if self.options.on_payload:
+            modified = self.options.on_payload(params)
+            if modified is not None:
+                params = modified
+
         block_types: dict[int, str] = {}
         tool_ids: dict[int, str] = {}
         tool_names: dict[int, str] = {}

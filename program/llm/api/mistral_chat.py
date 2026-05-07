@@ -130,6 +130,11 @@ class MistralChatAPI(BaseAPI):
             if reasoning_effort is not None:
                 kwargs["reasoning_effort"] = reasoning_effort
 
+            if self.options.on_payload:
+                modified = self.options.on_payload(kwargs)
+                if modified is not None:
+                    kwargs = modified
+
             async with await self._client.chat.stream_async(**kwargs) as stream:
                 async for event in stream:
                     if self._cancelled():

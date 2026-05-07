@@ -1,8 +1,13 @@
 from __future__ import annotations
+import asyncio
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
-__all__ = ["OAuthCredentials", "OAuthPrompt", "OAuthAuthInfo", "OAuthLoginCallbacks"]
+
+__all__ = ["OAuthCredentials", "OAuthPrompt", "OAuthAuthInfo", "OAuthLoginCallbacks", "AbortSignal"]
+
+
+AbortSignal = asyncio.Event
 
 
 @dataclass
@@ -32,3 +37,4 @@ class OAuthLoginCallbacks:
     on_prompt: Callable[[OAuthPrompt], Awaitable[str]]
     on_progress: Optional[Callable[[str], None]] = None
     on_manual_code_input: Optional[Callable[[], Awaitable[str]]] = None
+    signal: Optional[AbortSignal] = None

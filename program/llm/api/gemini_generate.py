@@ -111,6 +111,13 @@ class GeminiGenerateAPI(BaseAPI):
         if system:
             config.system_instruction = system
 
+        if self.options.on_payload:
+            payload = {"config": config, "contents": contents}
+            modified = self.options.on_payload(payload)
+            if modified is not None:
+                config = modified.get("config", config)
+                contents = modified.get("contents", contents)
+
         text_index = 0
         thinking_index = 0
         tool_index = 0

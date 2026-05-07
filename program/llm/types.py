@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from typing import Optional
+from typing import Any, Callable, Optional
 import asyncio
 
 
@@ -28,6 +28,11 @@ class ThinkingLevel(str, Enum):
     Max = "max"
 
 
+AbortSignal = asyncio.Event
+PayloadCallback = Callable[[dict[str, Any]], Optional[dict[str, Any]]]
+ResponseCallback = Callable[[int, dict[str, str]], None]
+
+
 @dataclass
 class Options:
     api_key: Optional[str] = None
@@ -39,7 +44,9 @@ class Options:
     max_tokens: Optional[int] = None
     thinking_level: Optional[ThinkingLevel] = None
     thinking_budget: Optional[int] = None
-    signal: Optional[asyncio.Event] = None
+    signal: Optional[AbortSignal] = None
+    on_payload: Optional[PayloadCallback] = None
+    on_response: Optional[ResponseCallback] = None
 
 
 @dataclass

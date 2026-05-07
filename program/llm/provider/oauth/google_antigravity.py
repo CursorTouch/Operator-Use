@@ -20,7 +20,7 @@ import certifi
 
 from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
-from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt
+from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
 
 __all__ = ["GoogleAntigravityOAuthProvider"]
 
@@ -295,7 +295,7 @@ async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
     return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
 
 
-async def refresh_antigravity_token(credentials: OAuthCredentials) -> OAuthCredentials:
+async def refresh_antigravity_token(credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
     data = await asyncio.to_thread(_refresh_token_sync, credentials.refresh)
     access, new_refresh, expires_ms = _parse_token_response(data)
     refresh = new_refresh or credentials.refresh
@@ -312,8 +312,8 @@ class GoogleAntigravityOAuthProvider(OAuthProvider):
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
         return await login_antigravity(callbacks)
 
-    async def refresh_token(self, credentials: OAuthCredentials) -> OAuthCredentials:
-        return await refresh_antigravity_token(credentials)
+    async def refresh_token(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
+        return await refresh_antigravity_token(credentials, signal=signal)
 
     async def logout(self, credentials: OAuthCredentials) -> None:
         # Revoke token via Google's revocation endpoint
@@ -336,7 +336,9 @@ class GoogleAntigravityOAuthProvider(OAuthProvider):
         from program.llm.api.google_antigravity import GoogleAntigravityAPI
         return GoogleAntigravityAPI
 
-    async def validate(self, credentials: OAuthCredentials) -> bool:
+    async def validate(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> bool:
         if self.is_expired(credentials):
+            return False
+        if signal and signal.is_set():
             return False
         return await asyncio.to_thread(_validate_token_sync, credentials.access)
