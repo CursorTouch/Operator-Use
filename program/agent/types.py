@@ -1,5 +1,7 @@
 from __future__ import annotations
+from collections import deque
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional
 import asyncio
 
@@ -13,6 +15,17 @@ from program.tool.types import ToolInvocation, ToolResult
 
 AbortSignal = asyncio.Event
 
+
+class SteeringMode(str, Enum):
+    OneAtATime = "one_at_a_time"
+    All = "all"
+
+
+class FollowupMode(str, Enum):
+    OneAtATime = "one_at_a_time"
+    All = "all"
+
+
 AfterToolCallCallback = Callable[[ToolResult, Optional[AbortSignal]], Optional[ToolResult]]
 BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Optional[ToolInvocation]]
 GetFollowUpMessagesCallback = Callable[[], list[BaseMessage]]
@@ -25,6 +38,7 @@ TransformContextCallback = Callable[[list[BaseMessage], Optional[AbortSignal]], 
 class AgentState:
     system_prompt: Optional[str] = None
     messages: list[BaseMessage] = field(default_factory=list)
+    pending_messages: deque[BaseMessage] = field(default_factory=deque)
     pending_tool_calls: list[ToolCallContent] = field(default_factory=list)
     is_streaming: bool = False
     llm: Optional[LLM] = None
@@ -38,6 +52,8 @@ class Options:
     after_tool_call: Optional[AfterToolCallCallback] = None
     before_tool_call: Optional[BeforeToolCallCallback] = None
     execution_mode: Optional[ExecutionMode] = None
+    steering_mode: SteeringMode = SteeringMode.OneAtATime
+    followup_mode: FollowupMode = FollowupMode.OneAtATime
     get_follow_up_messages: Optional[GetFollowUpMessagesCallback] = None
     get_steering_messages: Optional[GetSteeringMessagesCallback] = None
     should_stop_after_turn: Optional[ShouldStopAfterTurnCallback] = None

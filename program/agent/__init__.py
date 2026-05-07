@@ -13,6 +13,8 @@ from program.agent.types import (
     ToolExecutionUpdateEvent,
     ToolExecutionEndEvent,
     ExecutionMode,
+    SteeringMode,
+    FollowupMode,
 )
 from program.agent.service import Agent
 
@@ -32,4 +34,6 @@ __all__ = [
     "ToolExecutionUpdateEvent",
     "ToolExecutionEndEvent",
     "ExecutionMode",
+    "SteeringMode",
+    "FollowupMode",
 ]
