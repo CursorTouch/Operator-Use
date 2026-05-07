@@ -35,7 +35,7 @@ USERINFO_URL = "https://auth.openai.com/oauth/userinfo"
 REDIRECT_URI = "http://localhost:1455/auth/callback"
 SCOPES = "openid profile email offline_access"
 JWT_CLAIM_PATH = "https://api.openai.com/auth"
-CALLBACK_HOST = "127.0.0.1"
+CALLBACK_HOST = None  # binds to all interfaces (IPv4 + IPv6)
 CALLBACK_PORT = 1455
 
 _SUCCESS_HTML = b"""<!DOCTYPE html><html><head><title>Auth complete</title></head><body>
@@ -232,6 +232,7 @@ async def _start_local_server(state: str) -> tuple[asyncio.Server, asyncio.Futur
             pass
         finally:
             writer.close()
+            await writer.wait_closed()
 
     server = await asyncio.start_server(_handle, CALLBACK_HOST, CALLBACK_PORT)
     return server, code_future

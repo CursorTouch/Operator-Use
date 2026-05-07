@@ -140,26 +140,19 @@ def _build_body(
     input_items: list[dict[str, Any]],
     options: Options,
 ) -> dict[str, Any]:
+    effort = _THINKING_EFFORT.get(options.thinking_level, "medium") if options.thinking_level else "medium"
     body: dict[str, Any] = {
         "model": model,
         "store": False,
         "stream": True,
         "instructions": instructions,
         "input": input_items,
-        "text": {"verbosity": "low"},
+        "text": {"verbosity": "medium"},
         "include": ["reasoning.encrypted_content"],
-        "tool_choice": "auto",
-        "parallel_tool_calls": True,
+        "reasoning": {"effort": effort, "summary": "auto"},
     }
-    if options.temperature is not None:
-        body["temperature"] = options.temperature
     if options.max_tokens is not None:
         body["max_output_tokens"] = options.max_tokens
-    if options.thinking_level is not None:
-        body["reasoning"] = {
-            "effort": _THINKING_EFFORT[options.thinking_level],
-            "summary": "auto",
-        }
     return body
 
 
@@ -167,7 +160,7 @@ def _build_headers(token: str, account_id: str, *, websocket: bool = False) -> d
     headers: dict[str, str] = {
         "Authorization": f"Bearer {token}",
         "chatgpt-account-id": account_id,
-        "originator": "pi",
+        "originator": "codex_cli_rs",
     }
     if websocket:
         headers["OpenAI-Beta"] = "responses_websockets=2026-02-06"

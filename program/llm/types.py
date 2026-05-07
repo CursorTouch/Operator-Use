@@ -34,7 +34,7 @@ class Options:
     base_url: Optional[str] = None
     headers: Optional[dict[str, str]] = None
     max_retries: int = 3
-    timeout: timedelta = field(default_factory=lambda: timedelta(seconds=60))
+    timeout: timedelta = field(default_factory=lambda: timedelta(seconds=10))
     temperature: float = 1.0
     max_tokens: Optional[int] = None
     thinking_level: Optional[ThinkingLevel] = None

@@ -30,7 +30,7 @@ CLIENT_SECRET = "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"
 AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo"
-CALLBACK_HOST = "127.0.0.1"
+CALLBACK_HOST = None  # binds to all interfaces (IPv4 + IPv6)
 CALLBACK_PORT = 51121
 CALLBACK_PATH = "/oauth-callback"
 REDIRECT_URI = f"http://localhost:{CALLBACK_PORT}{CALLBACK_PATH}"
@@ -208,6 +208,7 @@ async def _start_local_server(expected_state: str) -> tuple[asyncio.Server, asyn
             pass
         finally:
             writer.close()
+            await writer.wait_closed()
 
     server = await asyncio.start_server(_handle, CALLBACK_HOST, CALLBACK_PORT)
     return server, code_future
@@ -282,6 +283,13 @@ async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
     data = await asyncio.to_thread(_exchange_code, code, recv_state)
     access, refresh, expires_ms = _parse_token_response(data)
     account_id = await asyncio.to_thread(_get_account_id_sync, access)
+
+    if callbacks.on_progress:
+        callbacks.on_progress("Setting up Cloud Code Assist access...")
+
+    from program.llm.api.google_antigravity import fetch_project_id, onboard_user
+    project_id = await fetch_project_id(access)
+    await onboard_user(access, project_id)
 
     return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
 
