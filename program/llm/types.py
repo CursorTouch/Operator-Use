@@ -6,6 +6,11 @@ from typing import Optional
 import asyncio
 
 
+class AuthType(str, Enum):
+    ApiKey = "api_key"
+    OAuth = "oauth"
+
+
 class StopReason(str, Enum):
     Stop = "stop"
     Length = "length"
@@ -35,6 +40,7 @@ class Options:
     thinking_level: Optional[ThinkingLevel] = None
     thinking_budget: Optional[int] = None
     signal: Optional[asyncio.Event] = None
+    auth_type: AuthType = AuthType.ApiKey
 
 
 @dataclass

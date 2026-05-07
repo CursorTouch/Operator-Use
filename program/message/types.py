@@ -50,11 +50,21 @@ Content = TextContent | ImageContent | ThinkingContent | ToolCallContent
 
 
 @dataclass
+class UsageCost:
+    input: float = 0.0
+    output: float = 0.0
+    cache_read: float = 0.0
+    cache_write: float = 0.0
+    total: float = 0.0
+
+
+@dataclass
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    cost: UsageCost = field(default_factory=UsageCost)
 
 
 @dataclass

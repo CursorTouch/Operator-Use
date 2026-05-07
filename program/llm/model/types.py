@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
+from program.message.types import Usage, UsageCost
 
 
 class Modality(str, Enum):
@@ -25,3 +26,20 @@ class Model:
     context_window: int = 0
     input: list[Modality] = field(default_factory=list)
     output: list[Modality] = field(default_factory=list)
+
+    def get_name(self) -> str:
+        return self.name
+
+    def get_model_id(self) -> str:
+        return self.id
+
+    def get_cost(self) -> Cost:
+        return self.cost
+
+    def calculate_cost(self, usage: Usage) -> UsageCost:
+        usage.cost.input = (self.cost.input / 1_000_000) * usage.input_tokens
+        usage.cost.output = (self.cost.output / 1_000_000) * usage.output_tokens
+        usage.cost.cache_read = (self.cost.cache_read / 1_000_000) * usage.cache_read_tokens
+        usage.cost.cache_write = (self.cost.cache_write / 1_000_000) * usage.cache_write_tokens
+        usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cache_read + usage.cost.cache_write
+        return usage.cost
