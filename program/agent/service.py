@@ -8,8 +8,12 @@ from program.agent.types import (
     ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
     AgentStartEvent, AgentEndEvent
 )
-from program.llm.types import LLMEventType,ErrorEvent,EndEvent,TextDeltaEvent,TextStartEvent,TextEndEvent,ThinkingDeltaEvent,ThinkingStartEvent,ThinkingEndEvent,StopReason
-from program.message.types import AssistantMessage,ToolMessage,UserMessage
+from program.llm.types import (
+    LLMEventType, ErrorEvent, EndEvent, TextDeltaEvent, TextStartEvent, TextEndEvent,
+    ThinkingDeltaEvent, ThinkingStartEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
+)
+from program.message.types import AssistantMessage, ToolMessage, UserMessage, TextContent, ThinkingContent, ToolCallContent
+from program.tool.types import ToolResult
 
 if TYPE_CHECKING:
     from program.llm.service import LLM
@@ -104,155 +108,37 @@ class Agent:
     
     async def _loop(self, messages: list[BaseMessage], emit: EmitEvent, signal: AbortSignal):
         emit(AgentStartEvent())
-        self.state.messages = list(messages)
-        
-        # Initial follow-up messages
-        if self.options.get_follow_up_messages:
-            initial_followups = self.options.get_follow_up_messages()
-            for msg in initial_followups:
-                emit(MessageStartEvent(message=msg))
-                emit(MessageEndEvent(message=msg))
-                self.state.messages.append(msg)
+        for message in messages:
+            emit(MessageStartEvent(message=message))
+            emit(MessageEndEvent(message=message))
 
         while True:
-            if signal.is_set():
-                break
-
-            # Check steering queue
-            if self.state.steering_queue:
-                steering_msgs = await self.state.steering_queue.drain()
-                for msg in steering_msgs:
-                    emit(MessageStartEvent(message=msg))
-                    emit(MessageEndEvent(message=msg))
-                    self.state.messages.append(msg)
-
             emit(TurnStartEvent())
+            message=AssistantMessage()
+            tool_calls: list[ToolCallContent]=[]
             
-            current_assistant_message = AssistantMessage()
-            self.state.messages.append(current_assistant_message)
-            
-            has_error = False
-            async for event in self.llm.stream(self.state.messages[:-1]): # Don't send the empty assistant message we just added
-                if signal.is_set():
-                    has_error = True
-                    break
+            async for event in self.llm.stream(messages):
+                match event:
+                    case ToolCallEndEvent(tool_call=tool_call):
+                        message.contents.append(tool_call)
+                        tool_calls.append(tool_call)
+                    case TextEndEvent(text=text):
+                        message.contents.append(text)
+                    case ThinkingEndEvent(thinking=thinking):
+                        message.contents.append(thinking)
+                    case EndEvent(reason=reason):
+                        message.stop_reason=reason
+                        emit(TurnEndEvent(message=message,tool_results=[]))
+                        emit(AgentEndEvent(messages=messages))
+                        break
                 
-                match event.type:
-                    case LLMEventType.Start:
-                        pass
-                    case LLMEventType.TextStart:
-                        emit(MessageStartEvent(message=current_assistant_message))
-                    case LLMEventType.TextDelta:
-                        current_assistant_message.contents.append(event.text)
-                        emit(MessageUpdateEvent(message=current_assistant_message))
-                    case LLMEventType.TextEnd:
-                        pass
-                    case LLMEventType.ThinkingStart:
-                        pass
-                    case LLMEventType.ThinkingDelta:
-                        if event.thinking:
-                            current_assistant_message.contents.append(event.thinking)
-                            emit(MessageUpdateEvent(message=current_assistant_message))
-                    case LLMEventType.ThinkingEnd:
-                        pass
-                    case LLMEventType.ToolCallStart:
-                        if event.tool_call:
-                            current_assistant_message.contents.append(event.tool_call)
-                            emit(MessageUpdateEvent(message=current_assistant_message))
-                    case LLMEventType.ToolCallDelta:
-                        # Update tool call args if needed, but usually we wait for ToolCallEnd
-                        pass
-                    case LLMEventType.ToolCallEnd:
-                        if event.tool_call:
-                            # Replace the partial tool call with the complete one
-                            for i, content in enumerate(current_assistant_message.contents):
-                                if isinstance(content, ToolCallContent) and content.id == event.tool_call.id:
-                                    current_assistant_message.contents[i] = event.tool_call
-                                    break
-                            emit(MessageUpdateEvent(message=current_assistant_message))
-                    case LLMEventType.Done:
-                        break
-                    case LLMEventType.Error:
-                        self.state.error_message = event.error
-                        has_error = True
-                        break
-
-            if has_error:
-                emit(TurnEndEvent(message=current_assistant_message))
-                break
-
-            emit(MessageEndEvent(message=current_assistant_message))
-
-            # Execute tool calls
-            tool_calls = [c for c in current_assistant_message.contents if isinstance(c, ToolCallContent)]
-            tool_results: list[BaseMessage] = []
-            
-            if tool_calls:
-                # For now, execute tools sequentially. 
-                # TODO: Implement parallel execution if requested.
-                for tc in tool_calls:
-                    if signal.is_set():
-                        break
+            tool_results=await self._execute_tool_calls(tool_calls=tool_calls)
                     
-                    tool = next((t for t in self.tools if t.name == tc.name), None)
-                    if not tool:
-                        res = ToolMessage(id=tc.id, contents=[TextContent(content=f"Tool '{tc.name}' not found.")])
-                        tool_results.append(res)
-                        continue
-
-                    emit(ToolExecutionStartEvent(tool_call_id=tc.id, tool_name=tc.name, args=tc.args))
-                    
-                    try:
-                        # Validate params
-                        is_valid, errs = tool.validate(tc.args)
-                        if not is_valid:
-                            result = ToolResult.error(content=f"Invalid parameters: {', '.join(errs)}")
-                        else:
-                            invocation = ToolInvocation(params=tc.args)
-                            result = await tool.execute(invocation, signal=signal)
-                        
-                        emit(ToolExecutionEndEvent(tool_call_id=tc.id, tool_name=tc.name, content=result.content, is_error=result.is_error))
-                        
-                        # Wrap result in ToolMessage
-                        res_content = str(result.content) if not isinstance(result.content, (str, bytes)) else result.content
-                        res = ToolMessage(id=tc.id, contents=[TextContent(content=res_content)])
-                        tool_results.append(res)
-                        self.state.messages.append(res)
-                    except Exception as e:
-                        emit(ToolExecutionEndEvent(tool_call_id=tc.id, tool_name=tc.name, content=str(e), is_error=True))
-                        res = ToolMessage(id=tc.id, contents=[TextContent(content=f"Error executing tool: {str(e)}")])
-                        tool_results.append(res)
-                        self.state.messages.append(res)
-
-            emit(TurnEndEvent(message=current_assistant_message, tool_results=tool_results))
-
-            # Check if we should continue
-            if self.options.should_stop_after_turn and self.options.should_stop_after_turn(self.state.messages):
-                break
-            
-            # If no tool calls and no steering/followup, we are done
-            has_pending = False
-            if self.state.follow_up_queue and not self.state.follow_up_queue.is_empty():
-                has_pending = True
-            if self.state.steering_queue and not self.state.steering_queue.is_empty():
-                has_pending = True
-            
-            if not tool_calls and not has_pending:
-                break
-            
-            # Handle follow-up queue
-            if self.state.follow_up_queue:
-                followup_msgs = await self.state.follow_up_queue.drain()
-                for msg in followup_msgs:
-                    emit(MessageStartEvent(message=msg))
-                    emit(MessageEndEvent(message=msg))
-                    self.state.messages.append(msg)
-
-        emit(AgentEndEvent(messages=self.state.messages))
+            emit(TurnEndEvent(message=message,tool_results=[]))
         
+        emit(AgentEndEvent(messages=messages))
 
-
-    async def _loop_continue(self,messages:list[BaseMessage],emit:EmitEvent,signal:AbortSignal):
+    async def _execute_tool_calls(self, tool_calls: list[ToolCallContent])->list[ToolResult]:
         pass
 
     async def run(self, messages: list[BaseMessage]):

@@ -21,31 +21,35 @@ class ToolExecutionMode(str, Enum):
 
 @dataclass
 class ToolInvocation:
+    id:str
     params: dict[str, Any] = field(default_factory=dict)
     cwd: str = ""
 
 
 @dataclass
 class ToolResult:
-    content: Any = None
+    id: str
+    content: str
     is_error: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def ok(
         cls,
-        content: Any = None,
+        id: str,
+        content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ToolResult:
-        return cls(content=content, is_error=False, metadata=metadata or {})
+        return cls(id=id, content=content, is_error=False, metadata=metadata or {})
 
     @classmethod
     def error(
         cls,
-        content: Any = None,
+        id: str,
+        content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ToolResult:
-        return cls(content=content, is_error=True, metadata=metadata or {})
+        return cls(id=id, content=content, is_error=True, metadata=metadata or {})
 
 OnUpdateCallback = Callable[[ToolResult], None]
 

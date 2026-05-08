@@ -36,7 +36,7 @@ class ThinkingLevel(str, Enum):
 class LLMEventType(str, Enum):
     Start = "start"
     Error = "error"
-    Done = "done"
+    End = "end"
     TextStart = "text_start"
     TextDelta = "text_delta"
     TextEnd = "text_end"
@@ -103,7 +103,7 @@ class ErrorEvent:
 
 @dataclass
 class EndEvent:
-    type: LLMEventType = field(default=LLMEventType.Done, init=False)
+    type: LLMEventType = field(default=LLMEventType.End, init=False)
     reason: StopReason = StopReason.Stop
 
 
@@ -128,37 +128,37 @@ class TextEndEvent:
 @dataclass
 class ThinkingStartEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingStart, init=False)
-    thinking: Optional["ThinkingContent"]
+    thinking: "ThinkingContent"
 
 
 @dataclass
 class ThinkingDeltaEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingDelta, init=False)
-    thinking: Optional["ThinkingContent"]
+    thinking: "ThinkingContent"
 
 
 @dataclass
 class ThinkingEndEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingEnd, init=False)
-    thinking: Optional["ThinkingContent"]
+    thinking: "ThinkingContent"
 
 
 @dataclass
 class ToolCallStartEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallStart, init=False)
-    tool_call: Optional["ToolCallContent"]
+    tool_call: "ToolCallContent"
 
 
 @dataclass
 class ToolCallDeltaEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallDelta, init=False)
-    tool_call: Optional["ToolCallContent"]
+    tool_call: "ToolCallContent"
 
 
 @dataclass
 class ToolCallEndEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallEnd, init=False)
-    tool_call: Optional["ToolCallContent"]
+    tool_call: "ToolCallContent"
 
 
 LLMEvent = (

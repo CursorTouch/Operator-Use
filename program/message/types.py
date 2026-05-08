@@ -50,7 +50,15 @@ class ToolCallContent:
     args: dict = field(default_factory=dict)
 
 
-Content = TextContent | ImageContent | ThinkingContent | ToolCallContent
+@dataclass
+class ToolResultContent:
+    type: Literal["tool_result"] = field(default="tool_result", init=False)
+    id: str = ""
+    content: str = ""
+    is_error: bool = False
+
+
+Content = TextContent | ImageContent | ThinkingContent | ToolCallContent | ToolResultContent
 
 
 @dataclass
@@ -95,4 +103,3 @@ class AssistantMessage(BaseMessage):
 @dataclass
 class ToolMessage(BaseMessage):
     role: Literal["tool"] = field(default="tool", init=False)
-    id: str = ""
