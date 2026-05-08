@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from program.llm.types import ThinkingLevel
     from program.tool.types import Tool, ToolExecutionMode
 
-from program.message.types import BaseMessage, ToolCallContent
+from program.message.types import BaseMessage, ToolCallContent, ToolResultContent
 from program.tool.types import ToolInvocation, ToolResult
 
 AbortSignal = asyncio.Event
@@ -45,7 +45,7 @@ AfterToolCallCallback = Callable[[ToolResult, Optional[AbortSignal]], Optional[T
 BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Optional[ToolInvocation]]
 GetFollowUpMessagesCallback = Callable[[], list[BaseMessage]]
 GetSteeringMessagesCallback = Callable[[], list[BaseMessage]]
-ShouldStopAfterTurnCallback = Callable[[list[BaseMessage]], bool]
+ShouldStopAfterTurnCallback = Callable[[BaseMessage,list[ToolResultContent]], bool]
 TransformContextCallback = Callable[[list[BaseMessage], Optional[AbortSignal]], list[BaseMessage]]
 
 
@@ -148,7 +148,7 @@ class TurnStartEvent:
 class TurnEndEvent:
     type: AgentEventType = field(default=AgentEventType.TurnEnd, init=False)
     message: Optional[BaseMessage] = None
-    tool_results: list[BaseMessage] = field(default_factory=list)
+    tool_results: list[ToolResultContent] = field(default_factory=list)
 
 
 # Message lifecycle
@@ -174,26 +174,24 @@ class MessageEndEvent:
 @dataclass
 class ToolExecutionStartEvent:
     type: AgentEventType = field(default=AgentEventType.ToolExecutionStart, init=False)
-    tool_call_id: str = ""
-    tool_name: str = ""
-    args: dict[str, Any] = field(default_factory=dict)
+    tool_call: ToolCallContent
 
 
 @dataclass
 class ToolExecutionUpdateEvent:
     type: AgentEventType = field(default=AgentEventType.ToolExecutionUpdate, init=False)
-    tool_call_id: str = ""
-    tool_name: str = ""
-    args: dict[str, Any] = field(default_factory=dict)
+    partial_tool_result: ToolResultContent
 
 
 @dataclass
 class ToolExecutionEndEvent:
     type: AgentEventType = field(default=AgentEventType.ToolExecutionEnd, init=False)
-    tool_call_id: str = ""
-    tool_name: str = ""
-    content: Any = None
-    is_error: bool = False
+    tool_result: ToolResultContent
+
+@dataclass
+class AgentErrorEvent:
+    type: AgentEventType = field(default=AgentEventType.AgentError, init=False)
+    error: str
 
 
 AgentEvent = (
@@ -207,4 +205,5 @@ AgentEvent = (
     | ToolExecutionStartEvent
     | ToolExecutionUpdateEvent
     | ToolExecutionEndEvent
+    | AgentErrorEvent
 )

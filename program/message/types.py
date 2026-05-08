@@ -2,7 +2,7 @@ from __future__ import annotations
 import base64
 import io
 from dataclasses import dataclass, field
-from typing import Literal, TYPE_CHECKING
+from typing import Literal, TYPE_CHECKING,Any
 from PIL import Image
 from program.llm.types import StopReason
 
@@ -47,7 +47,7 @@ class ToolCallContent:
     type: Literal["tool_call"] = field(default="tool_call", init=False)
     id: str = ""
     name: str = ""
-    args: dict = field(default_factory=dict)
+    args: dict[str,Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -56,7 +56,7 @@ class ToolResultContent:
     id: str = ""
     content: str = ""
     is_error: bool = False
-
+    metadata: dict[str,Any] = field(default_factory=dict)
 
 Content = TextContent | ImageContent | ThinkingContent | ToolCallContent | ToolResultContent
 

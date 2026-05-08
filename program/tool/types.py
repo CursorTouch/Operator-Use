@@ -51,7 +51,7 @@ class ToolResult:
     ) -> ToolResult:
         return cls(id=id, content=content, is_error=True, metadata=metadata or {})
 
-OnUpdateCallback = Callable[[ToolResult], None]
+ToolExecutionUpdateCallback = Callable[[ToolResult], None]
 
 AbortSignal = asyncio.Event
 
@@ -97,5 +97,5 @@ class Tool(ABC):
         return signal is not None and signal.is_set()
 
     @abstractmethod
-    async def execute(self, invocation: ToolInvocation, on_update: Optional[OnUpdateCallback] = None, signal: Optional[AbortSignal] = None) -> ToolResult:
+    async def execute(self, invocation: ToolInvocation, tool_execution_update_callback: Optional[ToolExecutionUpdateCallback] = None, signal: Optional[AbortSignal] = None) -> ToolResult:
         ...

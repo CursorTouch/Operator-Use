@@ -1,4 +1,5 @@
 from __future__ import annotations
+from program.message.types import ToolResultContent
 import asyncio
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Optional
@@ -6,14 +7,15 @@ from program.agent.types import (
     EmitEvent, AgentEventType, TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
-    AgentStartEvent, AgentEndEvent
+    AgentStartEvent, AgentEndEvent,AgentErrorEvent
 )
 from program.llm.types import (
     LLMEventType, ErrorEvent, EndEvent, TextDeltaEvent, TextStartEvent, TextEndEvent,
     ThinkingDeltaEvent, ThinkingStartEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
 )
-from program.message.types import AssistantMessage, ToolMessage, UserMessage, TextContent, ThinkingContent, ToolCallContent
 from program.tool.types import ToolResult
+from program.tool.registry import ToolRegistry
+from program.message.types import AssistantMessage, ToolCallContent
 
 if TYPE_CHECKING:
     from program.llm.service import LLM
@@ -27,7 +29,7 @@ from program.agent.types import (
     SteeringQueue,
     AbortSignal,
 )
-from program.message.types import BaseMessage
+from program.message.types import BaseMessage,ToolMessage
 
 
 class Agent:
@@ -42,6 +44,7 @@ class Agent:
         self.tools = tools
         self.system_prompt = system_prompt
         self.options = options or Options()
+        self.tool_registry = ToolRegistry(tools)
         self.state = AgentState(
             llm=llm,
             tools=tools,
@@ -105,41 +108,71 @@ class Agent:
                 pass
             case AgentEventType.ToolExecutionEnd:
                 pass
-    
+
     async def _loop(self, messages: list[BaseMessage], emit: EmitEvent, signal: AbortSignal):
         emit(AgentStartEvent())
         for message in messages:
             emit(MessageStartEvent(message=message))
             emit(MessageEndEvent(message=message))
 
+        tool_calls: list[ToolCallContent]=[]
+        tool_results: list[ToolResultContent]=[]
         while True:
             emit(TurnStartEvent())
             message=AssistantMessage()
-            tool_calls: list[ToolCallContent]=[]
-            
+
             async for event in self.llm.stream(messages):
                 match event:
                     case ToolCallEndEvent(tool_call=tool_call):
-                        message.contents.append(tool_call)
                         tool_calls.append(tool_call)
+                        message.contents.append(tool_call)
                     case TextEndEvent(text=text):
                         message.contents.append(text)
                     case ThinkingEndEvent(thinking=thinking):
                         message.contents.append(thinking)
                     case EndEvent(reason=reason):
                         message.stop_reason=reason
-                        emit(TurnEndEvent(message=message,tool_results=[]))
-                        emit(AgentEndEvent(messages=messages))
-                        break
+            
+            match message.stop_reason:
+                case StopReason.Error|StopReason.Abort:
+                    emit(AgentErrorEvent(error="error"))
+                    emit(TurnEndEvent(message=message,tool_results=tool_results))
+                    emit(AgentEndEvent(messages=messages))
+                    return None
+                case StopReason.ToolCalls:
+                    tool_calls.clear()
+                    tool_results.clear()
+                case StopReason.Stop:
+                    emit(TurnEndEvent(message=message,tool_results=tool_results))
+                    emit(AgentEndEvent(messages=messages))
+                    return None
+
+            messages.append(message)
                 
-            tool_results=await self._execute_tool_calls(tool_calls=tool_calls)
-                    
-            emit(TurnEndEvent(message=message,tool_results=[]))
+            for tool_result in self._execute_tool_calls(tool_calls=tool_calls,emit=emit,signal=signal):
+                contents=[ToolResultContent(
+                    id=tool_result.id,
+                    is_error=tool_result.is_error,
+                    content=tool_result.content,
+                    metadata=tool_result.metadata,
+                    )
+                ]
+                tool_message=ToolMessage(contents=contents)
+                messages.append(tool_message)
+                tool_results.append(tool_result)
+
+            emit(TurnEndEvent(message=message,tool_results=tool_results))
+            
+            if self.options.should_stop_after_turn is not None:
+                if self.options.should_stop_after_turn(message,tool_results):
+                    emit(AgentEndEvent(messages=messages))
+                    return None
         
         emit(AgentEndEvent(messages=messages))
 
-    async def _execute_tool_calls(self, tool_calls: list[ToolCallContent])->list[ToolResult]:
-        pass
+    async def _execute_tool_calls(self, tool_calls: list[ToolCallContent], emit: EmitEvent, signal:Optional[AbortSignal]=None)->list[ToolResult]:
+        tool_results: list[ToolResult]=[]
+        await self.tool_registry.batch_execute(tool_calls=tool_calls,options=self.options,emit=emit,signal=signal)
 
     async def run(self, messages: list[BaseMessage]):
         signal: AbortSignal = asyncio.Event()
