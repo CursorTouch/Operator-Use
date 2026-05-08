@@ -2,9 +2,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, TYPE_CHECKING
 from program.llm.api.types import APIResponse
 import asyncio
+
+if TYPE_CHECKING:
+    from program.message.types import TextContent, ThinkingContent, ToolCallContent
 
 
 class AuthType(str, Enum):
@@ -18,6 +21,7 @@ class StopReason(str, Enum):
     ToolCalls = "tool_calls"
     ContentFilter = "content_filter"
     Abort = "abort"
+    Error = "error"
 
 
 class ThinkingLevel(str, Enum):
@@ -65,24 +69,24 @@ class Options:
     on_response: Optional[ResponseCallback] = None
 
 
+def _default_text_event_data():
+    from program.message.types import TextContent
+    return TextContent(content="")
+
+
 @dataclass
 class TextEventData:
-    index: int = 0
-    text: str = ""
+    text: Any = field(default_factory=_default_text_event_data)
 
 
 @dataclass
 class ThinkingEventData:
-    index: int = 0
-    thinking: str = ""
+    thinking: Optional[Any] = None
 
 
 @dataclass
 class ToolCallEventData:
-    index: int = 0
-    id: str = ""
-    name: str = ""
-    args: str = ""
+    tool_call: Optional[Any] = None
 
 
 @dataclass

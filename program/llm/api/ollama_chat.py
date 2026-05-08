@@ -122,31 +122,31 @@ class OllamaChatAPI(BaseAPI):
 
                 if msg.thinking:
                     if not thinking_started:
-                        yield ThinkingStartEvent(data=ThinkingEventData(index=0))
+                        yield ThinkingStartEvent(data=ThinkingEventData())
                         thinking_started = True
                     thinking_buf += msg.thinking
-                    yield ThinkingDeltaEvent(data=ThinkingEventData(index=0, thinking=msg.thinking))
+                    yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=msg.thinking)))
 
                 if msg.content:
                     if not text_started:
-                        yield TextStartEvent(data=TextEventData(index=0))
+                        yield TextStartEvent(data=TextEventData())
                         text_started = True
                     text_buf += msg.content
-                    yield TextDeltaEvent(data=TextEventData(index=0, text=msg.content))
+                    yield TextDeltaEvent(data=TextEventData(text=TextContent(content=msg.content)))
 
                 # tool calls arrive in the final chunk
                 if msg.tool_calls:
                     for i, tc in enumerate(msg.tool_calls):
                         fn = tc.function
                         args = fn.arguments if isinstance(fn.arguments, str) else json.dumps(fn.arguments)
-                        yield ToolCallStartEvent(data=ToolCallEventData(index=i, name=fn.name))
-                        yield ToolCallEndEvent(data=ToolCallEventData(index=i, name=fn.name, args=args))
+                        yield ToolCallStartEvent(data=ToolCallEventData(tool_call=ToolCallContent(name=fn.name)))
+                        yield ToolCallEndEvent(data=ToolCallEventData(tool_call=ToolCallContent(name=fn.name, args=json.loads(args) if isinstance(args, str) else args)))
 
                 if chunk.done:
                     if thinking_started:
-                        yield ThinkingEndEvent(data=ThinkingEventData(index=0, thinking=thinking_buf))
+                        yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_buf)))
                     if text_started:
-                        yield TextEndEvent(data=TextEventData(index=0, text=text_buf))
+                        yield TextEndEvent(data=TextEventData(text=TextContent(content=text_buf)))
                     stop_reason = _STOP_REASON.get(chunk.done_reason or "", StopReason.Stop)
                     yield EndEvent(reason=stop_reason)
 

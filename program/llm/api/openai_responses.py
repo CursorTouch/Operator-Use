@@ -119,10 +119,6 @@ class OpenAIResponsesAPI(BaseAPI):
             if modified is not None:
                 params = modified
 
-        text_index = 0
-        thinking_index = 0
-        tool_index = 0
-        tool_ids: dict[str, str] = {}
         tool_names: dict[str, str] = {}
 
         yield StartEvent()
@@ -137,49 +133,42 @@ class OpenAIResponsesAPI(BaseAPI):
                 if etype == "response.output_item.added":
                     item = event.item
                     if item.type == "message":
-                        yield TextStartEvent(data=TextEventData(index=text_index))
+                        yield TextStartEvent(data=TextEventData())
                     elif item.type == "reasoning":
-                        yield ThinkingStartEvent(data=ThinkingEventData(index=thinking_index))
+                        yield ThinkingStartEvent(data=ThinkingEventData())
                     elif item.type == "function_call":
-                        tool_ids[item.call_id] = item.call_id
                         tool_names[item.call_id] = item.name
                         yield ToolCallStartEvent(data=ToolCallEventData(
-                            index=tool_index,
-                            id=item.call_id,
-                            name=item.name,
+                            tool_call=ToolCallContent(id=item.call_id, name=item.name)
                         ))
 
                 elif etype == "response.output_text.delta":
-                    yield TextDeltaEvent(data=TextEventData(index=text_index, text=event.delta))
+                    yield TextDeltaEvent(data=TextEventData(text=TextContent(content=event.delta)))
 
                 elif etype == "response.output_text.done":
-                    yield TextEndEvent(data=TextEventData(index=text_index, text=event.text))
-                    text_index += 1
+                    yield TextEndEvent(data=TextEventData(text=TextContent(content=event.text)))
 
                 elif etype == "response.reasoning_summary_text.delta":
-                    yield ThinkingDeltaEvent(data=ThinkingEventData(index=thinking_index, thinking=event.delta))
+                    yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=event.delta)))
 
                 elif etype == "response.reasoning_summary_text.done":
-                    yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=event.text))
-                    thinking_index += 1
+                    yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=event.text)))
 
                 elif etype == "response.function_call_arguments.delta":
                     call_id = event.item_id
                     yield ToolCallDeltaEvent(data=ToolCallEventData(
-                        index=tool_index,
-                        id=call_id,
-                        args=event.delta,
+                        tool_call=ToolCallContent(id=call_id)
                     ))
 
                 elif etype == "response.function_call_arguments.done":
                     call_id = event.item_id
                     yield ToolCallEndEvent(data=ToolCallEventData(
-                        index=tool_index,
-                        id=call_id,
-                        name=tool_names.get(call_id, ""),
-                        args=event.arguments,
+                        tool_call=ToolCallContent(
+                            id=call_id,
+                            name=tool_names.get(call_id, ""),
+                            args=json.loads(event.arguments)
+                        )
                     ))
-                    tool_index += 1
 
                 elif etype == "response.done":
                     resp = event.response

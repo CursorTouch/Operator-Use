@@ -145,33 +145,33 @@ class GeminiGenerateAPI(BaseAPI):
                     for part in candidate.content.parts:
                         if getattr(part, "thought", False) and part.text:
                             if not thinking_started:
-                                yield ThinkingStartEvent(data=ThinkingEventData(index=thinking_index))
+                                yield ThinkingStartEvent(data=ThinkingEventData())
                                 thinking_started = True
                             thinking_buf += part.text
-                            yield ThinkingDeltaEvent(data=ThinkingEventData(index=thinking_index, thinking=part.text))
+                            yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=part.text)))
                         elif part.text:
                             if thinking_started:
-                                yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+                                yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_buf)))
                                 thinking_started = False
                                 thinking_index += 1
                                 thinking_buf = ""
                             if not text_started:
-                                yield TextStartEvent(data=TextEventData(index=text_index))
+                                yield TextStartEvent(data=TextEventData())
                                 text_started = True
                             text_buf += part.text
-                            yield TextDeltaEvent(data=TextEventData(index=text_index, text=part.text))
+                            yield TextDeltaEvent(data=TextEventData(text=TextContent(content=part.text)))
                         elif part.function_call:
                             fc = part.function_call
                             tool_id = fc.name
                             args_str = json.dumps(dict(fc.args)) if fc.args else ""
                             yield ToolCallStartEvent(data=ToolCallEventData(
-                                index=tool_index, id=tool_id, name=fc.name,
+                                tool_call=ToolCallContent(id=tool_id, name=fc.name)
                             ))
                             yield ToolCallDeltaEvent(data=ToolCallEventData(
-                                index=tool_index, id=tool_id, args=args_str,
+                                tool_call=ToolCallContent(id=tool_id)
                             ))
                             yield ToolCallEndEvent(data=ToolCallEventData(
-                                index=tool_index, id=tool_id, name=fc.name, args=args_str,
+                                tool_call=ToolCallContent(id=tool_id, name=fc.name, args=json.loads(args_str) if args_str else {})
                             ))
                             tool_index += 1
 
@@ -181,7 +181,7 @@ class GeminiGenerateAPI(BaseAPI):
                         yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
                         thinking_index += 1
                     if text_started:
-                        yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
+                        yield TextEndEvent(data=TextEventData(text=TextContent(content=text_buf)))
                         text_index += 1
                     reason_str = finish_reason.name if hasattr(finish_reason, "name") else str(finish_reason)
                     yield EndEvent(reason=_STOP_REASON.get(reason_str, StopReason.Stop))

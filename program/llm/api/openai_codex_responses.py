@@ -242,9 +242,6 @@ def _is_retryable(status: int, body: str) -> bool:
 # ── Event processing ──────────────────────────────────────────────────────────
 
 async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
-    text_index = 0
-    thinking_index = 0
-    tool_index = 0
     tool_names: dict[str, str] = {}
 
     async for event in events:
@@ -254,46 +251,44 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
             item = event.get("item") or {}
             itype = item.get("type", "")
             if itype == "message":
-                yield TextStartEvent(data=TextEventData(index=text_index))
+                yield TextStartEvent(data=TextEventData())
             elif itype == "reasoning":
-                yield ThinkingStartEvent(data=ThinkingEventData(index=thinking_index))
+                yield ThinkingStartEvent(data=ThinkingEventData())
             elif itype == "function_call":
                 call_id = item.get("call_id", "")
                 name = item.get("name", "")
                 tool_names[call_id] = name
                 yield ToolCallStartEvent(data=ToolCallEventData(
-                    index=tool_index, id=call_id, name=name,
+                    tool_call=ToolCallContent(id=call_id, name=name)
                 ))
 
         elif etype == "response.output_text.delta":
-            yield TextDeltaEvent(data=TextEventData(index=text_index, text=event.get("delta", "")))
+            yield TextDeltaEvent(data=TextEventData(text=TextContent(content=event.get("delta", ""))))
 
         elif etype == "response.output_text.done":
-            yield TextEndEvent(data=TextEventData(index=text_index, text=event.get("text", "")))
-            text_index += 1
+            yield TextEndEvent(data=TextEventData(text=TextContent(content=event.get("text", ""))))
 
         elif etype == "response.reasoning_summary_text.delta":
-            yield ThinkingDeltaEvent(data=ThinkingEventData(index=thinking_index, thinking=event.get("delta", "")))
+            yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=event.get("delta", ""))))
 
         elif etype == "response.reasoning_summary_text.done":
-            yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=event.get("text", "")))
-            thinking_index += 1
+            yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=event.get("text", ""))))
 
         elif etype == "response.function_call_arguments.delta":
             item_id = event.get("item_id", "")
             yield ToolCallDeltaEvent(data=ToolCallEventData(
-                index=tool_index, id=item_id, args=event.get("delta", ""),
+                tool_call=ToolCallContent(id=item_id)
             ))
 
         elif etype == "response.function_call_arguments.done":
             item_id = event.get("item_id", "")
             yield ToolCallEndEvent(data=ToolCallEventData(
-                index=tool_index,
-                id=item_id,
-                name=tool_names.get(item_id, ""),
-                args=event.get("arguments", ""),
+                tool_call=ToolCallContent(
+                    id=item_id,
+                    name=tool_names.get(item_id, ""),
+                    args=json.loads(event.get("arguments", "{}"))
+                )
             ))
-            tool_index += 1
 
         elif etype == "response.completed":
             response = event.get("response") or {}

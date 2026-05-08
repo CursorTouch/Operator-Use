@@ -267,30 +267,30 @@ class GoogleAntigravityAPI(BaseAPI):
                         for part in content.get("parts", []):
                             if part.get("thought") and part.get("text"):
                                 if not thinking_started:
-                                    yield ThinkingStartEvent(data=ThinkingEventData(index=thinking_index))
+                                    yield ThinkingStartEvent(data=ThinkingEventData())
                                     thinking_started = True
                                 delta = part["text"]
                                 thinking_buf += delta
-                                yield ThinkingDeltaEvent(data=ThinkingEventData(index=thinking_index, thinking=delta))
+                                yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=delta)))
                             elif part.get("text"):
                                 if thinking_started:
-                                    yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+                                    yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_buf)))
                                     thinking_started = False
                                     thinking_index += 1
                                     thinking_buf = ""
                                 if not text_started:
-                                    yield TextStartEvent(data=TextEventData(index=text_index))
+                                    yield TextStartEvent(data=TextEventData())
                                     text_started = True
                                 delta = part["text"]
                                 text_buf += delta
-                                yield TextDeltaEvent(data=TextEventData(index=text_index, text=delta))
+                                yield TextDeltaEvent(data=TextEventData(text=TextContent(content=delta)))
                             elif part.get("functionCall"):
                                 fc = part["functionCall"]
                                 name = fc.get("name", "")
                                 args_str = json.dumps(fc.get("args", {}))
-                                yield ToolCallStartEvent(data=ToolCallEventData(index=tool_index, id=name, name=name))
-                                yield ToolCallDeltaEvent(data=ToolCallEventData(index=tool_index, id=name, args=args_str))
-                                yield ToolCallEndEvent(data=ToolCallEventData(index=tool_index, id=name, name=name, args=args_str))
+                                yield ToolCallStartEvent(data=ToolCallEventData(tool_call=ToolCallContent(id=name, name=name)))
+                                yield ToolCallDeltaEvent(data=ToolCallEventData(tool_call=ToolCallContent(id=name)))
+                                yield ToolCallEndEvent(data=ToolCallEventData(tool_call=ToolCallContent(id=name, name=name, args=json.loads(args_str))))
                                 tool_index += 1
 
                         finish_reason = candidate.get("finishReason", "")
@@ -299,7 +299,7 @@ class GoogleAntigravityAPI(BaseAPI):
                                 yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
                                 thinking_index += 1
                             if text_started:
-                                yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
+                                yield TextEndEvent(data=TextEventData(text=TextContent(content=text_buf)))
                                 text_index += 1
                             yield EndEvent(reason=_STOP_REASON.get(finish_reason, StopReason.Stop))
                             return

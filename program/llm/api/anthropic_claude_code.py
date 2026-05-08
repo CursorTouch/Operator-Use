@@ -129,16 +129,16 @@ class AnthropicClaudeCodeAPI(BaseAPI):
                     block_types[idx] = block.type
                     if block.type == "text":
                         text_bufs[idx] = ""
-                        yield TextStartEvent(data=TextEventData(index=idx))
+                        yield TextStartEvent(data=TextEventData())
                     elif block.type == "thinking":
                         thinking_bufs[idx] = ""
-                        yield ThinkingStartEvent(data=ThinkingEventData(index=idx))
+                        yield ThinkingStartEvent(data=ThinkingEventData())
                     elif block.type == "tool_use":
                         tool_ids[idx] = block.id
                         tool_names[idx] = block.name
                         tool_bufs[idx] = ""
                         yield ToolCallStartEvent(data=ToolCallEventData(
-                            index=idx, id=block.id, name=block.name,
+                            tool_call=ToolCallContent(id=block.id, name=block.name)
                         ))
 
                 elif etype == "content_block_delta":
@@ -146,29 +146,30 @@ class AnthropicClaudeCodeAPI(BaseAPI):
                     delta = event.delta
                     if delta.type == "text_delta":
                         text_bufs[idx] = text_bufs.get(idx, "") + delta.text
-                        yield TextDeltaEvent(data=TextEventData(index=idx, text=delta.text))
+                        yield TextDeltaEvent(data=TextEventData(text=TextContent(content=delta.text)))
                     elif delta.type == "thinking_delta":
                         thinking_bufs[idx] = thinking_bufs.get(idx, "") + delta.thinking
-                        yield ThinkingDeltaEvent(data=ThinkingEventData(index=idx, thinking=delta.thinking))
+                        yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=delta.thinking)))
                     elif delta.type == "input_json_delta":
                         tool_bufs[idx] = tool_bufs.get(idx, "") + delta.partial_json
                         yield ToolCallDeltaEvent(data=ToolCallEventData(
-                            index=idx, id=tool_ids.get(idx, ""), args=delta.partial_json,
+                            tool_call=ToolCallContent(id=tool_ids.get(idx, ""))
                         ))
 
                 elif etype == "content_block_stop":
                     idx = event.index
                     btype = block_types.get(idx, "")
                     if btype == "text":
-                        yield TextEndEvent(data=TextEventData(index=idx, text=text_bufs.get(idx, "")))
+                        yield TextEndEvent(data=TextEventData(text=TextContent(content=text_bufs.get(idx, ""))))
                     elif btype == "thinking":
-                        yield ThinkingEndEvent(data=ThinkingEventData(index=idx, thinking=thinking_bufs.get(idx, "")))
+                        yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_bufs.get(idx, ""))))
                     elif btype == "tool_use":
                         yield ToolCallEndEvent(data=ToolCallEventData(
-                            index=idx,
-                            id=tool_ids.get(idx, ""),
-                            name=tool_names.get(idx, ""),
-                            args=tool_bufs.get(idx, ""),
+                            tool_call=ToolCallContent(
+                                id=tool_ids.get(idx, ""),
+                                name=tool_names.get(idx, ""),
+                                args=json.loads(tool_bufs.get(idx, "{}"))
+                            )
                         ))
 
                 elif etype == "message_delta":

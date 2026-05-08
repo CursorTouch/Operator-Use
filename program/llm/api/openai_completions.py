@@ -122,8 +122,6 @@ class OpenAICompletionsAPI(BaseAPI):
 
         text_started = False
         text_buf = ""
-        text_index = 0
-        tool_index = 0
         # tool call state keyed by delta index
         tool_started: dict[int, bool] = {}
         tool_bufs: dict[int, str] = {}
@@ -143,10 +141,10 @@ class OpenAICompletionsAPI(BaseAPI):
 
             if delta.content:
                 if not text_started:
-                    yield TextStartEvent(data=TextEventData(index=text_index))
+                    yield TextStartEvent(data=TextEventData())
                     text_started = True
                 text_buf += delta.content
-                yield TextDeltaEvent(data=TextEventData(index=text_index, text=delta.content))
+                yield TextDeltaEvent(data=TextEventData(text=TextContent(content=delta.content)))
 
             if delta.tool_calls:
                 for tc in delta.tool_calls:
@@ -156,37 +154,34 @@ class OpenAICompletionsAPI(BaseAPI):
                         tool_bufs[idx] = ""
                         tool_meta[idx] = {"id": tc.id or "", "name": tc.function.name or "" if tc.function else ""}
                         yield ToolCallStartEvent(data=ToolCallEventData(
-                            index=tool_index + idx,
-                            id=tool_meta[idx]["id"],
-                            name=tool_meta[idx]["name"],
+                            tool_call=ToolCallContent(
+                                id=tool_meta[idx]["id"],
+                                name=tool_meta[idx]["name"],
+                            )
                         ))
                     if tc.function and tc.function.arguments:
                         tool_bufs[idx] += tc.function.arguments
                         yield ToolCallDeltaEvent(data=ToolCallEventData(
-                            index=tool_index + idx,
-                            id=tool_meta[idx]["id"],
-                            args=tc.function.arguments,
+                            tool_call=ToolCallContent(id=tool_meta[idx]["id"])
                         ))
 
             if choice.finish_reason:
                 if text_started:
-                    yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
-                    text_index += 1
+                    yield TextEndEvent(data=TextEventData(text=TextContent(content=text_buf)))
                     text_started = False
                     text_buf = ""
 
                 for idx in sorted(tool_started):
                     yield ToolCallEndEvent(data=ToolCallEventData(
-                        index=tool_index + idx,
-                        id=tool_meta[idx]["id"],
-                        name=tool_meta[idx]["name"],
-                        args=tool_bufs[idx],
+                        tool_call=ToolCallContent(
+                            id=tool_meta[idx]["id"],
+                            name=tool_meta[idx]["name"],
+                            args=json.loads(tool_bufs[idx]),
+                        )
                     ))
-                if tool_started:
-                    tool_index += len(tool_started)
-                    tool_started.clear()
-                    tool_bufs.clear()
-                    tool_meta.clear()
+                tool_started.clear()
+                tool_bufs.clear()
+                tool_meta.clear()
 
                 stop_reason = _STOP_REASON.get(choice.finish_reason, StopReason.Stop)
                 yield EndEvent(reason=stop_reason)
