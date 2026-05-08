@@ -186,10 +186,16 @@ class AnthropicMessagesAPI(BaseAPI):
                     elif btype == "thinking":
                         yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_bufs.get(idx, "")))
                     elif btype == "tool_use":
+                        args_str = tool_bufs.get(idx, "").strip()
+                        try:
+                            args = json.loads(args_str) if args_str else {}
+                        except json.JSONDecodeError:
+                            args = {}
+
                         yield ToolCallEndEvent(tool_call=ToolCallContent(
                                 id=tool_ids.get(idx, ""),
                                 name=tool_names.get(idx, ""),
-                                args=json.loads(tool_bufs.get(idx, "{}"))
+                                args=args
                             )
                         )
 

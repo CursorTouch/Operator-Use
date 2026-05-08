@@ -125,6 +125,7 @@ class Agent:
                 message = AssistantMessage()
                 tool_calls.clear()
 
+                emit(MessageStartEvent(message=message))
                 async for event in self.llm.stream(messages, tools=self.tools):
                     match event:
                         case ToolCallEndEvent(tool_call=tool_call):
@@ -140,6 +141,7 @@ class Agent:
                         case EndEvent(reason=reason):
                             message.stop_reason = reason
                 
+                emit(MessageEndEvent(message=message))
                 messages.append(message)
 
                 match message.stop_reason:
@@ -168,7 +170,14 @@ class Agent:
                                     )
                                 ]) for tool_call in tool_calls
                             ]
+                            for msg in tool_messages:
+                                emit(MessageStartEvent(message=msg))
+                                emit(MessageEndEvent(message=msg))
                             messages.extend(tool_messages)
+
+                            for msg in steering_messages:
+                                emit(MessageStartEvent(message=msg))
+                                emit(MessageEndEvent(message=msg))
                             messages.extend(steering_messages)
 
                         else:
@@ -183,6 +192,9 @@ class Agent:
                                     tool_result
                                 ]) for tool_result in tool_results
                             ]
+                            for msg in tool_messages:
+                                emit(MessageStartEvent(message=msg))
+                                emit(MessageEndEvent(message=msg))
                             messages.extend(tool_messages)
 
                     case StopReason.Stop:
@@ -195,6 +207,9 @@ class Agent:
                             follow_up_messages = await self.state.follow_up_queue.drain()
 
                         if follow_up_messages:
+                            for msg in follow_up_messages:
+                                emit(MessageStartEvent(message=msg))
+                                emit(MessageEndEvent(message=msg))
                             messages.extend(follow_up_messages)
                         else:
                             # No more work to do

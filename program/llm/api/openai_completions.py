@@ -191,10 +191,16 @@ class OpenAICompletionsAPI(BaseAPI):
                     text_buf = ""
 
                 for idx in sorted(tool_started):
+                    args_str = tool_bufs[idx].strip()
+                    try:
+                        args = json.loads(args_str) if args_str else {}
+                    except json.JSONDecodeError:
+                        args = {} # Or handle error appropriately
+
                     yield ToolCallEndEvent(tool_call=ToolCallContent(
                             id=tool_meta[idx]["id"],
                             name=tool_meta[idx]["name"],
-                            args=json.loads(tool_bufs[idx]),
+                            args=args,
                         )
                     )
                 tool_started.clear()

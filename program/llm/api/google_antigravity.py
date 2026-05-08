@@ -297,10 +297,18 @@ class GoogleAntigravityAPI(BaseAPI):
                             elif part.get("functionCall"):
                                 fc = part["functionCall"]
                                 name = fc.get("name", "")
-                                args_str = json.dumps(fc.get("args", {}))
+                                args_raw = fc.get("args", {})
+                                try:
+                                    if isinstance(args_raw, str) and args_raw.strip():
+                                        args = json.loads(args_raw)
+                                    else:
+                                        args = args_raw if args_raw else {}
+                                except json.JSONDecodeError:
+                                    args = {}
+
                                 yield ToolCallStartEvent(tool_call=ToolCallContent(id=name, name=name))
                                 yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=name))
-                                yield ToolCallEndEvent(tool_call=ToolCallContent(id=name, name=name, args=json.loads(args_str)))
+                                yield ToolCallEndEvent(tool_call=ToolCallContent(id=name, name=name, args=args))
                                 tool_index += 1
 
                         finish_reason = candidate.get("finishReason", "")

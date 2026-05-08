@@ -295,10 +295,16 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
 
         elif etype == "response.function_call_arguments.done":
             item_id = event.get("item_id", "")
+            args_str = event.get("arguments", "").strip()
+            try:
+                args = json.loads(args_str) if args_str else {}
+            except json.JSONDecodeError:
+                args = {}
+
             yield ToolCallEndEvent(tool_call=ToolCallContent(
                     id=item_id,
                     name=tool_names.get(item_id, ""),
-                    args=json.loads(event.get("arguments", "{}"))
+                    args=args
                 )
             )
 

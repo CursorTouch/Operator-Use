@@ -173,10 +173,16 @@ class OpenAIResponsesAPI(BaseAPI):
 
                 elif etype == "response.function_call_arguments.done":
                     call_id = event.item_id
+                    args_str = event.arguments.strip()
+                    try:
+                        args = json.loads(args_str) if args_str else {}
+                    except json.JSONDecodeError:
+                        args = {}
+
                     yield ToolCallEndEvent(tool_call=ToolCallContent(
                         id=call_id,
                         name=tool_names.get(call_id, ""),
-                        args=json.loads(event.arguments)
+                        args=args
                     ))
 
                 elif etype == "response.done":

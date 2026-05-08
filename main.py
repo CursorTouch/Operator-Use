@@ -48,19 +48,17 @@ class TimeTool(Tool):
         return ToolResult.ok(id=invocation.id, content=f"The time is {time_str} in {location}")
 
 async def main():
-    api_key = os.environ.get("NVIDIA_API_KEY", "")
+    api_key = os.environ.get("MISTRAL_API_KEY", "")
     if not api_key:
-        api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        api_key = input("Enter your API key: ").strip()
+        api_key = input("Enter your Mistral API key: ").strip()
 
-    model_id = "nvidia/llama-3.3-nemotron-super-49b-v1"
+    model_id = "mistral-large-latest"
     
     tools = [WeatherTool(), TimeTool()]
 
     llm = LLM(
         model_id=model_id,
-        provider="nvidia",
+        provider="mistral",
         options=LLMOptions(api_key=api_key),
     )
 
@@ -93,9 +91,16 @@ async def main():
             case AgentEventType.MessageUpdate:
                 pass
             case AgentEventType.MessageEnd:
-                if event.message.role == "assistant":
-                    text = "".join([c.content for c in event.message.contents if isinstance(c, TextContent)])
-                    print(text)
+                msg = event.message
+                content_summary = ""
+                for c in msg.contents:
+                    if hasattr(c, 'content'):
+                        content_summary += str(c.content)
+                    elif hasattr(c, 'name'):
+                        content_summary += f"[ToolCall: {c.name}] "
+                
+                if msg.role == "assistant" or msg.role == "user" or msg.role == "tool":
+                    print(content_summary)
             case AgentEventType.ToolExecutionStart:
                 print(f"\n[Tool] Executing {event.tool_call.name}...")
             case AgentEventType.ToolExecutionEnd:

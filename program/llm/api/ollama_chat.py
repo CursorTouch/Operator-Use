@@ -155,9 +155,17 @@ class OllamaChatAPI(BaseAPI):
                 if msg.tool_calls:
                     for i, tc in enumerate(msg.tool_calls):
                         fn = tc.function
-                        args = fn.arguments if isinstance(fn.arguments, str) else json.dumps(fn.arguments)
+                        args_raw = fn.arguments
+                        try:
+                            if isinstance(args_raw, str) and args_raw.strip():
+                                args = json.loads(args_raw)
+                            else:
+                                args = args_raw if args_raw else {}
+                        except json.JSONDecodeError:
+                            args = {}
+
                         yield ToolCallStartEvent(tool_call=ToolCallContent(name=fn.name))
-                        yield ToolCallEndEvent(tool_call=ToolCallContent(name=fn.name, args=json.loads(args) if isinstance(args, str) else args))
+                        yield ToolCallEndEvent(tool_call=ToolCallContent(name=fn.name, args=args))
 
                 if chunk.done:
                     if thinking_started:
