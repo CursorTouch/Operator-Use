@@ -1,60 +1,83 @@
 import asyncio
 import os
-from pydantic import BaseModel, Field
+import sys
 from program.llm.service import LLM, Options as LLMOptions
 from program.agent.service import Agent
 from program.agent.types import Options as AgentOptions, AgentEvent, AgentEventType
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 from program.message.types import UserMessage, TextContent, AssistantMessage, ToolMessage
 from dotenv import load_dotenv
 
 load_dotenv()
 
-class WeatherArgs(BaseModel):
-    location: str = Field(description="The city and state, e.g. London, UK")
-    unit: str = Field(default="celsius", description="The unit of temperature", pattern="^(celsius|fahrenheit)$")
+SYSTEM_PROMPT = """You are a highly skilled AI coding agent. Your goal is to help the user with their programming tasks, including:
+1. Exploring the codebase using `list_dir`, `read_file`, and `search_file`.
+2. Making changes using `write_file` and `edit_file`.
+3. Running commands, tests, and builds using `terminal`.
+4. Researching documentation and libraries using `web_search` and `web_fetch`.
 
-class WeatherTool(Tool):
-    def __init__(self):
-        super().__init__(
-            name="get_weather",
-            description="Get the current weather in a given location",
-            schema=WeatherArgs,
-            kind=ToolKind.Read,
-            execution_mode=ToolExecutionMode.Parallel
-        )
-    
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
-        location = invocation.params.get("location", "unknown")
-        return ToolResult.ok(id=invocation.id, content=f"Sunny, 20°C in {location}")
+Follow these rules:
+- Always explore before making changes.
+- When editing, use `edit_file` for small, precise changes. Use `write_file` for new files or complete rewrites.
+- Use `terminal` to verify your changes (e.g., run tests).
+- Be concise and professional.
+"""
 
-class TimeArgs(BaseModel):
-    location: str = Field(description="The city and state, e.g. London, UK")
-
-class TimeTool(Tool):
-    def __init__(self):
-        super().__init__(
-            name="get_time",
-            description="Get the current time in a given location",
-            schema=TimeArgs,
-            kind=ToolKind.Read,
-            execution_mode=ToolExecutionMode.Parallel
-        )
-    
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
-        import datetime
-        location = invocation.params.get("location", "unknown")
-        time_str = datetime.datetime.now().strftime('%H:%M')
-        return ToolResult.ok(id=invocation.id, content=f"The time is {time_str} in {location}")
+def process_event(event: AgentEvent):
+    match event.type:
+        case AgentEventType.TurnStart:
+            print("\n" + "="*20 + " NEW TURN " + "="*20)
+        case AgentEventType.MessageStart:
+            role = event.message.role.upper()
+            if role != "TOOL":
+                print(f"\n[{role}] ", end="", flush=True)
+        case AgentEventType.MessageUpdate:
+            pass # We could print deltas here for streaming effect
+        case AgentEventType.MessageEnd:
+            msg = event.message
+            content = ""
+            for c in msg.contents:
+                if hasattr(c, 'content'):
+                    content += str(c.content)
+                elif hasattr(c, 'name'):
+                    # Don't print tool calls here, they are handled by ExecutionStart
+                    pass
+            if content and msg.role != "tool":
+                print(content)
+        case AgentEventType.ToolExecutionStart:
+            print(f"\n[TOOL CALL] {event.tool_call.name}({event.tool_call.args})")
+        case AgentEventType.ToolExecutionEnd:
+            # Optionally print a snippet of the result if it's long
+            res = str(event.tool_result.content)
+            if len(res) > 200:
+                res = res[:200] + "..."
+            print(f"[TOOL RESULT] {res}")
+        case AgentEventType.AgentError:
+            print(f"\n[ERROR] {event.error}")
 
 async def main():
     api_key = os.environ.get("MISTRAL_API_KEY", "")
     if not api_key:
         api_key = input("Enter your Mistral API key: ").strip()
+        if not api_key:
+             print("Mistral API key is required.")
+             return
 
     model_id = "mistral-large-latest"
     
-    tools = [WeatherTool(), TimeTool()]
+    from program.agent.tools import (
+        ListDirTool, ReadFileTool, WriteFileTool, EditFileTool,
+        TerminalTool, WebFetchTool, WebSearchTool
+    )
+    
+    tools = [
+        ListDirTool(),
+        ReadFileTool(),
+        WriteFileTool(),
+        EditFileTool(),
+        TerminalTool(),
+        WebFetchTool(),
+        WebSearchTool()
+    ]
 
     llm = LLM(
         model_id=model_id,
@@ -62,78 +85,41 @@ async def main():
         options=LLMOptions(api_key=api_key),
     )
 
-    # State for testing steering and follow-ups
-    steering_delivered = False
-    follow_up_delivered = False
-
-    def get_steering():
-        nonlocal steering_delivered
-        if not steering_delivered:
-            steering_delivered = True
-            print("\n[HOOK] Injecting Steering Message!")
-            return [UserMessage(contents=[TextContent(content="Actually, also tell me the capital of France.")])]
-        return []
-
-    def get_follow_up():
-        nonlocal follow_up_delivered
-        if not follow_up_delivered:
-            follow_up_delivered = True
-            print("\n[HOOK] Injecting Follow-up Task!")
-            return [UserMessage(contents=[TextContent(content="Now tell me a joke.")])]
-        return []
-
-    def process_event(event: AgentEvent):
-        match event.type:
-            case AgentEventType.TurnStart:
-                print("\n--- New Turn Start ---")
-            case AgentEventType.MessageStart:
-                print(f"\n[{event.message.role.upper()}] ", end="")
-            case AgentEventType.MessageUpdate:
-                pass
-            case AgentEventType.MessageEnd:
-                msg = event.message
-                content_summary = ""
-                for c in msg.contents:
-                    if hasattr(c, 'content'):
-                        content_summary += str(c.content)
-                    elif hasattr(c, 'name'):
-                        content_summary += f"[ToolCall: {c.name}] "
-                
-                if msg.role == "assistant" or msg.role == "user" or msg.role == "tool":
-                    print(content_summary)
-            case AgentEventType.ToolExecutionStart:
-                print(f"\n[Tool] Executing {event.tool_call.name}...")
-            case AgentEventType.ToolExecutionEnd:
-                print(f"[Tool] Result: {event.tool_result.content}")
-            case AgentEventType.AgentError:
-                print(f"\n[ERROR] Agent Error: {event.error}")
-
     agent = Agent(
         llm=llm,
         tools=tools,
-        options=AgentOptions(
-            get_steering_messages=get_steering,
-            get_follow_up_messages=get_follow_up
-        )
+        system_prompt=SYSTEM_PROMPT,
+        options=AgentOptions()
     )
 
-    # Override the default process_events with our printer
     agent.process_events = process_event
 
-    print("--- Starting Agent Run ---")
-    messages = [UserMessage(contents=[TextContent(content="What is the weather in London and what time is it there?")])]
-    
-    await agent.run(messages)
+    print("--- AI Coding Agent Started ---")
+    print("Type 'exit' or 'quit' to stop.")
 
-    print("\n--- Final Conversation History ---")
-    for msg in agent.state.messages:
-        content_summary = ""
-        for c in msg.contents:
-            if hasattr(c, 'content'):
-                content_summary += str(c.content)
-            elif hasattr(c, 'name'):
-                content_summary += f"[ToolCall: {c.name}] "
-        print(f"[{msg.role.upper()}]: {content_summary}")
+    messages = []
+    
+    while True:
+        try:
+            user_input = input("\nUser > ").strip()
+            if not user_input:
+                continue
+            if user_input.lower() in ("exit", "quit"):
+                break
+            
+            messages.append(UserMessage(contents=[TextContent(content=user_input)]))
+            
+            # Run the agent with the message history
+            await agent.run(messages)
+            
+            # The agent.run method appends Assistant and Tool messages to the list it receives.
+            # So the 'messages' list is now updated with the agent's response and tool interactions.
+            
+        except KeyboardInterrupt:
+            print("\nInterrupted by user.")
+            break
+        except Exception as e:
+            print(f"\n[CRITICAL ERROR] {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())

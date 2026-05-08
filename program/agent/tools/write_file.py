@@ -1,0 +1,53 @@
+from __future__ import annotations
+from pathlib import Path
+from pydantic import BaseModel, Field
+from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+
+class WriteFileArgs(BaseModel):
+    path: str = Field(
+        ...,
+        description="Absolute path or path relative to the current working directory.",
+    )
+    content: str = Field(
+        ...,
+        description="Full content to write. This replaces the entire file.",
+    )
+    overwrite: bool = Field(
+        default=True,
+        description="Set to False to prevent accidentally overwriting an existing file.",
+    )
+
+class WriteFileTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="write_file",
+            description="Create a new file or fully overwrite an existing one. Parent directories are created automatically.",
+            schema=WriteFileArgs,
+            kind=ToolKind.Write,
+            execution_mode=ToolExecutionMode.Parallel
+        )
+
+    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+        params = invocation.params
+        path_str = params.get("path")
+        content = params.get("content")
+        overwrite = params.get("overwrite", True)
+        
+        if not path_str:
+             return ToolResult.error(id=invocation.id, content="Parameter 'path' is required.")
+        if content is None:
+             return ToolResult.error(id=invocation.id, content="Parameter 'content' is required.")
+
+        resolved_path = Path(path_str).resolve()
+        file_exists = resolved_path.exists()
+        
+        if file_exists and not overwrite:
+            return ToolResult.error(id=invocation.id, content=f"File exists and overwrite=False: {resolved_path}")
+        
+        try:
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+            resolved_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            return ToolResult.error(id=invocation.id, content=f"Failed to write file: {resolved_path}. {e}")
+            
+        return ToolResult.ok(id=invocation.id, content=f"{'Overwrote' if file_exists else 'Created'} file: {resolved_path}")

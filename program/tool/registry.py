@@ -30,7 +30,8 @@ class ToolRegistry:
         tool_call: ToolCallContent, 
         options: Optional[Options] = None,
         emit: Optional[EmitEvent] = None,
-        signal: Optional[AbortSignal] = None
+        signal: Optional[AbortSignal] = None,
+        **kwargs
     ) -> ToolResultContent:
 
         if options is not None and options.should_skip_tool_calls is not None:
@@ -57,7 +58,8 @@ class ToolRegistry:
             tool_result=await tool.execute(
                 invocation=invocation, 
                 tool_execution_update_callback=lambda partial_tool_result: emit(ToolExecutionUpdateEvent(partial_tool_result=partial_tool_result)), 
-                signal=signal
+                signal=signal,
+                **kwargs
             )
 
             if options is not None and options.after_tool_call is not None:
@@ -78,11 +80,12 @@ class ToolRegistry:
         options: Optional[Options] = None,
         emit: Optional[EmitEvent] = None,
         signal: Optional[AbortSignal] = None,
+        **kwargs
     ) -> list[ToolResultContent]:
         """Execute multiple tools sequentially."""
         results: list[ToolResultContent] = []
         for tool_call in tool_calls:
-            result = await self.execute(tool_call, options=options, emit=emit, signal=signal)
+            result = await self.execute(tool_call, options=options, emit=emit, signal=signal, **kwargs)
             results.append(result)
         return results
 
@@ -92,11 +95,12 @@ class ToolRegistry:
         options: Optional[Options] = None,
         emit: Optional[EmitEvent] = None,
         signal: Optional[AbortSignal] = None,
+        **kwargs
     ) -> list[ToolResultContent]:
         """Execute multiple tools in parallel."""
         tasks: list[asyncio.Future[ToolResultContent]] = []
         for tool_call in tool_calls:
-            tasks.append(self.execute(tool_call, options=options, emit=emit, signal=signal))
+            tasks.append(self.execute(tool_call, options=options, emit=emit, signal=signal, **kwargs))
         
         results = await asyncio.gather(*tasks)
         return results
@@ -107,6 +111,7 @@ class ToolRegistry:
         options: Optional[Options] = None,
         emit: Optional[EmitEvent] = None,
         signal: Optional[AbortSignal] = None,
+        **kwargs
     ) -> list[ToolResultContent]:
         """Execute multiple tools and return a flat list of results."""
         results: list[ToolResultContent] = []
@@ -128,12 +133,12 @@ class ToolRegistry:
 
         # 2. Execute Parallel calls concurrently
         if parallel_calls:
-            parallel_results = await self.parallel_execute(parallel_calls, options=options, emit=emit, signal=signal)
+            parallel_results = await self.parallel_execute(parallel_calls, options=options, emit=emit, signal=signal, **kwargs)
             results.extend(parallel_results)
 
         # 3. Execute Sequential calls one by one
         if sequential_calls:
-            sequential_results = await self.sequential_execute(sequential_calls, options=options, emit=emit, signal=signal)
+            sequential_results = await self.sequential_execute(sequential_calls, options=options, emit=emit, signal=signal, **kwargs)
             results.extend(sequential_results)
 
         return results

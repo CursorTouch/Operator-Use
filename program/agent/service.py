@@ -230,7 +230,13 @@ class Agent:
         emit(AgentEndEvent(messages=messages))
 
     async def _execute_tool_calls(self, tool_calls: list[ToolCallContent], emit: EmitEvent, signal:Optional[AbortSignal]=None)->list[ToolResultContent]:
-        tool_results=await self.tool_registry.batch_execute(tool_calls=tool_calls,options=self.options,emit=emit,signal=signal)
+        tool_results=await self.tool_registry.batch_execute(
+            tool_calls=tool_calls,
+            options=self.options,
+            emit=emit,
+            signal=signal,
+            _llm=self.llm
+        )
         return tool_results
 
     async def run(self, messages: list[BaseMessage]):
