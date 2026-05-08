@@ -21,8 +21,11 @@ from program.llm.types import (
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
-    TextContent, ImageContent, ThinkingContent, ToolCallContent,
+    TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from program.tool.types import Tool
 
 _DEFAULT_BASE_URL = "https://chatgpt.com/backend-api"
 _JWT_CLAIM_PATH = "https://api.openai.com/auth"
@@ -117,12 +120,12 @@ def _messages_to_input(messages: list[BaseMessage]) -> tuple[str, list[dict[str,
             if text:
                 instructions = text
         elif isinstance(msg, ToolMessage):
-            for item in msg.contents:
-                if isinstance(item, TextContent):
+            for content in msg.contents:
+                if isinstance(content, ToolResultContent):
                     input_items.append({
                         "type": "function_call_output",
-                        "call_id": msg.id,
-                        "output": item.content,
+                        "call_id": content.id,
+                        "output": content.content,
                     })
         else:
             role = "user" if isinstance(msg, UserMessage) else "assistant"
@@ -140,6 +143,7 @@ def _build_body(
     instructions: str,
     input_items: list[dict[str, Any]],
     options: Options,
+    tools: Optional[list[Tool]] = None,
 ) -> dict[str, Any]:
     effort = _THINKING_EFFORT.get(options.thinking_level, "medium") if options.thinking_level else "medium"
     body: dict[str, Any] = {
@@ -154,6 +158,17 @@ def _build_body(
     }
     if options.max_tokens is not None:
         body["max_output_tokens"] = options.max_tokens
+    
+    if tools:
+        body["tools"] = [
+            {
+                "type": "function",
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.schema.model_json_schema(),
+            }
+            for tool in tools
+        ]
     return body
 
 
@@ -358,11 +373,11 @@ class OpenAICodexResponsesAPI(BaseAPI):
             async for event in _process_events(_map_codex_events(_parse_ws(ws))):
                 yield event
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gpt-4o") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         token = self.options.api_key or ""
         account_id = _extract_account_id(token)
         instructions, input_items = _messages_to_input(messages)
-        body = _build_body(model, instructions, input_items, self.options)
+        body = _build_body(model, instructions, input_items, self.options, tools=tools)
 
         if self.options.on_payload:
             modified = self.options.on_payload(body)
@@ -387,8 +402,8 @@ class OpenAICodexResponsesAPI(BaseAPI):
                     yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                     return
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o") -> list[LLMEvent]:
+    async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model):
+        async for event in self.stream(messages, model=model, tools=tools):
             events.append(event)
         return events

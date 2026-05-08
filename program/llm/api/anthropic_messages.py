@@ -13,8 +13,11 @@ from program.llm.types import (
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
-    TextContent, ImageContent, ThinkingContent, ToolCallContent,
+    TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from program.tool.types import Tool
 
 _STOP_REASON: dict[str, StopReason] = {
     "end_turn": StopReason.Stop,
@@ -60,11 +63,20 @@ def _messages_to_anthropic(
                     parts.append({"type": "tool_use", "id": item.id, "name": item.name, "input": item.args})
             result.append({"role": "assistant", "content": parts})
         elif isinstance(msg, ToolMessage):
-            text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            result.append({
-                "role": "user",
-                "content": [{"type": "tool_result", "tool_use_id": msg.id, "content": text}],
-            })
+            tool_results = []
+            for content in msg.contents:
+                if isinstance(content, ToolResultContent):
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": content.id,
+                        "content": content.content,
+                        "is_error": content.is_error,
+                    })
+            if tool_results:
+                result.append({
+                    "role": "user",
+                    "content": tool_results,
+                })
 
     return system, result
 
@@ -85,6 +97,7 @@ class AnthropicMessagesAPI(BaseAPI):
         model: str,
         system: str | None,
         messages: list[dict[str, Any]],
+        tools: Optional[list[Tool]] = None,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {
             "model": model,
@@ -96,11 +109,22 @@ class AnthropicMessagesAPI(BaseAPI):
             params["system"] = system
         if self.options.thinking_budget is not None:
             params["thinking"] = {"type": "enabled", "budget_tokens": self.options.thinking_budget}
+        
+        if tools:
+            params["tools"] = [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.schema.model_json_schema(),
+                }
+                for tool in tools
+            ]
+            
         return params
 
-    async def stream(self, messages: list[BaseMessage], model: str = "claude-sonnet-4-6") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, messages: list[BaseMessage], model: str = "claude-sonnet-4-6", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         system, anthropic_messages = _messages_to_anthropic(messages)
-        params = self._build_params(model, system, anthropic_messages)
+        params = self._build_params(model, system, anthropic_messages, tools=tools)
 
         if self.options.on_payload:
             modified = self.options.on_payload(params)
@@ -176,8 +200,8 @@ class AnthropicMessagesAPI(BaseAPI):
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, error=str(event))
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "claude-sonnet-4-6") -> list[LLMEvent]:
+    async def invoke(self, messages: list[BaseMessage], model: str = "claude-sonnet-4-6", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model):
+        async for event in self.stream(messages, model=model, tools=tools):
             events.append(event)
         return events

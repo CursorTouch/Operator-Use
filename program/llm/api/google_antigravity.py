@@ -24,8 +24,11 @@ from program.llm.types import (
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
-    TextContent, ImageContent, ThinkingContent, ToolCallContent,
+    TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from program.tool.types import Tool
 
 __all__ = ["GoogleAntigravityAPI"]
 
@@ -146,11 +149,17 @@ def _messages_to_contents(
             if parts:
                 raw.append({"role": "model", "parts": parts})
         elif isinstance(msg, ToolMessage):
-            text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            raw.append({
-                "role": "user",
-                "parts": [{"functionResponse": {"name": msg.id, "response": {"result": text}}}],
-            })
+            parts = []
+            for content in msg.contents:
+                if isinstance(content, ToolResultContent):
+                    parts.append({
+                        "functionResponse": {
+                            "name": content.id,
+                            "response": {"result": content.content}
+                        }
+                    })
+            if parts:
+                raw.append({"role": "user", "parts": parts})
 
     # Merge consecutive same-role turns (Gemini requires strict alternation)
     contents: list[dict[str, Any]] = []
@@ -182,6 +191,7 @@ class GoogleAntigravityAPI(BaseAPI):
         project: str,
         system: str | None,
         contents: list[dict[str, Any]],
+        tools: Optional[list[Tool]] = None,
     ) -> dict[str, Any]:
         generation_config: dict[str, Any] = {}
         if self.options.temperature is not None:
@@ -202,10 +212,10 @@ class GoogleAntigravityAPI(BaseAPI):
 
         return {"model": model, "project": project, "request": inner}
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gemini-2.5-flash") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, messages: list[BaseMessage], model: str = "gemini-2.5-flash", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         project = await self._ensure_project_id()
         system, contents = _messages_to_contents(messages)
-        body = self._build_request_body(model, project, system, contents)
+        body = self._build_request_body(model, project, system, contents, tools=tools)
         headers = _antigravity_headers(self.options.api_key or "")
 
         if self.options.on_payload:
@@ -314,8 +324,8 @@ class GoogleAntigravityAPI(BaseAPI):
             yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.5-flash") -> list[LLMEvent]:
+    async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.5-flash", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model):
+        async for event in self.stream(messages, model=model, tools=tools):
             events.append(event)
         return events

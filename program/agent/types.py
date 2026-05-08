@@ -15,7 +15,7 @@ from program.message.types import BaseMessage, ToolCallContent, ToolResultConten
 from program.tool.types import ToolInvocation, ToolResult
 
 AbortSignal = asyncio.Event
-EmitEvent = Callable[[AgentEvent], None]
+EmitEvent = Callable[['AgentEvent'], None]
 
 
 class SteeringMode(str, Enum):
@@ -39,6 +39,7 @@ class AgentEventType(str, Enum):
     ToolExecutionStart = "tool_execution_start"
     ToolExecutionUpdate = "tool_execution_update"
     ToolExecutionEnd = "tool_execution_end"
+    AgentError = "agent_error"
 
 
 AfterToolCallCallback = Callable[[ToolResult, Optional[AbortSignal]], Optional[ToolResult]]

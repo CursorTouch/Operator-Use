@@ -13,8 +13,11 @@ from program.llm.types import (
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
-    TextContent, ImageContent, ThinkingContent, ToolCallContent,
+    TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from program.tool.types import Tool
 
 _THINKING_EFFORT: dict[ThinkingLevel, str] = {
     ThinkingLevel.Low: "low",
@@ -69,12 +72,12 @@ def _messages_to_input(
             text_parts = [c.content for c in msg.contents if isinstance(c, TextContent)]
             instructions = "\n".join(text_parts)
         elif isinstance(msg, ToolMessage):
-            for item in msg.contents:
-                if isinstance(item, TextContent):
+            for content in msg.contents:
+                if isinstance(content, ToolResultContent):
                     input_items.append({
                         "type": "function_call_output",
-                        "call_id": msg.id,
-                        "output": item.content,
+                        "call_id": content.id,
+                        "output": content.content,
                     })
         else:
             role = "user" if isinstance(msg, UserMessage) else "assistant"
@@ -96,7 +99,7 @@ class OpenAIResponsesAPI(BaseAPI):
             timeout=options.timeout.total_seconds(),
         )
 
-    def _build_params(self, model: str, instructions: str | None, input_items: list) -> dict[str, Any]:
+    def _build_params(self, model: str, instructions: str | None, input_items: list, tools: Optional[list[Tool]] = None) -> dict[str, Any]:
         params: dict[str, Any] = {
             "model": model,
             "input": input_items,
@@ -108,11 +111,23 @@ class OpenAIResponsesAPI(BaseAPI):
             params["max_output_tokens"] = self.options.max_tokens
         if self.options.thinking_level is not None:
             params["reasoning"] = {"effort": _THINKING_EFFORT[self.options.thinking_level]}
+        
+        if tools:
+            params["tools"] = [
+                {
+                    "type": "function",
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.schema.model_json_schema(),
+                }
+                for tool in tools
+            ]
+
         return params
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gpt-4o") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         instructions, input_items = _messages_to_input(messages)
-        params = self._build_params(model, instructions, input_items)
+        params = self._build_params(model, instructions, input_items, tools=tools)
 
         if self.options.on_payload:
             modified = self.options.on_payload(params)
@@ -176,8 +191,8 @@ class OpenAIResponsesAPI(BaseAPI):
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, error=str(event))
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o") -> list[LLMEvent]:
+    async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model):
+        async for event in self.stream(messages, model=model, tools=tools):
             events.append(event)
         return events

@@ -14,8 +14,11 @@ from program.llm.types import (
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
-    TextContent, ImageContent, ThinkingContent, ToolCallContent,
+    TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from program.tool.types import Tool
 
 _STOP_REASON: dict[str, StopReason] = {
     "STOP": StopReason.Stop,
@@ -70,14 +73,17 @@ def _messages_to_gemini(
             if parts:
                 contents.append(genai_types.Content(role="model", parts=parts))
         elif isinstance(msg, ToolMessage):
-            text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            parts = [genai_types.Part(
-                function_response=genai_types.FunctionResponse(
-                    name=msg.id,
-                    response={"result": text},
-                ),
-            )]
-            contents.append(genai_types.Content(role="user", parts=parts))
+            parts = []
+            for content in msg.contents:
+                if isinstance(content, ToolResultContent):
+                    parts.append(genai_types.Part(
+                        function_response=genai_types.FunctionResponse(
+                            name=content.id,
+                            response={"result": content.content},
+                        ),
+                    ))
+            if parts:
+                contents.append(genai_types.Content(role="user", parts=parts))
 
     return system, contents
 
@@ -87,7 +93,7 @@ class GeminiGenerateAPI(BaseAPI):
         super().__init__(options)
         self._client = genai.Client(api_key=options.api_key)
 
-    def _build_config(self) -> genai_types.GenerateContentConfig:
+    def _build_config(self, tools: Optional[list[Tool]] = None) -> genai_types.GenerateContentConfig:
         params: dict[str, Any] = {
             "temperature": self.options.temperature,
         }
@@ -102,12 +108,26 @@ class GeminiGenerateAPI(BaseAPI):
                 thinking_budget=budget,
                 include_thoughts=True,
             )
+        
+        if tools:
+            params["tools"] = [
+                genai_types.Tool(
+                    function_declarations=[
+                        genai_types.FunctionDeclaration(
+                            name=t.name,
+                            description=t.description,
+                            parameters=t.schema.model_json_schema(),
+                        )
+                        for t in tools
+                    ]
+                )
+            ]
 
         return genai_types.GenerateContentConfig(**params)
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         system, contents = _messages_to_gemini(messages)
-        config = self._build_config()
+        config = self._build_config(tools=tools)
         if system:
             config.system_instruction = system
 
@@ -189,8 +209,8 @@ class GeminiGenerateAPI(BaseAPI):
             yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash") -> list[LLMEvent]:
+    async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model):
+        async for event in self.stream(messages, model=model, tools=tools):
             events.append(event)
         return events

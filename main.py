@@ -1,159 +1,134 @@
 import asyncio
 import os
-from program.llm.service import LLM
-from program.llm.types import (
-    Options, StartEvent, EndEvent, ErrorEvent,
-    TextStartEvent, TextDeltaEvent, TextEndEvent,
-    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
-    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
-)
-from program.message.types import UserMessage, AssistantMessage, ToolMessage, TextContent, ThinkingContent, ToolCallContent, ToolResultContent
-from program.llm.types import StopReason
+from pydantic import BaseModel, Field
+from program.llm.service import LLM, Options as LLMOptions
+from program.agent.service import Agent
+from program.agent.types import Options as AgentOptions, AgentEvent, AgentEventType
+from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.message.types import UserMessage, TextContent, AssistantMessage, ToolMessage
 from dotenv import load_dotenv
+
 load_dotenv()
+
+class WeatherArgs(BaseModel):
+    location: str = Field(description="The city and state, e.g. London, UK")
+    unit: str = Field(default="celsius", description="The unit of temperature", pattern="^(celsius|fahrenheit)$")
+
+class WeatherTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="get_weather",
+            description="Get the current weather in a given location",
+            schema=WeatherArgs,
+            kind=ToolKind.Read,
+            execution_mode=ToolExecutionMode.Parallel
+        )
+    
+    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+        location = invocation.params.get("location", "unknown")
+        return ToolResult.ok(id=invocation.id, content=f"Sunny, 20°C in {location}")
+
+class TimeArgs(BaseModel):
+    location: str = Field(description="The city and state, e.g. London, UK")
+
+class TimeTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="get_time",
+            description="Get the current time in a given location",
+            schema=TimeArgs,
+            kind=ToolKind.Read,
+            execution_mode=ToolExecutionMode.Parallel
+        )
+    
+    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+        import datetime
+        location = invocation.params.get("location", "unknown")
+        time_str = datetime.datetime.now().strftime('%H:%M')
+        return ToolResult.ok(id=invocation.id, content=f"The time is {time_str} in {location}")
 
 async def main():
     api_key = os.environ.get("NVIDIA_API_KEY", "")
     if not api_key:
-        api_key = input("Enter your NVIDIA API key: ").strip()
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        api_key = input("Enter your API key: ").strip()
 
     model_id = "nvidia/llama-3.3-nemotron-super-49b-v1"
-
-    # Define a tool injection hook with multiple tools
-    def inject_tools(params):
-        params["tools"] = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_weather",
-                    "description": "Get the current weather in a given location",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "location": {"type": "string", "description": "The city and state, e.g. London, UK"},
-                            "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
-                        },
-                        "required": ["location"]
-                    }
-                }
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_time",
-                    "description": "Get the current time in a given location",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "location": {"type": "string", "description": "The city and state, e.g. London, UK"}
-                        },
-                        "required": ["location"]
-                    }
-                }
-            }
-        ]
-        params["tool_choice"] = "auto"
-        return params
+    
+    tools = [WeatherTool(), TimeTool()]
 
     llm = LLM(
-        model_id = model_id,
+        model_id=model_id,
         provider="nvidia",
-        options=Options(
-            api_key=api_key,
-            on_payload=inject_tools
-        ),
+        options=LLMOptions(api_key=api_key),
     )
 
-    # Initial prompt
+    # State for testing steering and follow-ups
+    steering_delivered = False
+    follow_up_delivered = False
+
+    def get_steering():
+        nonlocal steering_delivered
+        if not steering_delivered:
+            steering_delivered = True
+            print("\n[HOOK] Injecting Steering Message!")
+            return [UserMessage(contents=[TextContent(content="Actually, also tell me the capital of France.")])]
+        return []
+
+    def get_follow_up():
+        nonlocal follow_up_delivered
+        if not follow_up_delivered:
+            follow_up_delivered = True
+            print("\n[HOOK] Injecting Follow-up Task!")
+            return [UserMessage(contents=[TextContent(content="Now tell me a joke.")])]
+        return []
+
+    def process_event(event: AgentEvent):
+        match event.type:
+            case AgentEventType.TurnStart:
+                print("\n--- New Turn Start ---")
+            case AgentEventType.MessageStart:
+                print(f"\n[{event.message.role.upper()}] ", end="")
+            case AgentEventType.MessageUpdate:
+                pass
+            case AgentEventType.MessageEnd:
+                if event.message.role == "assistant":
+                    text = "".join([c.content for c in event.message.contents if isinstance(c, TextContent)])
+                    print(text)
+            case AgentEventType.ToolExecutionStart:
+                print(f"\n[Tool] Executing {event.tool_call.name}...")
+            case AgentEventType.ToolExecutionEnd:
+                print(f"[Tool] Result: {event.tool_result.content}")
+            case AgentEventType.AgentError:
+                print(f"\n[ERROR] Agent Error: {event.error}")
+
+    agent = Agent(
+        llm=llm,
+        tools=tools,
+        options=AgentOptions(
+            get_steering_messages=get_steering,
+            get_follow_up_messages=get_follow_up
+        )
+    )
+
+    # Override the default process_events with our printer
+    agent.process_events = process_event
+
+    print("--- Starting Agent Run ---")
     messages = [UserMessage(contents=[TextContent(content="What is the weather in London and what time is it there?")])]
-
-    while True:
-        # 1. Construct the AssistantMessage at the place of usage
-        assistant_msg = AssistantMessage()
-
-        print(f"\n--- Starting Turn (LLM Prediction) ---")
-        async for event in llm.stream(messages):
-            match event:
-                case StartEvent():
-                    print("[StartEvent]")
-                
-                case TextStartEvent():
-                    if not assistant_msg.contents or not isinstance(assistant_msg.contents[-1], TextContent):
-                        assistant_msg.contents.append(TextContent(content=""))
-                    print("[TextStartEvent]")
-                    
-                case TextDeltaEvent(text=text):
-                    if not assistant_msg.contents or not isinstance(assistant_msg.contents[-1], TextContent):
-                        assistant_msg.contents.append(TextContent(content=""))
-                    assistant_msg.contents[-1].content += text.content
-                    print(text.content, end="", flush=True)
-                    
-                case TextEndEvent():
-                    print(f"\n[TextEndEvent]")
-                    
-                case ToolCallStartEvent(tool_call=tc):
-                    print(f"[ToolCallStartEvent] id={tc.id if tc and tc.id else ''}, name={tc.name if tc and tc.name else ''}")
-                    
-                case ToolCallDeltaEvent():
-                    print(".", end="", flush=True)
-                    
-                case ToolCallEndEvent(tool_call=tc):
-                    if tc:
-                        assistant_msg.contents.append(tc)
-                    print(f"\n[ToolCallEndEvent] id={tc.id if tc else ''}, name={tc.name if tc else ''}, args={tc.args if tc else ''}")
-                    
-                case EndEvent(reason=reason):
-                    assistant_msg.stop_reason = reason
-                    print(f"\n[EndEvent] reason={reason}")
-                    
-                case ErrorEvent(reason=reason, error=err):
-                    print(f"\n[ErrorEvent] reason={reason}, error={err}")
-
-        # 2. Add the LLM's response to the conversation history
-        messages.append(assistant_msg)
-
-        # 3. Check if the LLM wants to call tools
-        if assistant_msg.stop_reason == StopReason.ToolCalls:
-            print("\n--- Executing Tool Calls ---")
-            results = []
-            for content in assistant_msg.contents:
-                if isinstance(content, ToolCallContent):
-                    # Mocking tool execution
-                    if content.name == "get_weather":
-                        output = f"Sunny, 20°C in {content.args.get('location', 'unknown')}"
-                    elif content.name == "get_time":
-                        import datetime
-                        output = f"The time is {datetime.datetime.now().strftime('%H:%M')} in {content.args.get('location', 'unknown')}"
-                    else:
-                        output = "Tool not found."
-                    
-                    print(f"Executed {content.name}: {output}")
-                    
-                    # 4. Create ToolResultContent for each call
-                    results.append(ToolResultContent(
-                        id=content.id,
-                        content=output
-                    ))
-            
-            # 5. Return ALL results in a SINGLE ToolMessage
-            messages.append(ToolMessage(contents=results))
-            
-            # Continue the loop for the next turn
-            continue
-        else:
-            # If it's a normal stop (not a tool call), we are done!
-            break
+    
+    await agent.run(messages)
 
     print("\n--- Final Conversation History ---")
-    for msg in messages:
-        summary = ""
+    for msg in agent.state.messages:
+        content_summary = ""
         for c in msg.contents:
-            if isinstance(c, ToolResultContent):
-                summary += f"[Result {c.id}: {c.content[:20]}...] "
-            else:
-                summary += repr(c)[:50] + "... "
-        print(f"[{msg.role.upper()}]: {summary}")
-
+            if hasattr(c, 'content'):
+                content_summary += str(c.content)
+            elif hasattr(c, 'name'):
+                content_summary += f"[ToolCall: {c.name}] "
+        print(f"[{msg.role.upper()}]: {content_summary}")
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -13,12 +13,13 @@ from program.agent.types import (
     ToolExecutionStartEvent,
     ToolExecutionUpdateEvent,
     ToolExecutionEndEvent,
-    ExecutionMode,
+    AgentErrorEvent,
     SteeringMode,
     FollowupMode,
     FollowupQueue,
     SteeringQueue,
 )
+from program.tool.types import ToolExecutionMode
 from program.agent.service import Agent
 
 __all__ = [
@@ -37,7 +38,8 @@ __all__ = [
     "ToolExecutionStartEvent",
     "ToolExecutionUpdateEvent",
     "ToolExecutionEndEvent",
-    "ExecutionMode",
+    "AgentErrorEvent",
+    "ToolExecutionMode",
     "SteeringMode",
     "FollowupMode",
     "FollowupQueue",

@@ -1,15 +1,17 @@
 from __future__ import annotations
-from program.message.types import ToolResultContent
+from program.message.types import ToolResultContent, ToolCallContent
 from program.agent.types import AbortSignal, EmitEvent,ToolExecutionStartEvent,ToolExecutionEndEvent,ToolExecutionUpdateEvent
 from program.tool.types import Tool, ToolInvocation, ToolExecutionMode
-from program.llm.types import ToolCallContent
 from typing import Any, Optional
 from program.agent.types import Options
 import asyncio
 
 class ToolRegistry:
-    def __init__(self) -> None:
+    def __init__(self, tools: Optional[list[Tool]] = None) -> None:
         self._tools: dict[str, Tool] = {}
+        if tools:
+            for tool in tools:
+                self.register(tool)
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool

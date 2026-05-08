@@ -13,8 +13,11 @@ from program.llm.types import (
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
-    TextContent, ImageContent, ThinkingContent, ToolCallContent,
+    TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
+from typing import Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    from program.tool.types import Tool
 
 _MINIMAL_LEVELS = {ThinkingLevel.Low, ThinkingLevel.Minimal}
 
@@ -65,8 +68,9 @@ def _messages_to_ollama(messages: list[BaseMessage]) -> list[dict[str, Any]]:
             result.append(entry)
 
         elif isinstance(msg, ToolMessage):
-            text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            result.append({"role": "tool", "content": text})
+            for content in msg.contents:
+                if isinstance(content, ToolResultContent):
+                    result.append({"role": "tool", "content": content.content})
 
     return result
 
@@ -86,7 +90,7 @@ class OllamaChatAPI(BaseAPI):
             opts["num_predict"] = self.options.max_tokens
         return opts
 
-    async def stream(self, messages: list[BaseMessage], model: str = "llama3.2") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, messages: list[BaseMessage], model: str = "llama3.2", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         ollama_messages = _messages_to_ollama(messages)
 
         think: bool | None = None
@@ -108,6 +112,19 @@ class OllamaChatAPI(BaseAPI):
                 "think": think,
                 "options": self._inference_options(),
             }
+
+            if tools:
+                payload["tools"] = [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.schema.model_json_schema(),
+                        }
+                    }
+                    for tool in tools
+                ]
 
             if self.options.on_payload:
                 modified = self.options.on_payload(payload)
@@ -153,8 +170,8 @@ class OllamaChatAPI(BaseAPI):
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, error=str(e))
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "llama3.2") -> list[LLMEvent]:
+    async def invoke(self, messages: list[BaseMessage], model: str = "llama3.2", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model):
+        async for event in self.stream(messages, model=model, tools=tools):
             events.append(event)
         return events

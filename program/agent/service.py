@@ -86,7 +86,8 @@ class Agent:
         self.state.pending_tool_calls.clear()
         self.state.is_streaming = False
 
-    def process_events(self,event:AgentEvent):
+    def process_events(self, event: AgentEvent) -> None:
+        """Process an agent event."""
         match event.type:
             case AgentEventType.AgentStart:
                 pass
@@ -118,82 +119,98 @@ class Agent:
         tool_calls: list[ToolCallContent] = []
         tool_results: list[ToolResultContent] = []
 
-        while True:
-            emit(TurnStartEvent())
-            message = AssistantMessage()
-            tool_calls.clear()
+        try:
+            while True:
+                emit(TurnStartEvent())
+                message = AssistantMessage()
+                tool_calls.clear()
 
-            async for event in self.llm.stream(messages):
-                match event:
-                    case ToolCallEndEvent(tool_call=tool_call):
-                        tool_calls.append(tool_call)
-                        message.contents.append(tool_call)
-                    case TextEndEvent(text=text):
-                        message.contents.append(text)
-                    case ThinkingEndEvent(thinking=thinking):
-                        message.contents.append(thinking)
-                    case ErrorEvent(reason=reason, error=error):
-                        message.stop_reason = reason
-                        message.error = error
-                    case EndEvent(reason=reason):
-                        message.stop_reason = reason
-            
-            messages.append(message)
+                async for event in self.llm.stream(messages, tools=self.tools):
+                    match event:
+                        case ToolCallEndEvent(tool_call=tool_call):
+                            tool_calls.append(tool_call)
+                            message.contents.append(tool_call)
+                        case TextEndEvent(text=text):
+                            message.contents.append(text)
+                        case ThinkingEndEvent(thinking=thinking):
+                            message.contents.append(thinking)
+                        case ErrorEvent(reason=reason, error=error):
+                            message.stop_reason = reason
+                            message.error = error
+                        case EndEvent(reason=reason):
+                            message.stop_reason = reason
+                
+                messages.append(message)
 
-            match message.stop_reason:
-                case StopReason.Error | StopReason.Abort:
-                    emit(AgentErrorEvent(error=message.error))
-                    emit(TurnEndEvent(message=message,tool_results=tool_results))
-                    break
-
-                case StopReason.ToolCalls:
-                    # 1. Check for Steering Messages
-                    if steering_messages:=self.options.get_steering_messages():
-                        tool_messages=[
-                            ToolMessage(contents=[
-                                ToolResultContent(
-                                    id=tool_call.id,
-                                    is_error=True,
-                                    content="Tool call(s) skipped due to steering message from USER"
-                                )
-                            ]) for tool_call in tool_calls
-                        ]
-                        messages.extend(tool_messages)
-                        messages.extend(steering_messages)
-
-                    else:
-                    # 2. No steering? Execute the tools as requested
-                        tool_results=await self._execute_tool_calls(
-                            tool_calls=tool_calls, 
-                            emit=emit, 
-                            signal=signal
-                        )
-                        tool_messages=[
-                            ToolMessage(contents=[
-                                tool_result
-                            ]) for tool_result in tool_results
-                        ]
-                        messages.extend(tool_messages)
-                        
-
-                case StopReason.Stop:
-                    # 3. Check for Follow-up Messages
-                    follow_up_messages = self.options.get_follow_up_messages()
-                    if follow_up_messages:
-                        messages.extend(follow_up_messages)
-                    else:
-                        # No more work to do
-                        emit(TurnEndEvent(message=message,tool_results=tool_results))
+                match message.stop_reason:
+                    case StopReason.Error | StopReason.Abort:
+                        err_msg = message.error or f"Turn failed with reason: {message.stop_reason.value}"
+                        emit(AgentErrorEvent(error=err_msg))
+                        emit(TurnEndEvent(message=message, tool_results=tool_results))
                         break
-            
-            emit(TurnEndEvent(message=message, tool_results=tool_results))
 
-            # Check if an external hook wants to stop the turn
-            if self.options.should_stop_after_turn:
-                if self.options.should_stop_after_turn(message, tool_results):
-                    break
-            
-            tool_results.clear()
+                    case StopReason.ToolCalls:
+                        # 1. Check for Steering Messages
+                        steering_messages = []
+                        if self.options.get_steering_messages:
+                            steering_messages = self.options.get_steering_messages()
+                        
+                        if not steering_messages and self.state.steering_queue:
+                            steering_messages = await self.state.steering_queue.drain()
+
+                        if steering_messages:
+                            tool_messages = [
+                                ToolMessage(contents=[
+                                    ToolResultContent(
+                                        id=tool_call.id,
+                                        is_error=True,
+                                        content="Tool call(s) skipped due to steering message from USER"
+                                    )
+                                ]) for tool_call in tool_calls
+                            ]
+                            messages.extend(tool_messages)
+                            messages.extend(steering_messages)
+
+                        else:
+                            # 2. No steering? Execute the tools as requested
+                            tool_results = await self._execute_tool_calls(
+                                tool_calls=tool_calls, 
+                                emit=emit, 
+                                signal=signal
+                            )
+                            tool_messages = [
+                                ToolMessage(contents=[
+                                    tool_result
+                                ]) for tool_result in tool_results
+                            ]
+                            messages.extend(tool_messages)
+
+                    case StopReason.Stop:
+                        # 3. Check for Follow-up Messages
+                        follow_up_messages = []
+                        if self.options.get_follow_up_messages:
+                            follow_up_messages = self.options.get_follow_up_messages()
+                        
+                        if not follow_up_messages and self.state.follow_up_queue:
+                            follow_up_messages = await self.state.follow_up_queue.drain()
+
+                        if follow_up_messages:
+                            messages.extend(follow_up_messages)
+                        else:
+                            # No more work to do
+                            emit(TurnEndEvent(message=message, tool_results=tool_results))
+                            break
+                
+                emit(TurnEndEvent(message=message, tool_results=tool_results))
+
+                # Check if an external hook wants to stop the turn
+                if self.options.should_stop_after_turn:
+                    if self.options.should_stop_after_turn(message, tool_results):
+                        break
+                
+                tool_results.clear()
+        except Exception as e:
+            emit(AgentErrorEvent(error=str(e)))
 
         emit(AgentEndEvent(messages=messages))
 
@@ -206,9 +223,8 @@ class Agent:
         self.state.is_streaming = True
         self.state.error_message=""
 
-        try:
-            await self._loop(messages,self.process_events,signal)
-        except Exception as e:
-            pass
+        await self._loop(messages, self.process_events, signal)
+        self.state.messages = messages
+        self.state.is_streaming = False
 
 

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from program.llm.types import LLMEvent, Options
 from program.message.types import BaseMessage
+from typing import TYPE_CHECKING, Optional
+from program.tool.types import Tool
 
 
 class BaseAPI(ABC):
@@ -13,10 +15,10 @@ class BaseAPI(ABC):
 
     @abstractmethod
     def stream(
-        self, messages: list[BaseMessage], model: str
+        self, messages: list[BaseMessage], model: str, tools: Optional[list[Tool]] = None
     ) -> AsyncIterator[LLMEvent]: ...
 
     @abstractmethod
     async def invoke(
-        self, messages: list[BaseMessage], model: str
+        self, messages: list[BaseMessage], model: str, tools: Optional[list[Tool]] = None
     ) -> list[LLMEvent]: ...

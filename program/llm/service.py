@@ -8,6 +8,10 @@ from program.llm.provider.types import APIProvider, OAuthProvider
 from program.llm.provider.oauth.store import load_credentials, save_credentials
 from program.llm.types import LLMEvent, Options
 from program.message.types import BaseMessage
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from program.tool.types import Tool
 
 
 class LLM:
@@ -78,17 +82,17 @@ class LLM:
             api_key = self._oauth_provider.get_api_key(self._credentials)
             self.api.options.api_key = api_key
 
-    async def stream(self, messages: list[BaseMessage]) -> AsyncIterator[LLMEvent]:
+    async def stream(self, messages: list[BaseMessage], tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:
         await self._refresh_if_needed()
         try:
-            async for event in self.api.stream(messages, model=self.model.id):
+            async for event in self.api.stream(messages, model=self.model.id, tools=tools):
                 yield event
         except Exception as e:
             from program.llm.types import ErrorEvent, StopReason
             yield ErrorEvent(reason=StopReason.Error, error=str(e))
 
-    async def invoke(self, messages: list[BaseMessage]) -> list[LLMEvent]:
+    async def invoke(self, messages: list[BaseMessage], tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
         await self._refresh_if_needed()
-        return await self.api.invoke(messages, model=self.model.id)
+        return await self.api.invoke(messages, model=self.model.id, tools=tools)
 
 
