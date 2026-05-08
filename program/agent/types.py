@@ -45,6 +45,7 @@ AfterToolCallCallback = Callable[[ToolResult, Optional[AbortSignal]], Optional[T
 BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Optional[ToolInvocation]]
 GetFollowUpMessagesCallback = Callable[[], list[BaseMessage]]
 GetSteeringMessagesCallback = Callable[[], list[BaseMessage]]
+ShouldSkipToolCallsCallback = Callable[[ToolCallContent], ToolResultContent]
 ShouldStopAfterTurnCallback = Callable[[BaseMessage,list[ToolResultContent]], bool]
 TransformContextCallback = Callable[[list[BaseMessage], Optional[AbortSignal]], list[BaseMessage]]
 
@@ -73,6 +74,7 @@ class Options:
     get_follow_up_messages: Optional[GetFollowUpMessagesCallback] = None
     get_steering_messages: Optional[GetSteeringMessagesCallback] = None
     should_stop_after_turn: Optional[ShouldStopAfterTurnCallback] = None
+    should_skip_tool_calls: Optional[ShouldSkipToolCallsCallback] = None
     transform_context: Optional[TransformContextCallback] = None
 
 

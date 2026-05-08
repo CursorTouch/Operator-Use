@@ -80,8 +80,12 @@ class LLM:
 
     async def stream(self, messages: list[BaseMessage]) -> AsyncIterator[LLMEvent]:
         await self._refresh_if_needed()
-        async for event in self.api.stream(messages, model=self.model.id):
-            yield event
+        try:
+            async for event in self.api.stream(messages, model=self.model.id):
+                yield event
+        except Exception as e:
+            from program.llm.types import ErrorEvent, StopReason
+            yield ErrorEvent(reason=StopReason.Error, error=str(e))
 
     async def invoke(self, messages: list[BaseMessage]) -> list[LLMEvent]:
         await self._refresh_if_needed()

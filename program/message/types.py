@@ -98,6 +98,7 @@ class AssistantMessage(BaseMessage):
     role: Literal["assistant"] = field(default="assistant", init=False)
     usage: Usage = field(default_factory=Usage)
     stop_reason: StopReason = StopReason.Stop
+    error: str = ""
 
 
 @dataclass
