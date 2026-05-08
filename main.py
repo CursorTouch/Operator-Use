@@ -3,8 +3,12 @@ import os
 import sys
 from program.llm.service import LLM, Options as LLMOptions
 from program.agent.service import Agent
-from program.agent.types import Options as AgentOptions, AgentEvent, AgentEventType
-from program.message.types import UserMessage, TextContent, AssistantMessage, ToolMessage
+from program.agent.types import (
+    Options as AgentOptions, AgentEvent, AgentEventType,
+    TurnStartEvent, MessageStartEvent, MessageEndEvent,
+    ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent
+)
+from program.message.types import UserMessage, TextContent, AssistantMessage, ToolMessage,SystemMessage
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,36 +27,35 @@ Follow these rules:
 """
 
 def process_event(event: AgentEvent):
-    match event.type:
-        case AgentEventType.TurnStart:
+    match event:
+        case TurnStartEvent():
             print("\n" + "="*20 + " NEW TURN " + "="*20)
-        case AgentEventType.MessageStart:
-            role = event.message.role.upper()
-            if role != "TOOL":
-                print(f"\n[{role}] ", end="", flush=True)
-        case AgentEventType.MessageUpdate:
-            pass # We could print deltas here for streaming effect
-        case AgentEventType.MessageEnd:
-            msg = event.message
-            for c in msg.contents:
-                if hasattr(c, 'type'):
-                    if c.type == "text" and c.content:
-                        print(c.content)
-                    elif c.type == "thinking" and c.content:
-                        print(f"\n[THOUGHTS]\n{c.content}\n" + "-"*20)
-                elif hasattr(c, 'name'):
-                    # Tool calls are handled by ExecutionStart
-                    pass
-        case AgentEventType.ToolExecutionStart:
-            print(f"\n[TOOL CALL] {event.tool_call.name}({event.tool_call.args})")
-        case AgentEventType.ToolExecutionEnd:
+        case MessageStartEvent(message=msg):
+            if msg:
+                role = msg.role.upper()
+                if role != "TOOL":
+                    print(f"\n[{role}] ", end="", flush=True)
+        case MessageEndEvent(message=msg):
+            if msg:
+                for c in msg.contents:
+                    if hasattr(c, 'type'):
+                        if c.type == "text" and c.content:
+                            print(c.content)
+                        elif c.type == "thinking" and c.content:
+                            print(f"\n[THOUGHTS]\n{c.content}\n" + "-"*20)
+                    elif hasattr(c, 'name'):
+                        # Tool calls are handled by ExecutionStart
+                        pass
+        case ToolExecutionStartEvent(tool_call=tc):
+            print(f"\n[TOOL CALL] {tc.name}({tc.args})")
+        case ToolExecutionEndEvent(tool_result=res):
             # Optionally print a snippet of the result if it's long
-            res = str(event.tool_result.content)
-            if len(res) > 200:
-                res = res[:200] + "..."
-            print(f"[TOOL RESULT] {res}")
-        case AgentEventType.AgentError:
-            print(f"\n[ERROR] {event.error}")
+            content = str(res.content)
+            if len(content) > 200:
+                content = content[:200] + "..."
+            print(f"[TOOL RESULT] {content}")
+        case AgentErrorEvent(error=err):
+            print(f"\n[ERROR] {err}")
 
 async def main():
     api_key = os.environ.get("NVIDIA_API_KEY", "")
@@ -62,7 +65,7 @@ async def main():
              print("NVIDIA API key is required.")
              return
 
-    model_id = "nvidia/llama-3.3-nemotron-super-49b-v1"
+    model_id = "nvidia/nemotron-3-super-120b-a12b"
     
     from program.agent.tools import (
         ListDirTool, ReadFileTool, WriteFileTool, EditFileTool,
@@ -88,7 +91,6 @@ async def main():
     agent = Agent(
         llm=llm,
         tools=tools,
-        system_prompt=SYSTEM_PROMPT,
         options=AgentOptions()
     )
 
@@ -97,7 +99,7 @@ async def main():
     print("--- AI Coding Agent Started ---")
     print("Type 'exit' or 'quit' to stop.")
 
-    messages = []
+    messages = [SystemMessage(contents=[TextContent(content=SYSTEM_PROMPT)])]
     
     while True:
         try:

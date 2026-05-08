@@ -17,12 +17,13 @@ class WebFetchArgs(BaseModel):
         default=None,
         description=(
             "If provided, the page is passed to the LLM which extracts only the relevant parts. "
-            "Use when you know what you're looking for — e.g. 'current temperature in Singapore'. "
+            "Use when you know what you're looking for — e.g. 'current temperature in Singapore', 'latest release version'. "
+            "Omit for APIs, JSON endpoints, or when you need the raw content."
         ),
     )
     timeout: int = Field(
         default=10,
-        description="Request timeout in seconds (default 10).",
+        description="Request timeout in seconds (default 10). Increase to 30+ for slow APIs or large pages.",
     )
 
 class WebFetchTool(Tool):
@@ -31,7 +32,9 @@ class WebFetchTool(Tool):
             name="web_fetch",
             description=(
                 "Fetch the content of a URL and return it as text. Use after web_search to read a full page. "
-                "Set prompt= to extract only what you need from the page — the LLM will filter out irrelevant content."
+                "Also useful for REST APIs, config files, and documentation. "
+                "Set prompt= to extract only what you need from the page — the LLM will filter out irrelevant content. "
+                "Omit prompt for raw output (JSON APIs, downloads, etc.)."
             ),
             schema=WebFetchArgs,
             kind=ToolKind.Web,
@@ -47,8 +50,8 @@ class WebFetchTool(Tool):
         ]
         try:
             # Using the invoke method of our LLM class
+            # Note: In our current implementation, AssistantMessage is captured in events.
             events = await llm.invoke(messages=messages)
-            # Find the final text response
             from program.llm.types import TextEndEvent
             for event in events:
                 if isinstance(event, TextEndEvent):
@@ -70,16 +73,21 @@ class WebFetchTool(Tool):
             return ToolResult.error(id=invocation.id, content=f"Invalid URL: {url}. Must be http:// or https://")
 
         try:
-            async with httpx.AsyncClient(timeout=float(timeout)) as client:
-                response = await client.get(url, follow_redirects=True)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+            }
+            async with httpx.AsyncClient(timeout=float(timeout), follow_redirects=True, headers=headers) as client:
+                response = await client.get(url)
                 response.raise_for_status()
                 
-                # Basic HTML to Text
-                text = response.text
-                text = re.sub(r'<script.*?>.*?</script>', '', text, flags=re.DOTALL)
-                text = re.sub(r'<style.*?>.*?</style>', '', text, flags=re.DOTALL)
-                text = re.sub(r'<.*?>', ' ', text)
-                text = re.sub(r'\s+', ' ', text).strip()
+                from markdownify import markdownify
+                text = markdownify(
+                    response.text, 
+                    heading_style="ATX", 
+                    strip=["script", "style", "nav", "footer", "header"]
+                )
                 
                 if not text:
                     return ToolResult.error(id=invocation.id, content=f"No content returned from {url}")
@@ -88,7 +96,7 @@ class WebFetchTool(Tool):
                 if prompt and llm:
                     text = await self._extract_relevant(text, prompt, llm)
                 elif len(text) > MAX_TOOL_OUTPUT_LENGTH:
-                    text = text[:MAX_TOOL_OUTPUT_LENGTH] + "\n... [Output Truncated]"
+                    text = text[:MAX_TOOL_OUTPUT_LENGTH] + "..."
                     
                 return ToolResult.ok(id=invocation.id, content=text)
         except Exception as e:

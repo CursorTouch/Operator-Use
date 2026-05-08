@@ -213,6 +213,15 @@ MODELS: list[Model] = [
         output=[Modality.Text],
     ),
     Model(
+        id="nvidia/nemotron-3-super-120b-a12b",
+        name="Nemotron 3 Super 120B",
+        provider="nvidia",
+        cost=Cost(input=0.45, output=0.55),
+        context_window=131_072,
+        input=[Modality.Text],
+        output=[Modality.Text],
+    ),
+    Model(
         id="nvidia/llama-3.3-nemotron-super-49b-v1",
         name="Nemotron Super 49B",
         provider="nvidia",
