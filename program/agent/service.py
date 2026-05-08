@@ -112,9 +112,6 @@ class Agent:
 
     async def _loop(self, messages: list[BaseMessage], emit: EmitEvent, signal: AbortSignal):
         emit(AgentStartEvent())
-        for message in messages:
-            emit(MessageStartEvent(message=message))
-            emit(MessageEndEvent(message=message))
 
         tool_calls: list[ToolCallContent] = []
         tool_results: list[ToolResultContent] = []
@@ -131,6 +128,10 @@ class Agent:
                         case ToolCallEndEvent(tool_call=tool_call):
                             tool_calls.append(tool_call)
                             message.contents.append(tool_call)
+                        case TextDeltaEvent(text=text):
+                            emit(MessageUpdateEvent(message=AssistantMessage(contents=[text])))
+                        case ThinkingDeltaEvent(thinking=thinking):
+                            emit(MessageUpdateEvent(message=AssistantMessage(contents=[thinking])))
                         case TextEndEvent(text=text):
                             message.contents.append(text)
                         case ThinkingEndEvent(thinking=thinking):

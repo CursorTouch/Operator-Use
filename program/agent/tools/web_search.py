@@ -46,9 +46,9 @@ class WebSearchTool(Tool):
             if not results:
                 return ToolResult.ok(id=invocation.id, content=f"No results found for: {query}")
 
-            lines = [f"🔍 Web Search Results for: {query}"]
+            lines = [f"Web Search Results for: {query}"]
             for idx, r in enumerate(results, start=1):
-                lines.append(f"🔍 {idx}. Title: {r['title']}")
+                lines.append(f"{idx}. Title: {r['title']}")
                 lines.append(f"   URL: {r['href']}")
                 if r.get("body"):
                     lines.append(f"   Snippet: {r['body']}")

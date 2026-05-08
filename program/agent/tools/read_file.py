@@ -62,8 +62,10 @@ class ReadFileTool(Tool):
         end_idx = total_lines if limit is None else min(total_lines, start_idx + limit)
         selected_lines = lines[start_idx:end_idx]
 
+        max_line_num_width = len(str(end_idx))
         numbered_lines = [
-            f"{i + 1} | {line.rstrip(chr(10) + chr(13))}" for i, line in enumerate(selected_lines, start=start_idx)
+            f"{str(i + 1).rjust(max_line_num_width)} | {line.rstrip(chr(10) + chr(13))}" 
+            for i, line in enumerate(selected_lines, start=start_idx)
         ]
         content = "\n".join(numbered_lines)
 

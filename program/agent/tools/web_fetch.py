@@ -83,11 +83,7 @@ class WebFetchTool(Tool):
                 response.raise_for_status()
                 
                 from markdownify import markdownify
-                text = markdownify(
-                    response.text, 
-                    heading_style="ATX", 
-                    strip=["script", "style", "nav", "footer", "header"]
-                )
+                text = markdownify(response.text)
                 
                 if not text:
                     return ToolResult.error(id=invocation.id, content=f"No content returned from {url}")
