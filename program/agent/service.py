@@ -1,6 +1,13 @@
 from __future__ import annotations
+import asyncio
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Optional
+from program.agent.types import (
+    EmitEvent,AgentEventType,TurnStartEvent,TurnEndEvent,
+    MessageStartEvent,MessageEventData,MessageEndEvent,ToolCallStartEvent,
+    ToolCallEventData,ToolCallEndEvent,AgentStartEvent,AgentEndEvent
+)
+
 
 if TYPE_CHECKING:
     from program.llm.service import LLM
@@ -12,6 +19,7 @@ from program.agent.types import (
     AgentEvent,
     FollowupQueue,
     SteeringQueue,
+    AbortSignal,
 )
 from program.message.types import BaseMessage
 
@@ -68,3 +76,72 @@ class Agent:
         self.state.error_message = None
         self.state.pending_tool_calls.clear()
         self.state.is_streaming = False
+
+    def process_events(self,event:AgentEvent):
+        match event.type:
+            case AgentEventType.AgentStart:
+                pass
+            case AgentEventType.AgentEnd:
+                pass
+            case AgentEventType.TurnStart:
+                pass
+            case AgentEventType.TurnEnd:
+                pass
+            case AgentEventType.MessageStart:
+                pass
+            case AgentEventType.MessageUpdate:
+                pass
+            case AgentEventType.MessageEnd:
+                pass
+            case AgentEventType.ToolExecutionStart:
+                pass
+            case AgentEventType.ToolExecutionUpdate:
+                pass
+            case AgentEventType.ToolExecutionEnd:
+                pass
+    
+    async def _loop(self,messages:list[BaseMessage],emit:EmitEvent,signal:AbortSignal):
+        emit(AgentStartEvent())
+        pending_messages= (self.options.get_follow_up_messages() or [])+messages
+        for message in pending_messages:
+            emit(MessageStartEvent(message=message))
+            emit(MessageEndEvent(message=message))
+            self.state.messages.append(message)
+
+            has_tool_calls=False
+            while has_tool_calls or len(pending_messages):
+                emit(TurnStartEvent())
+                llm_event=await self.llm.invoke(self.state.messages)
+                
+
+                
+                
+                
+
+                
+
+                emit(TurnEndEvent(message=message))
+                
+                
+                
+
+                
+
+                emit(TurnEndEvent(message=message))
+        
+
+
+    async def _loop_continue(self,messages:list[BaseMessage],emit:EmitEvent,signal:AbortSignal):
+        pass
+
+    async def run(self, messages: list[BaseMessage]):
+        signal: AbortSignal = asyncio.Event()
+        self.state.is_streaming = True
+        self.state.error_message=""
+
+        try:
+            await self._loop(messages,self.process_events,signal)
+        except Exception as e:
+            pass
+
+

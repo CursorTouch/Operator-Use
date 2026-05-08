@@ -29,6 +29,20 @@ class ThinkingLevel(str, Enum):
     Max = "max"
 
 
+class LLMEventType(str, Enum):
+    Start = "start"
+    Error = "error"
+    Done = "done"
+    TextStart = "text_start"
+    TextDelta = "text_delta"
+    TextEnd = "text_end"
+    ThinkingStart = "thinking_start"
+    ThinkingDelta = "thinking_delta"
+    ThinkingEnd = "thinking_end"
+    ToolCallStart = "tool_call_start"
+    ToolCallDelta = "tool_call_delta"
+    ToolCallEnd = "tool_call_end"
+
 
 AbortSignal = asyncio.Event
 PayloadCallback = Callable[[dict[str, Any]], Optional[dict[str, Any]]]
@@ -73,76 +87,76 @@ class ToolCallEventData:
 
 @dataclass
 class LLMEvent:
-    type: str
+    type: LLMEventType
 
 
 @dataclass
 class StartEvent(LLMEvent):
-    type: str = field(default="start", init=False)
+    type: LLMEventType = field(default=LLMEventType.Start, init=False)
 
 
 @dataclass
 class ErrorEvent(LLMEvent):
-    type: str = field(default="error", init=False)
+    type: LLMEventType = field(default=LLMEventType.Error, init=False)
     reason: StopReason = StopReason.Stop
     message: str = ""
 
 
 @dataclass
 class DoneEvent(LLMEvent):
-    type: str = field(default="done", init=False)
+    type: LLMEventType = field(default=LLMEventType.Done, init=False)
     reason: StopReason = StopReason.Stop
 
 
 @dataclass
 class TextStartEvent(LLMEvent):
-    type: str = field(default="text_start", init=False)
+    type: LLMEventType = field(default=LLMEventType.TextStart, init=False)
     data: TextEventData = field(default_factory=TextEventData)
 
 
 @dataclass
 class TextDeltaEvent(LLMEvent):
-    type: str = field(default="text_delta", init=False)
+    type: LLMEventType = field(default=LLMEventType.TextDelta, init=False)
     data: TextEventData = field(default_factory=TextEventData)
 
 
 @dataclass
 class TextEndEvent(LLMEvent):
-    type: str = field(default="text_end", init=False)
+    type: LLMEventType = field(default=LLMEventType.TextEnd, init=False)
     data: TextEventData = field(default_factory=TextEventData)
 
 
 @dataclass
 class ThinkingStartEvent(LLMEvent):
-    type: str = field(default="thinking_start", init=False)
+    type: LLMEventType = field(default=LLMEventType.ThinkingStart, init=False)
     data: ThinkingEventData = field(default_factory=ThinkingEventData)
 
 
 @dataclass
 class ThinkingDeltaEvent(LLMEvent):
-    type: str = field(default="thinking_delta", init=False)
+    type: LLMEventType = field(default=LLMEventType.ThinkingDelta, init=False)
     data: ThinkingEventData = field(default_factory=ThinkingEventData)
 
 
 @dataclass
 class ThinkingEndEvent(LLMEvent):
-    type: str = field(default="thinking_end", init=False)
+    type: LLMEventType = field(default=LLMEventType.ThinkingEnd, init=False)
     data: ThinkingEventData = field(default_factory=ThinkingEventData)
 
 
 @dataclass
 class ToolCallStartEvent(LLMEvent):
-    type: str = field(default="tool_call_start", init=False)
+    type: LLMEventType = field(default=LLMEventType.ToolCallStart, init=False)
     data: ToolCallEventData = field(default_factory=ToolCallEventData)
 
 
 @dataclass
 class ToolCallDeltaEvent(LLMEvent):
-    type: str = field(default="tool_call_delta", init=False)
+    type: LLMEventType = field(default=LLMEventType.ToolCallDelta, init=False)
     data: ToolCallEventData = field(default_factory=ToolCallEventData)
 
 
 @dataclass
 class ToolCallEndEvent(LLMEvent):
-    type: str = field(default="tool_call_end", init=False)
+    type: LLMEventType = field(default=LLMEventType.ToolCallEnd, init=False)
     data: ToolCallEventData = field(default_factory=ToolCallEventData)

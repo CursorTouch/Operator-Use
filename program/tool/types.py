@@ -14,7 +14,7 @@ class ToolKind(str, Enum):
     Web = "web"
 
 
-class ExecutionMode(str, Enum):
+class ToolExecutionMode(str, Enum):
     Sequential = "sequential"
     Parallel = "parallel"
 
@@ -59,7 +59,7 @@ class Tool(ABC):
         description: str,
         schema: Type[BaseModel],
         kind: ToolKind,
-        execution_mode: ExecutionMode = ExecutionMode.Parallel,
+        execution_mode: ToolExecutionMode = ToolExecutionMode.Sequential,
     ) -> None:
         self.name = name
         self.description = description

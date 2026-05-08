@@ -15,6 +15,7 @@ from program.message.types import BaseMessage, ToolCallContent
 from program.tool.types import ToolInvocation, ToolResult
 
 AbortSignal = asyncio.Event
+EmitEvent = Callable[[AgentEvent], None]
 
 
 class SteeringMode(str, Enum):
@@ -25,6 +26,19 @@ class SteeringMode(str, Enum):
 class FollowupMode(str, Enum):
     OneAtATime = "one_at_a_time"
     All = "all"
+
+
+class AgentEventType(str, Enum):
+    AgentStart = "agent_start"
+    AgentEnd = "agent_end"
+    TurnStart = "turn_start"
+    TurnEnd = "turn_end"
+    MessageStart = "message_start"
+    MessageUpdate = "message_update"
+    MessageEnd = "message_end"
+    ToolExecutionStart = "tool_execution_start"
+    ToolExecutionUpdate = "tool_execution_update"
+    ToolExecutionEnd = "tool_execution_end"
 
 
 AfterToolCallCallback = Callable[[ToolResult, Optional[AbortSignal]], Optional[ToolResult]]
@@ -96,24 +110,24 @@ class SteeringQueue:
 # Agent lifecycle
 @dataclass
 class AgentStartEvent:
-    type: str = field(default="agent_start", init=False)
+    type: AgentEventType = field(default=AgentEventType.AgentStart, init=False)
 
 
 @dataclass
 class AgentEndEvent:
-    type: str = field(default="agent_end", init=False)
+    type: AgentEventType = field(default=AgentEventType.AgentEnd, init=False)
     messages: list[BaseMessage] = field(default_factory=list)
 
 
 # Turn lifecycle
 @dataclass
 class TurnStartEvent:
-    type: str = field(default="turn_start", init=False)
+    type: AgentEventType = field(default=AgentEventType.TurnStart, init=False)
 
 
 @dataclass
 class TurnEndEvent:
-    type: str = field(default="turn_end", init=False)
+    type: AgentEventType = field(default=AgentEventType.TurnEnd, init=False)
     message: Optional[BaseMessage] = None
     tool_results: list[BaseMessage] = field(default_factory=list)
 
@@ -121,26 +135,26 @@ class TurnEndEvent:
 # Message lifecycle
 @dataclass
 class MessageStartEvent:
-    type: str = field(default="message_start", init=False)
+    type: AgentEventType = field(default=AgentEventType.MessageStart, init=False)
     message: Optional[BaseMessage] = None
 
 
 @dataclass
 class MessageUpdateEvent:
-    type: str = field(default="message_update", init=False)
+    type: AgentEventType = field(default=AgentEventType.MessageUpdate, init=False)
     message: Optional[BaseMessage] = None
 
 
 @dataclass
 class MessageEndEvent:
-    type: str = field(default="message_end", init=False)
+    type: AgentEventType = field(default=AgentEventType.MessageEnd, init=False)
     message: Optional[BaseMessage] = None
 
 
 # Tool execution lifecycle
 @dataclass
 class ToolExecutionStartEvent:
-    type: str = field(default="tool_execution_start", init=False)
+    type: AgentEventType = field(default=AgentEventType.ToolExecutionStart, init=False)
     tool_call_id: str = ""
     tool_name: str = ""
     args: dict[str, Any] = field(default_factory=dict)
@@ -148,7 +162,7 @@ class ToolExecutionStartEvent:
 
 @dataclass
 class ToolExecutionUpdateEvent:
-    type: str = field(default="tool_execution_update", init=False)
+    type: AgentEventType = field(default=AgentEventType.ToolExecutionUpdate, init=False)
     tool_call_id: str = ""
     tool_name: str = ""
     args: dict[str, Any] = field(default_factory=dict)
@@ -156,7 +170,7 @@ class ToolExecutionUpdateEvent:
 
 @dataclass
 class ToolExecutionEndEvent:
-    type: str = field(default="tool_execution_end", init=False)
+    type: AgentEventType = field(default=AgentEventType.ToolExecutionEnd, init=False)
     tool_call_id: str = ""
     tool_name: str = ""
     content: Any = None
