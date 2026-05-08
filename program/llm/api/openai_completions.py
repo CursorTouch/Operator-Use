@@ -8,6 +8,7 @@ from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
 )
 from program.message.types import (
@@ -143,6 +144,8 @@ class OpenAICompletionsAPI(BaseAPI):
 
         text_started = False
         text_buf = ""
+        thinking_started = False
+        thinking_buf = ""
         # tool call state keyed by delta index
         tool_started: dict[int, bool] = {}
         tool_bufs: dict[int, str] = {}
@@ -160,7 +163,22 @@ class OpenAICompletionsAPI(BaseAPI):
 
             delta = choice.delta
 
+            # Handle reasoning/thinking content (often used by NVIDIA and some OpenAI models)
+            reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "thinking", None)
+            if reasoning:
+                if not thinking_started:
+                    yield ThinkingStartEvent(thinking=ThinkingContent(content=""))
+                    thinking_started = True
+                thinking_buf += reasoning
+                yield ThinkingDeltaEvent(thinking=ThinkingContent(content=reasoning))
+
             if delta.content:
+                # If thinking was happening, end it before starting text
+                if thinking_started:
+                    yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
+                    thinking_started = False
+                    thinking_buf = ""
+                
                 if not text_started:
                     yield TextStartEvent(text=TextContent(content=""))
                     text_started = True
@@ -168,6 +186,12 @@ class OpenAICompletionsAPI(BaseAPI):
                 yield TextDeltaEvent(text=TextContent(content=delta.content))
 
             if delta.tool_calls:
+                # If thinking was happening, end it
+                if thinking_started:
+                    yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
+                    thinking_started = False
+                    thinking_buf = ""
+
                 for tc in delta.tool_calls:
                     idx = tc.index
                     if idx not in tool_started:
@@ -185,6 +209,11 @@ class OpenAICompletionsAPI(BaseAPI):
                         )
 
             if choice.finish_reason:
+                if thinking_started:
+                    yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
+                    thinking_started = False
+                    thinking_buf = ""
+
                 if text_started:
                     yield TextEndEvent(text=TextContent(content=text_buf))
                     text_started = False

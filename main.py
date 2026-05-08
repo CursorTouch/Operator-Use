@@ -34,15 +34,15 @@ def process_event(event: AgentEvent):
             pass # We could print deltas here for streaming effect
         case AgentEventType.MessageEnd:
             msg = event.message
-            content = ""
             for c in msg.contents:
-                if hasattr(c, 'content'):
-                    content += str(c.content)
+                if hasattr(c, 'type'):
+                    if c.type == "text" and c.content:
+                        print(c.content)
+                    elif c.type == "thinking" and c.content:
+                        print(f"\n[THOUGHTS]\n{c.content}\n" + "-"*20)
                 elif hasattr(c, 'name'):
-                    # Don't print tool calls here, they are handled by ExecutionStart
+                    # Tool calls are handled by ExecutionStart
                     pass
-            if content and msg.role != "tool":
-                print(content)
         case AgentEventType.ToolExecutionStart:
             print(f"\n[TOOL CALL] {event.tool_call.name}({event.tool_call.args})")
         case AgentEventType.ToolExecutionEnd:
@@ -55,14 +55,14 @@ def process_event(event: AgentEvent):
             print(f"\n[ERROR] {event.error}")
 
 async def main():
-    api_key = os.environ.get("MISTRAL_API_KEY", "")
+    api_key = os.environ.get("NVIDIA_API_KEY", "")
     if not api_key:
-        api_key = input("Enter your Mistral API key: ").strip()
+        api_key = input("Enter your NVIDIA API key: ").strip()
         if not api_key:
-             print("Mistral API key is required.")
+             print("NVIDIA API key is required.")
              return
 
-    model_id = "mistral-large-latest"
+    model_id = "nvidia/llama-3.3-nemotron-super-49b-v1"
     
     from program.agent.tools import (
         ListDirTool, ReadFileTool, WriteFileTool, EditFileTool,
@@ -81,7 +81,7 @@ async def main():
 
     llm = LLM(
         model_id=model_id,
-        provider="mistral",
+        provider="nvidia",
         options=LLMOptions(api_key=api_key),
     )
 
