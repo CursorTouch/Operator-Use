@@ -7,9 +7,9 @@ from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
-    TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
-    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
-    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
+    TextStartEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
+    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -126,48 +126,42 @@ class OpenAIResponsesAPI(BaseAPI):
         async with self._client.responses.stream(**params) as stream:
             async for event in stream:
                 if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                     return
                 etype = event.type
 
                 if etype == "response.output_item.added":
                     item = event.item
                     if item.type == "message":
-                        yield TextStartEvent(data=TextEventData())
+                        yield TextStartEvent(text=TextContent(content=""))
                     elif item.type == "reasoning":
-                        yield ThinkingStartEvent(data=ThinkingEventData())
+                        yield ThinkingStartEvent(thinking=None)
                     elif item.type == "function_call":
                         tool_names[item.call_id] = item.name
-                        yield ToolCallStartEvent(data=ToolCallEventData(
-                            tool_call=ToolCallContent(id=item.call_id, name=item.name)
-                        ))
+                        yield ToolCallStartEvent(tool_call=ToolCallContent(id=item.call_id, name=item.name))
 
                 elif etype == "response.output_text.delta":
-                    yield TextDeltaEvent(data=TextEventData(text=TextContent(content=event.delta)))
+                    yield TextDeltaEvent(text=TextContent(content=event.delta))
 
                 elif etype == "response.output_text.done":
-                    yield TextEndEvent(data=TextEventData(text=TextContent(content=event.text)))
+                    yield TextEndEvent(text=TextContent(content=event.text))
 
                 elif etype == "response.reasoning_summary_text.delta":
-                    yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=event.delta)))
+                    yield ThinkingDeltaEvent(thinking=ThinkingContent(content=event.delta))
 
                 elif etype == "response.reasoning_summary_text.done":
-                    yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=event.text)))
+                    yield ThinkingEndEvent(thinking=ThinkingContent(content=event.text))
 
                 elif etype == "response.function_call_arguments.delta":
                     call_id = event.item_id
-                    yield ToolCallDeltaEvent(data=ToolCallEventData(
-                        tool_call=ToolCallContent(id=call_id)
-                    ))
+                    yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=call_id))
 
                 elif etype == "response.function_call_arguments.done":
                     call_id = event.item_id
-                    yield ToolCallEndEvent(data=ToolCallEventData(
-                        tool_call=ToolCallContent(
-                            id=call_id,
-                            name=tool_names.get(call_id, ""),
-                            args=json.loads(event.arguments)
-                        )
+                    yield ToolCallEndEvent(tool_call=ToolCallContent(
+                        id=call_id,
+                        name=tool_names.get(call_id, ""),
+                        args=json.loads(event.arguments)
                     ))
 
                 elif etype == "response.done":
@@ -180,7 +174,7 @@ class OpenAIResponsesAPI(BaseAPI):
                     yield EndEvent(reason=stop_reason)
 
                 elif etype == "error":
-                    yield ErrorEvent(reason=StopReason.Abort, message=str(event))
+                    yield ErrorEvent(reason=StopReason.Abort, error=str(event))
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o") -> list[LLMEvent]:
         events: list[LLMEvent] = []

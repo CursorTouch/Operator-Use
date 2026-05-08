@@ -76,17 +76,17 @@ def _default_text_event_data():
 
 @dataclass
 class TextEventData:
-    text: Any = field(default_factory=_default_text_event_data)
+    text: "TextContent" = field(default_factory=_default_text_event_data)
 
 
 @dataclass
 class ThinkingEventData:
-    thinking: Optional[Any] = None
+    thinking: Optional["ThinkingContent"] = None
 
 
 @dataclass
 class ToolCallEventData:
-    tool_call: Optional[Any] = None
+    tool_call: Optional["ToolCallContent"] = None
 
 
 @dataclass
@@ -98,7 +98,7 @@ class StartEvent:
 class ErrorEvent:
     type: LLMEventType = field(default=LLMEventType.Error, init=False)
     reason: StopReason = StopReason.Stop
-    message: str = ""
+    error: str = ""
 
 
 @dataclass
@@ -110,55 +110,55 @@ class EndEvent:
 @dataclass
 class TextStartEvent:
     type: LLMEventType = field(default=LLMEventType.TextStart, init=False)
-    data: TextEventData = field(default_factory=TextEventData)
+    text: "TextContent"
 
 
 @dataclass
 class TextDeltaEvent:
     type: LLMEventType = field(default=LLMEventType.TextDelta, init=False)
-    data: TextEventData = field(default_factory=TextEventData)
+    text: "TextContent"
 
 
 @dataclass
 class TextEndEvent:
     type: LLMEventType = field(default=LLMEventType.TextEnd, init=False)
-    data: TextEventData = field(default_factory=TextEventData)
+    text: "TextContent"
 
 
 @dataclass
 class ThinkingStartEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingStart, init=False)
-    data: ThinkingEventData = field(default_factory=ThinkingEventData)
+    thinking: Optional["ThinkingContent"]
 
 
 @dataclass
 class ThinkingDeltaEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingDelta, init=False)
-    data: ThinkingEventData = field(default_factory=ThinkingEventData)
+    thinking: Optional["ThinkingContent"]
 
 
 @dataclass
 class ThinkingEndEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingEnd, init=False)
-    data: ThinkingEventData = field(default_factory=ThinkingEventData)
+    thinking: Optional["ThinkingContent"]
 
 
 @dataclass
 class ToolCallStartEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallStart, init=False)
-    data: ToolCallEventData = field(default_factory=ToolCallEventData)
+    tool_call: Optional["ToolCallContent"]
 
 
 @dataclass
 class ToolCallDeltaEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallDelta, init=False)
-    data: ToolCallEventData = field(default_factory=ToolCallEventData)
+    tool_call: Optional["ToolCallContent"]
 
 
 @dataclass
 class ToolCallEndEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallEnd, init=False)
-    data: ToolCallEventData = field(default_factory=ToolCallEventData)
+    tool_call: Optional["ToolCallContent"]
 
 
 LLMEvent = (

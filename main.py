@@ -32,29 +32,29 @@ async def main():
         elif isinstance(event, TextStartEvent):
             print("[TextStartEvent]")
         elif isinstance(event, TextDeltaEvent):
-            print(event.data.text.content, end="", flush=True)
+            print(event.text.content, end="", flush=True)
         elif isinstance(event, TextEndEvent):
             print(f"\n[TextEndEvent]")
         elif isinstance(event, ThinkingStartEvent):
             print(f"[ThinkingStartEvent]")
         elif isinstance(event, ThinkingDeltaEvent):
-            thinking = event.data.thinking.content if event.data.thinking else ""
+            thinking = event.thinking.content if event.thinking else ""
             print(f"[ThinkingDelta] {thinking}", end="", flush=True)
         elif isinstance(event, ThinkingEndEvent):
-            thinking = event.data.thinking.content if event.data.thinking else ""
+            thinking = event.thinking.content if event.thinking else ""
             print(f"\n[ThinkingEndEvent]")
         elif isinstance(event, ToolCallStartEvent):
-            tc = event.data.tool_call
+            tc = event.tool_call
             print(f"[ToolCallStartEvent] id={tc.id if tc else ''}, name={tc.name if tc else ''}")
         elif isinstance(event, ToolCallDeltaEvent):
             print(f"[ToolCallDelta]")
         elif isinstance(event, ToolCallEndEvent):
-            tc = event.data.tool_call
+            tc = event.tool_call
             print(f"[ToolCallEndEvent] id={tc.id if tc else ''}, name={tc.name if tc else ''}")
         elif isinstance(event, EndEvent):
             print(f"\n[EndEvent] reason={event.reason}")
         elif isinstance(event, ErrorEvent):
-            print(f"\n[ErrorEvent] reason={event.reason}, message={event.message}")
+            print(f"\n[ErrorEvent] reason={event.reason}, error={event.error}")
 
 
 if __name__ == "__main__":

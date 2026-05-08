@@ -10,9 +10,9 @@ from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
-    TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
-    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
-    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
+    TextStartEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
+    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -138,7 +138,7 @@ class MistralChatAPI(BaseAPI):
             async with await self._client.chat.stream_async(**kwargs) as stream:
                 async for event in stream:
                     if self._cancelled():
-                        yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                        yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                         return
                     chunk = event.data
                     if not chunk.choices:
@@ -150,10 +150,10 @@ class MistralChatAPI(BaseAPI):
                     if content and content != UNSET_SENTINEL:
                         if isinstance(content, str):
                             if not text_started:
-                                yield TextStartEvent(data=TextEventData())
+                                yield TextStartEvent(text=TextContent(content=""))
                                 text_started = True
                             text_buf += content
-                            yield TextDeltaEvent(data=TextEventData(text=TextContent(content=content)))
+                            yield TextDeltaEvent(text=TextContent(content=content))
                         elif isinstance(content, list):
                             for chunk_item in content:
                                 if isinstance(chunk_item, ThinkChunk):
@@ -163,22 +163,22 @@ class MistralChatAPI(BaseAPI):
                                     )
                                     if thinking_text:
                                         if not thinking_started:
-                                            yield ThinkingStartEvent(data=ThinkingEventData())
+                                            yield ThinkingStartEvent(thinking=None)
                                             thinking_started = True
                                         thinking_buf += thinking_text
-                                        yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_text)))
+                                        yield ThinkingDeltaEvent(thinking=ThinkingContent(content=thinking_text))
                                     if chunk_item.closed:
                                         if thinking_started:
-                                            yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_buf)))
+                                            yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                                             thinking_index += 1
                                             thinking_started = False
                                             thinking_buf = ""
                                 elif isinstance(chunk_item, TextChunk):
                                     if not text_started:
-                                        yield TextStartEvent(data=TextEventData())
+                                        yield TextStartEvent(text=TextContent(content=""))
                                         text_started = True
                                     text_buf += chunk_item.text
-                                    yield TextDeltaEvent(data=TextEventData(text=TextContent(content=chunk_item.text)))
+                                    yield TextDeltaEvent(text=TextContent(content=chunk_item.text))
 
                     tool_calls = delta.tool_calls
                     if tool_calls and tool_calls != UNSET_SENTINEL:
@@ -191,37 +191,34 @@ class MistralChatAPI(BaseAPI):
                                 tool_started[idx] = True
                                 tool_bufs[idx] = ""
                                 tool_meta[idx] = {"id": tc_id, "name": fn.name}
-                                yield ToolCallStartEvent(data=ToolCallEventData(
-                                    tool_call=ToolCallContent(id=tc_id, name=fn.name)
-                                ))
+                                yield ToolCallStartEvent(tool_call=ToolCallContent(id=tc_id, name=fn.name)
+                                )
                             if args:
                                 tool_bufs[idx] += args
-                                yield ToolCallDeltaEvent(data=ToolCallEventData(
-                                    tool_call=ToolCallContent(id=tc_id)
-                                ))
+                                yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=tc_id)
+                                )
 
                     finish = choice.finish_reason
                     if finish and finish != UNSET_SENTINEL:
                         if thinking_started:
-                            yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+                            yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                             thinking_index += 1
                             thinking_started = False
                             thinking_buf = ""
 
                         if text_started:
-                            yield TextEndEvent(data=TextEventData(text=TextContent(content=text_buf)))
+                            yield TextEndEvent(text=TextContent(content=text_buf))
                             text_index += 1
                             text_started = False
                             text_buf = ""
 
                         for idx in sorted(tool_started):
-                            yield ToolCallEndEvent(data=ToolCallEventData(
-                                tool_call=ToolCallContent(
+                            yield ToolCallEndEvent(tool_call=ToolCallContent(
                                     id=tool_meta[idx]["id"],
                                     name=tool_meta[idx]["name"],
                                     args=json.loads(tool_bufs[idx])
                                 )
-                            ))
+                            )
                         if tool_started:
                             tool_index += len(tool_started)
                             tool_started.clear()
@@ -232,7 +229,7 @@ class MistralChatAPI(BaseAPI):
                         yield EndEvent(reason=stop_reason)
 
         except Exception as e:
-            yield ErrorEvent(reason=StopReason.Abort, message=str(e))
+            yield ErrorEvent(reason=StopReason.Abort, error=str(e))
 
     async def invoke(self, messages: list[BaseMessage], model: str = "mistral-medium-latest") -> list[LLMEvent]:
         events: list[LLMEvent] = []

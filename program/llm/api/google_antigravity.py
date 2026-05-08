@@ -18,9 +18,9 @@ from program.llm.api.types import APIResponse
 from program.llm.types import (
     LLMEvent, Options, StopReason,
     StartEvent, EndEvent, ErrorEvent,
-    TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
-    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
-    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
+    TextStartEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
+    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -236,12 +236,12 @@ class GoogleAntigravityAPI(BaseAPI):
 
                     if not response.is_success:
                         error_body = (await response.aread()).decode(errors="replace")
-                        yield ErrorEvent(reason=StopReason.Abort, message=f"HTTP {response.status_code}: {error_body}")
+                        yield ErrorEvent(reason=StopReason.Abort, error=f"HTTP {response.status_code}: {error_body}")
                         return
 
                     async for line in response.aiter_lines():
                         if self._cancelled():
-                            yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                            yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                             return
                         if not line.startswith("data: "):
                             continue
@@ -267,51 +267,51 @@ class GoogleAntigravityAPI(BaseAPI):
                         for part in content.get("parts", []):
                             if part.get("thought") and part.get("text"):
                                 if not thinking_started:
-                                    yield ThinkingStartEvent(data=ThinkingEventData())
+                                    yield ThinkingStartEvent(thinking=None)
                                     thinking_started = True
                                 delta = part["text"]
                                 thinking_buf += delta
-                                yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=delta)))
+                                yield ThinkingDeltaEvent(thinking=ThinkingContent(content=delta))
                             elif part.get("text"):
                                 if thinking_started:
-                                    yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_buf)))
+                                    yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                                     thinking_started = False
                                     thinking_index += 1
                                     thinking_buf = ""
                                 if not text_started:
-                                    yield TextStartEvent(data=TextEventData())
+                                    yield TextStartEvent(text=TextContent(content=""))
                                     text_started = True
                                 delta = part["text"]
                                 text_buf += delta
-                                yield TextDeltaEvent(data=TextEventData(text=TextContent(content=delta)))
+                                yield TextDeltaEvent(text=TextContent(content=delta))
                             elif part.get("functionCall"):
                                 fc = part["functionCall"]
                                 name = fc.get("name", "")
                                 args_str = json.dumps(fc.get("args", {}))
-                                yield ToolCallStartEvent(data=ToolCallEventData(tool_call=ToolCallContent(id=name, name=name)))
-                                yield ToolCallDeltaEvent(data=ToolCallEventData(tool_call=ToolCallContent(id=name)))
-                                yield ToolCallEndEvent(data=ToolCallEventData(tool_call=ToolCallContent(id=name, name=name, args=json.loads(args_str))))
+                                yield ToolCallStartEvent(tool_call=ToolCallContent(id=name, name=name))
+                                yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=name))
+                                yield ToolCallEndEvent(tool_call=ToolCallContent(id=name, name=name, args=json.loads(args_str)))
                                 tool_index += 1
 
                         finish_reason = candidate.get("finishReason", "")
                         if finish_reason and finish_reason not in ("", "FINISH_REASON_UNSPECIFIED"):
                             if thinking_started:
-                                yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+                                yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                                 thinking_index += 1
                             if text_started:
-                                yield TextEndEvent(data=TextEventData(text=TextContent(content=text_buf)))
+                                yield TextEndEvent(text=TextContent(content=text_buf))
                                 text_index += 1
                             yield EndEvent(reason=_STOP_REASON.get(finish_reason, StopReason.Stop))
                             return
 
         except Exception as exc:
-            yield ErrorEvent(reason=StopReason.Abort, message=str(exc))
+            yield ErrorEvent(reason=StopReason.Abort, error=str(exc))
             return
 
         if thinking_started:
-            yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+            yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
         if text_started:
-            yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
+            yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.5-flash") -> list[LLMEvent]:

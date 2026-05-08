@@ -7,9 +7,9 @@ from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason,
     StartEvent, EndEvent, ErrorEvent,
-    TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
-    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
-    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
+    TextStartEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
+    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -119,7 +119,7 @@ class AnthropicMessagesAPI(BaseAPI):
         async with self._client.messages.stream(**params) as stream:
             async for event in stream:
                 if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                     return
                 etype = event.type
 
@@ -129,55 +129,52 @@ class AnthropicMessagesAPI(BaseAPI):
                     block_types[idx] = block.type
                     if block.type == "text":
                         text_bufs[idx] = ""
-                        yield TextStartEvent(data=TextEventData())
+                        yield TextStartEvent(text=TextContent(content=""))
                     elif block.type == "thinking":
                         thinking_bufs[idx] = ""
-                        yield ThinkingStartEvent(data=ThinkingEventData())
+                        yield ThinkingStartEvent(thinking=None)
                     elif block.type == "tool_use":
                         tool_ids[idx] = block.id
                         tool_names[idx] = block.name
                         tool_bufs[idx] = ""
-                        yield ToolCallStartEvent(data=ToolCallEventData(
-                            tool_call=ToolCallContent(id=block.id, name=block.name)
-                        ))
+                        yield ToolCallStartEvent(tool_call=ToolCallContent(id=block.id, name=block.name)
+                        )
 
                 elif etype == "content_block_delta":
                     idx = event.index
                     delta = event.delta
                     if delta.type == "text_delta":
                         text_bufs[idx] = text_bufs.get(idx, "") + delta.text
-                        yield TextDeltaEvent(data=TextEventData(text=TextContent(content=delta.text)))
+                        yield TextDeltaEvent(text=TextContent(content=delta.text))
                     elif delta.type == "thinking_delta":
                         thinking_bufs[idx] = thinking_bufs.get(idx, "") + delta.thinking
-                        yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=delta.thinking)))
+                        yield ThinkingDeltaEvent(thinking=ThinkingContent(content=delta.thinking))
                     elif delta.type == "input_json_delta":
                         tool_bufs[idx] = tool_bufs.get(idx, "") + delta.partial_json
-                        yield ToolCallDeltaEvent(data=ToolCallEventData(
-                            tool_call=ToolCallContent(id=tool_ids.get(idx, ""))
-                        ))
+                        yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=tool_ids.get(idx, ""))
+                        )
 
                 elif etype == "content_block_stop":
                     idx = event.index
                     btype = block_types.get(idx, "")
                     if btype == "text":
-                        yield TextEndEvent(data=TextEventData(text=TextContent(content=text_bufs.get(idx, ""))))
+                        yield TextEndEvent(text=TextContent(content=text_bufs.get(idx, "")))
                     elif btype == "thinking":
-                        yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_bufs.get(idx, ""))))
+                        yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_bufs.get(idx, "")))
                     elif btype == "tool_use":
-                        yield ToolCallEndEvent(data=ToolCallEventData(
-                            tool_call=ToolCallContent(
+                        yield ToolCallEndEvent(tool_call=ToolCallContent(
                                 id=tool_ids.get(idx, ""),
                                 name=tool_names.get(idx, ""),
                                 args=json.loads(tool_bufs.get(idx, "{}"))
                             )
-                        ))
+                        )
 
                 elif etype == "message_delta":
                     stop_reason = _STOP_REASON.get(event.delta.stop_reason or "", StopReason.Stop)
                     yield EndEvent(reason=stop_reason)
 
                 elif etype == "error":
-                    yield ErrorEvent(reason=StopReason.Abort, message=str(event))
+                    yield ErrorEvent(reason=StopReason.Abort, error=str(event))
 
     async def invoke(self, messages: list[BaseMessage], model: str = "claude-sonnet-4-6") -> list[LLMEvent]:
         events: list[LLMEvent] = []

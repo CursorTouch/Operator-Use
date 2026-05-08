@@ -8,9 +8,9 @@ from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
-    TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
-    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
-    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
+    TextStartEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
+    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -135,7 +135,7 @@ class GeminiGenerateAPI(BaseAPI):
                 config=config,
             ):
                 if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                     return
                 if not chunk.candidates:
                     continue
@@ -145,56 +145,48 @@ class GeminiGenerateAPI(BaseAPI):
                     for part in candidate.content.parts:
                         if getattr(part, "thought", False) and part.text:
                             if not thinking_started:
-                                yield ThinkingStartEvent(data=ThinkingEventData())
+                                yield ThinkingStartEvent(thinking=None)
                                 thinking_started = True
                             thinking_buf += part.text
-                            yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=part.text)))
+                            yield ThinkingDeltaEvent(thinking=ThinkingContent(content=part.text))
                         elif part.text:
                             if thinking_started:
-                                yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_buf)))
+                                yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                                 thinking_started = False
                                 thinking_index += 1
                                 thinking_buf = ""
                             if not text_started:
-                                yield TextStartEvent(data=TextEventData())
+                                yield TextStartEvent(text=TextContent(content=""))
                                 text_started = True
                             text_buf += part.text
-                            yield TextDeltaEvent(data=TextEventData(text=TextContent(content=part.text)))
+                            yield TextDeltaEvent(text=TextContent(content=part.text))
                         elif part.function_call:
                             fc = part.function_call
                             tool_id = fc.name
                             args_str = json.dumps(dict(fc.args)) if fc.args else ""
-                            yield ToolCallStartEvent(data=ToolCallEventData(
-                                tool_call=ToolCallContent(id=tool_id, name=fc.name)
-                            ))
-                            yield ToolCallDeltaEvent(data=ToolCallEventData(
-                                tool_call=ToolCallContent(id=tool_id)
-                            ))
-                            yield ToolCallEndEvent(data=ToolCallEventData(
-                                tool_call=ToolCallContent(id=tool_id, name=fc.name, args=json.loads(args_str) if args_str else {})
-                            ))
+                            yield ToolCallStartEvent(tool_call=ToolCallContent(id=tool_id, name=fc.name))
+                            yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=tool_id))
+                            yield ToolCallEndEvent(tool_call=ToolCallContent(id=tool_id, name=fc.name, args=json.loads(args_str) if args_str else {}))
                             tool_index += 1
 
                 finish_reason = getattr(candidate, "finish_reason", None)
                 if finish_reason and str(finish_reason) not in ("", "FINISH_REASON_UNSPECIFIED"):
                     if thinking_started:
-                        yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
-                        thinking_index += 1
+                        yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                     if text_started:
-                        yield TextEndEvent(data=TextEventData(text=TextContent(content=text_buf)))
-                        text_index += 1
+                        yield TextEndEvent(text=TextContent(content=text_buf))
                     reason_str = finish_reason.name if hasattr(finish_reason, "name") else str(finish_reason)
                     yield EndEvent(reason=_STOP_REASON.get(reason_str, StopReason.Stop))
                     return
 
         except Exception as exc:
-            yield ErrorEvent(reason=StopReason.Abort, message=str(exc))
+            yield ErrorEvent(reason=StopReason.Abort, error=str(exc))
             return
 
         if thinking_started:
-            yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
+            yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
         if text_started:
-            yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
+            yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash") -> list[LLMEvent]:

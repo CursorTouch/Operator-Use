@@ -15,9 +15,9 @@ from program.llm.api.types import APIResponse
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
-    TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
-    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
-    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
+    TextStartEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
+    ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -251,44 +251,41 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
             item = event.get("item") or {}
             itype = item.get("type", "")
             if itype == "message":
-                yield TextStartEvent(data=TextEventData())
+                yield TextStartEvent(text=TextContent(content=""))
             elif itype == "reasoning":
-                yield ThinkingStartEvent(data=ThinkingEventData())
+                yield ThinkingStartEvent(thinking=None)
             elif itype == "function_call":
                 call_id = item.get("call_id", "")
                 name = item.get("name", "")
                 tool_names[call_id] = name
-                yield ToolCallStartEvent(data=ToolCallEventData(
-                    tool_call=ToolCallContent(id=call_id, name=name)
-                ))
+                yield ToolCallStartEvent(tool_call=ToolCallContent(id=call_id, name=name)
+                )
 
         elif etype == "response.output_text.delta":
-            yield TextDeltaEvent(data=TextEventData(text=TextContent(content=event.get("delta", ""))))
+            yield TextDeltaEvent(text=TextContent(content=event.get("delta", "")))
 
         elif etype == "response.output_text.done":
-            yield TextEndEvent(data=TextEventData(text=TextContent(content=event.get("text", ""))))
+            yield TextEndEvent(text=TextContent(content=event.get("text", "")))
 
         elif etype == "response.reasoning_summary_text.delta":
-            yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=event.get("delta", ""))))
+            yield ThinkingDeltaEvent(thinking=ThinkingContent(content=event.get("delta", "")))
 
         elif etype == "response.reasoning_summary_text.done":
-            yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=event.get("text", ""))))
+            yield ThinkingEndEvent(thinking=ThinkingContent(content=event.get("text", "")))
 
         elif etype == "response.function_call_arguments.delta":
             item_id = event.get("item_id", "")
-            yield ToolCallDeltaEvent(data=ToolCallEventData(
-                tool_call=ToolCallContent(id=item_id)
-            ))
+            yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=item_id)
+            )
 
         elif etype == "response.function_call_arguments.done":
             item_id = event.get("item_id", "")
-            yield ToolCallEndEvent(data=ToolCallEventData(
-                tool_call=ToolCallContent(
+            yield ToolCallEndEvent(tool_call=ToolCallContent(
                     id=item_id,
                     name=tool_names.get(item_id, ""),
                     args=json.loads(event.get("arguments", "{}"))
                 )
-            ))
+            )
 
         elif etype == "response.completed":
             response = event.get("response") or {}
@@ -380,14 +377,14 @@ class OpenAICodexResponsesAPI(BaseAPI):
             async for event in self._stream_ws(body, ws_headers):
                 yield event
                 if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                     return
         except Exception:
             sse_headers = _build_headers(token, account_id, websocket=False)
             async for event in self._stream_sse(body, sse_headers):
                 yield event
                 if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                     return
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o") -> list[LLMEvent]:

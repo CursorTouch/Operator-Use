@@ -106,6 +106,25 @@ class SteeringQueue:
     mode: SteeringMode
     queue: Queue[BaseMessage] = field(default_factory=Queue)
 
+    def clear(self):
+        self.queue = Queue()
+
+    async def add(self, message: BaseMessage):
+        await self.queue.put(message)
+    
+    def is_empty(self) -> bool:
+        return self.queue.empty()
+
+    async def drain(self) -> list[BaseMessage]:
+        messages = []
+        if self.mode == SteeringMode.OneAtATime:
+            if not self.is_empty():
+                messages.append(await self.queue.get())
+        else:
+            while not self.is_empty():
+                messages.append(await self.queue.get())
+        return messages
+
 
 # Agent lifecycle
 @dataclass

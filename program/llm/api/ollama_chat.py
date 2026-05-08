@@ -7,9 +7,9 @@ from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
-    TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
-    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
-    ToolCallStartEvent, ToolCallEndEvent, ToolCallEventData,
+    TextStartEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
+    ToolCallStartEvent, ToolCallEndEvent,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -116,42 +116,42 @@ class OllamaChatAPI(BaseAPI):
 
             async for chunk in await self._client.chat(**payload):
                 if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, message="Cancelled")
+                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                     return
                 msg = chunk.message
 
                 if msg.thinking:
                     if not thinking_started:
-                        yield ThinkingStartEvent(data=ThinkingEventData())
+                        yield ThinkingStartEvent(thinking=None)
                         thinking_started = True
                     thinking_buf += msg.thinking
-                    yield ThinkingDeltaEvent(data=ThinkingEventData(thinking=ThinkingContent(content=msg.thinking)))
+                    yield ThinkingDeltaEvent(thinking=ThinkingContent(content=msg.thinking))
 
                 if msg.content:
                     if not text_started:
-                        yield TextStartEvent(data=TextEventData())
+                        yield TextStartEvent(text=TextContent(content=""))
                         text_started = True
                     text_buf += msg.content
-                    yield TextDeltaEvent(data=TextEventData(text=TextContent(content=msg.content)))
+                    yield TextDeltaEvent(text=TextContent(content=msg.content))
 
                 # tool calls arrive in the final chunk
                 if msg.tool_calls:
                     for i, tc in enumerate(msg.tool_calls):
                         fn = tc.function
                         args = fn.arguments if isinstance(fn.arguments, str) else json.dumps(fn.arguments)
-                        yield ToolCallStartEvent(data=ToolCallEventData(tool_call=ToolCallContent(name=fn.name)))
-                        yield ToolCallEndEvent(data=ToolCallEventData(tool_call=ToolCallContent(name=fn.name, args=json.loads(args) if isinstance(args, str) else args)))
+                        yield ToolCallStartEvent(tool_call=ToolCallContent(name=fn.name))
+                        yield ToolCallEndEvent(tool_call=ToolCallContent(name=fn.name, args=json.loads(args) if isinstance(args, str) else args))
 
                 if chunk.done:
                     if thinking_started:
-                        yield ThinkingEndEvent(data=ThinkingEventData(thinking=ThinkingContent(content=thinking_buf)))
+                        yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                     if text_started:
-                        yield TextEndEvent(data=TextEventData(text=TextContent(content=text_buf)))
+                        yield TextEndEvent(text=TextContent(content=text_buf))
                     stop_reason = _STOP_REASON.get(chunk.done_reason or "", StopReason.Stop)
                     yield EndEvent(reason=stop_reason)
 
         except Exception as e:
-            yield ErrorEvent(reason=StopReason.Abort, message=str(e))
+            yield ErrorEvent(reason=StopReason.Abort, error=str(e))
 
     async def invoke(self, messages: list[BaseMessage], model: str = "llama3.2") -> list[LLMEvent]:
         events: list[LLMEvent] = []
