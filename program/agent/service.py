@@ -7,6 +7,7 @@ from program.agent.types import (
     MessageStartEvent,MessageEventData,MessageEndEvent,ToolCallStartEvent,
     ToolCallEventData,ToolCallEndEvent,AgentStartEvent,AgentEndEvent
 )
+from program.llm.types import LLMEventType,ErrorEvent,EndEvent,TextDeltaEvent,TextStartEvent,TextEndEvent,ThinkingDeltaEvent,ThinkingStartEvent,ThinkingEndEvent
 
 
 if TYPE_CHECKING:
@@ -111,7 +112,34 @@ class Agent:
             has_tool_calls=False
             while has_tool_calls or len(pending_messages):
                 emit(TurnStartEvent())
-                llm_event=await self.llm.invoke(self.state.messages)
+                llm_event=self.llm.stream(self.state.messages)
+
+                for event in llm_event:
+                    match event.type:
+                        case LLMEventType.Start:
+                            pass
+                        case LLMEventType.Error:
+                            pass
+                        case LLMEventType.Done:
+                            pass
+                        case LLMEventType.TextStart:
+                            pass
+                        case LLMEventType.TextDelta:
+                            pass
+                        case LLMEventType.TextEnd:
+                            pass
+                        case LLMEventType.ThinkingStart:
+                            pass
+                        case LLMEventType.ThinkingDelta:
+                            pass
+                        case LLMEventType.ThinkingEnd:
+                            pass
+                        case LLMEventType.ToolCallStart:
+                            pass
+                        case LLMEventType.ToolCallDelta:
+                            pass
+                        case LLMEventType.ToolCallEnd:
+                            pass
                 
 
                 

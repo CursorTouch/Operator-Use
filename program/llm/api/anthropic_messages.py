@@ -6,7 +6,7 @@ from anthropic import AsyncAnthropic
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason,
-    StartEvent, DoneEvent, ErrorEvent,
+    StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
@@ -173,7 +173,7 @@ class AnthropicMessagesAPI(BaseAPI):
 
                 elif etype == "message_delta":
                     stop_reason = _STOP_REASON.get(event.delta.stop_reason or "", StopReason.Stop)
-                    yield DoneEvent(reason=stop_reason)
+                    yield EndEvent(reason=stop_reason)
 
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, message=str(event))

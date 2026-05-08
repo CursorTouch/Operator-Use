@@ -17,7 +17,7 @@ from program.llm.api.base import BaseAPI
 from program.llm.api.types import APIResponse
 from program.llm.types import (
     LLMEvent, Options, StopReason,
-    StartEvent, DoneEvent, ErrorEvent,
+    StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
@@ -301,7 +301,7 @@ class GoogleAntigravityAPI(BaseAPI):
                             if text_started:
                                 yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
                                 text_index += 1
-                            yield DoneEvent(reason=_STOP_REASON.get(finish_reason, StopReason.Stop))
+                            yield EndEvent(reason=_STOP_REASON.get(finish_reason, StopReason.Stop))
                             return
 
         except Exception as exc:
@@ -312,7 +312,7 @@ class GoogleAntigravityAPI(BaseAPI):
             yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
         if text_started:
             yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
-        yield DoneEvent(reason=StopReason.Stop)
+        yield EndEvent(reason=StopReason.Stop)
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.5-flash") -> list[LLMEvent]:
         events: list[LLMEvent] = []

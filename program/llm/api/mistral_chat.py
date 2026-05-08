@@ -9,7 +9,7 @@ from mistralai.client.types import UNSET_SENTINEL
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
-    StartEvent, DoneEvent, ErrorEvent,
+    StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
@@ -232,7 +232,7 @@ class MistralChatAPI(BaseAPI):
                             tool_meta.clear()
 
                         stop_reason = _STOP_REASON.get(str(finish), StopReason.Stop)
-                        yield DoneEvent(reason=stop_reason)
+                        yield EndEvent(reason=stop_reason)
 
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, message=str(e))

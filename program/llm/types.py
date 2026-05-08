@@ -86,77 +86,88 @@ class ToolCallEventData:
 
 
 @dataclass
-class LLMEvent:
-    type: LLMEventType
-
-
-@dataclass
-class StartEvent(LLMEvent):
+class StartEvent:
     type: LLMEventType = field(default=LLMEventType.Start, init=False)
 
 
 @dataclass
-class ErrorEvent(LLMEvent):
+class ErrorEvent:
     type: LLMEventType = field(default=LLMEventType.Error, init=False)
     reason: StopReason = StopReason.Stop
     message: str = ""
 
 
 @dataclass
-class DoneEvent(LLMEvent):
+class EndEvent:
     type: LLMEventType = field(default=LLMEventType.Done, init=False)
     reason: StopReason = StopReason.Stop
 
 
 @dataclass
-class TextStartEvent(LLMEvent):
+class TextStartEvent:
     type: LLMEventType = field(default=LLMEventType.TextStart, init=False)
     data: TextEventData = field(default_factory=TextEventData)
 
 
 @dataclass
-class TextDeltaEvent(LLMEvent):
+class TextDeltaEvent:
     type: LLMEventType = field(default=LLMEventType.TextDelta, init=False)
     data: TextEventData = field(default_factory=TextEventData)
 
 
 @dataclass
-class TextEndEvent(LLMEvent):
+class TextEndEvent:
     type: LLMEventType = field(default=LLMEventType.TextEnd, init=False)
     data: TextEventData = field(default_factory=TextEventData)
 
 
 @dataclass
-class ThinkingStartEvent(LLMEvent):
+class ThinkingStartEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingStart, init=False)
     data: ThinkingEventData = field(default_factory=ThinkingEventData)
 
 
 @dataclass
-class ThinkingDeltaEvent(LLMEvent):
+class ThinkingDeltaEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingDelta, init=False)
     data: ThinkingEventData = field(default_factory=ThinkingEventData)
 
 
 @dataclass
-class ThinkingEndEvent(LLMEvent):
+class ThinkingEndEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingEnd, init=False)
     data: ThinkingEventData = field(default_factory=ThinkingEventData)
 
 
 @dataclass
-class ToolCallStartEvent(LLMEvent):
+class ToolCallStartEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallStart, init=False)
     data: ToolCallEventData = field(default_factory=ToolCallEventData)
 
 
 @dataclass
-class ToolCallDeltaEvent(LLMEvent):
+class ToolCallDeltaEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallDelta, init=False)
     data: ToolCallEventData = field(default_factory=ToolCallEventData)
 
 
 @dataclass
-class ToolCallEndEvent(LLMEvent):
+class ToolCallEndEvent:
     type: LLMEventType = field(default=LLMEventType.ToolCallEnd, init=False)
     data: ToolCallEventData = field(default_factory=ToolCallEventData)
+
+
+LLMEvent = (
+    StartEvent
+    | ErrorEvent
+    | EndEvent
+    | TextStartEvent
+    | TextDeltaEvent
+    | TextEndEvent
+    | ThinkingStartEvent
+    | ThinkingDeltaEvent
+    | ThinkingEndEvent
+    | ToolCallStartEvent
+    | ToolCallDeltaEvent
+    | ToolCallEndEvent
+)

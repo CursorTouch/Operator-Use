@@ -6,7 +6,7 @@ from ollama import AsyncClient
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
-    StartEvent, DoneEvent, ErrorEvent,
+    StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
     ToolCallStartEvent, ToolCallEndEvent, ToolCallEventData,
@@ -148,7 +148,7 @@ class OllamaChatAPI(BaseAPI):
                     if text_started:
                         yield TextEndEvent(data=TextEventData(index=0, text=text_buf))
                     stop_reason = _STOP_REASON.get(chunk.done_reason or "", StopReason.Stop)
-                    yield DoneEvent(reason=stop_reason)
+                    yield EndEvent(reason=stop_reason)
 
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, message=str(e))

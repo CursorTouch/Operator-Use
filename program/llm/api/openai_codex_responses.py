@@ -14,7 +14,7 @@ from program.llm.api.base import BaseAPI
 from program.llm.api.types import APIResponse
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
-    StartEvent, DoneEvent, ErrorEvent,
+    StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
@@ -298,7 +298,7 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
         elif etype == "response.completed":
             response = event.get("response") or {}
             stop_reason = _STOP_REASON.get(response.get("stop_reason") or "", StopReason.Stop)
-            yield DoneEvent(reason=stop_reason)
+            yield EndEvent(reason=stop_reason)
 
 
 # ── API class ─────────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
-    StartEvent, DoneEvent, ErrorEvent,
+    StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
 )
@@ -189,7 +189,7 @@ class OpenAICompletionsAPI(BaseAPI):
                     tool_meta.clear()
 
                 stop_reason = _STOP_REASON.get(choice.finish_reason, StopReason.Stop)
-                yield DoneEvent(reason=stop_reason)
+                yield EndEvent(reason=stop_reason)
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o") -> list[LLMEvent]:
         events: list[LLMEvent] = []

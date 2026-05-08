@@ -7,7 +7,7 @@ from google.genai import types as genai_types
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
-    StartEvent, DoneEvent, ErrorEvent,
+    StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
@@ -184,7 +184,7 @@ class GeminiGenerateAPI(BaseAPI):
                         yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
                         text_index += 1
                     reason_str = finish_reason.name if hasattr(finish_reason, "name") else str(finish_reason)
-                    yield DoneEvent(reason=_STOP_REASON.get(reason_str, StopReason.Stop))
+                    yield EndEvent(reason=_STOP_REASON.get(reason_str, StopReason.Stop))
                     return
 
         except Exception as exc:
@@ -195,7 +195,7 @@ class GeminiGenerateAPI(BaseAPI):
             yield ThinkingEndEvent(data=ThinkingEventData(index=thinking_index, thinking=thinking_buf))
         if text_started:
             yield TextEndEvent(data=TextEventData(index=text_index, text=text_buf))
-        yield DoneEvent(reason=StopReason.Stop)
+        yield EndEvent(reason=StopReason.Stop)
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash") -> list[LLMEvent]:
         events: list[LLMEvent] = []

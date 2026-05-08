@@ -1,7 +1,7 @@
 import asyncio
 import os
 from program.llm.service import LLM
-from program.llm.types import Options, DoneEvent, ErrorEvent, TextDeltaEvent
+from program.llm.types import Options, EndEvent, ErrorEvent, TextDeltaEvent
 from program.message.types import UserMessage, TextContent
 from dotenv import load_dotenv
 load_dotenv()
@@ -24,7 +24,7 @@ async def main():
     async for event in llm.stream(messages):
         if isinstance(event, TextDeltaEvent):
             print(event.data.text, end="", flush=True)
-        elif isinstance(event, DoneEvent):
+        elif isinstance(event, EndEvent):
             print(f"\n\nDone ({event.reason})")
         elif isinstance(event, ErrorEvent):
             print(f"\nError: {event.message}")

@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
     LLMEvent, Options, StopReason, ThinkingLevel,
-    StartEvent, DoneEvent, ErrorEvent,
+    StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent, TextEventData,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent, ThinkingEventData,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent, ToolCallEventData,
@@ -188,7 +188,7 @@ class OpenAIResponsesAPI(BaseAPI):
                         getattr(resp, "stop_reason", None) or "",
                         StopReason.Stop,
                     )
-                    yield DoneEvent(reason=stop_reason)
+                    yield EndEvent(reason=stop_reason)
 
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, message=str(event))
