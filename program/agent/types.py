@@ -55,9 +55,10 @@ TransformContextCallback = Callable[[list[BaseMessage], Optional[AbortSignal]], 
 class AgentState:
     system_prompt: Optional[str] = None
     messages: list[BaseMessage] = field(default_factory=list)
-    pending_tool_calls: list[ToolCallContent] = field(default_factory=list)
+    pending_tool_calls: set[str] = field(default_factory=set)
     is_streaming: bool = False
     llm: Optional[LLM] = None
+    streaming_message: Optional[BaseMessage] = None
     thinking_level: Optional[ThinkingLevel] = None
     error_message: Optional[str] = None
     tools: list[Tool] = field(default_factory=list)

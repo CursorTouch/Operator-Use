@@ -2,7 +2,7 @@ from __future__ import annotations
 from program.message.types import ToolResultContent
 import asyncio
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Callable
 from program.agent.types import (
     EmitEvent, AgentEventType, TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
@@ -15,7 +15,7 @@ from program.llm.types import (
 )
 from program.tool.types import ToolResult
 from program.tool.registry import ToolRegistry
-from program.message.types import AssistantMessage, ToolCallContent
+from program.message.types import AssistantMessage, ToolCallContent, Role
 
 if TYPE_CHECKING:
     from program.llm.service import LLM
@@ -45,6 +45,7 @@ class Agent:
         self.system_prompt = system_prompt
         self.options = options or Options()
         self.tool_registry = ToolRegistry(tools)
+        self.listeners: list[Callable[[AgentEvent], None]] = []
         self.state = AgentState(
             llm=llm,
             tools=tools,
@@ -86,29 +87,29 @@ class Agent:
         self.state.pending_tool_calls.clear()
         self.state.is_streaming = False
 
-    def process_events(self, event: AgentEvent) -> None:
-        """Process an agent event."""
-        match event.type:
-            case AgentEventType.AgentStart:
-                pass
-            case AgentEventType.AgentEnd:
-                pass
-            case AgentEventType.TurnStart:
-                pass
-            case AgentEventType.TurnEnd:
-                pass
-            case AgentEventType.MessageStart:
-                pass
-            case AgentEventType.MessageUpdate:
-                pass
-            case AgentEventType.MessageEnd:
-                pass
-            case AgentEventType.ToolExecutionStart:
-                pass
-            case AgentEventType.ToolExecutionUpdate:
-                pass
-            case AgentEventType.ToolExecutionEnd:
-                pass
+    async def subscribe(self, listener: Callable[[AgentEvent], None]) -> Callable[[], None]:
+        """Subscribe to agent events."""
+        self.listeners.append(listener)
+        return lambda: self.listeners.remove(listener)
+    
+    async def process_events(self, event: AgentEvent) -> None:  
+        """Process an agent event and update internal state."""  
+        match event:
+            case MessageStartEvent(message=message):  
+                self.state.streaming_message = message  
+            case MessageUpdateEvent(message=message):  
+                self.state.streaming_message = message  
+            case MessageEndEvent(message=message):  
+                self.state.streaming_message = None  
+                self.state.messages.append(message)  
+            case ToolExecutionStartEvent(tool_call=tool_call):  
+                self.state.pending_tool_calls.add(tool_call.id)  
+            case ToolExecutionEndEvent(tool_result=tool_result):  
+                self.state.pending_tool_calls.discard(tool_result.id)
+            case AgentErrorEvent(error=error):  
+                self.state.error_message = error
+        # Notify all listeners  
+        await asyncio.gather(*[listener(event) for listener in self.listeners])
 
     async def _loop(self, messages: list[BaseMessage], emit: EmitEvent, signal: AbortSignal):
         emit(AgentStartEvent())
@@ -169,20 +170,20 @@ class Agent:
                         for msg in tool_messages:
                             emit(MessageStartEvent(message=msg))
                             emit(MessageEndEvent(message=msg))
-                        messages.extend(tool_messages)
+                            messages.append(msg)
 
                         if steering_messages:=self.options.get_steering_messages():
                             for msg in steering_messages:
                                 emit(MessageStartEvent(message=msg))
                                 emit(MessageEndEvent(message=msg))
-                            messages.extend(steering_messages)
+                                messages.append(msg)
 
                     case StopReason.Stop:
                         if follow_up_messages:=self.options.get_follow_up_messages():
                             for msg in follow_up_messages:
                                 emit(MessageStartEvent(message=msg))
                                 emit(MessageEndEvent(message=msg))
-                            messages.extend(follow_up_messages)
+                                messages.append(msg)
                         else:
                             # No more work to do
                             emit(TurnEndEvent(message=message, tool_results=tool_results))
@@ -231,10 +232,40 @@ class Agent:
     async def run(self, messages: list[BaseMessage]):
         signal: AbortSignal = asyncio.Event()
         self.state.is_streaming = True
-        self.state.error_message=""
-
         await self._loop(messages, self.process_events, signal)
-        self.state.messages = messages
+        self.state.is_streaming = False
+
+    async def run_continue(self) -> None:  
+        """Continue from the current transcript. The last message must be a user or tool-result message."""  
+        if self.state.is_streaming:  
+            raise RuntimeError("Agent is already processing. Wait for completion before continuing.")  
+        
+        if not self.state.messages:  
+            raise RuntimeError("No messages to continue from")  
+        
+        last_message = self.state.messages[-1]  
+        if last_message.role == Role.ASSISTANT:  
+            # Check for queued steering messages first  
+            if not self.state.steering_queue.is_empty():  
+                steering_messages = await self.state.steering_queue.drain()  
+                await self.run(steering_messages)  
+                return  
+            
+            # Check for queued follow-up messages  
+            if not self.state.follow_up_queue.is_empty():  
+                follow_up_messages = await self.state.follow_up_queue.drain()  
+                await self.run(follow_up_messages)  
+                return  
+            
+            raise RuntimeError("Cannot continue from message role: assistant")  
+        
+        await self._loop_continue()  
+    
+    async def _loop_continue(self) -> None:  
+        """Continue the agent loop from existing context without adding new messages."""  
+        signal: AbortSignal = asyncio.Event()  
+        self.state.is_streaming = True   
+        await self._loop(self.state.messages, self.process_events, signal)  
         self.state.is_streaming = False
 
 

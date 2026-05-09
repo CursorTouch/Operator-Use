@@ -3,7 +3,9 @@ import base64
 import io
 from dataclasses import dataclass, field
 from typing import Literal, TYPE_CHECKING,Any
+from enum import Enum
 from PIL import Image
+
 from program.llm.types import StopReason
 
 if TYPE_CHECKING:
@@ -78,24 +80,29 @@ class Usage:
     cache_write_tokens: int = 0
     cost: UsageCost = field(default_factory=UsageCost)
 
+class Role(Enum):
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
 
 @dataclass
 class BaseMessage:
-    role: str
+    role: Role
     contents: list[Content] = field(default_factory=list)
 
 @dataclass
 class SystemMessage(BaseMessage):
-    role: Literal["system"] = field(default="system", init=False)
+    role: Role = field(default=Role.SYSTEM, init=False)
 
 @dataclass
 class UserMessage(BaseMessage):
-    role: Literal["user"] = field(default="user", init=False)
+    role: Role = field(default=Role.USER, init=False)
 
 
 @dataclass
 class AssistantMessage(BaseMessage):
-    role: Literal["assistant"] = field(default="assistant", init=False)
+    role: Role = field(default=Role.ASSISTANT, init=False)
     usage: Usage = field(default_factory=Usage)
     stop_reason: StopReason = StopReason.Stop
     error: str = ""
@@ -103,4 +110,4 @@ class AssistantMessage(BaseMessage):
 
 @dataclass
 class ToolMessage(BaseMessage):
-    role: Literal["tool"] = field(default="tool", init=False)
+    role: Role = field(default=Role.TOOL, init=False)
