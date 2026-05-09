@@ -24,18 +24,32 @@ class LLM:
     def __init__(
         self,
         model_id: str,
-        provider: str,
+        provider: str | None = None,
         options: Options | None = None,
     ) -> None:
         model = self._models.get(model_id)
         if model is None:
             raise ValueError(f"Model '{model_id}' not found.")
 
+        provider = provider or model.provider
         resolved_provider = self._providers.get(provider)
         if resolved_provider is None:
             raise ValueError(f"Provider '{provider}' not found.")
 
         self.model = model
+        
+        # 1. Resolve the API class
+        # If the model explicitly overrides the API, use it. Otherwise use provider's API.
+        api_name_or_class = model.api if getattr(model, "api", None) else resolved_provider.api
+        api_class = api_name_or_class
+        if isinstance(api_class, str):
+            api_class = self._apis.get(api_class)
+            if api_class is None:
+                raise ValueError(f"API '{api_name_or_class}' not found in registry.")
+
+        # 2. Resolve Base URL
+        # If the model explicitly overrides the base_url, use it.
+        base_url_override = model.base_url if getattr(model, "base_url", None) else None
 
         if isinstance(resolved_provider, OAuthProvider):
             credential = self._auth_store.get(resolved_provider.id)
@@ -44,21 +58,23 @@ class LLM:
                     f"No credentials found for '{provider}'. "
                     f"Please log in first."
                 )
-            api_class = resolved_provider.api
+            
             # Synchronous init (will be updated correctly before first request)
-            merged = self._merge_options(
-                Options(api_key=resolved_provider.get_api_key(credential)),
-                options,
-            )
+            base_opts = Options(api_key=resolved_provider.get_api_key(credential))
+            if base_url_override:
+                base_opts.base_url = base_url_override
+                
+            merged = self._merge_options(base_opts, options)
             self.provider_id = resolved_provider.id
             self.api = api_class(merged)
         else:
-            merged = self._merge_options(resolved_provider.options, options)
-            api_class = resolved_provider.api
-            if isinstance(api_class, str):
-                api_class = self._apis.get(api_class)
-                if api_class is None:
-                    raise ValueError(f"API '{resolved_provider.api}' not found in registry.")
+            base_opts = resolved_provider.options
+            if base_url_override:
+                # We don't mutate the provider's options, we merge over it
+                override_opts = Options(base_url=base_url_override)
+                base_opts = self._merge_options(base_opts, override_opts)
+                
+            merged = self._merge_options(base_opts, options)
             self.provider_id = resolved_provider.id
             self.api = api_class(merged)
 

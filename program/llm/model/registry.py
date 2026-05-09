@@ -21,10 +21,13 @@ class ModelRegistry:
     def reset(self) -> None:
         self._models.clear()
 
-    @classmethod
-    def from_builtins(cls) -> ModelRegistry:
+    def load_builtin_models(self) -> None:
         from program.llm.model.builtins import MODELS
-        instance = cls()
         for model in MODELS:
-            instance.register(model)
+            self.register(model)
+
+    @classmethod
+    def from_builtin(cls) -> ModelRegistry:
+        instance = cls()
+        instance.load_builtin_models()
         return instance

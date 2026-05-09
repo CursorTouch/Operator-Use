@@ -17,6 +17,7 @@ class ToolKind(str, Enum):
 class ToolExecutionMode(str, Enum):
     Sequential = "sequential"
     Parallel = "parallel"
+    Batch = "batch"
 
 
 @dataclass

@@ -117,7 +117,7 @@ class ToolRegistry:
         results: list[ToolResultContent] = []
         parallel_calls: list[ToolCallContent] = []
         sequential_calls: list[ToolCallContent] = []
-
+        
         # 1. Group calls or handle missing tools immediately
         for tool_call in tool_calls:
             tool = self.get(tool_call.name)

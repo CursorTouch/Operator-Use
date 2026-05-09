@@ -4,6 +4,7 @@ from program.llm.provider.registry import ProviderRegistry
 from program.llm.provider.oauth import OAuthLoginCallbacks
 from program.config import get_auth_path
 from program.auth.types import AuthCredential, OAuthCredential, APICredential
+from program.utils import strip_json_comments
 
 class AuthStore:
     def __init__(self, registry: ProviderRegistry):
@@ -12,14 +13,12 @@ class AuthStore:
         self.data: dict[str, AuthCredential] = self._load()
 
     def _load(self) -> dict[str, AuthCredential]:
-        if not os.path.exists(self.store_path):
-            return {}
         try:
-            with open(self.store_path, "r", encoding="utf-8") as f:
-                raw_data = json.load(f)
+            content = self.store_path.read_text(encoding="utf-8")
+            clean_content = strip_json_comments(content)
+            raw_data = json.loads(clean_content)
             data: dict[str, AuthCredential] = {}
             for k, v in raw_data.items():
-                # Reconstruct the credential type
                 if "refresh" in v:
                     data[k] = OAuthCredential(
                         access=v.get("access", ""),
