@@ -250,6 +250,15 @@ MODELS: list[Model] = [
         output=[Modality.Text],
     ),
     Model(
+        id="mistral-medium-3-5",
+        name="Mistral Medium 3.5",
+        provider="mistral",
+        cost=Cost(input=0.80, output=4.0, cache_read=0.08, cache_write=1.0),
+        context_window=256_000,
+        input=[Modality.Text, Modality.Image],
+        output=[Modality.Text],
+    ),
+    Model(
         id="mistral-large-latest",
         name="Mistral Large",
         provider="mistral",

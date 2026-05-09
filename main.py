@@ -87,7 +87,7 @@ async def main():
              print("Mistral API key is required.")
              return
 
-    model_id = "mistral-large-latest"
+    model_id = "mistral-medium-3-5"
     
     from program.agent.tools import (
         ListDirTool, ReadFileTool, WriteFileTool, EditFileTool,

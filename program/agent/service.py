@@ -122,6 +122,9 @@ class Agent:
                 message = AssistantMessage()
                 tool_calls.clear()
 
+                if self.options.transform_context is not None:
+                    messages = self.options.transform_context(messages,signal)
+
                 emit(MessageStartEvent(message=message))
                 async for event in self.llm.stream(messages, tools=self.tools):
                     match event:
@@ -153,61 +156,29 @@ class Agent:
                         break
 
                     case StopReason.ToolCalls:
-                        # 1. Check for Steering Messages
-                        steering_messages = []
-                        if self.options.get_steering_messages:
-                            steering_messages = self.options.get_steering_messages()
-                        
-                        if not steering_messages and self.state.steering_queue:
-                            steering_messages = await self.state.steering_queue.drain()
+                        tool_results = await self._execute_tool_calls(
+                            tool_calls=tool_calls, 
+                            emit=emit, 
+                            signal=signal
+                        )
+                        tool_messages = [
+                            ToolMessage(contents=[
+                                tool_result
+                            ]) for tool_result in tool_results
+                        ]
+                        for msg in tool_messages:
+                            emit(MessageStartEvent(message=msg))
+                            emit(MessageEndEvent(message=msg))
+                        messages.extend(tool_messages)
 
-                        if steering_messages:
-                            tool_messages = [
-                                ToolMessage(contents=[
-                                    ToolResultContent(
-                                        id=tool_call.id,
-                                        is_error=True,
-                                        content="Tool call(s) skipped due to steering message from USER"
-                                    )
-                                ]) for tool_call in tool_calls
-                            ]
-                            for msg in tool_messages:
-                                emit(MessageStartEvent(message=msg))
-                                emit(MessageEndEvent(message=msg))
-                            messages.extend(tool_messages)
-
+                        if steering_messages:=self.options.get_steering_messages():
                             for msg in steering_messages:
                                 emit(MessageStartEvent(message=msg))
                                 emit(MessageEndEvent(message=msg))
                             messages.extend(steering_messages)
 
-                        else:
-                            # 2. No steering? Execute the tools as requested
-                            tool_results = await self._execute_tool_calls(
-                                tool_calls=tool_calls, 
-                                emit=emit, 
-                                signal=signal
-                            )
-                            tool_messages = [
-                                ToolMessage(contents=[
-                                    tool_result
-                                ]) for tool_result in tool_results
-                            ]
-                            for msg in tool_messages:
-                                emit(MessageStartEvent(message=msg))
-                                emit(MessageEndEvent(message=msg))
-                            messages.extend(tool_messages)
-
                     case StopReason.Stop:
-                        # 3. Check for Follow-up Messages
-                        follow_up_messages = []
-                        if self.options.get_follow_up_messages:
-                            follow_up_messages = self.options.get_follow_up_messages()
-                        
-                        if not follow_up_messages and self.state.follow_up_queue:
-                            follow_up_messages = await self.state.follow_up_queue.drain()
-
-                        if follow_up_messages:
+                        if follow_up_messages:=self.options.get_follow_up_messages():
                             for msg in follow_up_messages:
                                 emit(MessageStartEvent(message=msg))
                                 emit(MessageEndEvent(message=msg))
