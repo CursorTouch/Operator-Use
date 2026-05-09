@@ -20,7 +20,7 @@ import certifi
 
 from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
-from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
+from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredential, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
 
 __all__ = ["GoogleAntigravityOAuthProvider"]
 
@@ -53,19 +53,6 @@ _ERROR_HTML = b"""<!DOCTYPE html><html><head><title>Auth failed</title></head><b
 <p>An error occurred. Please try again.</p>
 </body></html>"""
 
-
-def _get_account_id_sync(access_token: str) -> str:
-    req = urllib.request.Request(
-        USERINFO_URL,
-        headers={"Authorization": f"Bearer {access_token}"},
-        method="GET",
-    )
-    try:
-        with urllib.request.urlopen(req, context=_SSL_CONTEXT, timeout=10) as resp:
-            data = json.loads(resp.read())
-            return data.get("email") or data.get("id") or ""
-    except Exception:
-        return ""
 
 
 def _parse_authorization_input(value: str) -> tuple[Optional[str], Optional[str]]:
@@ -215,7 +202,7 @@ async def _start_local_server(expected_state: str) -> tuple[asyncio.Server, asyn
     return server, code_future
 
 
-async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
     state = secrets.token_urlsafe(32)
     url = _build_authorization_url(state)
 
@@ -283,7 +270,6 @@ async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
 
     data = await asyncio.to_thread(_exchange_code, code, recv_state)
     access, refresh, expires_ms = _parse_token_response(data)
-    account_id = await asyncio.to_thread(_get_account_id_sync, access)
 
     if callbacks.on_progress:
         callbacks.on_progress("Setting up Cloud Code Assist access...")
@@ -292,15 +278,14 @@ async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
     project_id = await fetch_project_id(access)
     await onboard_user(access, project_id)
 
-    return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
+    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms)
 
 
-async def refresh_antigravity_token(credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
-    data = await asyncio.to_thread(_refresh_token_sync, credentials.refresh)
+async def refresh_antigravity_token(credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+    data = await asyncio.to_thread(_refresh_token_sync, credential.refresh)
     access, new_refresh, expires_ms = _parse_token_response(data)
-    refresh = new_refresh or credentials.refresh
-    account_id = credentials.account_id
-    return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
+    refresh = new_refresh or credential.refresh
+    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms)
 
 
 @dataclass
@@ -309,17 +294,17 @@ class GoogleAntigravityOAuthProvider(OAuthProvider):
     name: str = "Google Antigravity"
     uses_callback_server: bool = True
 
-    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential:
         return await login_antigravity(callbacks)
 
-    async def refresh_token(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
-        return await refresh_antigravity_token(credentials, signal=signal)
+    async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        return await refresh_antigravity_token(credential, signal=signal)
 
-    async def logout(self, credentials: OAuthCredentials) -> None:
+    async def logout(self, credential: OAuthCredential) -> None:
         # Revoke token via Google's revocation endpoint
         try:
             req = urllib.request.Request(
-                f"https://oauth2.googleapis.com/revoke?token={urllib.parse.quote(credentials.access)}",
+                f"https://oauth2.googleapis.com/revoke?token={urllib.parse.quote(credential.access)}",
                 data=b"",
                 method="POST",
             )
@@ -328,17 +313,17 @@ class GoogleAntigravityOAuthProvider(OAuthProvider):
         except Exception:
             pass
 
-    def get_api_key(self, credentials: OAuthCredentials) -> str:
-        return credentials.access
+    def get_api_key(self, credential: OAuthCredential) -> str:
+        return credential.access
 
     @property
     def api(self):
         from program.llm.api.google_antigravity import GoogleAntigravityAPI
         return GoogleAntigravityAPI
 
-    async def validate(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> bool:
-        if self.is_expired(credentials):
+    async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:
+        if self.is_expired(credential):
             return False
         if signal and signal.is_set():
             return False
-        return await asyncio.to_thread(_validate_token_sync, credentials.access)
+        return await asyncio.to_thread(_validate_token_sync, credential.access)

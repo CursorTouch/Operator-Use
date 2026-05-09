@@ -1,22 +1,16 @@
 from __future__ import annotations
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass,field
 from typing import Awaitable, Callable, Optional
+from program.llm.provider.types import AuthType
+from program.auth.types import OAuthCredential
 
 
-__all__ = ["OAuthCredentials", "OAuthPrompt", "OAuthAuthInfo", "OAuthLoginCallbacks", "AbortSignal"]
+
+__all__ = ["OAuthCredential","OAuthPrompt", "OAuthAuthInfo", "OAuthLoginCallbacks", "AbortSignal"]
 
 
 AbortSignal = asyncio.Event
-
-
-@dataclass
-class OAuthCredentials:
-    access: str
-    refresh: str
-    expires: int  # Unix timestamp in milliseconds
-    account_id: str
-
 
 @dataclass
 class OAuthPrompt:

@@ -5,7 +5,8 @@ from program.llm.model.registry import ModelRegistry
 from program.llm.api.registry import APIRegistry
 from program.llm.provider.registry import ProviderRegistry
 from program.llm.provider.types import APIProvider, OAuthProvider
-from program.llm.provider.oauth.store import load_credentials, save_credentials
+from program.auth.service import AuthStore
+from program.auth.types import OAuthCredential
 from program.llm.types import LLMEvent, Options
 from program.message.types import BaseMessage
 from typing import TYPE_CHECKING, Optional
@@ -18,6 +19,7 @@ class LLM:
     _apis = APIRegistry.from_builtins()
     _models = ModelRegistry.from_builtins()
     _providers = ProviderRegistry.from_builtins()
+    _auth_store = AuthStore(_providers)
 
     def __init__(
         self,
@@ -36,19 +38,19 @@ class LLM:
         self.model = model
 
         if isinstance(resolved_provider, OAuthProvider):
-            credentials = load_credentials(resolved_provider.id)
-            if credentials is None:
+            credential = self._auth_store.get(resolved_provider.id)
+            if not isinstance(credential, OAuthCredential):
                 raise RuntimeError(
                     f"No credentials found for '{provider}'. "
                     f"Please log in first."
                 )
             api_class = resolved_provider.api
+            # Synchronous init (will be updated correctly before first request)
             merged = self._merge_options(
-                Options(api_key=resolved_provider.get_api_key(credentials)),
+                Options(api_key=resolved_provider.get_api_key(credential)),
                 options,
             )
-            self._oauth_provider = resolved_provider
-            self._credentials = credentials
+            self.provider_id = resolved_provider.id
             self.api = api_class(merged)
         else:
             merged = self._merge_options(resolved_provider.options, options)
@@ -57,8 +59,7 @@ class LLM:
                 api_class = self._apis.get(api_class)
                 if api_class is None:
                     raise ValueError(f"API '{resolved_provider.api}' not found in registry.")
-            self._oauth_provider = None
-            self._credentials = None
+            self.provider_id = resolved_provider.id
             self.api = api_class(merged)
 
     def _merge_options(self, base: Options, override: Options | None) -> Options:
@@ -71,19 +72,11 @@ class LLM:
                 setattr(merged, f.name, value)
         return merged
 
-    async def _refresh_if_needed(self) -> None:
-        if self._oauth_provider is None or self._credentials is None:
-            return
-        if self._oauth_provider.is_expired(self._credentials):
-            self._credentials = await self._oauth_provider.refresh_token(
-                self._credentials, signal=self.api.options.signal
-            )
-            save_credentials(self._oauth_provider.id, self._credentials)
-            api_key = self._oauth_provider.get_api_key(self._credentials)
+    async def stream(self, messages: list[BaseMessage], tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:
+        api_key = await self._auth_store.get_api_key(self.provider_id)
+        if api_key:
             self.api.options.api_key = api_key
 
-    async def stream(self, messages: list[BaseMessage], tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:
-        await self._refresh_if_needed()
         try:
             async for event in self.api.stream(messages, model=self.model.id, tools=tools):
                 yield event
@@ -92,7 +85,14 @@ class LLM:
             yield ErrorEvent(reason=StopReason.Error, error=str(e))
 
     async def invoke(self, messages: list[BaseMessage], tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
-        await self._refresh_if_needed()
-        return await self.api.invoke(messages, model=self.model.id, tools=tools)
+        api_key = await self._auth_store.get_api_key(self.provider_id)
+        if api_key:
+            self.api.options.api_key = api_key
+
+        try:
+            return await self.api.invoke(messages, model=self.model.id, tools=tools)
+        except Exception as e:
+            from program.llm.types import ErrorEvent, StopReason
+            return [ErrorEvent(reason=StopReason.Error, error=str(e))]
 
 

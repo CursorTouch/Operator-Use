@@ -21,7 +21,7 @@ import certifi
 from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
 from program.llm.provider.oauth.pkce import generate_pkce
-from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
+from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredential, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
 
 __all__ = ["AnthropicClaudeCodeOAuthProvider"]
 
@@ -47,28 +47,6 @@ _ERROR_HTML = b"""<!DOCTYPE html><html><head><title>Auth failed</title></head><b
 <p>An error occurred. Please try again.</p>
 </body></html>"""
 
-
-def _decode_jwt(token: str) -> dict | None:
-    try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
-        payload = parts[1]
-        padding = (4 - len(payload) % 4) % 4
-        decoded = base64.urlsafe_b64decode(payload + "=" * padding)
-        return json.loads(decoded)
-    except Exception:
-        return None
-
-
-def _get_account_id(access_token: str) -> str:
-    payload = _decode_jwt(access_token)
-    if isinstance(payload, dict):
-        for key in ("sub", "user_id", "account_id"):
-            value = payload.get(key)
-            if isinstance(value, str) and value:
-                return value
-    return ""
 
 
 def _parse_authorization_input(value: str) -> tuple[Optional[str], Optional[str]]:
@@ -222,7 +200,7 @@ async def _start_local_server(expected_state: str) -> tuple[asyncio.Server, asyn
     return server, code_future
 
 
-async def login_anthropic(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+async def login_anthropic(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
     verifier, challenge = generate_pkce()
     # The state is the verifier itself (matches the TS implementation)
     state = verifier
@@ -292,16 +270,14 @@ async def login_anthropic(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
 
     data = await asyncio.to_thread(_exchange_code, code, recv_state, verifier)
     access, refresh, expires_ms = _parse_token_response(data)
-    account_id = _get_account_id(access)
 
-    return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
+    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms)
 
 
-async def refresh_anthropic_token(credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
-    data = await asyncio.to_thread(_refresh_token_sync, credentials.refresh)
+async def refresh_anthropic_token(credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+    data = await asyncio.to_thread(_refresh_token_sync, credential.refresh)
     access, refresh, expires_ms = _parse_token_response(data)
-    account_id = _get_account_id(access) or credentials.account_id
-    return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
+    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms)
 
 
 @dataclass
@@ -310,28 +286,28 @@ class AnthropicClaudeCodeOAuthProvider(OAuthProvider):
     name: str = "Anthropic (Claude Pro/Max)"
     uses_callback_server: bool = True
 
-    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential:
         return await login_anthropic(callbacks)
 
-    async def refresh_token(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
-        return await refresh_anthropic_token(credentials, signal=signal)
+    async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        return await refresh_anthropic_token(credential, signal=signal)
 
-    async def logout(self, credentials: OAuthCredentials) -> None:
+    async def logout(self, credential: OAuthCredential) -> None:
         # Anthropic OAuth does not expose a token revocation endpoint
         pass
 
-    def get_api_key(self, credentials: OAuthCredentials) -> str:
-        return credentials.access
+    def get_api_key(self, credential: OAuthCredential) -> str:
+        return credential.access
 
     @property
     def api(self):
         from program.llm.api.anthropic_claude_code import AnthropicClaudeCodeAPI
         return AnthropicClaudeCodeAPI
 
-    async def validate(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> bool:
-        if self.is_expired(credentials):
+    async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:
+        if self.is_expired(credential):
             return False
         if signal and signal.is_set():
             return False
-        return await asyncio.to_thread(_validate_token_sync, credentials.access)
+        return await asyncio.to_thread(_validate_token_sync, credential.access)
 

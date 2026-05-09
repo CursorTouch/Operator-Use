@@ -9,7 +9,7 @@ from program.llm.api.base import BaseAPI
 from program.llm.types import AuthType, Options
 
 if TYPE_CHECKING:
-    from program.llm.provider.oauth.types import OAuthCredentials, OAuthLoginCallbacks, AbortSignal
+    from program.llm.provider.oauth.types import OAuthCredential, OAuthLoginCallbacks, AbortSignal
 
 __all__ = ["AuthType", "APIProvider", "OAuthProvider"]
 
@@ -26,27 +26,27 @@ class OAuthProvider(ABC):
     def api(self) -> Type[BaseAPI]: ...
 
     @abstractmethod
-    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials: ...
+    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential: ...
 
     @abstractmethod
-    async def refresh_token(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials: ...
+    async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential: ...
 
     @abstractmethod
-    async def logout(self, credentials: OAuthCredentials) -> None: ...
+    async def logout(self, credential: OAuthCredential) -> None: ...
 
     @abstractmethod
-    def get_api_key(self, credentials: OAuthCredentials) -> str: ...
+    def get_api_key(self, credential: OAuthCredential) -> str: ...
 
     @abstractmethod
-    async def validate(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> bool: ...
+    async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool: ...
 
-    def is_expired(self, credentials: OAuthCredentials) -> bool:
-        return int(time.time() * 1000) + 30_000 >= credentials.expires
+    def is_expired(self, credential: OAuthCredential) -> bool:
+        return int(time.time() * 1000) + 30_000 >= credential.expires
 
-    async def ensure_fresh(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
-        if self.is_expired(credentials):
-            return await self.refresh_token(credentials, signal=signal)
-        return credentials
+    async def ensure_fresh(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        if self.is_expired(credential):
+            return await self.refresh_token(credential=credential, signal=signal)
+        return credential
 
 
 @dataclass

@@ -24,7 +24,7 @@ _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
 from program.llm.provider.oauth.pkce import generate_pkce
-from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
+from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredential, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
 
 __all__ = ["OpenAICodexOAuthProvider"]
 
@@ -52,6 +52,30 @@ _ERROR_HTML = b"""<!DOCTYPE html><html><head><title>Auth failed</title></head><b
 
 def _create_state() -> str:
     return secrets.token_hex(16)
+
+
+def _decode_jwt(token: str) -> dict | None:
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        payload = parts[1]
+        padding = (4 - len(payload) % 4) % 4
+        decoded = base64.urlsafe_b64decode(payload + "=" * padding)
+        return json.loads(decoded)
+    except Exception:
+        return None
+
+
+def _get_account_id(access_token: str) -> str | None:
+    payload = _decode_jwt(access_token)
+    if not isinstance(payload, dict):
+        return None
+    auth = payload.get(JWT_CLAIM_PATH)
+    if not isinstance(auth, dict):
+        return None
+    account_id = auth.get("chatgpt_account_id")
+    return account_id if isinstance(account_id, str) and account_id else None
 
 
 def _decode_jwt(token: str) -> dict | None:
@@ -241,8 +265,8 @@ async def _start_local_server(state: str) -> tuple[asyncio.Server, asyncio.Futur
 
 async def login_openai_codex(
     callbacks: OAuthLoginCallbacks,
-    originator: str = "pi",
-) -> OAuthCredentials:
+    originator: str = "program",
+) -> OAuthCredential:
     verifier, challenge = generate_pkce()
     state = _create_state()
     url = _build_authorization_url(challenge, state, originator)
@@ -303,20 +327,20 @@ async def login_openai_codex(
 
     account_id = _get_account_id(access)
     if not account_id:
-        raise ValueError("Failed to extract account_id from access token")
+        raise ValueError("missing chatgpt_account_id in token. Ensure you have a valid ChatGPT subscription.")
 
-    return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
+    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
 
 
-async def refresh_openai_codex_token(credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
-    data = await asyncio.to_thread(_refresh_token_sync, credentials.refresh)
+async def refresh_openai_codex_token(credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+    data = await asyncio.to_thread(_refresh_token_sync, credential.refresh)
     access, refresh, expires_ms = _parse_token_response(data)
 
     account_id = _get_account_id(access)
     if not account_id:
-        raise ValueError("Failed to extract account_id from access token")
+        raise ValueError("missing chatgpt_account_id in refreshed token. Ensure you have a valid ChatGPT subscription.")
 
-    return OAuthCredentials(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
+    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
 
 
 @dataclass
@@ -325,26 +349,26 @@ class OpenAICodexOAuthProvider(OAuthProvider):
     name: str = "ChatGPT Plus/Pro (Codex Subscription)"
     uses_callback_server: bool = True
 
-    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential:
         return await login_openai_codex(callbacks)
 
-    async def refresh_token(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
-        return await refresh_openai_codex_token(credentials, signal=signal)
+    async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        return await refresh_openai_codex_token(credential, signal=signal)
 
-    async def logout(self, credentials: OAuthCredentials) -> None:
-        await asyncio.to_thread(_revoke_token_sync, credentials.refresh)
+    async def logout(self, credential: OAuthCredential) -> None:
+        await asyncio.to_thread(_revoke_token_sync, credential.refresh)
 
-    def get_api_key(self, credentials: OAuthCredentials) -> str:
-        return credentials.access
+    def get_api_key(self, credential: OAuthCredential) -> str:
+        return credential.access
 
     @property
     def api(self):
         from program.llm.api.openai_codex_responses import OpenAICodexResponsesAPI
         return OpenAICodexResponsesAPI
 
-    async def validate(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> bool:
-        if self.is_expired(credentials):
+    async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:
+        if self.is_expired(credential):
             return False
         if signal and signal.is_set():
             return False
-        return await asyncio.to_thread(_validate_token_sync, credentials.access)
+        return await asyncio.to_thread(_validate_token_sync, credential.access)

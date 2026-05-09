@@ -25,7 +25,7 @@ import certifi
 
 from dataclasses import dataclass
 from program.llm.provider.types import OAuthProvider
-from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredentials, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
+from program.llm.provider.oauth.types import OAuthAuthInfo, OAuthCredential, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
 
 __all__ = ["GitHubCopilotOAuthProvider", "get_copilot_base_url"]
 
@@ -138,15 +138,6 @@ def _fetch_copilot_token(github_token: str, domain: str) -> dict:
     )
 
 
-def _fetch_github_account_id(github_token: str, domain: str) -> str:
-    urls = _get_urls(domain)
-    try:
-        data = _fetch_json(urls["user"], headers={"Authorization": f"Bearer {github_token}", "Accept": "application/json"})
-        login = data.get("login")
-        return str(login) if login else ""
-    except Exception:
-        return ""
-
 
 def _enable_model(copilot_token: str, model_id: str, enterprise_domain: Optional[str]) -> bool:
     base_url = get_copilot_base_url(copilot_token, enterprise_domain)
@@ -215,7 +206,7 @@ async def _poll_for_github_token(
     raise RuntimeError("Device flow timed out")
 
 
-async def login_github_copilot(callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+async def login_github_copilot(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
     domain_input = await callbacks.on_prompt(OAuthPrompt(
         message="GitHub Enterprise URL/domain (leave blank for github.com):",
         placeholder="company.ghe.com",
@@ -260,14 +251,12 @@ async def login_github_copilot(callbacks: OAuthLoginCallbacks) -> OAuthCredentia
     if not isinstance(token, str) or not isinstance(expires_at, (int, float)):
         raise ValueError(f"Invalid Copilot token response: {copilot_data}")
 
-    account_id = await asyncio.to_thread(_fetch_github_account_id, github_token, domain)
     expires_ms = int(expires_at) * 1000 - 5 * 60 * 1000
 
-    credentials = OAuthCredentials(
+    credential = OAuthCredential(
         access=token,
         refresh=github_token,
         expires=expires_ms,
-        account_id=account_id,
     )
 
     if callbacks.on_progress:
@@ -278,21 +267,20 @@ async def login_github_copilot(callbacks: OAuthLoginCallbacks) -> OAuthCredentia
         for model_id in _POLICY_MODEL_IDS
     ])
 
-    return credentials
+    return credential
 
 
-async def refresh_github_copilot_token(credentials: OAuthCredentials, enterprise_domain: Optional[str] = None, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
+async def refresh_github_copilot_token(credential: OAuthCredential, enterprise_domain: Optional[str] = None, signal: Optional[AbortSignal] = None) -> OAuthCredential:
     domain = enterprise_domain or "github.com"
-    copilot_data = await asyncio.to_thread(_fetch_copilot_token, credentials.refresh, domain)
+    copilot_data = await asyncio.to_thread(_fetch_copilot_token, credential.refresh, domain)
     token = copilot_data.get("token")
     expires_at = copilot_data.get("expires_at")
     if not isinstance(token, str) or not isinstance(expires_at, (int, float)):
         raise ValueError(f"Invalid Copilot token response: {copilot_data}")
-    return OAuthCredentials(
+    return OAuthCredential(
         access=token,
-        refresh=credentials.refresh,
+        refresh=credential.refresh,
         expires=int(expires_at) * 1000 - 5 * 60 * 1000,
-        account_id=credentials.account_id,
     )
 
 
@@ -302,23 +290,23 @@ class GitHubCopilotOAuthProvider(OAuthProvider):
     name: str = "GitHub Copilot"
     uses_callback_server: bool = False
 
-    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredentials:
+    async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential:
         return await login_github_copilot(callbacks)
 
-    async def refresh_token(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> OAuthCredentials:
-        return await refresh_github_copilot_token(credentials, signal=signal)
+    async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        return await refresh_github_copilot_token(credential, signal=signal)
 
-    async def logout(self, credentials: OAuthCredentials) -> None:
+    async def logout(self, credential: OAuthCredential) -> None:
         # GitHub does not expose a token revocation endpoint for device flow tokens
         pass
 
-    def get_api_key(self, credentials: OAuthCredentials) -> str:
-        return credentials.access
+    def get_api_key(self, OAuthCredential: OAuthCredential) -> str:
+        return OAuthCredential.access
 
-    async def validate(self, credentials: OAuthCredentials, signal: Optional[AbortSignal] = None) -> bool:
-        if self.is_expired(credentials):
+    async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:
+        if self.is_expired(credential):
             try:
-                await self.refresh_token(credentials, signal=signal)
+                await self.refresh_token(credential, signal=signal)
                 return True
             except Exception:
                 return False
