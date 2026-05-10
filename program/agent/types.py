@@ -88,13 +88,13 @@ class FollowupQueue:
     def clear(self):
         self.queue = Queue()
 
-    async def add(self, message: BaseMessage):
+    async def enqueue(self, message: BaseMessage):
         await self.queue.put(message)
     
     def is_empty(self) -> bool:
         return self.queue.empty()
 
-    async def drain(self) -> list[BaseMessage]:
+    async def dequeue(self) -> list[BaseMessage]:
         messages = []
         if self.mode == FollowupMode.OneAtATime:
             if not self.is_empty():
@@ -113,13 +113,13 @@ class SteeringQueue:
     def clear(self):
         self.queue = Queue()
 
-    async def add(self, message: BaseMessage):
+    async def enqueue(self, message: BaseMessage):
         await self.queue.put(message)
     
     def is_empty(self) -> bool:
         return self.queue.empty()
 
-    async def drain(self) -> list[BaseMessage]:
+    async def dequeue(self) -> list[BaseMessage]:
         messages = []
         if self.mode == SteeringMode.OneAtATime:
             if not self.is_empty():

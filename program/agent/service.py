@@ -56,11 +56,11 @@ class Agent:
 
     async def steer(self, message: BaseMessage) -> None:
         """Add a steering message to the steering queue."""
-        await self.state.steering_queue.add(message)
+        await self.state.steering_queue.enqueue(message)
 
     async def follow_up(self, message: BaseMessage) -> None:
         """Add a follow-up message to the follow-up queue."""
-        await self.state.follow_up_queue.add(message)
+        await self.state.follow_up_queue.enqueue(message)
 
     def clear_steering(self) -> None:
         """Clear all messages from the steering queue."""
@@ -247,13 +247,13 @@ class Agent:
         if last_message.role == Role.ASSISTANT:  
             # Check for queued steering messages first  
             if not self.state.steering_queue.is_empty():  
-                steering_messages = await self.state.steering_queue.drain()  
+                steering_messages = await self.state.steering_queue.dequeue()  
                 await self.run(steering_messages)  
                 return  
             
             # Check for queued follow-up messages  
             if not self.state.follow_up_queue.is_empty():  
-                follow_up_messages = await self.state.follow_up_queue.drain()  
+                follow_up_messages = await self.state.follow_up_queue.dequeue()  
                 await self.run(follow_up_messages)  
                 return  
             
