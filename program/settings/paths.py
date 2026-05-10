@@ -4,20 +4,21 @@ from program.utils import ensure_directory
 APP_NAME="Program"
 CONFIG_DIR_NAME = ".program"
 
-CONFIG_DIR=Path.home() / CONFIG_DIR_NAME
+CONFIG_DIR_PATH=Path.home() / CONFIG_DIR_NAME
 
 
-def get_config_dir()->Path:
-    ensure_directory(CONFIG_DIR)
-    return CONFIG_DIR
-
-def get_agent_dir() -> Path:
-    path = CONFIG_DIR / "agent"
-    ensure_directory(path)
+def get_config_dir(cwd:Path|None)->Path:
+    path = CONFIG_DIR_PATH
+    if cwd is not None and cwd.exists():
+        path = cwd / CONFIG_DIR_NAME
     return path
 
-def get_settings_path() -> Path:
-    path = get_config_dir() / "settings.json"
+def get_agent_dir(cwd:Path|None) -> Path:
+    path = get_config_dir(cwd) / "agent"
+    return path
+
+def get_settings_path(path:Path|None=None) -> Path:
+    path = get_config_dir(path) / "settings.json"
     return path
 
 def get_auth_path() -> Path:
@@ -29,16 +30,21 @@ def get_models_path() -> Path:
     return path
 
 def get_session_path() -> Path:
-    path = get_agent_dir() / "sessions"
-    ensure_directory(path)
+    path = get_config_dir() / "sessions"
     return path
 
-def get_prompts_path() -> Path:
-    path = get_agent_dir() / "prompts"
-    ensure_directory(path)
+def get_prompts_path(cwd:Path|None) -> Path:
+    path = get_config_dir(cwd) / "prompts"
     return path
 
-def get_tools_path() -> Path:
-    path = get_agent_dir() / "tools"
-    ensure_directory(path)
+def get_tools_path(cwd:Path|None) -> Path:
+    path = get_config_dir(cwd) / "tools"
+    return path
+
+def get_themes_path(cwd:Path|None) -> Path:
+    path = get_config_dir(cwd) / "themes"
+    return path
+
+def get_extensions_path(cwd:Path|None) -> Path:
+    path = get_config_dir(cwd) / "extensions"
     return path
