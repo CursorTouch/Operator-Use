@@ -1,68 +1,12 @@
-import json  
-from abc import ABC, abstractmethod  
-from dataclasses import dataclass  
-from pathlib import Path  
-from typing import Callable, Generic, TypeVar  
-from filelock import FileLock  
-  
+from __future__ import annotations
 from program.llm.provider.registry import ProviderRegistry  
 from program.llm.provider.oauth import OAuthLoginCallbacks  
 from program.settings.paths import get_auth_path  
-from program.auth.types import AuthCredential, OAuthCredential, APICredential, AuthType
-  
-T = TypeVar('T')  
-  
-@dataclass  
-class LockResult:  
-    result: T  
-    next: str | None = None  
-  
-class AuthStorage(ABC):  
-    """Abstract storage backend for auth credentials."""  
-      
-    @abstractmethod  
-    def with_lock(self, fn: Callable[[str | None], LockResult]) -> LockResult:  
-        """Execute fn with locked access to the storage (async)."""  
-        pass  
-  
-class FileAuthStorage(AuthStorage):  
-    """File-based storage backend with locking."""  
-      
-    def __init__(self, store_path: Path):  
-        self.store_path = store_path  
-        self.lock_path = store_path.with_suffix(".lock")  
-        self._ensure_parent_dir()  
-        self._ensure_file_exists()  
-      
-    def _ensure_parent_dir(self) -> None:  
-        self.store_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)  
-      
-    def _ensure_file_exists(self) -> None:  
-        if not self.store_path.exists():  
-            self.store_path.write_text("{}", encoding="utf-8")  
-            self.store_path.chmod(0o600)  
+from program.auth.types import AuthCredential, OAuthCredential, APICredential, AuthType, LockResult
+from program.auth.storage import AuthStorage, FileAuthStorage, InMemoryAuthStorage
+from pathlib import Path 
+import json 
 
-    def with_lock(self, fn: Callable[[str | None], LockResult]) -> LockResult:  
-        with FileLock(self.lock_path):  
-            current = self.store_path.read_text(encoding="utf-8") if self.store_path.exists() else None  
-            result = fn(current)  
-            if result.next is not None:  
-                self.store_path.write_text(result.next, encoding="utf-8")  
-                self.store_path.chmod(0o600)  
-            return result  
-  
-class InMemoryAuthStorage(AuthStorage):  
-    """In-memory storage backend for testing."""  
-      
-    def __init__(self):  
-        self._value: str | None = None  
-      
-    def with_lock(self, fn: Callable[[str | None], LockResult]) -> LockResult:  
-        result = fn(self._value)  
-        if result.next is not None:  
-            self._value = result.next  
-        return result  
-  
 class AuthStore:  
     """Credential storage with pluggable backends."""  
       

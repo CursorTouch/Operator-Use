@@ -1,6 +1,6 @@
 from program.llm.types import AuthType
 from dataclasses import dataclass,field
-from pydantic.v1 import BaseModel
+from typing import TypeVar
 
 @dataclass
 class OAuthCredential:
@@ -16,5 +16,12 @@ class APICredential:
     key:str
 
 AuthCredential=OAuthCredential|APICredential
+
+T = TypeVar('T')  
+  
+@dataclass  
+class LockResult:  
+    result: T  
+    next: str | None = None  
     
     
