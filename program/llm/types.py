@@ -10,6 +10,13 @@ if TYPE_CHECKING:
     from program.message.types import TextContent, ThinkingContent, ToolCallContent
 
 
+class TransportType(str, Enum):
+    STDIO = "stdio"
+    HTTP = "http"
+    WEBSOCKET = "websocket"
+    SSE = "sse"
+
+
 class AuthType(str, Enum):
     ApiKey = "api_key"
     OAuth = "oauth"
@@ -22,6 +29,15 @@ class StopReason(str, Enum):
     ContentFilter = "content_filter"
     Abort = "abort"
     Error = "error"
+
+# Needs to bind this to the api layer (Thinking Effort->Thinking Budgets for the Providers don't support Thinking Effort directly which uses the Thinking Budget instead)
+class ThinkingBudgets:
+    minimal:Optional[int]
+    low:Optional[int]
+    medium:Optional[int]
+    high:Optional[int]
+    xhigh:Optional[int]
+    max:Optional[int]
 
 
 class ThinkingLevel(str, Enum):
@@ -63,7 +79,7 @@ class Options:
     temperature: float = 1.0
     max_tokens: Optional[int] = None
     thinking_level: Optional[ThinkingLevel] = None
-    thinking_budget: Optional[int] = None
+    thinking_budgets: Optional[ThinkingBudgets] = None
     signal: Optional[AbortSignal] = None
     on_payload: Optional[PayloadCallback] = None
     on_response: Optional[ResponseCallback] = None

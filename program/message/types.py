@@ -111,3 +111,6 @@ class AssistantMessage(BaseMessage):
 @dataclass
 class ToolMessage(BaseMessage):
     role: Role = field(default=Role.TOOL, init=False)
+
+
+LLMMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage

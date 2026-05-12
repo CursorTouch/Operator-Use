@@ -29,7 +29,7 @@ def get_models_path() -> Path:
     path = get_config_dir() / "models.json"
     return path
 
-def get_session_path() -> Path:
+def get_sessions_path() -> Path:
     path = get_config_dir() / "sessions"
     return path
 

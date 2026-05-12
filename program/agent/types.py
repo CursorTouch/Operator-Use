@@ -17,6 +17,10 @@ from program.tool.types import ToolInvocation, ToolResult
 AbortSignal = asyncio.Event
 EmitEvent = Callable[['AgentEvent'], None]
 
+class AgentContext:
+    system_prompt:str
+    messages: list[BaseMessage]
+    tools: list[Tool]
 
 class SteeringMode(str, Enum):
     OneAtATime = "one_at_a_time"
