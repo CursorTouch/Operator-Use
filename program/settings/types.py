@@ -11,6 +11,11 @@ T = TypeVar('T')
 class LockResult:  
     result: T  
     next: str | None = None  
+
+@dataclass  
+class SettingsError:  
+    scope: SCOPE  
+    error: Exception  
   
 @dataclass  
 class CompactionSettings:  
@@ -101,4 +106,4 @@ class Settings:
     skills: Optional[list[str]] = None  
     prompts: Optional[list[str]] = None  
     themes: Optional[list[str]] = None  
-    enable_skill_commands: Optional[bool] = None  
+    enable_skill_commands: Optional[bool] = None
