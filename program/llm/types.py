@@ -11,7 +11,6 @@ if TYPE_CHECKING:
 
 
 class TransportType(str, Enum):
-    STDIO = "stdio"
     HTTP = "http"
     WEBSOCKET = "websocket"
     SSE = "sse"
@@ -30,23 +29,33 @@ class StopReason(str, Enum):
     Abort = "abort"
     Error = "error"
 
-# Needs to bind this to the api layer (Thinking Effort->Thinking Budgets for the Providers don't support Thinking Effort directly which uses the Thinking Budget instead)
-class ThinkingBudgets:
-    minimal:Optional[int]
-    low:Optional[int]
-    medium:Optional[int]
-    high:Optional[int]
-    xhigh:Optional[int]
-    max:Optional[int]
-
 
 class ThinkingLevel(str, Enum):
-    Low = "low"
     Minimal = "minimal"
+    Low = "low"
     Medium = "medium"
     High = "high"
     XHigh = "xhigh"
     Max = "max"
+
+
+@dataclass
+class ThinkingBudgets:
+    """Token budgets for providers that map ThinkingLevel to budget_tokens instead of effort strings."""
+    minimal: Optional[int] = 1024
+    low: Optional[int] = 2048
+    medium: Optional[int] = 4096
+    high: Optional[int] = 8192
+    xhigh: Optional[int] = 16384
+    max: Optional[int] = 32768
+
+    def get(self, level: ThinkingLevel) -> int:
+        _defaults = {
+            "minimal": 1024, "low": 2048, "medium": 4096,
+            "high": 8192, "xhigh": 16384, "max": 32768,
+        }
+        value = getattr(self, level.value, None)
+        return value if value is not None else _defaults[level.value]
 
 
 class LLMEventType(str, Enum):
@@ -78,6 +87,7 @@ class Options:
     timeout: timedelta = field(default_factory=lambda: timedelta(seconds=10))
     temperature: float = 1.0
     max_tokens: Optional[int] = None
+    transport: TransportType = TransportType.HTTP
     thinking_level: Optional[ThinkingLevel] = None
     thinking_budgets: Optional[ThinkingBudgets] = None
     signal: Optional[AbortSignal] = None

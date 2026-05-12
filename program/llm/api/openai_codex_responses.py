@@ -13,7 +13,7 @@ import websockets.asyncio.client
 from program.llm.api.base import BaseAPI
 from program.llm.api.types import APIResponse
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingLevel,
+    LLMEvent, Options, StopReason, ThinkingLevel, TransportType,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -317,6 +317,8 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
 # ── API class ─────────────────────────────────────────────────────────────────
 
 class OpenAICodexResponsesAPI(BaseAPI):
+    SUPPORTED_TRANSPORTS = (TransportType.HTTP, TransportType.WEBSOCKET)
+
     def __init__(self, options: Options) -> None:
         super().__init__(options)
         self._http_url = _resolve_http_url(options.base_url)
@@ -392,21 +394,18 @@ class OpenAICodexResponsesAPI(BaseAPI):
 
         yield StartEvent()
 
-        # Try WebSocket first for lower latency; fall back to SSE on failure.
-        try:
-            ws_headers = _build_headers(token, account_id, websocket=True)
-            async for event in self._stream_ws(body, ws_headers):
-                yield event
-                if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
-                    return
-        except Exception:
-            sse_headers = _build_headers(token, account_id, websocket=False)
-            async for event in self._stream_sse(body, sse_headers):
-                yield event
-                if self._cancelled():
-                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
-                    return
+        if self.options.transport == TransportType.WEBSOCKET:
+            headers = _build_headers(token, account_id, websocket=True)
+            stream_iter = self._stream_ws(body, headers)
+        else:
+            headers = _build_headers(token, account_id, websocket=False)
+            stream_iter = self._stream_sse(body, headers)
+
+        async for event in stream_iter:
+            if self._cancelled():
+                yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
+                return
+            yield event
 
     async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
         events: list[LLMEvent] = []

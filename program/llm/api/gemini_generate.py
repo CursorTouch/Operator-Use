@@ -6,7 +6,7 @@ from google import genai
 from google.genai import types as genai_types
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingLevel,
+    LLMEvent, Options, StopReason, ThinkingBudgets,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -25,15 +25,6 @@ _STOP_REASON: dict[str, StopReason] = {
     "MAX_TOKENS": StopReason.Length,
     "SAFETY": StopReason.ContentFilter,
     "RECITATION": StopReason.ContentFilter,
-}
-
-_THINKING_BUDGET: dict[ThinkingLevel, int] = {
-    ThinkingLevel.Minimal: 512,
-    ThinkingLevel.Low: 1024,
-    ThinkingLevel.Medium: 4096,
-    ThinkingLevel.High: 8192,
-    ThinkingLevel.XHigh: 16384,
-    ThinkingLevel.Max: 32768,
 }
 
 
@@ -100,9 +91,10 @@ class GeminiGenerateAPI(BaseAPI):
         if self.options.max_tokens is not None:
             params["max_output_tokens"] = self.options.max_tokens
 
-        budget = self.options.thinking_budget
-        if budget is None and self.options.thinking_level is not None:
-            budget = _THINKING_BUDGET.get(self.options.thinking_level)
+        budget = None
+        if self.options.thinking_level is not None:
+            budgets = self.options.thinking_budgets or ThinkingBudgets()
+            budget = budgets.get(self.options.thinking_level)
         if budget is not None:
             params["thinking_config"] = genai_types.ThinkingConfig(
                 thinking_budget=budget,

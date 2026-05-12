@@ -20,12 +20,12 @@ if TYPE_CHECKING:
     from program.tool.types import Tool
 
 _REASONING_EFFORT: dict[ThinkingLevel, str] = {
-    ThinkingLevel.Low: "low",
     ThinkingLevel.Minimal: "low",
+    ThinkingLevel.Low: "low",
     ThinkingLevel.Medium: "medium",
     ThinkingLevel.High: "high",
-    ThinkingLevel.XHigh: "xhigh",
-    ThinkingLevel.Max: "xhigh",
+    ThinkingLevel.XHigh: "high",
+    ThinkingLevel.Max: "high",
 }
 
 _STOP_REASON: dict[str, StopReason] = {

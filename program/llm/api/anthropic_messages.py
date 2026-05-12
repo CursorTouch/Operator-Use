@@ -5,7 +5,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
-    LLMEvent, Options, StopReason,
+    LLMEvent, Options, StopReason, ThinkingBudgets,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -107,8 +107,9 @@ class AnthropicMessagesAPI(BaseAPI):
         }
         if system:
             params["system"] = system
-        if self.options.thinking_budget is not None:
-            params["thinking"] = {"type": "enabled", "budget_tokens": self.options.thinking_budget}
+        if self.options.thinking_level is not None:
+            budgets = self.options.thinking_budgets or ThinkingBudgets()
+            params["thinking"] = {"type": "enabled", "budget_tokens": budgets.get(self.options.thinking_level)}
         
         if tools:
             params["tools"] = [

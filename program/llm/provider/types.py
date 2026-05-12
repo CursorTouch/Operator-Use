@@ -5,8 +5,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Type, Union, TYPE_CHECKING
 
+from dataclasses import field
 from program.llm.api.base import BaseAPI
-from program.llm.types import AuthType, Options
+from program.llm.types import AuthType, Options, TransportType
 
 if TYPE_CHECKING:
     from program.llm.provider.oauth.types import OAuthCredential, OAuthLoginCallbacks, AbortSignal
@@ -55,6 +56,7 @@ class APIProvider:
     api: Union[str, Type[BaseAPI]]
     options: Options
     auth_type: AuthType = AuthType.ApiKey
+    supported_transports: list[TransportType] = field(default_factory=lambda: [TransportType.HTTP])
 
     def get_api_key(self) -> Optional[str]:
         return self.options.api_key
