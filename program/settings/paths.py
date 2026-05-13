@@ -1,5 +1,4 @@
 from pathlib import Path
-from program.utils import ensure_directory
 
 APP_NAME="Program"
 CONFIG_DIR_NAME = ".program"

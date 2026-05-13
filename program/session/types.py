@@ -1,88 +1,107 @@
-
+from __future__ import annotations
+from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
+from program.message.types import LLMMessage
+
+class SessionEntryType(str,Enum):
+    SESSION = "session"
+    THINKING_LEVEL_CHANGE = "thinking_level_change"
+    MODEL_CHANGE = "model_change"
+    COMPACTION = "compaction"
+    BRANCH_SUMMARY = "branch_summary"
+    LABEL = "label"
+    SESSION_HEADER = "session_header"
+    SESSION_INFO = "session_info"
+    CUSTOM = "custom"
+    CUSTOM_INFO = "custom_info"
+
 
 # Session Entry Types
 @dataclass
-class SessionEntryBase:
+class BaseSession:
+    type: SessionEntryType
     id: str
     parent_id: Optional[str]
     timestamp: str
 
 @dataclass
-class SessionHeader(SessionEntryBase):
+class SessionHeader(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.SESSION_HEADER, init=False)
     version: int
     cwd: str
-    type: str = field(default="session", init=False)
     parent_session: Optional[str] = None
 
 @dataclass
-class SessionMessageEntry(SessionEntryBase):
-    message: Dict[str, Any]
-    type: str = field(default="message", init=False)
+class SessionMessage(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.SESSION, init=False)
+    message: LLMMessage
 
 @dataclass
-class ThinkingLevelChangeEntry(SessionEntryBase):
+class ThinkingLevelChange(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.THINKING_LEVEL_CHANGE, init=False)
     thinking_level: str
-    type: str = field(default="thinking_level_change", init=False)
 
 @dataclass
-class ModelChangeEntry(SessionEntryBase):
+class ModelChange(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.MODEL_CHANGE, init=False)
     provider: str
     model_id: str
-    type: str = field(default="model_change", init=False)
 
 @dataclass
-class CompactionEntry(SessionEntryBase):
+class Compaction(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.COMPACTION, init=False)
     summary: str
     first_kept_entry_id: str
     tokens_before: int
-    type: str = field(default="compaction", init=False)
     details: Optional[Any] = None
 
 @dataclass
-class BranchSummaryEntry(SessionEntryBase):
+class BranchSummary(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.BRANCH_SUMMARY, init=False)
     from_id: str
     summary: str
-    type: str = field(default="branch_summary", init=False)
     details: Optional[Any] = None
 
 @dataclass
-class LabelEntry(SessionEntryBase):
+class Label(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.LABEL, init=False)
     target_id: str
     label: Optional[str]
-    type: str = field(default="label", init=False)
 
 @dataclass
-class SessionInfoEntry(SessionEntryBase):
+class SessionInfo(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.SESSION_INFO, init=False)
     name: Optional[str]
-    type: str = field(default="session_info", init=False)
 
 @dataclass
-class CustomEntry(SessionEntryBase):
+class CustomInfo(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.CUSTOM_INFO, init=False)
     custom_type: str
-    type: str = field(default="custom", init=False)
     data: Optional[Any] = None
 
 @dataclass
-class CustomMessageEntry(SessionEntryBase):
+class CustomMessage(BaseSession):
+    type: SessionEntryType = field(default=SessionEntryType.CUSTOM, init=False)
+    custom_type: str
     content: str
-    type: str = field(default="custom_message", init=False)
-    display: Optional[str] = None
+    display: bool = False
     details: Optional[Any] = None
 
 @dataclass
 class SessionTreeNode:
     """Tree node for getTree() - defensive copy of session structure"""
-    entry: "SessionEntry"
-    children: List["SessionTreeNode"]
+    entry: SessionEntry
+    children: List[SessionTreeNode]
     label: Optional[str] = None
     label_timestamp: Optional[str] = None
 
 SessionEntry = (
-    SessionMessageEntry | ThinkingLevelChangeEntry | ModelChangeEntry |
-    CompactionEntry | BranchSummaryEntry | LabelEntry | SessionInfoEntry |
-    CustomEntry | CustomMessageEntry
+    SessionMessage | ThinkingLevelChange | ModelChange |
+    Compaction | BranchSummary | Label | SessionInfo |
+    CustomInfo | CustomMessage
 )
 
-FileEntry = SessionHeader | SessionEntry
+Session = SessionHeader | SessionEntry
+
+

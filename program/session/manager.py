@@ -1,59 +1,16 @@
-from __future__ import annotations  
+from __future__ import annotations
 from typing import Optional, Dict, List, Any, Set
-from datetime import datetime  
+from datetime import datetime
 from pathlib import Path
-from program.session.storage import SessionStorage, FileSessionStorage
 from program.session.types import (
     FileEntry, SessionHeader, SessionMessageEntry,ThinkingLevelChangeEntry,
     ModelChangeEntry,CompactionEntry,BranchSummaryEntry,LabelEntry,SessionInfoEntry,
-    CustomEntry,CustomMessageEntry,SessionEntry, SessionTreeNode
+    CustomEntry,CustomMessageEntry,SessionEntry, SessionTreeNode,SessionType
 )
-import uuid
+from program.session.utils import create_session_id, generate_id, infer_entry_type, ensure_type_field
 import json
 
-CURRENT_SESSION_VERSION = 1  
-  
-def create_session_id() -> str:  
-    """Generate a unique session ID.""" 
-    return str(uuid.uuid4())  
-  
-def generate_id(existing_ids: Set[str]) -> str:
-    """Generate a unique short ID (8 hex chars, collision-checked)."""
-    for _ in range(100):
-        short_id = uuid.uuid4().hex[:8]
-        if short_id not in existing_ids:
-            return short_id
-    return str(uuid.uuid4())
-
-def _infer_entry_type(entry: Dict[str, Any]) -> str:
-    """Infer entry type from entry structure."""
-    if "message" in entry:
-        return "message"
-    if "thinkingLevel" in entry:
-        return "thinking_level_change"
-    if "modelId" in entry:
-        return "model_change"
-    if "firstKeptEntryId" in entry:
-        return "compaction"
-    if "fromId" in entry:
-        return "branch_summary"
-    if "targetId" in entry:
-        return "label"
-    if "name" in entry and "version" not in entry:
-        return "session_info"
-    if "customType" in entry and "content" in entry:
-        return "custom_message"
-    if "customType" in entry:
-        return "custom"
-    if "version" in entry:
-        return "session"
-    return "unknown"
-
-def _ensure_type_field(entry: Dict[str, Any]) -> Dict[str, Any]:
-    """Ensure entry has type field for serialization."""
-    if "type" not in entry:
-        entry["type"] = _infer_entry_type(entry)
-    return entry
+CURRENT_SESSION_VERSION = 1
 
 class SessionManager:  
     """Manages conversation sessions as append-only trees stored in JSONL files."""  
@@ -240,11 +197,11 @@ class SessionManager:
         self.label_timestamps_by_id = {}  
           
         for entry in self.file_entries:  
-            if entry["type"] != "session":  
+            if entry["type"] != SessionType.SESSION:  
                 self.by_id[entry["id"]] = entry  
-                if entry["type"] == "label":  
-                    self.labels_by_id[entry["targetId"]] = entry["label"]  
-                    self.label_timestamps_by_id[entry["targetId"]] = entry["timestamp"]  
+                if entry["type"] == SessionType.LABEL:  
+                    self.labels_by_id[entry["target_id"]] = entry["label"]  
+                    self.label_timestamps_by_id[entry["target_id"]] = entry["timestamp"]  
           
         # Set leaf to last entry  
         if self.file_entries:  
@@ -263,7 +220,7 @@ class SessionManager:
             return
 
         has_assistant = any(
-            (_infer_entry_type(e) if "type" not in e else e["type"]) == "message" and e["message"]["role"] == "assistant"
+            (infer_entry_type(e) if "type" not in e else e["type"]) == "message" and e["message"]["role"] == "assistant"
             for e in self.file_entries
         )
 
@@ -275,14 +232,14 @@ class SessionManager:
             # Write all entries on first assistant response
             path = Path(self.session_file)
             path.parent.mkdir(parents=True, exist_ok=True)
-            content = "\n".join(json.dumps(_ensure_type_field(e)) for e in self.file_entries) + "\n"
+            content = "\n".join(json.dumps(ensure_type_field(e)) for e in self.file_entries) + "\n"
             path.write_text(content, encoding="utf-8")
             self.flushed = True
         else:
             # Append only the new entry
             path = Path(self.session_file)
             with open(path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(_ensure_type_field(entry)) + "\n")  
+                f.write(json.dumps(ensure_type_field(entry)) + "\n")  
       
     def _rewrite_file(self) -> None:
         """Rewrite entire file (used for branching/migration)."""
@@ -291,7 +248,7 @@ class SessionManager:
 
         path = Path(self.session_file)
         path.parent.mkdir(parents=True, exist_ok=True)
-        content = "\n".join(json.dumps(_ensure_type_field(e)) for e in self.file_entries) + "\n"
+        content = "\n".join(json.dumps(ensure_type_field(e)) for e in self.file_entries) + "\n"
         path.write_text(content, encoding="utf-8")  
       
     # =========================================================================  
