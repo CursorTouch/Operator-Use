@@ -3,15 +3,17 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from program.message.types import LLMMessage
+from program.llm.types import ThinkingLevel
+from pathlib import Path
 
-class SessionEntryType(str,Enum):
-    SESSION = "session"
+class SessionEntryType(str, Enum):
+    SESSION_HEADER = "session_header"
+    LLM = "llm"
     THINKING_LEVEL_CHANGE = "thinking_level_change"
     MODEL_CHANGE = "model_change"
     COMPACTION = "compaction"
     BRANCH_SUMMARY = "branch_summary"
     LABEL = "label"
-    SESSION_HEADER = "session_header"
     SESSION_INFO = "session_info"
     CUSTOM = "custom"
     CUSTOM_INFO = "custom_info"
@@ -19,37 +21,37 @@ class SessionEntryType(str,Enum):
 
 # Session Entry Types
 @dataclass
-class BaseSession:
+class BaseSessionEntry:
     type: SessionEntryType
     id: str
     parent_id: Optional[str]
     timestamp: str
 
 @dataclass
-class SessionHeader(BaseSession):
+class SessionHeader(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.SESSION_HEADER, init=False)
     version: int
     cwd: str
-    parent_session: Optional[str] = None
+    parent_session_path: Optional[Path] = None
 
 @dataclass
-class SessionMessage(BaseSession):
-    type: SessionEntryType = field(default=SessionEntryType.SESSION, init=False)
+class LLMMessageEntry(BaseSessionEntry):
+    type: SessionEntryType = field(default=SessionEntryType.LLM, init=False)
     message: LLMMessage
 
 @dataclass
-class ThinkingLevelChange(BaseSession):
+class ThinkingLevelChangeEntry(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.THINKING_LEVEL_CHANGE, init=False)
-    thinking_level: str
+    thinking_level: ThinkingLevel
 
 @dataclass
-class ModelChange(BaseSession):
+class ModelChangeEntry(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.MODEL_CHANGE, init=False)
     provider: str
     model_id: str
 
 @dataclass
-class Compaction(BaseSession):
+class CompactionEntry(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.COMPACTION, init=False)
     summary: str
     first_kept_entry_id: str
@@ -57,31 +59,31 @@ class Compaction(BaseSession):
     details: Optional[Any] = None
 
 @dataclass
-class BranchSummary(BaseSession):
+class BranchSummaryEntry(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.BRANCH_SUMMARY, init=False)
     from_id: str
     summary: str
     details: Optional[Any] = None
 
 @dataclass
-class Label(BaseSession):
+class LabelEntry(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.LABEL, init=False)
     target_id: str
     label: Optional[str]
 
 @dataclass
-class SessionInfo(BaseSession):
+class SessionInfoEntry(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.SESSION_INFO, init=False)
     name: Optional[str]
 
 @dataclass
-class CustomInfo(BaseSession):
+class CustomInfoEntry(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.CUSTOM_INFO, init=False)
     custom_type: str
     data: Optional[Any] = None
 
 @dataclass
-class CustomMessage(BaseSession):
+class CustomMessageEntry(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.CUSTOM, init=False)
     custom_type: str
     content: str
@@ -96,12 +98,20 @@ class SessionTreeNode:
     label: Optional[str] = None
     label_timestamp: Optional[str] = None
 
+
+@dataclass
+class SessionContext:
+    """Context built from session entries for sending to LLM"""
+    messages: List[LLMMessage]
+    thinking_level: str
+    model: Optional[Dict[str, str]] = None
+
 SessionEntry = (
-    SessionMessage | ThinkingLevelChange | ModelChange |
-    Compaction | BranchSummary | Label | SessionInfo |
-    CustomInfo | CustomMessage
+    LLMMessageEntry | ThinkingLevelChangeEntry | ModelChangeEntry |
+    CompactionEntry | BranchSummaryEntry | LabelEntry | SessionInfoEntry |
+    CustomInfoEntry | CustomMessageEntry
 )
 
-Session = SessionHeader | SessionEntry
+FileEntry = SessionHeader | SessionEntry
 
 
