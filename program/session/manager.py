@@ -497,23 +497,23 @@ class SessionManager:
     # =========================================================================
 
     @staticmethod
-    def create(cwd: str, session_dir: Optional[str] = None) -> "SessionManager":
+    def create(cwd: str, session_dir: Optional[str] = None) -> SessionManager:
         """Create a new session."""
-        dir_ = session_dir or get_default_session_dir(cwd)
-        return SessionManager(cwd, dir_, None, True)
+        session_dir = session_dir or get_default_session_dir(cwd)
+        return SessionManager(cwd, session_dir, None, True)
 
     @staticmethod
-    def open(session_file: str, session_dir: Optional[str] = None, cwd_override: Optional[str] = None) -> "SessionManager":
+    def open(session_file: str, session_dir: Optional[str] = None, cwd_override: Optional[str] = None) -> SessionManager:
         """Open a specific session file."""
         file_path = Path(session_file)
         entries = load_entries_from_file(str(file_path))
         header = next((e for e in entries if isinstance(e, SessionHeader)), None)
         cwd = cwd_override or (header.cwd if header else str(Path.cwd()))
-        dir_ = session_dir or str(file_path.parent)
-        return SessionManager(cwd, dir_, str(file_path), True)
+        session_dir = session_dir or str(file_path.parent)
+        return SessionManager(cwd, session_dir, str(file_path), True)
 
     @staticmethod
-    def continue_recent(cwd: str, session_dir: Optional[str] = None) -> "SessionManager":
+    def continue_recent(cwd: str, session_dir: Optional[str] = None) -> SessionManager:
         """Continue the most recent session, or create a new one if none exists."""
         session_dir = session_dir or get_default_session_dir(cwd)
         most_recent = find_most_recent_session_file(session_dir)
@@ -522,12 +522,12 @@ class SessionManager:
         return SessionManager(cwd, session_dir, None, True)
 
     @staticmethod
-    def in_memory(cwd: Optional[str] = None) -> "SessionManager":
+    def in_memory(cwd: Optional[str] = None) -> SessionManager:
         """Create an in-memory session (no file persistence)."""
         return SessionManager(cwd or str(Path.cwd()), "", None, False)
 
     @staticmethod
-    def fork_from(source_file: str, target_cwd: str, session_dir: Optional[str] = None) -> "SessionManager":
+    def fork_from(source_file: str, target_cwd: str, session_dir: Optional[str] = None) -> SessionManager:
         """Fork a session from another project directory into a new cwd."""
         source_file = Path(source_file)
         source_entries = load_entries_from_file(str(source_file))
