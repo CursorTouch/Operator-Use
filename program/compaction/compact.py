@@ -1,7 +1,8 @@
 """Session compaction service for managing large session contexts."""
 
 from __future__ import annotations
-from typing import Optional, List, Dict, Any, Set, TYPE_CHECKING
+from typing import Optional, List, TYPE_CHECKING, Any
+from program.message.types import LLMMessage, Role, ThinkingContent, TextContent
 from datetime import datetime
 
 from program.session.types import (
@@ -27,6 +28,10 @@ from program.compaction.utils import (
     compute_file_lists,
     format_file_operations,
     truncate_for_summary,
+    extract_file_ops_from_message,
+    get_assistant_usage,
+    calculate_context_tokens,
+    should_compact,
 )
 
 if TYPE_CHECKING:
@@ -148,7 +153,33 @@ class Compact:
         self.manager = manager
         self.settings = settings or DEFAULT_COMPACTION_SETTINGS
 
-    def estimate_message_tokens(self, message: Any) -> int:
+    def should_perform_compaction(self, entries: Optional[List[SessionEntry]] = None) -> bool:
+        """Check if compaction should be performed on current session.
+
+        Args:
+            entries: Session entries to analyze (uses manager entries if None)
+
+        Returns:
+            True if context tokens exceed reserve threshold
+        """
+        if entries is None:
+            entries = self.manager.get_entries()
+
+        # Calculate actual tokens if available, otherwise estimate
+        messages = [
+            e.message for e in entries
+            if isinstance(e, LLMMessageEntry)
+        ]
+
+        actual_tokens = calculate_context_tokens(messages)
+        if actual_tokens > 0:
+            return should_compact(actual_tokens, self.settings.reserve_tokens)
+
+        # Fall back to estimates
+        estimated = self.estimate_context_tokens(messages)
+        return should_compact(estimated, self.settings.reserve_tokens)
+
+    def estimate_message_tokens(self, message: LLMMessage) -> int:
         """Estimate token count for a message using chars/4 heuristic.
 
         Args:
@@ -159,28 +190,23 @@ class Compact:
         """
         char_count = 0
 
-        if hasattr(message, "role"):
-            if message.role == "user":
-                if hasattr(message, "content"):
-                    if isinstance(message.content, str):
-                        char_count = len(message.content)
-                    elif isinstance(message.content, list):
-                        for block in message.content:
-                            if isinstance(block, dict) and block.get("type") == "text":
-                                char_count += len(block.get("text", ""))
+        role = message.role
+        contents = message.contents
 
-            elif message.role == "assistant":
-                if hasattr(message, "contents"):
-                    for content_block in message.contents:
-                        if hasattr(content_block, "type"):
-                            if content_block.type == "text" and hasattr(content_block, "content"):
-                                char_count += len(content_block.content)
-                            elif content_block.type == "thinking" and hasattr(content_block, "content"):
-                                char_count += len(content_block.content)
+        match role:
+            case Role.USER:
+                for content in contents:
+                    if isinstance(content,TextContent):
+                        char_count += len(content.content)
+            
+            case Role.ASSISTANT:
+                for content in contents:
+                    if isinstance(content,(TextContent,ThinkingContent)):
+                        char_count += len(content.content)
 
         return max(1, char_count // 4)
 
-    def estimate_context_tokens(self, messages: List[Any]) -> int:
+    def estimate_context_tokens(self, messages: List[LLMMessage]) -> int:
         """Estimate total context tokens from messages.
 
         Args:
@@ -189,10 +215,7 @@ class Compact:
         Returns:
             Estimated total tokens
         """
-        total = 0
-        for message in messages:
-            total += self.estimate_message_tokens(message)
-        return total
+        return sum(self.estimate_message_tokens(message=message) for message in messages)
 
     def _find_valid_cut_points(
         self,
@@ -396,6 +419,14 @@ class Compact:
             ]
 
         file_ops = create_file_ops()
+
+        # Extract file operations from messages to be summarized
+        for message in messages_to_summarize:
+            extract_file_ops_from_message(message, file_ops)
+
+        # Extract from turn prefix if present
+        for message in turn_prefix_messages:
+            extract_file_ops_from_message(message, file_ops)
 
         return CompactionPreparation(
             first_kept_entry_id=first_kept_entry_id,

@@ -9,8 +9,9 @@ from pydantic import BaseModel
 
 class ToolKind(str, Enum):
     Read = "read"
+    Edit = "edit"
     Write = "write"
-    Execute = "execute"
+    Shell = "shell"
     Web = "web"
 
 

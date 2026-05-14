@@ -12,7 +12,7 @@ from program.session.types import (
     SessionEntry,
     LLMMessageEntry,
     BranchSummaryEntry,
-    CompactionEntry,
+    CompactionSummaryEntry,
     CustomMessageEntry,
     SessionEntryType,
 )
@@ -162,7 +162,7 @@ class BranchCompact:
         if entry.type == SessionEntryType.BRANCH_SUMMARY and isinstance(entry, BranchSummaryEntry):
             return entry
 
-        if entry.type == SessionEntryType.COMPACTION and isinstance(entry, CompactionEntry):
+        if entry.type == SessionEntryType.COMPACTION_SUMMARY and isinstance(entry, CompactionSummaryEntry):
             return entry
 
         return None

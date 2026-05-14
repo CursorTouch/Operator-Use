@@ -21,6 +21,16 @@ class FileOperations:
 
 
 @dataclass
+class ContextUsageEstimate:
+    """Estimated token usage for context."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    total_tokens: int = 0
+
+
+@dataclass
 class CompactionSettings:
     """Settings for session compaction."""
     enabled: bool = True

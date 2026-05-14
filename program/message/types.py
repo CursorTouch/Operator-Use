@@ -2,14 +2,12 @@ from __future__ import annotations
 import base64
 import io
 from dataclasses import dataclass, field
-from typing import Literal, TYPE_CHECKING,Any
+from typing import Literal, TYPE_CHECKING,Any,Optional
 from enum import Enum
 from PIL import Image
 
 from program.llm.types import StopReason
-
-if TYPE_CHECKING:
-    pass
+from program.tool.types import ToolKind
 
 
 @dataclass
@@ -49,6 +47,7 @@ class ToolCallContent:
     type: Literal["tool_call"] = field(default="tool_call", init=False)
     id: str = ""
     name: str = ""
+    kind: Optional[ToolKind] = None
     args: dict[str,Any] = field(default_factory=dict)
 
 

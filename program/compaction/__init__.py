@@ -13,6 +13,7 @@ from program.compaction.types import (
     CompactionPreparation,
     CompactionResult,
     CompactionDetails,
+    ContextUsageEstimate,
     FileOperations,
     BranchSummaryResult,
     BranchSummaryDetails,
@@ -34,6 +35,7 @@ __all__ = [
     "CompactionPreparation",
     "CompactionResult",
     "CompactionDetails",
+    "ContextUsageEstimate",
     "FileOperations",
     "DEFAULT_COMPACTION_SETTINGS",
     # Compaction service class

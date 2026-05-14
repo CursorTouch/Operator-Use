@@ -1,12 +1,17 @@
 from __future__ import annotations
-from typing import Dict, Any, Set, Union, Optional, List, Callable, TYPE_CHECKING
+from typing import Dict, Any, Set, Optional, List, Callable, TYPE_CHECKING
 from datetime import datetime
 from pathlib import Path
 import uuid
 import json
 
 if TYPE_CHECKING:
-    from program.session.types import SessionEntry, FileEntry, SessionHeader
+    from program.session.types import (
+        SessionEntry, FileEntry, SessionHeader, LLMMessageEntry,
+        ThinkingLevelChangeEntry, ModelChangeEntry, CompactionSummaryEntry,
+        BranchSummaryEntry, LabelEntry, SessionInfoEntry, CustomInfoEntry,
+        CustomMessageEntry
+    )
     from program.message.types import LLMMessage
 
 # Type alias for progress callback
@@ -27,159 +32,9 @@ def generate_id(existing_ids: Set[str]) -> str:
     return str(uuid.uuid4())
 
 
-def infer_entry_type(entry: Dict[str, Any]) -> str:
-    """Infer entry type from entry structure."""
-    if "message" in entry:
-        return "llm"
-    if "thinking_level" in entry:
-        return "thinking_level_change"
-    if "model_id" in entry:
-        return "model_change"
-    if "first_kept_entry_id" in entry:
-        return "compaction"
-    if "from_id" in entry:
-        return "branch_summary"
-    if "target_id" in entry:
-        return "label"
-    if "name" in entry and "version" not in entry:
-        return "session_info"
-    if "custom_type" in entry and "content" in entry:
-        return "custom_message"
-    if "custom_type" in entry:
-        return "custom"
-    if "version" in entry:
-        return "session_header"
-    return "unknown"
-
-
-def ensure_type_field(entry: Dict[str, Any]) -> Dict[str, Any]:
-    """Ensure entry has type field for serialization."""
-    if "type" not in entry:
-        entry["type"] = infer_entry_type(entry)
-    return entry
-
-
-def deserialize_entry(data: Dict[str, Any]) -> Union[FileEntry, SessionEntry]:
-    """Convert dict to proper dataclass instance."""
-    from program.session.types import (
-        SessionHeader, LLMMessageEntry, ThinkingLevelChangeEntry,
-        ModelChangeEntry, CompactionEntry, BranchSummaryEntry,
-        LabelEntry, SessionInfoEntry, CustomInfoEntry, CustomMessageEntry,
-    )
-
-    entry_type = data.get("type", "")
-
-    try:
-        if entry_type == "session_header":
-            return SessionHeader(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                version=data.get("version", 1),
-                cwd=data.get("cwd", ""),
-                parent_session_path=data.get("parent_session_path")
-            )
-        elif entry_type == "llm":
-            return LLMMessageEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                message=data.get("message")
-            )
-        elif entry_type == "thinking_level_change":
-            return ThinkingLevelChangeEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                thinking_level=data.get("thinking_level")
-            )
-        elif entry_type == "model_change":
-            return ModelChangeEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                provider=data.get("provider"),
-                model_id=data.get("model_id")
-            )
-        elif entry_type == "compaction":
-            return CompactionEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                summary=data.get("summary"),
-                first_kept_entry_id=data.get("first_kept_entry_id"),
-                tokens_before=data.get("tokens_before"),
-                details=data.get("details")
-            )
-        elif entry_type == "branch_summary":
-            return BranchSummaryEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                from_id=data.get("from_id"),
-                summary=data.get("summary"),
-                details=data.get("details")
-            )
-        elif entry_type == "label":
-            return LabelEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                target_id=data.get("target_id"),
-                label=data.get("label")
-            )
-        elif entry_type == "session_info":
-            return SessionInfoEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                name=data.get("name")
-            )
-        elif entry_type == "custom_info":
-            return CustomInfoEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                custom_type=data.get("custom_type"),
-                data=data.get("data")
-            )
-        elif entry_type == "custom_message" or entry_type == "custom":
-            return CustomMessageEntry(
-                id=data.get("id"),
-                parent_id=data.get("parent_id"),
-                timestamp=data.get("timestamp"),
-                custom_type=data.get("custom_type"),
-                content=data.get("content"),
-                display=data.get("display", False),
-                details=data.get("details")
-            )
-        else:
-            return data
-    except Exception:
-        return data
-
-
 # =========================================================================
 # Module-level Session Utilities
 # =========================================================================
-
-def parse_session_entries(content: str) -> List[FileEntry]:
-    """Parse JSONL content into session entries."""
-    entries: List[FileEntry] = []
-    lines = content.strip().split("\n")
-
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            data = json.loads(line)
-            entry = deserialize_entry(data)
-            entries.append(entry)
-        except (json.JSONDecodeError, Exception):
-            continue
-
-    return entries
-
 
 def get_latest_compaction_entry(entries: List[SessionEntry]) -> Optional[Any]:
     """Get the most recent compaction entry from a list of entries."""
@@ -201,6 +56,8 @@ def get_default_session_dir(cwd: str) -> str:
 
 def load_entries_from_file(file_path: str) -> List[FileEntry]:
     """Load entries from a JSONL session file."""
+    from program.session.types import SessionEntryType
+    
     path = Path(file_path)
     if not path.exists():
         return []
@@ -208,25 +65,54 @@ def load_entries_from_file(file_path: str) -> List[FileEntry]:
     try:
         content = path.read_text(encoding="utf-8")
         entries: List[FileEntry] = []
+
         for line in content.strip().splitlines():
             if not line.strip():
                 continue
             try:
                 data = json.loads(line)
-                entry = deserialize_entry(data)
+                entry_type = data.get("type", "").lower()
+                
+                match entry_type:
+                    case SessionEntryType.SESSION_HEADER:
+                        entry = SessionHeader(**data)
+                    case SessionEntryType.LLM:
+                        entry = LLMMessageEntry(**data)
+                    case SessionEntryType.THINKING_LEVEL_CHANGE:
+                        entry = ThinkingLevelChangeEntry(**data)
+                    case SessionEntryType.MODEL_CHANGE:
+                        entry = ModelChangeEntry(**data)
+                    case SessionEntryType.COMPACTION_SUMMARY:
+                        entry = CompactionSummaryEntry(**data)
+                    case SessionEntryType.BRANCH_SUMMARY:
+                        entry = BranchSummaryEntry(**data)
+                    case SessionEntryType.LABEL:
+                        entry = LabelEntry(**data)
+                    case SessionEntryType.SESSION_INFO:
+                        entry = SessionInfoEntry(**data)
+                    case SessionEntryType.CUSTOM_INFO:
+                        entry = CustomInfoEntry(**data)
+                    case SessionEntryType.CUSTOM_MESSAGE:
+                        entry = CustomMessageEntry(**data)
+                    case _:
+                        continue
+
                 entries.append(entry)
             except (json.JSONDecodeError, Exception):
                 continue
+
         return entries
     except Exception:
         return []
 
 
-def is_valid_session_file(file_path: str) -> bool:
+def is_valid_session_file(session_file_path: str) -> bool:
     """Check if a file is a valid session file."""
+    from program.session.types import SessionEntryType
+    
     try:
-        path = Path(file_path)
-        if not path.exists():
+        path = Path(session_file_path)
+        if not path.exists() or not path.is_file():
             return False
 
         content = path.read_text(encoding="utf-8", errors="ignore")
@@ -235,15 +121,15 @@ def is_valid_session_file(file_path: str) -> bool:
             return False
 
         header = json.loads(first_line)
-        return header.get("type") == "session_header" and isinstance(header.get("id"), str)
+        return header.get("type") == SessionEntryType.SESSION_HEADER and isinstance(header.get("id"), str)
     except Exception:
         return False
 
 
-def find_most_recent_session(session_dir: str) -> Optional[str]:
+def find_most_recent_session_path(session_path: str) -> Optional[str]:
     """Find the most recently modified session file in a directory."""
     try:
-        path = Path(session_dir)
+        path = Path(session_path)
         if not path.exists():
             return None
 
@@ -261,7 +147,7 @@ def find_most_recent_session(session_dir: str) -> Optional[str]:
         return None
 
 
-def is_message_with_content(message: LLMMessage) -> bool:
+def is_message_with_contents(message: LLMMessage) -> bool:
     """Check if a message has text content."""
     return hasattr(message, "role") and hasattr(message, "contents") and len(message.contents) > 0
 
@@ -298,7 +184,7 @@ def get_last_activity_time(entries: List[FileEntry]) -> Optional[float]:
             continue
 
         message = entry.message
-        if not is_message_with_content(message):
+        if not is_message_with_contents(message):
             continue
 
         if message.role not in (Role.USER, Role.ASSISTANT):
@@ -382,15 +268,15 @@ def build_session_info(file_path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def list_sessions_from_dir(
-    session_dir: str,
+def list_sessions_from_path(
+    session_path: str,
     on_progress: Optional[SessionListProgress] = None,
     progress_offset: int = 0,
     progress_total: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """List all sessions in a directory."""
     sessions: List[Dict[str, Any]] = []
-    path = Path(session_dir)
+    path = Path(session_path)
 
     if not path.exists():
         return sessions

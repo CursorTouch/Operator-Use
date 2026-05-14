@@ -42,7 +42,8 @@ class ToolRegistry:
         if tool is None:
             content=f"Tool '{tool_call.name}' not found."
             return ToolResultContent(id=tool_call.id, is_error=True, content=content, metadata={})
-
+        
+        tool_call.kind = tool.kind
         ok, errors = tool.validate(params=tool_call.args)
         if not ok:
             content = f"Invalid parameters for '{tool_call.name}':\n{chr(10).join(errors)}"
