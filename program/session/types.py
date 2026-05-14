@@ -33,7 +33,7 @@ class SessionHeader(BaseSessionEntry):
     type: SessionEntryType = field(default=SessionEntryType.SESSION_HEADER, init=False)
     version: int
     cwd: str
-    parent_session_path: Optional[Path] = None
+    parent_session_file: Optional[str] = None
 
 @dataclass
 class LLMMessageEntry(BaseSessionEntry):
@@ -58,7 +58,6 @@ class CompactionSummaryEntry(BaseSessionEntry):
     first_kept_entry_id: str
     tokens_before: int
     details: Optional[Any] = None
-    from_hook: bool = False
 
 @dataclass
 class BranchSummaryEntry(BaseSessionEntry):
@@ -66,7 +65,6 @@ class BranchSummaryEntry(BaseSessionEntry):
     from_id: str
     summary: str
     details: Optional[Any] = None
-    from_hook: bool = False
 
 @dataclass
 class LabelEntry(BaseSessionEntry):

@@ -88,7 +88,7 @@ class SessionManager:
             timestamp=timestamp,
             parent_id=None,
             cwd=self.cwd,
-            parent_session_path=None,
+            parent_session_file=None,
             version=CURRENT_SESSION_VERSION,
         )
 
@@ -220,7 +220,6 @@ class SessionManager:
         first_kept_entry_id: str,
         tokens_before: int,
         details: Optional[Any] = None,
-        from_hook: bool = False,
     ) -> str:
         """Append a compaction summary entry. Returns entry id."""
         entry = CompactionSummaryEntry(
@@ -231,7 +230,6 @@ class SessionManager:
             first_kept_entry_id=first_kept_entry_id,
             tokens_before=tokens_before,
             details=details,
-            from_hook=from_hook,
         )
         self._append_entry(entry)
         return entry.id
@@ -409,7 +407,6 @@ class SessionManager:
         branch_from_id: Optional[str],
         summary: str,
         details: Optional[Any] = None,
-        from_hook: bool = False,
     ) -> str:
         """Branch from an entry and record a summary of the abandoned path."""
         if branch_from_id is not None and branch_from_id not in self.by_id:
@@ -423,7 +420,6 @@ class SessionManager:
             from_id=branch_from_id or "root",
             summary=summary,
             details=details,
-            from_hook=from_hook,
         )
         self._append_entry(entry)
         return entry.id
@@ -448,7 +444,7 @@ class SessionManager:
             timestamp=timestamp,
             parent_id=None,
             cwd=self.cwd,
-            parent_session_path=previous_session_file if self.persist else None,
+            parent_session_file=previous_session_file if self.persist else None,
         )
 
         # Collect labels for entries in the path
@@ -507,9 +503,9 @@ class SessionManager:
         return SessionManager(cwd, dir_, None, True)
 
     @staticmethod
-    def open(path: str, session_dir: Optional[str] = None, cwd_override: Optional[str] = None) -> "SessionManager":
+    def open(session_file: str, session_dir: Optional[str] = None, cwd_override: Optional[str] = None) -> "SessionManager":
         """Open a specific session file."""
-        file_path = Path(path)
+        file_path = Path(session_file)
         entries = load_entries_from_file(str(file_path))
         header = next((e for e in entries if isinstance(e, SessionHeader)), None)
         cwd = cwd_override or (header.cwd if header else str(Path.cwd()))
@@ -531,16 +527,16 @@ class SessionManager:
         return SessionManager(cwd or str(Path.cwd()), "", None, False)
 
     @staticmethod
-    def fork_from(source_path: str, target_cwd: str, session_dir: Optional[str] = None) -> "SessionManager":
+    def fork_from(source_file: str, target_cwd: str, session_dir: Optional[str] = None) -> "SessionManager":
         """Fork a session from another project directory into a new cwd."""
-        source_file = Path(source_path)
+        source_file = Path(source_file)
         source_entries = load_entries_from_file(str(source_file))
         if not source_entries:
-            raise ValueError(f"Cannot fork: source session is empty or invalid: {source_path}")
+            raise ValueError(f"Cannot fork: source session is empty or invalid: {source_file}")
 
         header = next((e for e in source_entries if isinstance(e, SessionHeader)), None)
         if not header:
-            raise ValueError(f"Cannot fork: source session has no header: {source_path}")
+            raise ValueError(f"Cannot fork: source session has no header: {source_file}")
 
         dir_ = session_dir or get_default_session_dir(target_cwd)
         Path(dir_).mkdir(parents=True, exist_ok=True)
@@ -556,7 +552,7 @@ class SessionManager:
             timestamp=timestamp,
             parent_id=None,
             cwd=target_cwd,
-            parent_session_path=str(source_path),
+            parent_session_file=str(source_file),
         )
 
         with open(new_file, "w", encoding="utf-8") as f:

@@ -357,12 +357,15 @@ def build_session_context(
     if not leaf:
         return SessionContext(messages=[], thinking_level=None)
 
-    # Walk from leaf to root
     entries: List[SessionEntry] = []
     current: Optional[SessionEntry] = leaf
+
+    # Walk from leaf to root
     while current:
-        entries.insert(0, current)
+        entries.append(current)
         current = by_id.get(current.parent_id) if current.parent_id else None
+    # reverse to root to leaf
+    entries.reverse()
 
     # Collect last thinking_level, model, and compaction along the path
     thinking_level: Optional[ThinkingLevel] = None
@@ -380,42 +383,31 @@ def build_session_context(
 
     messages: List[LLMMessage] = []
 
-    def _user_msg(text: str) -> UserMessage:
-        msg = UserMessage()
-        msg.contents = [TextContent(content=text)]
-        return msg
-
     def _emit(entry: SessionEntry) -> None:
         match entry:
             case LLMMessageEntry(message=message):
                 messages.append(message)
             case CustomMessageEntry(content=content):
                 if isinstance(content, str):
-                    messages.append(_user_msg(content))
+                    messages.append(UserMessage(contents=[TextContent(content=content)]))
                 else:
-                    msg = UserMessage()
-                    msg.contents = list(content)
-                    messages.append(msg)
+                    messages.append(UserMessage(contents=list(content)))
             case BranchSummaryEntry(from_id=from_id, summary=summary):
-                messages.append(_user_msg(f"[Branch summary from {from_id}]\n\n{summary}"))
+                messages.append(UserMessage(contents=[TextContent(content=f"[Branch summary from {from_id}]\n\n{summary}")]))
 
     if compaction:
-        messages.append(_user_msg(
-            f"[Compacted conversation. {compaction.tokens_before} tokens before.]\n\n{compaction.summary}"
-        ))
+        messages.append(UserMessage(contents=[TextContent(content=f"[Compacted conversation. {compaction.tokens_before} tokens before.]\n\n{compaction.summary}")]))
         comp_idx = next(
             (i for i, e in enumerate(entries) if isinstance(e, CompactionSummaryEntry) and e.id == compaction.id),
             -1,
         )
-        found_first_kept = False
-        for i in range(comp_idx):
-            e = entries[i]
-            if e.id == compaction.first_kept_entry_id:
-                found_first_kept = True
-            if found_first_kept:
+        first_kept_idx = next(
+            (i for i, e in enumerate(entries) if e.id == compaction.first_kept_entry_id),
+            comp_idx,
+        )
+        for i, e in enumerate(entries): # root --> leaf
+            if i != comp_idx and (i > comp_idx or i >= first_kept_idx):
                 _emit(e)
-        for i in range(comp_idx + 1, len(entries)):
-            _emit(entries[i])
     else:
         for entry in entries:
             _emit(entry)
