@@ -28,7 +28,7 @@ BLOCKED_COMMANDS = {
     "init 6",
 }
 
-class TerminalArgs(BaseModel):
+class TerminalSchema(BaseModel):
     cmd: str = Field(
         description="The shell command to run. On Windows uses cmd.exe, on Linux/macOS uses bash. Chain commands with && for sequential execution. Avoid interactive commands that wait for input."
     )
@@ -48,7 +48,7 @@ class TerminalTool(Tool):
         super().__init__(
             name="terminal",
             description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, or any CLI task. Destructive commands are blocked.",
-            schema=TerminalArgs,
+            schema=TerminalSchema,
             kind=ToolKind.Execute,
             execution_mode=ToolExecutionMode.Parallel
         )

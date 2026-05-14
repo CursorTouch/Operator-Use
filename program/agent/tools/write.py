@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
-class WriteFileArgs(BaseModel):
+class WriteSchema(BaseModel):
     path: str = Field(
         ...,
         description="Absolute path or path relative to the current working directory.",
@@ -14,15 +14,15 @@ class WriteFileArgs(BaseModel):
     )
     overwrite: bool = Field(
         default=True,
-        description="Set to False to prevent accidentally overwriting an existing file.",
+        description="Set to False to prevent accidentally overwriting an existing file. Default is True, so the file will be overwritten if it exists.",
     )
 
-class WriteFileTool(Tool):
+class WriteTool(Tool):
     def __init__(self):
         super().__init__(
-            name="write_file",
+            name="write",
             description="Create a new file or fully overwrite an existing one. Parent directories are created automatically.",
-            schema=WriteFileArgs,
+            schema=WriteSchema,
             kind=ToolKind.Write,
             execution_mode=ToolExecutionMode.Parallel
         )

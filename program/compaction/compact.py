@@ -7,7 +7,7 @@ from datetime import datetime
 from program.session.types import (
     SessionEntry,
     LLMMessageEntry,
-    CompactionEntry,
+    CompactionSummaryEntry,
     BranchSummaryEntry,
     CustomMessageEntry,
     SessionEntryType,
@@ -212,7 +212,7 @@ class Compact:
                 SessionEntryType.LABEL,
                 SessionEntryType.SESSION_INFO,
                 SessionEntryType.CUSTOM_INFO,
-                SessionEntryType.COMPACTION,
+                SessionEntryType.COMPACTION_SUMMARY,
             ):
                 continue
 
@@ -299,7 +299,7 @@ class Compact:
 
         while cut_index > start_index:
             prev_entry = entries[cut_index - 1]
-            if prev_entry.type == SessionEntryType.COMPACTION:
+            if prev_entry.type == SessionEntryType.COMPACTION_SUMMARY:
                 break
             if prev_entry.type == SessionEntryType.LLM:
                 break
@@ -341,12 +341,12 @@ class Compact:
         if entries is None:
             entries = self.manager.get_entries()
 
-        if not entries or entries[-1].type == SessionEntryType.COMPACTION:
+        if not entries or entries[-1].type == SessionEntryType.COMPACTION_SUMMARY:
             return None
 
         prev_compaction_index = -1
         for i in range(len(entries) - 1, -1, -1):
-            if entries[i].type == SessionEntryType.COMPACTION:
+            if entries[i].type == SessionEntryType.COMPACTION_SUMMARY:
                 prev_compaction_index = i
                 break
 
@@ -355,7 +355,7 @@ class Compact:
 
         if prev_compaction_index >= 0:
             prev_compaction = entries[prev_compaction_index]
-            if isinstance(prev_compaction, CompactionEntry):
+            if isinstance(prev_compaction, CompactionSummaryEntry):
                 previous_summary = prev_compaction.summary
                 first_kept_id = prev_compaction.first_kept_entry_id
                 first_kept_index = next(
@@ -435,7 +435,7 @@ class Compact:
         entry_id = generate_id(set(self.manager.by_id.keys()))
         timestamp = datetime.now().isoformat()
 
-        compaction_entry = CompactionEntry(
+        compaction_entry = CompactionSummaryEntry(
             id=entry_id,
             parent_id=self.manager.leaf_id,
             timestamp=timestamp,

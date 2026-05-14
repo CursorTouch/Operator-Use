@@ -3,7 +3,7 @@ import asyncio
 from pydantic import BaseModel, Field
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
-class WebSearchArgs(BaseModel):
+class WebSearchSchema(BaseModel):
     query: str = Field(
         ...,
         description="The search query. Be specific — include names, versions, or error messages for better results.",
@@ -18,7 +18,7 @@ class WebSearchTool(Tool):
         super().__init__(
             name="web_search",
             description="Search the web and return titles, URLs, and snippets. Use for current events, documentation, package info, or error messages. Follow up with web_fetch to read the full content of a result.",
-            schema=WebSearchArgs,
+            schema=WebSearchSchema,
             kind=ToolKind.Web,
             execution_mode=ToolExecutionMode.Parallel
         )

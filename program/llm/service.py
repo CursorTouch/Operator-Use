@@ -5,7 +5,7 @@ from program.llm.model.registry import ModelRegistry
 from program.llm.api.registry import APIRegistry
 from program.llm.provider.registry import ProviderRegistry
 from program.llm.provider.types import APIProvider, OAuthProvider
-from program.auth.service import AuthStore
+from program.auth.manager import AuthManager
 from program.auth.types import OAuthCredential
 from program.llm.types import LLMEvent, Options
 from program.message.types import BaseMessage
@@ -19,7 +19,7 @@ class LLM:
     _apis = APIRegistry.from_builtins()
     _models = ModelRegistry.from_builtins()
     _providers = ProviderRegistry.from_builtins()
-    _auth_store = AuthStore(_providers)
+    _auth_store = AuthManager(_providers)
 
     def __init__(
         self,

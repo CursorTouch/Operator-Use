@@ -11,7 +11,7 @@ class SessionEntryType(str, Enum):
     LLM = "llm"
     THINKING_LEVEL_CHANGE = "thinking_level_change"
     MODEL_CHANGE = "model_change"
-    COMPACTION = "compaction"
+    COMPACTION_SUMMARY = "compaction_summary"
     BRANCH_SUMMARY = "branch_summary"
     LABEL = "label"
     SESSION_INFO = "session_info"
@@ -51,8 +51,8 @@ class ModelChangeEntry(BaseSessionEntry):
     model_id: str
 
 @dataclass
-class CompactionEntry(BaseSessionEntry):
-    type: SessionEntryType = field(default=SessionEntryType.COMPACTION, init=False)
+class CompactionSummaryEntry(BaseSessionEntry):
+    type: SessionEntryType = field(default=SessionEntryType.COMPACTION_SUMMARY, init=False)
     summary: str
     first_kept_entry_id: str
     tokens_before: int
@@ -108,7 +108,7 @@ class SessionContext:
 
 SessionEntry = (
     LLMMessageEntry | ThinkingLevelChangeEntry | ModelChangeEntry |
-    CompactionEntry | BranchSummaryEntry | LabelEntry | SessionInfoEntry |
+    CompactionSummaryEntry | BranchSummaryEntry | LabelEntry | SessionInfoEntry |
     CustomInfoEntry | CustomMessageEntry
 )
 

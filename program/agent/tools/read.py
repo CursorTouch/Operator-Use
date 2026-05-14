@@ -5,7 +5,7 @@ from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation
 
 MAX_TOOL_OUTPUT_LENGTH = 100000 
 
-class ReadFileArgs(BaseModel):
+class ReadSchema(BaseModel):
     path: str = Field(
         ...,
         description="Absolute path or path relative to the current working directory.",
@@ -19,12 +19,12 @@ class ReadFileArgs(BaseModel):
         description="Maximum number of lines to read.",
     )
 
-class ReadFileTool(Tool):
+class ReadTool(Tool):
     def __init__(self):
         super().__init__(
-            name="read_file",
+            name="read",
             description="Read a text file and return its contents with line numbers. Use offset/limit to read a slice of a large file.",
-            schema=ReadFileArgs,
+            schema=ReadSchema,
             kind=ToolKind.Read,
             execution_mode=ToolExecutionMode.Parallel
         )

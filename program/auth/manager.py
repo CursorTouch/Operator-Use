@@ -7,7 +7,7 @@ from program.auth.storage import AuthStorage, FileAuthStorage, InMemoryAuthStora
 from pathlib import Path 
 import json 
 
-class AuthStore:  
+class AuthManager:
     """Credential storage with pluggable backends."""  
       
     def __init__(self, registry: ProviderRegistry, storage: AuthStorage):  
@@ -16,24 +16,24 @@ class AuthStore:
         self.data: dict[str, AuthCredential] = self._load()  
         self.runtime_overrides: dict[str, str] = {}  
       
-    @staticmethod  
-    def create(registry: ProviderRegistry, auth_path: Path | None = None) -> "AuthStore":  
-        """Create AuthStore with file storage."""  
-        path = auth_path or get_auth_path()  
-        storage = FileAuthStorage(path)  
-        return AuthStore(registry, storage)  
+    @staticmethod
+    def create(registry: ProviderRegistry, auth_path: Path | None = None) -> "AuthManager":
+        """Create AuthManager with file storage."""
+        path = auth_path or get_auth_path()
+        storage = FileAuthStorage(path)
+        return AuthManager(registry, storage)  
       
-    @staticmethod  
-    def from_storage(registry: ProviderRegistry, storage: AuthStorage) -> "AuthStore":  
-        """Create AuthStore with custom storage."""  
-        return AuthStore(registry, storage)  
+    @staticmethod
+    def from_storage(registry: ProviderRegistry, storage: AuthStorage) -> "AuthManager":
+        """Create AuthManager with custom storage."""
+        return AuthManager(registry, storage)  
       
-    @staticmethod  
-    def in_memory(registry: ProviderRegistry, initial: dict = {}) -> "AuthStore":  
-        """Create AuthStore with in-memory storage for testing."""  
-        storage = InMemoryAuthStorage()  
-        storage.with_lock(lambda _: LockResult(result=None, next=json.dumps(initial, indent=2)))  
-        return AuthStore.from_storage(registry, storage)  
+    @staticmethod
+    def in_memory(registry: ProviderRegistry, initial: dict = {}) -> "AuthManager":
+        """Create AuthManager with in-memory storage for testing."""
+        storage = InMemoryAuthStorage()
+        storage.with_lock(lambda _: LockResult(result=None, next=json.dumps(initial, indent=2)))
+        return AuthManager.from_storage(registry, storage)  
       
     def _parse_storage_data(self, content: str | None) -> dict[str, AuthCredential]:  
         if not content:  

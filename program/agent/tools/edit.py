@@ -11,20 +11,23 @@ class Edit(BaseModel):
     new_content: str = Field(
         ..., description="The replacement text."
     )
+    replace_all: bool = Field(
+        False, description="Whether to replace all occurrences of old_content. Default is False, so only the first occurrence is replaced."
+    )
 
-class EditFileArgs(BaseModel):
+class EditSchema(BaseModel):
     path: str = Field(..., description="Absolute path or path relative to the current working directory.")
     edits: list[Edit] = Field(
         ...,
         description="One or more edits to apply in order.",
     )
 
-class EditFileTool(Tool):
+class EditTool(Tool):
     def __init__(self):
         super().__init__(
             name="edit_file",
             description="Edit a file by replacing exact chunks of text. Pass one or more {old_content, new_content} pairs.",
-            schema=EditFileArgs,
+            schema=EditSchema,
             kind=ToolKind.Write,
             execution_mode=ToolExecutionMode.Parallel
         )
@@ -52,20 +55,22 @@ class EditFileTool(Tool):
             if isinstance(entry, dict):
                 old = entry.get("old_content")
                 new = entry.get("new_content")
+                replace_all = entry.get("replace_all", False)
             else:
                 old = entry.old_content
                 new = entry.new_content
-                
+                replace_all = entry.replace_all
+
             if old is None:
                 return ToolResult.error(id=invocation.id, content=f"Edit #{i + 1}: old_content is required.")
             if old not in content:
                 return ToolResult.error(id=invocation.id, content=f"Edit #{i + 1}: old_content not found in {resolved_path}. Ensure exact match.")
-            
+
             count = content.count(old)
-            if count > 1:
-                return ToolResult.error(id=invocation.id, content=f"Edit #{i + 1}: old_content matches {count} locations. Be more specific.")
-            
-            content = content.replace(old, new, 1)
+            if count > 1 and not replace_all:
+                return ToolResult.error(id=invocation.id, content=f"Edit #{i + 1}: old_content matches {count} locations. Use replace_all=true to replace all occurrences, or be more specific.")
+
+            content = content.replace(old, new, -1 if replace_all else 1)
 
         try:
             resolved_path.write_text(content, encoding="utf-8")

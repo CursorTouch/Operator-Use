@@ -6,18 +6,18 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
-class ListDirArgs(BaseModel):
+class LsSchema(BaseModel):
     path: str = Field(
         default=".",
         description="Absolute path or path relative to the current working directory. Omit to list the current directory.",
     )
 
-class ListDirTool(Tool):
+class LsTool(Tool):
     def __init__(self):
         super().__init__(
-            name="list_dir",
+            name="ls",
             description="List files and subdirectories inside a directory. Directories are shown first, then files, both sorted alphabetically.",
-            schema=ListDirArgs,
+            schema=LsSchema,
             kind=ToolKind.Read,
             execution_mode=ToolExecutionMode.Parallel
         )
