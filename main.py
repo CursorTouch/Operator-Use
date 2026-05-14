@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 from program.llm.service import LLM, Options as LLMOptions
-from program.agent.service import Agent
+from program.agent.loop import Agent
 from program.agent.types import (
     Options as AgentOptions, AgentEvent, AgentEventType,
     AgentStartEvent, AgentEndEvent,

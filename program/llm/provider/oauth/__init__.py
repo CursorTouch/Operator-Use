@@ -1,5 +1,5 @@
 from program.llm.provider.types import OAuthProvider
-from program.llm.provider.oauth.types import OAuthCredentials, OAuthLoginCallbacks, OAuthAuthInfo, OAuthPrompt
+from program.llm.provider.oauth.types import OAuthCredential, OAuthLoginCallbacks, OAuthAuthInfo, OAuthPrompt
 from program.llm.provider.oauth.pkce import generate_pkce
 from program.llm.provider.oauth.openai_codex import OpenAICodexOAuthProvider
 from program.llm.provider.oauth.anthropic_claude_code import AnthropicClaudeCodeOAuthProvider
@@ -8,7 +8,7 @@ from program.llm.provider.oauth.google_antigravity import GoogleAntigravityOAuth
 
 __all__ = [
     "OAuthProvider",
-    "OAuthCredentials",
+    "OAuthCredential",
     "OAuthLoginCallbacks",
     "OAuthAuthInfo",
     "OAuthPrompt",

@@ -4,21 +4,23 @@ from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional
+from program.llm.model.types import Model
 import asyncio
 
 if TYPE_CHECKING:
     from program.llm.service import LLM
     from program.llm.types import ThinkingLevel
-    from program.tool.types import Tool, ToolExecutionMode
+    from program.tool.types import Tool
 
 from program.message.types import BaseMessage, ToolCallContent, ToolResultContent
-from program.tool.types import ToolInvocation, ToolResult
+from program.tool.types import ToolInvocation, ToolResult, ToolExecutionMode
 
 AbortSignal = asyncio.Event
 EmitEvent = Callable[['AgentEvent'], None]
 
 class AgentContext:
     system_prompt:str
+    model:Model
     messages: list[BaseMessage]
     tools: list[Tool]
 
