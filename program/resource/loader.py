@@ -8,7 +8,6 @@ Mirrors resource-loader.ts from the TS source.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from dataclasses import dataclass, field
@@ -80,14 +79,6 @@ class PromptTemplate:
     name: str
     content: str
     file_path: str
-    source_info: Optional[SourceInfo] = None
-
-
-@dataclass
-class Theme:
-    name: Optional[str]
-    source_path: Optional[str]
-    data: dict = field(default_factory=dict)
     source_info: Optional[SourceInfo] = None
 
 
@@ -265,17 +256,6 @@ def _load_prompts_from_dir(directory: str, prompts: list, diagnostics: list) -> 
 
 
 # ---------------------------------------------------------------------------
-# Theme loader
-# ---------------------------------------------------------------------------
-
-def load_theme_from_path(file_path: str) -> Theme:
-    with open(file_path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    name = data.get("name") or os.path.splitext(os.path.basename(file_path))[0]
-    return Theme(name=name, source_path=file_path, data=data)
-
-
-# ---------------------------------------------------------------------------
 # Context files  (AGENTS.md / CLAUDE.md)
 # ---------------------------------------------------------------------------
 
@@ -360,8 +340,6 @@ class _PackageManager:
         global_skill_dir = os.path.join(self._agent_dir, "skills")
         local_prompt_dir = os.path.join(self._cwd, CONFIG_DIR_NAME, "prompts")
         global_prompt_dir = os.path.join(self._agent_dir, "prompts")
-        local_theme_dir = os.path.join(self._cwd, CONFIG_DIR_NAME, "themes")
-        global_theme_dir = os.path.join(self._agent_dir, "themes")
 
         def _dir_entries(directory: str, scope: str) -> list[dict]:
             if not os.path.isdir(directory):
@@ -383,17 +361,11 @@ class _PackageManager:
             + _dir_entries(local_prompt_dir, "project")
             + self._wrap(settings.prompts or [], "settings", "user")
         )
-        themes = (
-            _dir_entries(global_theme_dir, "user")
-            + _dir_entries(local_theme_dir, "project")
-            + self._wrap(settings.themes or [], "settings", "user")
-        )
 
         return {
             "extensions": extensions,
             "skills": skills,
             "prompts": prompts,
-            "themes": themes,
         }
 
     async def resolve_extension_sources(
@@ -404,7 +376,6 @@ class _PackageManager:
             "extensions": [{"path": p, "enabled": True, "metadata": meta} for p in paths],
             "skills": [],
             "prompts": [],
-            "themes": [],
         }
 
 
@@ -416,7 +387,6 @@ class _PackageManager:
 class ResourceExtensionPaths:
     skill_paths: list[dict] = field(default_factory=list)   # [{path, metadata}]
     prompt_paths: list[dict] = field(default_factory=list)
-    theme_paths: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -427,19 +397,16 @@ class DefaultResourceLoaderOptions:
     additional_extension_paths: list[str] = field(default_factory=list)
     additional_skill_paths: list[str] = field(default_factory=list)
     additional_prompt_template_paths: list[str] = field(default_factory=list)
-    additional_theme_paths: list[str] = field(default_factory=list)
     extension_factories: list[ExtensionFactory] = field(default_factory=list)
     no_extensions: bool = False
     no_skills: bool = False
     no_prompt_templates: bool = False
-    no_themes: bool = False
     no_context_files: bool = False
     system_prompt: Optional[str] = None
     append_system_prompt: Optional[list[str]] = None
     extensions_override: Optional[Callable] = None
     skills_override: Optional[Callable] = None
     prompts_override: Optional[Callable] = None
-    themes_override: Optional[Callable] = None
     agents_files_override: Optional[Callable] = None
     system_prompt_override: Optional[Callable] = None
     append_system_prompt_override: Optional[Callable] = None
@@ -474,19 +441,16 @@ class DefaultResourceLoader:
         self._additional_extension_paths = options.additional_extension_paths
         self._additional_skill_paths = options.additional_skill_paths
         self._additional_prompt_template_paths = options.additional_prompt_template_paths
-        self._additional_theme_paths = options.additional_theme_paths
         self._extension_factories = options.extension_factories
         self._no_extensions = options.no_extensions
         self._no_skills = options.no_skills
         self._no_prompt_templates = options.no_prompt_templates
-        self._no_themes = options.no_themes
         self._no_context_files = options.no_context_files
         self._system_prompt_source = options.system_prompt
         self._append_system_prompt_source = options.append_system_prompt
         self._extensions_override = options.extensions_override
         self._skills_override = options.skills_override
         self._prompts_override = options.prompts_override
-        self._themes_override = options.themes_override
         self._agents_files_override = options.agents_files_override
         self._system_prompt_override = options.system_prompt_override
         self._append_system_prompt_override = options.append_system_prompt_override
@@ -499,18 +463,14 @@ class DefaultResourceLoader:
         self._skill_diagnostics: list[ResourceDiagnostic] = []
         self._prompts: list[PromptTemplate] = []
         self._prompt_diagnostics: list[ResourceDiagnostic] = []
-        self._themes: list[Theme] = []
-        self._theme_diagnostics: list[ResourceDiagnostic] = []
         self._agents_files: list[dict] = []
         self._system_prompt: Optional[str] = None
         self._append_system_prompt: list[str] = []
 
         self._last_skill_paths: list[str] = []
         self._last_prompt_paths: list[str] = []
-        self._last_theme_paths: list[str] = []
         self._extension_skill_source_infos: dict[str, SourceInfo] = {}
         self._extension_prompt_source_infos: dict[str, SourceInfo] = {}
-        self._extension_theme_source_infos: dict[str, SourceInfo] = {}
 
     # -------------------------------------------------------------------------
     # Accessors
@@ -524,9 +484,6 @@ class DefaultResourceLoader:
 
     def get_prompts(self) -> dict:
         return {"prompts": self._prompts, "diagnostics": self._prompt_diagnostics}
-
-    def get_themes(self) -> dict:
-        return {"themes": self._themes, "diagnostics": self._theme_diagnostics}
 
     def get_agents_files(self) -> dict:
         return {"agents_files": self._agents_files}
@@ -544,7 +501,6 @@ class DefaultResourceLoader:
     def extend_resources(self, paths: ResourceExtensionPaths) -> None:
         skill_entries = self._normalize_extension_paths(paths.skill_paths)
         prompt_entries = self._normalize_extension_paths(paths.prompt_paths)
-        theme_entries = self._normalize_extension_paths(paths.theme_paths)
 
         for entry in skill_entries:
             meta = PathMetadata(**entry["metadata"]) if isinstance(entry["metadata"], dict) else entry["metadata"]
@@ -552,9 +508,6 @@ class DefaultResourceLoader:
         for entry in prompt_entries:
             meta = PathMetadata(**entry["metadata"]) if isinstance(entry["metadata"], dict) else entry["metadata"]
             self._extension_prompt_source_infos[entry["path"]] = create_source_info(entry["path"], meta)
-        for entry in theme_entries:
-            meta = PathMetadata(**entry["metadata"]) if isinstance(entry["metadata"], dict) else entry["metadata"]
-            self._extension_theme_source_infos[entry["path"]] = create_source_info(entry["path"], meta)
 
         if skill_entries:
             self._last_skill_paths = self._merge_paths(
@@ -567,12 +520,6 @@ class DefaultResourceLoader:
                 self._last_prompt_paths, [e["path"] for e in prompt_entries]
             )
             self._update_prompts_from_paths(self._last_prompt_paths)
-
-        if theme_entries:
-            self._last_theme_paths = self._merge_paths(
-                self._last_theme_paths, [e["path"] for e in theme_entries]
-            )
-            self._update_themes_from_paths(self._last_theme_paths)
 
     # -------------------------------------------------------------------------
     # reload
@@ -589,7 +536,6 @@ class DefaultResourceLoader:
 
         self._extension_skill_source_infos = {}
         self._extension_prompt_source_infos = {}
-        self._extension_theme_source_infos = {}
 
         def _get_enabled(resources: list[dict]) -> list[str]:
             for r in resources:
@@ -614,7 +560,6 @@ class DefaultResourceLoader:
         enabled_ext_paths = _get_enabled(resolved["extensions"])
         enabled_skill_resources = _get_enabled_resources(resolved["skills"])
         enabled_prompt_paths = _get_enabled(resolved["prompts"])
-        enabled_theme_paths = _get_enabled(resolved["themes"])
 
         # Map skill paths: dirs with SKILL.md get resolved to that file
         def _map_skill_path(resource: dict) -> str:
@@ -649,7 +594,6 @@ class DefaultResourceLoader:
         cli_ext_paths = _get_enabled(cli_sources.get("extensions", []))
         cli_skill_paths = _get_enabled(cli_sources.get("skills", []))
         cli_prompt_paths = _get_enabled(cli_sources.get("prompts", []))
-        cli_theme_paths = _get_enabled(cli_sources.get("themes", []))
 
         # Extensions
         ext_paths = (
@@ -702,21 +646,6 @@ class DefaultResourceLoader:
                 if not any(d.path == p for d in self._prompt_diagnostics):
                     self._prompt_diagnostics.append(
                         ResourceDiagnostic(type="error", message="Prompt template path does not exist", path=p)
-                    )
-
-        # Themes
-        theme_paths = (
-            self._merge_paths(cli_theme_paths, self._additional_theme_paths)
-            if self._no_themes
-            else self._merge_paths(cli_theme_paths + enabled_theme_paths, self._additional_theme_paths)
-        )
-        self._last_theme_paths = theme_paths
-        self._update_themes_from_paths(theme_paths, metadata_by_path)
-        for p in self._additional_theme_paths:
-            if not os.path.exists(p):
-                if not any(d.path == p for d in self._theme_diagnostics):
-                    self._theme_diagnostics.append(
-                        ResourceDiagnostic(type="error", message="Theme path does not exist", path=p)
                     )
 
         # Agents / context files
@@ -896,72 +825,6 @@ class DefaultResourceLoader:
         ]
         self._prompt_diagnostics = result["diagnostics"]
 
-    def _update_themes_from_paths(
-        self, paths: list[str], metadata_by_path: Optional[dict] = None
-    ) -> None:
-        if self._no_themes and not paths:
-            result = {"themes": [], "diagnostics": []}
-        else:
-            loaded = self._load_themes(paths)
-            deduped = self._dedupe_themes(loaded["themes"])
-            result = {"themes": deduped["themes"], "diagnostics": loaded["diagnostics"] + deduped["diagnostics"]}
-        result = self._themes_override(result) if self._themes_override else result
-        themes = []
-        for t in result["themes"]:
-            src = (
-                self._find_source_info_for_path(
-                    t.source_path or "", self._extension_theme_source_infos, metadata_by_path
-                )
-                or t.source_info
-                or (self._get_default_source_info(t.source_path) if t.source_path else None)
-            )
-            t.source_info = src
-            themes.append(t)
-        self._themes = themes
-        self._theme_diagnostics = result["diagnostics"]
-
-    def _load_themes(self, paths: list[str]) -> dict:
-        themes: list[Theme] = []
-        diagnostics: list[ResourceDiagnostic] = []
-        for p in paths:
-            resolved = os.path.normpath(os.path.join(self._cwd, p))
-            if not os.path.exists(resolved):
-                diagnostics.append(ResourceDiagnostic(type="warning", message="theme path does not exist", path=resolved))
-                continue
-            try:
-                if os.path.isdir(resolved):
-                    self._load_themes_from_dir(resolved, themes, diagnostics)
-                elif os.path.isfile(resolved) and resolved.endswith(".json"):
-                    self._load_theme_from_file(resolved, themes, diagnostics)
-                else:
-                    diagnostics.append(ResourceDiagnostic(type="warning", message="theme path is not a json file", path=resolved))
-            except OSError as exc:
-                diagnostics.append(ResourceDiagnostic(type="warning", message=str(exc), path=resolved))
-        return {"themes": themes, "diagnostics": diagnostics}
-
-    def _load_themes_from_dir(self, directory: str, themes: list, diagnostics: list) -> None:
-        try:
-            for entry in os.scandir(directory):
-                target = entry.path
-                if entry.is_symlink():
-                    try:
-                        if not os.path.isfile(target):
-                            continue
-                    except OSError:
-                        continue
-                elif not entry.is_file():
-                    continue
-                if entry.name.endswith(".json"):
-                    self._load_theme_from_file(target, themes, diagnostics)
-        except OSError as exc:
-            diagnostics.append(ResourceDiagnostic(type="warning", message=str(exc), path=directory))
-
-    def _load_theme_from_file(self, file_path: str, themes: list, diagnostics: list) -> None:
-        try:
-            themes.append(load_theme_from_path(file_path))
-        except Exception as exc:
-            diagnostics.append(ResourceDiagnostic(type="warning", message=str(exc), path=file_path))
-
     def _dedupe_prompts(self, raw: dict) -> dict:
         seen: dict[str, PromptTemplate] = {}
         diagnostics: list[ResourceDiagnostic] = list(raw.get("diagnostics", []))
@@ -981,27 +844,6 @@ class DefaultResourceLoader:
             else:
                 seen[prompt.name] = prompt
         return {"prompts": list(seen.values()), "diagnostics": diagnostics}
-
-    def _dedupe_themes(self, themes: list[Theme]) -> dict:
-        seen: dict[str, Theme] = {}
-        diagnostics: list[ResourceDiagnostic] = []
-        for t in themes:
-            name = t.name or "unnamed"
-            if name in seen:
-                diagnostics.append(ResourceDiagnostic(
-                    type="collision",
-                    message=f'name "{name}" collision',
-                    path=t.source_path or "",
-                    collision=ResourceCollision(
-                        resource_type="theme",
-                        name=name,
-                        winner_path=seen[name].source_path or "<builtin>",
-                        loser_path=t.source_path or "<builtin>",
-                    ),
-                ))
-            else:
-                seen[name] = t
-        return {"themes": list(seen.values()), "diagnostics": diagnostics}
 
     def _discover_system_prompt_file(self) -> Optional[str]:
         for base in (self._cwd, self._agent_dir):

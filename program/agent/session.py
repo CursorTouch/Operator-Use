@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from os.path import basename, dirname
 from pathlib import Path
 from typing import Any, Callable, Optional, TYPE_CHECKING
+from program.llm.service import LLM
 
 from program.agent.loop import Agent
 from program.agent.types import (
@@ -20,9 +21,9 @@ from program.agent.types import (
 from program.compaction import Compact, BranchCompact
 from program.compaction.types import CompactionResult, DEFAULT_COMPACTION_SETTINGS
 from program.compaction.utils import get_last_assistant_usage, calculate_context_tokens, should_compact
-from program.extensions.runtime import ExtensionRunner, emit_session_shutdown_event, NoOpUIContext
+from program.extensions.runtime import ExtensionRunner, emit_session_shutdown_event
 from program.extensions.types import (
-    ExtensionUIContext, ExtensionCommandContextActions,
+    ExtensionCommandContextActions,
     LoadExtensionsResult,
 )
 from program.extensions.runtime import ExtensionErrorListener
@@ -80,7 +81,6 @@ AgentSessionEventListener = Callable[[AgentSessionEvent], None]
 
 @dataclass
 class ExtensionBindings:
-    ui_context: Optional[ExtensionUIContext] = None
     command_context_actions: Optional[ExtensionCommandContextActions] = None
     shutdown_handler: Optional[Callable] = None
     on_error: Optional[ExtensionErrorListener] = None
@@ -202,7 +202,6 @@ class AgentSession:
         self._pending_bash_messages: list = []
 
         # Extension
-        self._extension_ui_context: Optional[ExtensionUIContext] = None
         self._extension_command_context_actions: Optional[ExtensionCommandContextActions] = None
         self._extension_shutdown_handler: Optional[Callable] = None
         self._extension_error_listener: Optional[ExtensionErrorListener] = None
@@ -376,7 +375,6 @@ class AgentSession:
                 options["on_error"](e)
 
     def _apply_extension_bindings(self, runner: ExtensionRunner) -> None:
-        runner.set_ui_context(self._extension_ui_context)
         runner.bind_command_context(self._extension_command_context_actions)
 
         if self._extension_error_unsubscriber:
@@ -1002,13 +1000,11 @@ class AgentSession:
         self.session_manager.append_thinking_level_change(effective)
         self.settings_manager.set_default_thinking_level(effective)
         self._emit({"type": "thinking_level_changed", "level": effective})
-        asyncio.create_task(
-            self._extension_runner.emit({
-                "type": "thinking_level_select",
-                "level": effective,
-                "previousLevel": previous,
-            })
-        )
+        asyncio.create_task(self._extension_runner.emit({
+            "type": "thinking_level_select",
+            "level": effective,
+            "previousLevel": previous,
+        }))
 
     def cycle_thinking_level(self) -> Optional[str]:
         if not self.supports_thinking():
@@ -1207,8 +1203,6 @@ class AgentSession:
     # =========================================================================
 
     async def bind_extensions(self, bindings: ExtensionBindings) -> None:
-        if bindings.ui_context is not None:
-            self._extension_ui_context = bindings.ui_context
         if bindings.command_context_actions is not None:
             self._extension_command_context_actions = bindings.command_context_actions
         if bindings.shutdown_handler is not None:
@@ -1238,8 +1232,7 @@ class AgentSession:
         self.set_active_tools_by_name(active_tool_names)
 
         has_bindings = (
-            self._extension_ui_context
-            or self._extension_command_context_actions
+            self._extension_command_context_actions
             or self._extension_shutdown_handler
             or self._extension_error_listener
         )
@@ -1297,7 +1290,7 @@ class AgentSession:
         self._retry_abort_event = asyncio.Event()
         try:
             await asyncio.wait_for(
-                asyncio.shield(asyncio.get_event_loop().run_in_executor(None, self._retry_abort_event.wait)),
+                self._retry_abort_event.wait(),
                 timeout=delay_s,
             )
             # Abort event was set during sleep

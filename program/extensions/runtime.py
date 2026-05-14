@@ -21,10 +21,6 @@ from program.extensions.types import (
     ExtensionError,
     ExtensionFlag,
     ExtensionRuntime,
-    ExtensionShortcut,
-    ExtensionUIContext,
-    ExtensionUIDialogOptions,
-    ExtensionWidgetOptions,
     InputEvent,
     InputEventContinueResult,
     InputEventHandledResult,
@@ -33,7 +29,6 @@ from program.extensions.types import (
     InputSource,
     MessageEndEvent,
     MessageEndEventResult,
-    MessageRenderer,
     ProviderConfig,
     RegisteredCommand,
     RegisteredTool,
@@ -53,72 +48,12 @@ from program.extensions.types import (
     ToolResultEventResult,
     UserBashEvent,
     UserBashEventResult,
-    WorkingIndicatorOptions,
 )
 from program.llm.model.types import Model
 from program.llm.types import ThinkingLevel
 from program.message.types import BaseMessage, ImageContent
 
 logger = logging.getLogger(__name__)
-
-RESERVED_KEYBINDINGS = frozenset([
-    "app.interrupt",
-    "app.clear",
-    "app.exit",
-    "app.suspend",
-    "app.thinking.cycle",
-    "app.model.cycleForward",
-    "app.model.cycleBackward",
-    "app.model.select",
-    "app.tools.expand",
-    "app.thinking.toggle",
-    "app.editor.external",
-    "app.message.followUp",
-    "tui.input.submit",
-    "tui.select.confirm",
-    "tui.select.cancel",
-    "tui.input.copy",
-    "tui.editor.deleteToLineEnd",
-])
-
-
-# ---------------------------------------------------------------------------
-# No-op UI context used when no UI is available (RPC / print mode)
-# ---------------------------------------------------------------------------
-
-class NoOpUIContext(ExtensionUIContext):
-    async def select(self, title, options, opts=None): return None
-    async def confirm(self, title, message, opts=None): return False
-    async def input(self, title, placeholder=None, opts=None): return None
-    def notify(self, message, type="info"): pass
-    def on_terminal_input(self, handler): return lambda: None
-    def set_status(self, key, text): pass
-    def set_working_message(self, message=None): pass
-    def set_working_visible(self, visible): pass
-    def set_working_indicator(self, options=None): pass
-    def set_hidden_thinking_label(self, label=None): pass
-    def set_widget(self, key, content, options=None): pass
-    def set_footer(self, factory): pass
-    def set_header(self, factory): pass
-    def set_title(self, title): pass
-    async def custom(self, factory, options=None): return None
-    def paste_to_editor(self, text): pass
-    def set_editor_text(self, text): pass
-    def get_editor_text(self): return ""
-    async def editor(self, title, prefill=None): return None
-    def add_autocomplete_provider(self, factory): pass
-    def set_editor_component(self, factory): pass
-    def get_editor_component(self): return None
-    @property
-    def theme(self): return None
-    def get_all_themes(self): return []
-    def get_theme(self, name): return None
-    def set_theme(self, theme): return {"success": False, "error": "UI not available"}
-    def get_tools_expanded(self): return False
-    def set_tools_expanded(self, expanded): pass
-
-
-_NO_OP_UI = NoOpUIContext()
 
 
 # ---------------------------------------------------------------------------
@@ -131,16 +66,6 @@ class RunnerExtensionContext(ExtensionContext):
 
     def _check(self) -> None:
         self._runner._assert_active()
-
-    @property
-    def ui(self) -> ExtensionUIContext:
-        self._check()
-        return self._runner._ui_context
-
-    @property
-    def has_ui(self) -> bool:
-        self._check()
-        return self._runner.has_ui()
 
     @property
     def cwd(self) -> str:
@@ -222,27 +147,6 @@ class RunnerCommandContext(RunnerExtensionContext):
         await self._runner._reload_handler()
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _build_builtin_keybindings(resolved_keybindings: dict) -> dict:
-    """Maps each key string to {keybinding, restrict_override}."""
-    result: dict[str, dict] = {}
-    for keybinding, keys in resolved_keybindings.items():
-        if keys is None:
-            continue
-        key_list = keys if isinstance(keys, list) else [keys]
-        restrict = keybinding in RESERVED_KEYBINDINGS
-        for key in key_list:
-            normalized = key.lower()
-            existing = result.get(normalized)
-            if existing and existing["restrict_override"] and not restrict:
-                continue
-            result[normalized] = {"keybinding": keybinding, "restrict_override": restrict}
-    return result
-
-
 ExtensionErrorListener = Callable[[ExtensionError], None]
 
 
@@ -261,14 +165,12 @@ class ExtensionRunner:
     ) -> None:
         self._extensions = extensions
         self._runtime = runtime
-        self._ui_context: ExtensionUIContext = _NO_OP_UI
         self._cwd = cwd
         self._session_manager = session_manager
         self._model_registry = model_registry
 
         self._error_listeners: set[ExtensionErrorListener] = set()
         self._stale_message: Optional[str] = None
-        self._shortcut_diagnostics: list[dict] = []
         self._command_diagnostics: list[dict] = []
 
         # Callback fields (bound via bind_core / bind_command_context)
@@ -380,15 +282,6 @@ class ExtensionRunner:
             self._switch_session_handler = _cancelled_false
             self._reload_handler = _async_noop
 
-    def set_ui_context(self, ui_context: Optional[ExtensionUIContext] = None) -> None:
-        self._ui_context = ui_context if ui_context is not None else _NO_OP_UI
-
-    def get_ui_context(self) -> ExtensionUIContext:
-        return self._ui_context
-
-    def has_ui(self) -> bool:
-        return self._ui_context is not _NO_OP_UI
-
     # -------------------------------------------------------------------------
     # Extension queries
     # -------------------------------------------------------------------------
@@ -424,50 +317,6 @@ class ExtensionRunner:
 
     def get_flag_values(self) -> dict[str, Union[bool, str]]:
         return dict(self._runtime.flag_values)
-
-    def get_shortcuts(self, resolved_keybindings: dict) -> dict[str, ExtensionShortcut]:
-        self._shortcut_diagnostics = []
-        builtin = _build_builtin_keybindings(resolved_keybindings)
-        result: dict[str, ExtensionShortcut] = {}
-
-        for ext in self._extensions:
-            for key, shortcut in ext.shortcuts.items():
-                normalized = key.lower()
-                builtin_entry = builtin.get(normalized)
-
-                if builtin_entry and builtin_entry["restrict_override"]:
-                    msg = (
-                        f"Extension shortcut '{key}' from {shortcut.extension_path} "
-                        f"conflicts with built-in shortcut. Skipping."
-                    )
-                    self._shortcut_diagnostics.append({"type": "warning", "message": msg, "path": shortcut.extension_path})
-                    if not self.has_ui():
-                        logger.warning(msg)
-                    continue
-
-                if builtin_entry and not builtin_entry["restrict_override"]:
-                    msg = (
-                        f"Extension shortcut conflict: '{key}' is built-in shortcut for "
-                        f"{builtin_entry['keybinding']} and {shortcut.extension_path}. "
-                        f"Using {shortcut.extension_path}."
-                    )
-                    self._shortcut_diagnostics.append({"type": "warning", "message": msg, "path": shortcut.extension_path})
-
-                existing = result.get(normalized)
-                if existing:
-                    msg = (
-                        f"Extension shortcut conflict: '{key}' registered by both "
-                        f"{existing.extension_path} and {shortcut.extension_path}. "
-                        f"Using {shortcut.extension_path}."
-                    )
-                    self._shortcut_diagnostics.append({"type": "warning", "message": msg, "path": shortcut.extension_path})
-
-                result[normalized] = shortcut
-
-        return result
-
-    def get_shortcut_diagnostics(self) -> list[dict]:
-        return self._shortcut_diagnostics
 
     # -------------------------------------------------------------------------
     # Stale instance handling
@@ -508,13 +357,6 @@ class ExtensionRunner:
             if handlers:
                 return True
         return False
-
-    def get_message_renderer(self, custom_type: str) -> Optional[MessageRenderer]:
-        for ext in self._extensions:
-            renderer = ext.message_renderers.get(custom_type)
-            if renderer:
-                return renderer
-        return None
 
     # -------------------------------------------------------------------------
     # Command resolution
@@ -836,7 +678,6 @@ class ExtensionRunner:
         ctx = self.create_context()
         skill_paths: list[dict] = []
         prompt_paths: list[dict] = []
-        theme_paths: list[dict] = []
 
         for ext in self._extensions:
             handlers = ext.handlers.get("resources_discover", [])
@@ -850,8 +691,6 @@ class ExtensionRunner:
                             skill_paths.append({"path": p, "extension_path": ext.path})
                         for p in (result.prompt_paths or []):
                             prompt_paths.append({"path": p, "extension_path": ext.path})
-                        for p in (result.theme_paths or []):
-                            theme_paths.append({"path": p, "extension_path": ext.path})
                 except Exception as exc:
                     self.emit_error(ExtensionError(
                         extension_path=ext.path,
@@ -860,7 +699,7 @@ class ExtensionRunner:
                         stack=_get_stack(exc),
                     ))
 
-        return {"skill_paths": skill_paths, "prompt_paths": prompt_paths, "theme_paths": theme_paths}
+        return {"skill_paths": skill_paths, "prompt_paths": prompt_paths}
 
     async def emit_input(
         self,

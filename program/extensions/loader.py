@@ -31,9 +31,7 @@ from program.extensions.types import (
     ExtensionFactory,
     ExtensionFlag,
     ExtensionRuntime,
-    ExtensionShortcut,
     LoadExtensionsResult,
-    MessageRenderer,
     RegisteredCommand,
     RegisteredTool,
     ToolDefinition,
@@ -279,13 +277,7 @@ class ConcreteExtensionAPI(ExtensionAPI):
         )
 
     def register_shortcut(self, shortcut: Any, options: dict) -> None:
-        self._runtime.assert_active()
-        self._ext.shortcuts[str(shortcut).lower()] = ExtensionShortcut(
-            shortcut=shortcut,
-            handler=options["handler"],
-            extension_path=self._ext.path,
-            description=options.get("description"),
-        )
+        pass  # UI shortcuts not supported in headless mode
 
     def register_flag(self, name: str, options: dict) -> None:
         self._runtime.assert_active()
@@ -306,11 +298,8 @@ class ConcreteExtensionAPI(ExtensionAPI):
             return None
         return self._runtime.flag_values.get(name)
 
-    # -- Message rendering ---------------------------------------------------
-
-    def register_message_renderer(self, custom_type: str, renderer: MessageRenderer) -> None:
-        self._runtime.assert_active()
-        self._ext.message_renderers[custom_type] = renderer
+    def register_message_renderer(self, custom_type: str, renderer: Any) -> None:
+        pass  # Message renderers not supported in headless mode
 
     # -- Action methods (delegate to runtime) --------------------------------
 

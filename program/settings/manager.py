@@ -134,7 +134,7 @@ class SettingsManager:
         # Chains async writes to prevent concurrent file mutations; executes task and clears tracking
         prev = self._write_queue
 
-        async def chained():
+        async def chained() -> None:
             if prev is not None:
                 try:
                     await prev
@@ -211,7 +211,7 @@ class SettingsManager:
 
         self._enqueue_write("project", write_task)  
   
-    async def flush(self):
+    async def flush(self) -> None:
         # Waits for any pending async writes to complete (use before reload to ensure consistency)
         if self._write_queue is not None:
             await self._write_queue
@@ -222,7 +222,7 @@ class SettingsManager:
         self.errors.clear()
         return drained
 
-    async def reload(self):
+    async def reload(self) -> None:
         # Flushes pending writes, reloads both scopes from disk, merges them
         # Clears modification tracking so next change is detected fresh
         await self.flush()
@@ -281,14 +281,6 @@ class SettingsManager:
         self._mark_modified("default_provider")  
         self._mark_modified("default_model")  
         self._save()  
-        
-    def get_theme(self) -> Optional[str]:    
-        return self.settings.theme    
-        
-    def set_theme(self, theme: str):    
-        self.global_settings.theme = theme    
-        self._mark_modified("theme")    
-        self._save()    
         
     def get_default_thinking_level(self) -> Optional[str]:    
         return self.settings.default_thinking_level    
@@ -356,71 +348,6 @@ class SettingsManager:
         self._mark_modified("follow_up_mode")  
         self._save()  
   
-    def get_show_images(self) -> bool:  
-        return self.settings.terminal.get("show_images") if self.settings.terminal else True  
-  
-    def set_show_images(self, show: bool):  
-        if not self.global_settings.terminal:  
-            self.global_settings.terminal = {}  
-        self.global_settings.terminal["show_images"] = show  
-        self._mark_modified("terminal", "show_images")  
-        self._save()  
-  
-    def get_image_width_cells(self) -> int:  
-        width = self.settings.terminal.get("image_width_cells") if self.settings.terminal else None  
-        if not isinstance(width, (int, float)) or not width:  
-            return 60  
-        return max(1, int(width))  
-  
-    def set_image_width_cells(self, width: int):  
-        if not self.global_settings.terminal:  
-            self.global_settings.terminal = {}  
-        self.global_settings.terminal["image_width_cells"] = max(1, int(width))  
-        self._mark_modified("terminal", "image_width_cells")  
-        self._save()  
-  
-    def get_clear_on_shrink(self) -> bool:  
-        if self.settings.terminal and self.settings.terminal.get("clear_on_shrink") is not None:  
-            return self.settings.terminal["clear_on_shrink"]  
-        return False  
-  
-    def set_clear_on_shrink(self, enabled: bool):  
-        if not self.global_settings.terminal:  
-            self.global_settings.terminal = {}  
-        self.global_settings.terminal["clear_on_shrink"] = enabled  
-        self._mark_modified("terminal", "clear_on_shrink")  
-        self._save()  
-  
-    def get_show_terminal_progress(self) -> bool:  
-        return self.settings.terminal.get("show_terminal_progress") if self.settings.terminal else False  
-  
-    def set_show_terminal_progress(self, enabled: bool):  
-        if not self.global_settings.terminal:  
-            self.global_settings.terminal = {}  
-        self.global_settings.terminal["show_terminal_progress"] = enabled  
-        self._mark_modified("terminal", "show_terminal_progress")  
-        self._save()  
-  
-    def get_image_auto_resize(self) -> bool:  
-        return self.settings.images.get("auto_resize") if self.settings.images else True  
-  
-    def set_image_auto_resize(self, enabled: bool):  
-        if not self.global_settings.images:  
-            self.global_settings.images = {}  
-        self.global_settings.images["auto_resize"] = enabled  
-        self._mark_modified("images", "auto_resize")  
-        self._save()  
-  
-    def get_block_images(self) -> bool:
-        return self.settings.images.get("block_images") if self.settings.images else False
-
-    def set_block_images(self, blocked: bool):
-        if not self.global_settings.images:
-            self.global_settings.images = {}
-        self.global_settings.images["block_images"] = blocked
-        self._mark_modified("images", "block_images")
-        self._save()  
-  
     def get_enable_skill_commands(self) -> bool:  
         return self.settings.enable_skill_commands if self.settings.enable_skill_commands is not None else True  
   
@@ -429,44 +356,7 @@ class SettingsManager:
         self._mark_modified("enable_skill_commands")  
         self._save()  
   
-    def get_tree_filter_mode(self) -> str:  
-        mode = self.settings.tree_filter_mode  
-        valid = ["default", "no-tools", "user-only", "labeled-only", "all"]  
-        return mode if mode in valid else "default"  
-  
-    def set_tree_filter_mode(self, mode: str):  
-        self.global_settings.tree_filter_mode = mode  
-        self._mark_modified("tree_filter_mode")  
-        self._save()  
-  
-    def get_show_hardware_cursor(self) -> bool:  
-        return self.settings.show_hardware_cursor if self.settings.show_hardware_cursor is not None else False  
-  
-    def set_show_hardware_cursor(self, enabled: bool):  
-        self.global_settings.show_hardware_cursor = enabled  
-        self._mark_modified("show_hardware_cursor")  
-        self._save()  
-  
-    def get_editor_padding_x(self) -> int:  
-        return self.settings.editor_padding_x if self.settings.editor_padding_x is not None else 0  
-  
-    def set_editor_padding_x(self, padding: int):  
-        self.global_settings.editor_padding_x = max(0, min(3, int(padding)))  
-        self._mark_modified("editor_padding_x")  
-        self._save()  
-  
-    def get_autocomplete_max_visible(self) -> int:  
-        return self.settings.autocomplete_max_visible if self.settings.autocomplete_max_visible is not None else 5  
-  
-    def set_autocomplete_max_visible(self, max_visible: int):  
-        self.global_settings.autocomplete_max_visible = max(3, min(20, int(max_visible)))  
-        self._mark_modified("autocomplete_max_visible")  
-        self._save()  
-  
-    def get_code_block_indent(self) -> str:  
-        return self.settings.markdown.get("code_block_indent") if self.settings.markdown else "  "
-
-    def get_session_dir(self)->Path:
+    def get_session_dir(self) -> Path:
         if self.settings.session_dir is None:
             return None
         if self.settings.session_dir.startswith("~"):

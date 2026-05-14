@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
 from program.extensions.runtime import emit_session_shutdown_event
 from program.session.manager import SessionManager
@@ -43,7 +43,7 @@ def _extract_user_message_text(content) -> str:
     return ""
 
 
-CreateAgentSessionRuntimeFactory = Callable[..., "CreateAgentSessionRuntimeResult"]
+CreateAgentSessionRuntimeFactory = Callable[..., Awaitable["CreateAgentSessionRuntimeResult"]]
 
 
 class CreateAgentSessionRuntimeResult:
@@ -81,8 +81,8 @@ class AgentSessionRuntime:
         self._create_runtime = create_runtime
         self._diagnostics: list = list(diagnostics or [])
         self._model_fallback_message = model_fallback_message
-        self._rebind_session: Optional[Callable] = None
-        self._before_session_invalidate: Optional[Callable] = None
+        self._rebind_session: Optional[Callable[..., Awaitable[None]]] = None
+        self._before_session_invalidate: Optional[Callable[[], None]] = None
 
     @property
     def services(self) -> "AgentSessionServices":
@@ -104,10 +104,10 @@ class AgentSessionRuntime:
     def model_fallback_message(self) -> Optional[str]:
         return self._model_fallback_message
 
-    def set_rebind_session(self, rebind_session: Optional[Callable] = None) -> None:
+    def set_rebind_session(self, rebind_session: Optional[Callable[..., Awaitable[None]]] = None) -> None:
         self._rebind_session = rebind_session
 
-    def set_before_session_invalidate(self, callback: Optional[Callable] = None) -> None:
+    def set_before_session_invalidate(self, callback: Optional[Callable[[], None]] = None) -> None:
         """
         Set a synchronous callback that runs after session_shutdown handlers finish
         but before the current session is invalidated.
@@ -125,7 +125,9 @@ class AgentSessionRuntime:
             "reason": reason,
             "targetSessionFile": target_session_file,
         })
-        cancelled = bool(result.get("cancel")) if result else False
+        cancelled = bool(
+            getattr(result, "cancel", None) or (isinstance(result, dict) and result.get("cancel"))
+        ) if result else False
         return {"cancelled": cancelled}
 
     async def _emit_before_fork(self, entry_id: str, options: dict) -> dict:
@@ -137,7 +139,9 @@ class AgentSessionRuntime:
             "entryId": entry_id,
             **options,
         })
-        cancelled = bool(result.get("cancel")) if result else False
+        cancelled = bool(
+            getattr(result, "cancel", None) or (isinstance(result, dict) and result.get("cancel"))
+        ) if result else False
         return {"cancelled": cancelled}
 
     async def _teardown_current(
@@ -204,9 +208,6 @@ class AgentSessionRuntime:
         session_dir = self.session.session_manager.get_session_dir()
         session_manager = SessionManager.create(self.cwd, session_dir)
 
-        if options.get("parent_session"):
-            session_manager.new_session(parent_session=options["parent_session"])
-
         await self._teardown_current("new", session_manager.get_session_file())
         self._apply(await self._create_runtime(
             cwd=self.cwd,
@@ -260,7 +261,6 @@ class AgentSessionRuntime:
 
             if not target_leaf_id:
                 session_manager = SessionManager.create(self.cwd, session_dir)
-                session_manager.new_session(parent_session=current_session_file)
             else:
                 source_manager = SessionManager.open(current_session_file, session_dir)
                 forked_path = source_manager.create_branched_session(target_leaf_id)
@@ -285,7 +285,7 @@ class AgentSessionRuntime:
         # In-memory fork
         session_manager = self.session.session_manager
         if not target_leaf_id:
-            session_manager.new_session(parent_session=self.session.session_file)
+            session_manager.new_session()
         else:
             session_manager.create_branched_session(target_leaf_id)
 

@@ -19,19 +19,8 @@ from program.tool.types import ToolExecutionMode, ToolInvocation, ToolResult
 AbortSignal = asyncio.Event
 
 # ---------------------------------------------------------------------------
-# Stubs for UI / external types not yet implemented
+# Stubs for non-UI types not yet implemented
 # ---------------------------------------------------------------------------
-Component = Any
-Theme = Any
-TUI = Any
-EditorTheme = Any
-EditorComponent = Any
-AutocompleteItem = Any
-AutocompleteProvider = Any
-OverlayHandle = Any
-OverlayOptions = Any
-KeyId = Any
-KeybindingsManager = Any
 ReadonlySessionManager = Any
 SessionManager = Any
 ModelRegistry = Any
@@ -40,97 +29,6 @@ BashOperations = Any
 BashResult = Any
 SourceInfo = Any
 BuildSystemPromptOptions = Any
-ReadonlyFooterDataProvider = Any
-
-# ---------------------------------------------------------------------------
-# UI Context
-# ---------------------------------------------------------------------------
-
-@dataclass
-class ExtensionUIDialogOptions:
-    signal: Optional[AbortSignal] = None
-    timeout: Optional[int] = None
-
-
-WidgetPlacement = Literal["aboveEditor", "belowEditor"]
-
-
-@dataclass
-class ExtensionWidgetOptions:
-    placement: WidgetPlacement = "aboveEditor"
-
-
-TerminalInputHandler = Callable[[str], Optional[dict]]
-
-
-@dataclass
-class WorkingIndicatorOptions:
-    frames: Optional[list[str]] = None
-    interval_ms: Optional[int] = None
-
-
-AutocompleteProviderFactory = Callable[[AutocompleteProvider], AutocompleteProvider]
-EditorFactory = Callable[[TUI, EditorTheme, KeybindingsManager], EditorComponent]
-
-
-class ExtensionUIContext(ABC):
-    @abstractmethod
-    async def select(self, title: str, options: list[str], opts: Optional[ExtensionUIDialogOptions] = None) -> Optional[str]: ...
-    @abstractmethod
-    async def confirm(self, title: str, message: str, opts: Optional[ExtensionUIDialogOptions] = None) -> bool: ...
-    @abstractmethod
-    async def input(self, title: str, placeholder: Optional[str] = None, opts: Optional[ExtensionUIDialogOptions] = None) -> Optional[str]: ...
-    @abstractmethod
-    def notify(self, message: str, type: Literal["info", "warning", "error"] = "info") -> None: ...
-    @abstractmethod
-    def on_terminal_input(self, handler: TerminalInputHandler) -> Callable[[], None]: ...
-    @abstractmethod
-    def set_status(self, key: str, text: Optional[str]) -> None: ...
-    @abstractmethod
-    def set_working_message(self, message: Optional[str] = None) -> None: ...
-    @abstractmethod
-    def set_working_visible(self, visible: bool) -> None: ...
-    @abstractmethod
-    def set_working_indicator(self, options: Optional[WorkingIndicatorOptions] = None) -> None: ...
-    @abstractmethod
-    def set_hidden_thinking_label(self, label: Optional[str] = None) -> None: ...
-    @abstractmethod
-    def set_widget(self, key: str, content: Any, options: Optional[ExtensionWidgetOptions] = None) -> None: ...
-    @abstractmethod
-    def set_footer(self, factory: Any) -> None: ...
-    @abstractmethod
-    def set_header(self, factory: Any) -> None: ...
-    @abstractmethod
-    def set_title(self, title: str) -> None: ...
-    @abstractmethod
-    async def custom(self, factory: Any, options: Optional[dict] = None) -> Any: ...
-    @abstractmethod
-    def paste_to_editor(self, text: str) -> None: ...
-    @abstractmethod
-    def set_editor_text(self, text: str) -> None: ...
-    @abstractmethod
-    def get_editor_text(self) -> str: ...
-    @abstractmethod
-    async def editor(self, title: str, prefill: Optional[str] = None) -> Optional[str]: ...
-    @abstractmethod
-    def add_autocomplete_provider(self, factory: AutocompleteProviderFactory) -> None: ...
-    @abstractmethod
-    def set_editor_component(self, factory: Optional[EditorFactory]) -> None: ...
-    @abstractmethod
-    def get_editor_component(self) -> Optional[EditorFactory]: ...
-    @property
-    @abstractmethod
-    def theme(self) -> Theme: ...
-    @abstractmethod
-    def get_all_themes(self) -> list[dict]: ...
-    @abstractmethod
-    def get_theme(self, name: str) -> Optional[Theme]: ...
-    @abstractmethod
-    def set_theme(self, theme: Union[str, Theme]) -> dict: ...
-    @abstractmethod
-    def get_tools_expanded(self) -> bool: ...
-    @abstractmethod
-    def set_tools_expanded(self, expanded: bool) -> None: ...
 
 
 # ---------------------------------------------------------------------------
@@ -152,12 +50,6 @@ class CompactOptions:
 
 
 class ExtensionContext(ABC):
-    @property
-    @abstractmethod
-    def ui(self) -> ExtensionUIContext: ...
-    @property
-    @abstractmethod
-    def has_ui(self) -> bool: ...
     @property
     @abstractmethod
     def cwd(self) -> str: ...
@@ -217,28 +109,6 @@ class ExtensionCommandContext(ExtensionContext):
 # ---------------------------------------------------------------------------
 
 @dataclass
-class ToolRenderResultOptions:
-    expanded: bool
-    is_partial: bool
-
-
-@dataclass
-class ToolRenderContext:
-    args: Any
-    tool_call_id: str
-    invalidate: Callable[[], None]
-    last_component: Optional[Component]
-    state: Any
-    cwd: str
-    execution_started: bool
-    args_complete: bool
-    is_partial: bool
-    expanded: bool
-    show_images: bool
-    is_error: bool
-
-
-@dataclass
 class ToolInfo:
     name: str
     description: str
@@ -255,11 +125,8 @@ class ToolDefinition:
     execute: Callable[..., Awaitable[ToolResult]]
     prompt_snippet: Optional[str] = None
     prompt_guidelines: Optional[list[str]] = None
-    render_shell: Literal["default", "self"] = "default"
     prepare_arguments: Optional[Callable[[Any], Any]] = None
     execution_mode: Optional[ToolExecutionMode] = None
-    render_call: Optional[Callable[..., Component]] = None
-    render_result: Optional[Callable[..., Component]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -281,18 +148,6 @@ class ResolvedCommand(RegisteredCommand):
 
 
 # ---------------------------------------------------------------------------
-# Message Rendering
-# ---------------------------------------------------------------------------
-
-@dataclass
-class MessageRenderOptions:
-    expanded: bool
-
-
-MessageRenderer = Callable[[Any, MessageRenderOptions, Theme], Optional[Component]]
-
-
-# ---------------------------------------------------------------------------
 # Resource Events
 # ---------------------------------------------------------------------------
 
@@ -307,7 +162,6 @@ class ResourcesDiscoverEvent:
 class ResourcesDiscoverResult:
     skill_paths: Optional[list[str]] = None
     prompt_paths: Optional[list[str]] = None
-    theme_paths: Optional[list[str]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -903,16 +757,10 @@ class ExtensionAPI(ABC):
     def register_command(self, name: str, options: dict) -> None: ...
 
     @abstractmethod
-    def register_shortcut(self, shortcut: KeyId, options: dict) -> None: ...
-
-    @abstractmethod
     def register_flag(self, name: str, options: dict) -> None: ...
 
     @abstractmethod
     def get_flag(self, name: str) -> Optional[Union[bool, str]]: ...
-
-    @abstractmethod
-    def register_message_renderer(self, custom_type: str, renderer: MessageRenderer) -> None: ...
 
     @abstractmethod
     def send_message(self, message: dict, options: Optional[dict] = None) -> None: ...
@@ -1015,14 +863,6 @@ class ExtensionFlag:
     extension_path: str
     description: Optional[str] = None
     default: Optional[Union[bool, str]] = None
-
-
-@dataclass
-class ExtensionShortcut:
-    shortcut: KeyId
-    handler: Callable[["ExtensionContext"], Any]
-    extension_path: str
-    description: Optional[str] = None
 
 
 # Handler type aliases
@@ -1130,10 +970,8 @@ class Extension:
     source_info: Optional[SourceInfo]
     handlers: dict[str, list[Callable]] = field(default_factory=dict)
     tools: dict[str, RegisteredTool] = field(default_factory=dict)
-    message_renderers: dict[str, MessageRenderer] = field(default_factory=dict)
     commands: dict[str, RegisteredCommand] = field(default_factory=dict)
     flags: dict[str, ExtensionFlag] = field(default_factory=dict)
-    shortcuts: dict[str, ExtensionShortcut] = field(default_factory=dict)
 
 
 @dataclass
