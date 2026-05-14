@@ -35,49 +35,14 @@ from program.compaction.compact import Compact
 
 if TYPE_CHECKING:
     from program.session.manager import SessionManager
+    from program.llm.service import LLM
 
 
-# ============================================================================
-# Constants
-# ============================================================================
-
-BRANCH_SUMMARY_PREAMBLE = """The user explored a different conversation branch before returning here.
-Summary of that exploration:
-
-"""
-
-BRANCH_SUMMARY_PROMPT = """Create a structured summary of this conversation branch for context when returning later.
-
-Use this EXACT format:
-
-## Goal
-[What was the user trying to accomplish in this branch?]
-
-## Constraints & Preferences
-- [Any constraints, preferences, or requirements mentioned]
-- [Or "(none)" if none were mentioned]
-
-## Progress
-### Done
-- [x] [Completed tasks/changes]
-
-### In Progress
-- [ ] [Work that was started but not finished]
-
-### Blocked
-- [Issues preventing progress, if any]
-
-## Key Decisions
-- **[Decision]**: [Brief rationale]
-
-## Next Steps
-1. [What should happen next to continue this work]
-
-Keep each section concise. Preserve exact file paths, function names, and error messages."""
-
-SUMMARIZATION_SYSTEM_PROMPT = """You are a context summarization assistant. Your task is to read a conversation between a user and an AI coding assistant, then produce a structured summary following the exact format specified.
-
-Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary."""
+from program.compaction.prompts import (
+    SUMMARIZATION_SYSTEM_PROMPT,
+    BRANCH_SUMMARY_PREAMBLE,
+    BRANCH_SUMMARY_PROMPT,
+)
 
 
 # ============================================================================
@@ -88,14 +53,11 @@ Do NOT continue the conversation. Do NOT respond to any questions in the convers
 class BranchCompact:
     """Branch summarization service for session tree navigation."""
 
-    def __init__(self, manager: SessionManager):
-        """Initialize branch compaction service.
-
-        Args:
-            manager: SessionManager instance
-        """
+    def __init__(self, manager: SessionManager, llm: Optional["LLM"] = None):
+        from program.compaction.compact import Compact
         self.manager = manager
-        self.compact = Compact(manager)
+        self.llm = llm
+        self.compact = Compact(manager, llm=llm)
 
     def collect_entries(
         self,
@@ -152,7 +114,7 @@ class BranchCompact:
             if hasattr(entry.message, "role"):
                 from program.message.types import Role
 
-                if entry.message.role == Role.TOOL_RESULT:
+                if entry.message.role == Role.TOOL:
                     return None
             return entry.message
 
@@ -219,7 +181,7 @@ class BranchCompact:
             # Check budget before adding
             if token_budget > 0 and total_tokens + tokens > token_budget:
                 # If this is a summary entry, try to fit it anyway as it's important context
-                if entry.type in (SessionEntryType.COMPACTION, SessionEntryType.BRANCH_SUMMARY):
+                if entry.type in (SessionEntryType.COMPACTION_SUMMARY, SessionEntryType.BRANCH_SUMMARY):
                     if total_tokens < token_budget * 0.9:
                         messages.insert(0, message)
                         total_tokens += tokens
@@ -234,38 +196,26 @@ class BranchCompact:
     async def generate_summary(
         self,
         entries: List[SessionEntry],
+        llm: Optional["LLM"] = None,
         custom_instructions: Optional[str] = None,
-        reserve_tokens: int = 16384,
     ) -> BranchSummaryResult:
-        """Generate a summary of abandoned branch entries.
-
-        Args:
-            entries: Session entries to summarize (chronological order)
-            custom_instructions: Optional custom instructions for summarization
-            reserve_tokens: Tokens reserved for prompt + response
-
-        Returns:
-            BranchSummaryResult with summary and file tracking
-        """
+        """Generate a summary of abandoned branch entries."""
         if not entries:
             return BranchSummaryResult(summary="No content to summarize")
 
-        # Prepare entries
         preparation = self.prepare(entries)
-
         if not preparation.messages:
             return BranchSummaryResult(summary="No content to summarize")
 
-        # Generate basic summary
-        summary = self._generate_basic_summary(preparation, custom_instructions)
+        active_llm = llm or self.llm
 
-        # Compute file lists
+        if active_llm:
+            summary = await self._generate_llm_summary(preparation, active_llm, custom_instructions)
+        else:
+            summary = self._generate_basic_summary(preparation, custom_instructions)
+
         files_dict = compute_file_lists(preparation.file_ops)
-        file_ops_str = format_file_operations(
-            files_dict["read_files"],
-            files_dict["modified_files"],
-        )
-        summary += file_ops_str
+        summary += format_file_operations(files_dict["read_files"], files_dict["modified_files"])
 
         return BranchSummaryResult(
             summary=summary,
@@ -273,23 +223,57 @@ class BranchCompact:
             modified_files=files_dict["modified_files"],
         )
 
+    async def _generate_llm_summary(
+        self,
+        preparation: BranchPreparation,
+        llm: "LLM",
+        custom_instructions: Optional[str] = None,
+    ) -> str:
+        """Call the LLM to generate a branch summary."""
+        from program.compaction.utils import serialize_conversation
+        from program.message.types import SystemMessage, UserMessage, TextContent
+        from program.llm.types import TextEndEvent, ErrorEvent, StopReason
+
+        prompt = BRANCH_SUMMARY_PROMPT
+        if custom_instructions:
+            prompt = f"{prompt}\n\nAdditional focus: {custom_instructions}"
+
+        conversation_text = serialize_conversation(preparation.messages)
+        prompt_text = f"<conversation>\n{conversation_text}\n</conversation>\n\n{prompt}"
+
+        system_msg = SystemMessage()
+        system_msg.contents = [TextContent(content=SUMMARIZATION_SYSTEM_PROMPT)]
+        user_msg = UserMessage()
+        user_msg.contents = [TextContent(content=prompt_text)]
+
+        events = await llm.invoke([system_msg, user_msg])
+
+        text_parts: List[str] = []
+        error = ""
+        stop_reason = StopReason.Stop
+        for event in events:
+            if isinstance(event, TextEndEvent):
+                text_parts.append(event.text.content)
+            elif isinstance(event, ErrorEvent):
+                stop_reason = event.reason
+                error = event.error
+
+        if stop_reason == StopReason.Error:
+            raise RuntimeError(f"Branch summarization failed: {error}")
+
+        return "".join(text_parts)
+
     def _generate_basic_summary(
         self,
         preparation: BranchPreparation,
         custom_instructions: Optional[str] = None,
     ) -> str:
-        """Generate a basic branch summary."""
-        sections = []
-
-        sections.append(BRANCH_SUMMARY_PREAMBLE)
-
-        message_count = len(preparation.messages)
-        sections.append(f"## Branch Content\n- Summarized {message_count} messages")
+        """Fallback branch summary when no LLM is available."""
+        sections = [BRANCH_SUMMARY_PREAMBLE]
+        sections.append(f"## Branch Content\n- Summarized {len(preparation.messages)} messages")
         sections.append(f"- Total tokens: {preparation.total_tokens}")
-
         if custom_instructions:
             sections.append(f"## Custom Focus\n{custom_instructions}")
-
         return "\n\n".join(sections)
 
     def create_entry(

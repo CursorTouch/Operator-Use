@@ -1,8 +1,8 @@
 """Shared utilities for compaction and session summarization."""
 
 from __future__ import annotations
-from typing import Set, List, Dict, Any, Optional, TYPE_CHECKING
-from program.compaction.types import FileOperations, ContextUsageEstimate
+from typing import List, Dict, Optional, TYPE_CHECKING
+from program.compaction.types import FileOperations, ContextUsageEstimate, CompactionSettings
 from program.session.types import SessionEntry, LLMMessageEntry
 from program.tool.types import ToolKind
 
@@ -149,7 +149,7 @@ def get_message_from_entry_for_compaction(entry: SessionEntry) -> Optional[LLMMe
     return get_message_from_entry(entry)
 
 
-def get_assistant_usage(message: LLMMessage) -> ContextUsageEstimate:
+def get_assistant_usage(message: AssistantMessage) -> ContextUsageEstimate:
     """Extract usage information from an assistant message.
 
     Args:
@@ -158,7 +158,7 @@ def get_assistant_usage(message: LLMMessage) -> ContextUsageEstimate:
     Returns:
         ContextUsageEstimate with token counts from the message
     """
-    if not hasattr(message, "usage"):
+    if not message.usage:
         return ContextUsageEstimate()
 
     usage = message.usage
@@ -170,11 +170,9 @@ def get_assistant_usage(message: LLMMessage) -> ContextUsageEstimate:
     )
 
     return ContextUsageEstimate(
-        input_tokens=usage.input_tokens,
-        output_tokens=usage.output_tokens,
-        cache_read_tokens=usage.cache_read_tokens,
-        cache_write_tokens=usage.cache_write_tokens,
-        total_tokens=total,
+        tokens=total,
+        usage_tokens=total,
+        trailing_tokens=0,
     )
 
 
@@ -208,18 +206,14 @@ def get_last_assistant_usage_info(messages: List[LLMMessage]) -> str:
     """
     usage = get_last_assistant_usage(messages)
 
-    if usage.total_tokens == 0:
+    if usage.tokens == 0:
         return ""
 
-    parts = [f"Total: {usage.total_tokens}"]
-    if usage.input_tokens:
-        parts.append(f"In: {usage.input_tokens}")
-    if usage.output_tokens:
-        parts.append(f"Out: {usage.output_tokens}")
-    if usage.cache_read_tokens:
-        parts.append(f"Cache: {usage.cache_read_tokens}")
-    if usage.cache_write_tokens:
-        parts.append(f"CacheW: {usage.cache_write_tokens}")
+    parts = [f"Total: {usage.tokens}"]
+    if usage.usage_tokens:
+        parts.append(f"Usage: {usage.usage_tokens}")
+    if usage.trailing_tokens:
+        parts.append(f"Trailing: {usage.trailing_tokens}")
 
     return f"[{', '.join(parts)}]"
 
@@ -245,18 +239,49 @@ def calculate_context_tokens(messages: List[LLMMessage]) -> int:
 
 def should_compact(
     current_tokens: int,
-    reserve_tokens: int = 16384,
+    context_window: int,
+    settings: CompactionSettings,
 ) -> bool:
     """Determine if compaction should be performed.
 
     Args:
         current_tokens: Current context token count
-        reserve_tokens: Token reserve threshold (default 16384)
+        context_window: Model's total context window size
+        settings: Compaction settings (must have .enabled and .reserve_tokens)
 
     Returns:
         True if compaction is needed, False otherwise
     """
-    return current_tokens > reserve_tokens
+    if not settings.enabled:
+        return False
+    return current_tokens > context_window - settings.reserve_tokens
+
+
+def serialize_conversation(messages: List[LLMMessage]) -> str:
+    """Serialize LLM messages to plain text for summarization prompts."""
+    from program.message.types import TextContent, ThinkingContent, ToolCallContent, ToolResultContent, Role
+    import json
+
+    parts: List[str] = []
+    for msg in messages:
+        role = getattr(msg, "role", None)
+        if role is None:
+            continue
+        role_label = role.value.upper() if hasattr(role, "value") else str(role).upper()
+        contents = getattr(msg, "contents", [])
+        lines: List[str] = []
+        for block in contents:
+            if isinstance(block, TextContent) and block.content:
+                lines.append(block.content)
+            elif isinstance(block, ThinkingContent) and block.content:
+                lines.append(f"[thinking] {block.content} [/thinking]")
+            elif isinstance(block, ToolCallContent):
+                lines.append(f"[tool_call] {block.name} {json.dumps(block.args)} [/tool_call]")
+            elif isinstance(block, ToolResultContent):
+                lines.append(f"[tool_result] {block.id} {block.content} [/tool_result]")
+        if lines:
+            parts.append(f"{role_label}: {' '.join(lines)}")
+    return "\n\n".join(parts)
 
 
 def _extract_bash_file_ops(command: str, file_ops: FileOperations) -> None:

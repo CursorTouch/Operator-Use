@@ -1,140 +1,74 @@
-"""Session compaction service for managing large session contexts."""
+"""Session compaction for managing large session contexts."""
 
 from __future__ import annotations
 from typing import Optional, List, TYPE_CHECKING, Any
-from program.message.types import LLMMessage, Role, ThinkingContent, TextContent
+from program.message.types import LLMMessage, Role, TextContent, ThinkingContent, ToolCallContent, ToolResultContent
+from program.message.types import AssistantMessage, UserMessage, SystemMessage
 from datetime import datetime
 
 from program.session.types import (
-    SessionEntry,
-    LLMMessageEntry,
-    CompactionSummaryEntry,
-    BranchSummaryEntry,
-    CustomMessageEntry,
-    SessionEntryType,
+    SessionEntry, LLMMessageEntry, CompactionSummaryEntry,
+    BranchSummaryEntry, CustomMessageEntry, SessionEntryType,
 )
 from program.session.utils import generate_id
 from program.compaction.types import (
-    FileOperations,
-    CompactionSettings,
-    CutPointResult,
-    CompactionPreparation,
-    CompactionResult,
-    CompactionDetails,
-    DEFAULT_COMPACTION_SETTINGS,
+    FileOperations, CompactionSettings, CutPointResult,
+    CompactionPreparation, CompactionResult, CompactionDetails,
+    ContextUsageEstimate, DEFAULT_COMPACTION_SETTINGS,
 )
 from program.compaction.utils import (
-    create_file_ops,
-    compute_file_lists,
-    format_file_operations,
-    truncate_for_summary,
-    extract_file_ops_from_message,
-    get_assistant_usage,
-    calculate_context_tokens,
-    should_compact,
+    create_file_ops, compute_file_lists, format_file_operations,
+    extract_file_ops_from_message, should_compact, serialize_conversation,
 )
 
 if TYPE_CHECKING:
     from program.session.manager import SessionManager
+    from program.llm.service import LLM
+    from program.message.types import Usage
+
+from program.compaction.prompts import (
+    SUMMARIZATION_SYSTEM_PROMPT,
+    SUMMARIZATION_PROMPT,
+    UPDATE_SUMMARIZATION_PROMPT,
+    TURN_PREFIX_SUMMARIZATION_PROMPT,
+)
 
 
-# Summarization prompts
-SUMMARIZATION_SYSTEM_PROMPT = """You are a context summarization assistant. Your task is to read a conversation between a user and an AI coding assistant, then produce a structured summary following the exact format specified.
+# ============================================================================
+# Token calculation helpers
+# ============================================================================
 
-Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary."""
+def _get_assistant_usage(message: LLMMessage) -> Optional[Usage]:
+    """Return usage from an assistant message, skipping aborted/errored ones."""
+    from program.llm.types import StopReason
+    if not isinstance(message, AssistantMessage):
+        return None
+    if message.stop_reason in (StopReason.Abort, StopReason.Error):
+        return None
+    usage = message.usage
+    if not usage or usage.input_tokens == 0:
+        return None
+    return usage
 
-SUMMARIZATION_PROMPT = """The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
 
-Use this EXACT format:
+def calculate_context_tokens(usage: Usage) -> int:
+    """Sum all token components from a Usage object."""
+    return usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens
 
-## Goal
-[What is the user trying to accomplish? Can be multiple items if the session covers different tasks.]
 
-## Constraints & Preferences
-- [Any constraints, preferences, or requirements mentioned by user]
-- [Or "(none)" if none were mentioned]
-
-## Progress
-### Done
-- [x] [Completed tasks/changes]
-
-### In Progress
-- [ ] [Current work]
-
-### Blocked
-- [Issues preventing progress, if any]
-
-## Key Decisions
-- **[Decision]**: [Brief rationale]
-
-## Next Steps
-1. [Ordered list of what should happen next]
-
-## Critical Context
-- [Any data, examples, or references needed to continue]
-- [Or "(none)" if not applicable]
-
-Keep each section concise. Preserve exact file paths, function names, and error messages."""
-
-UPDATE_SUMMARIZATION_PROMPT = """The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
-
-Update the existing structured summary with new information. RULES:
-- PRESERVE all existing information from the previous summary
-- ADD new progress, decisions, and context from the new messages
-- UPDATE the Progress section: move items from "In Progress" to "Done" when completed
-- UPDATE "Next Steps" based on what was accomplished
-- PRESERVE exact file paths, function names, and error messages
-- If something is no longer relevant, you may remove it
-
-Use this EXACT format:
-
-## Goal
-[Preserve existing goals, add new ones if the task expanded]
-
-## Constraints & Preferences
-- [Preserve existing, add new ones discovered]
-
-## Progress
-### Done
-- [x] [Include previously done items AND newly completed items]
-
-### In Progress
-- [ ] [Current work - update based on progress]
-
-### Blocked
-- [Current blockers - remove if resolved]
-
-## Key Decisions
-- **[Decision]**: [Brief rationale] (preserve all previous, add new)
-
-## Next Steps
-1. [Update based on current state]
-
-## Critical Context
-- [Preserve important context, add new if needed]
-
-Keep each section concise. Preserve exact file paths, function names, and error messages."""
-
-TURN_PREFIX_SUMMARIZATION_PROMPT = """This is the PREFIX of a turn that was too large to keep. The SUFFIX (recent work) is retained.
-
-Summarize the prefix to provide context for the retained suffix:
-
-## Original Request
-[What did the user ask for in this turn?]
-
-## Early Progress
-- [Key decisions and work done in the prefix]
-
-## Context for Suffix
-- [Information needed to understand the retained recent work]
-
-Be concise. Focus on what's needed to understand the kept suffix."""
+def get_last_assistant_usage(entries: List[SessionEntry]) -> Optional[Usage]:
+    """Find usage from the last non-aborted assistant message in session entries."""
+    for entry in reversed(entries):
+        if isinstance(entry, LLMMessageEntry):
+            usage = _get_assistant_usage(entry.message)
+            if usage:
+                return usage
+    return None
 
 
 # ============================================================================
 # Compact Service Class
 # ============================================================================
-
 
 class Compact:
     """Session compaction service for managing large context."""
@@ -143,79 +77,82 @@ class Compact:
         self,
         manager: SessionManager,
         settings: Optional[CompactionSettings] = None,
+        llm: Optional[LLM] = None,
     ):
-        """Initialize compaction service.
-
-        Args:
-            manager: SessionManager instance
-            settings: Compaction settings (uses defaults if None)
-        """
         self.manager = manager
         self.settings = settings or DEFAULT_COMPACTION_SETTINGS
+        self.llm = llm
+
+    # -------------------------------------------------------------------------
+    # Token estimation
+    # -------------------------------------------------------------------------
+
+    def estimate_message_tokens(self, message: LLMMessage) -> int:
+        """Estimate token count for a message using chars/4 heuristic."""
+        chars = 0
+        role = getattr(message, "role", None)
+        contents = getattr(message, "contents", [])
+
+        if role == Role.USER:
+            for block in contents:
+                if isinstance(block, TextContent):
+                    chars += len(block.content)
+
+        elif role == Role.ASSISTANT:
+            for block in contents:
+                if isinstance(block, (TextContent, ThinkingContent)):
+                    chars += len(block.content)
+                elif isinstance(block, ToolCallContent):
+                    import json
+                    chars += len(block.name) + len(json.dumps(block.args))
+
+        elif role == Role.TOOL:
+            for block in contents:
+                if isinstance(block, ToolResultContent):
+                    chars += len(block.content)
+                    # Rough image estimate if metadata suggests image content
+                    if block.metadata.get("has_image"):
+                        chars += 4800
+
+        return max(1, chars // 4)
+
+    def estimate_context_tokens(self, messages: List[LLMMessage]) -> ContextUsageEstimate:
+        """Estimate context size, using actual assistant usage when available."""
+        last_usage_info: Optional[tuple[Usage, int]] = None
+        for i in range(len(messages) - 1, -1, -1):
+            usage = _get_assistant_usage(messages[i])
+            if usage:
+                last_usage_info = (usage, i)
+                break
+
+        if not last_usage_info:
+            estimated = sum(self.estimate_message_tokens(m) for m in messages)
+            return ContextUsageEstimate(tokens=estimated, usage_tokens=0, trailing_tokens=estimated)
+
+        usage, idx = last_usage_info
+        usage_tokens = calculate_context_tokens(usage)
+        trailing = sum(self.estimate_message_tokens(messages[i]) for i in range(idx + 1, len(messages)))
+        return ContextUsageEstimate(
+            tokens=usage_tokens + trailing,
+            usage_tokens=usage_tokens,
+            trailing_tokens=trailing,
+            last_usage_index=idx,
+        )
 
     def should_perform_compaction(self, entries: Optional[List[SessionEntry]] = None) -> bool:
-        """Check if compaction should be performed on current session.
-
-        Args:
-            entries: Session entries to analyze (uses manager entries if None)
-
-        Returns:
-            True if context tokens exceed reserve threshold
-        """
+        """Check if compaction should be performed on current session."""
         if entries is None:
             entries = self.manager.get_entries()
 
-        # Calculate actual tokens if available, otherwise estimate
-        messages = [
-            e.message for e in entries
-            if isinstance(e, LLMMessageEntry)
-        ]
+        context = self.manager.build_session_context()
+        estimate = self.estimate_context_tokens(context.messages)
 
-        actual_tokens = calculate_context_tokens(messages)
-        if actual_tokens > 0:
-            return should_compact(actual_tokens, self.settings.reserve_tokens)
+        context_window = self.llm.model.context_window if self.llm else 200_000
+        return should_compact(estimate.tokens, context_window, self.settings)
 
-        # Fall back to estimates
-        estimated = self.estimate_context_tokens(messages)
-        return should_compact(estimated, self.settings.reserve_tokens)
-
-    def estimate_message_tokens(self, message: LLMMessage) -> int:
-        """Estimate token count for a message using chars/4 heuristic.
-
-        Args:
-            message: Message to estimate tokens for
-
-        Returns:
-            Estimated token count
-        """
-        char_count = 0
-
-        role = message.role
-        contents = message.contents
-
-        match role:
-            case Role.USER:
-                for content in contents:
-                    if isinstance(content,TextContent):
-                        char_count += len(content.content)
-            
-            case Role.ASSISTANT:
-                for content in contents:
-                    if isinstance(content,(TextContent,ThinkingContent)):
-                        char_count += len(content.content)
-
-        return max(1, char_count // 4)
-
-    def estimate_context_tokens(self, messages: List[LLMMessage]) -> int:
-        """Estimate total context tokens from messages.
-
-        Args:
-            messages: List of messages
-
-        Returns:
-            Estimated total tokens
-        """
-        return sum(self.estimate_message_tokens(message=message) for message in messages)
+    # -------------------------------------------------------------------------
+    # Cut point detection
+    # -------------------------------------------------------------------------
 
     def _find_valid_cut_points(
         self,
@@ -223,29 +160,15 @@ class Compact:
         start_index: int,
         end_index: int,
     ) -> List[int]:
-        """Find valid cut points in entries."""
+        """Find valid cut points — never cut at tool results."""
         cut_points: List[int] = []
-
         for i in range(start_index, end_index):
             entry = entries[i]
-
-            if entry.type in (
-                SessionEntryType.THINKING_LEVEL_CHANGE,
-                SessionEntryType.MODEL_CHANGE,
-                SessionEntryType.LABEL,
-                SessionEntryType.SESSION_INFO,
-                SessionEntryType.CUSTOM_INFO,
-                SessionEntryType.COMPACTION_SUMMARY,
-            ):
-                continue
-
-            if entry.type in (
-                SessionEntryType.LLM,
-                SessionEntryType.CUSTOM,
-                SessionEntryType.BRANCH_SUMMARY,
-            ):
+            if entry.type == SessionEntryType.LLM and isinstance(entry, LLMMessageEntry):
+                if entry.message.role != Role.TOOL:
+                    cut_points.append(i)
+            elif entry.type in (SessionEntryType.BRANCH_SUMMARY, SessionEntryType.CUSTOM):
                 cut_points.append(i)
-
         return cut_points
 
     def _find_turn_start_index(
@@ -257,17 +180,11 @@ class Compact:
         """Find the user message that starts the turn containing the given entry."""
         for i in range(entry_index, start_index - 1, -1):
             entry = entries[i]
-
             if entry.type in (SessionEntryType.BRANCH_SUMMARY, SessionEntryType.CUSTOM):
                 return i
-
             if entry.type == SessionEntryType.LLM and isinstance(entry, LLMMessageEntry):
-                if hasattr(entry.message, "role"):
-                    from program.message.types import Role
-
-                    if entry.message.role == Role.USER:
-                        return i
-
+                if entry.message.role == Role.USER:
+                    return i
         return -1
 
     def find_cut_point(
@@ -277,90 +194,116 @@ class Compact:
         end_index: int,
         keep_recent_tokens: Optional[int] = None,
     ) -> CutPointResult:
-        """Find the cut point for compaction.
-
-        Args:
-            entries: Session entries to analyze
-            start_index: Start of search range (inclusive)
-            end_index: End of search range (exclusive)
-            keep_recent_tokens: Target tokens to keep (uses settings if None)
-
-        Returns:
-            CutPointResult with cut point details
-        """
+        """Find the cut point that keeps approximately `keep_recent_tokens`."""
         if keep_recent_tokens is None:
             keep_recent_tokens = self.settings.keep_recent_tokens
 
         cut_points = self._find_valid_cut_points(entries, start_index, end_index)
-
         if not cut_points:
-            return CutPointResult(
-                first_kept_entry_index=start_index,
-                turn_start_index=-1,
-                is_split_turn=False,
-            )
+            return CutPointResult(first_kept_entry_index=start_index)
 
-        accumulated_tokens = 0
+        accumulated = 0
         cut_index = cut_points[0]
 
         for i in range(end_index - 1, start_index - 1, -1):
             entry = entries[i]
-
-            if entry.type != SessionEntryType.LLM:
+            if entry.type == SessionEntryType.LLM and isinstance(entry, LLMMessageEntry):
+                accumulated += self.estimate_message_tokens(entry.message)
+            elif isinstance(entry, BranchSummaryEntry):
+                accumulated += max(1, len(entry.summary) // 4)
+            elif isinstance(entry, CustomMessageEntry) and isinstance(entry.content, str):
+                accumulated += max(1, len(entry.content) // 4)
+            else:
                 continue
-
-            if isinstance(entry, LLMMessageEntry):
-                message_tokens = self.estimate_message_tokens(entry.message)
-                accumulated_tokens += message_tokens
-
-                if accumulated_tokens >= keep_recent_tokens:
-                    for c in cut_points:
-                        if c >= i:
-                            cut_index = c
-                            break
-                    break
-
-        while cut_index > start_index:
-            prev_entry = entries[cut_index - 1]
-            if prev_entry.type == SessionEntryType.COMPACTION_SUMMARY:
+            if accumulated >= keep_recent_tokens:
+                for c in cut_points:
+                    if c >= i:
+                        cut_index = c
+                        break
                 break
-            if prev_entry.type == SessionEntryType.LLM:
+
+        # Pull cut_index back to include preceding non-message entries
+        while cut_index > start_index:
+            prev = entries[cut_index - 1]
+            if prev.type == SessionEntryType.COMPACTION_SUMMARY:
+                break
+            if prev.type == SessionEntryType.LLM:
                 break
             cut_index -= 1
 
         cut_entry = entries[cut_index]
-        is_user_message = (
+        is_user = (
             cut_entry.type == SessionEntryType.LLM
             and isinstance(cut_entry, LLMMessageEntry)
-            and hasattr(cut_entry.message, "role")
+            and cut_entry.message.role == Role.USER
         )
-
-        if is_user_message:
-            from program.message.types import Role
-
-            is_user_message = cut_entry.message.role == Role.USER
-
-        turn_start_index = (
-            -1
-            if is_user_message
-            else self._find_turn_start_index(entries, cut_index, start_index)
-        )
+        turn_start = -1 if is_user else self._find_turn_start_index(entries, cut_index, start_index)
 
         return CutPointResult(
             first_kept_entry_index=cut_index,
-            turn_start_index=turn_start_index,
-            is_split_turn=not is_user_message and turn_start_index != -1,
+            turn_start_index=turn_start,
+            is_split_turn=not is_user and turn_start != -1,
         )
 
+    # -------------------------------------------------------------------------
+    # Message extraction helpers
+    # -------------------------------------------------------------------------
+
+    def _entry_to_message(self, entry: SessionEntry, skip_compaction: bool = False) -> Optional[LLMMessage]:
+        """Convert a session entry to an LLM message for summarization."""
+        if skip_compaction and entry.type == SessionEntryType.COMPACTION_SUMMARY:
+            return None
+        if isinstance(entry, LLMMessageEntry):
+            return entry.message
+        if isinstance(entry, CustomMessageEntry):
+            msg = UserMessage()
+            content = entry.content
+            msg.contents = [TextContent(content=content if isinstance(content, str) else "")]
+            return msg
+        if isinstance(entry, BranchSummaryEntry) and entry.summary:
+            msg = UserMessage()
+            msg.contents = [TextContent(content=entry.summary)]
+            return msg
+        if isinstance(entry, CompactionSummaryEntry) and not skip_compaction and entry.summary:
+            msg = UserMessage()
+            msg.contents = [TextContent(content=entry.summary)]
+            return msg
+        return None
+
+    # -------------------------------------------------------------------------
+    # File operation extraction
+    # -------------------------------------------------------------------------
+
+    def _extract_file_operations(
+        self,
+        messages: List[LLMMessage],
+        entries: List[SessionEntry],
+        prev_compaction_index: int,
+    ) -> FileOperations:
+        """Build FileOperations, seeding from previous compaction details."""
+        file_ops = create_file_ops()
+
+        if prev_compaction_index >= 0:
+            prev = entries[prev_compaction_index]
+            if isinstance(prev, CompactionSummaryEntry) and not getattr(prev, "from_hook", False):
+                details = prev.details
+                if isinstance(details, dict):
+                    for f in details.get("read_files", []):
+                        file_ops.read.add(f)
+                    for f in details.get("modified_files", []):
+                        file_ops.edited.add(f)
+
+        for msg in messages:
+            extract_file_ops_from_message(msg, file_ops)
+
+        return file_ops
+
+    # -------------------------------------------------------------------------
+    # Preparation
+    # -------------------------------------------------------------------------
+
     def prepare(self, entries: Optional[List[SessionEntry]] = None) -> Optional[CompactionPreparation]:
-        """Prepare compaction data from session entries.
-
-        Args:
-            entries: Session entries (uses manager entries if None)
-
-        Returns:
-            CompactionPreparation with message lists and metadata, or None if not needed
-        """
+        """Prepare compaction data from session entries."""
         if entries is None:
             entries = self.manager.get_entries()
 
@@ -375,61 +318,45 @@ class Compact:
 
         previous_summary: Optional[str] = None
         boundary_start = 0
-
         if prev_compaction_index >= 0:
-            prev_compaction = entries[prev_compaction_index]
-            if isinstance(prev_compaction, CompactionSummaryEntry):
-                previous_summary = prev_compaction.summary
-                first_kept_id = prev_compaction.first_kept_entry_id
-                first_kept_index = next(
-                    (i for i, e in enumerate(entries) if e.id == first_kept_id),
-                    prev_compaction_index + 1,
-                )
-                boundary_start = first_kept_index
+            prev = entries[prev_compaction_index]
+            if isinstance(prev, CompactionSummaryEntry):
+                previous_summary = prev.summary
+                first_kept_id = prev.first_kept_entry_id
+                idx = next((i for i, e in enumerate(entries) if e.id == first_kept_id), prev_compaction_index + 1)
+                boundary_start = idx
 
-        boundary_end = len(entries)
+        context = self.manager.build_session_context()
+        tokens_before = self.estimate_context_tokens(context.messages).tokens
 
-        tokens_before = self.estimate_context_tokens(
-            [e.message if isinstance(e, LLMMessageEntry) else None for e in entries]
-        )
-
-        cut_point = self.find_cut_point(entries, boundary_start, boundary_end)
+        cut_point = self.find_cut_point(entries, boundary_start, len(entries))
 
         first_kept_entry = entries[cut_point.first_kept_entry_index]
-        first_kept_entry_id = first_kept_entry.id
+        if not first_kept_entry.id:
+            return None
 
-        history_end = (
-            cut_point.turn_start_index
-            if cut_point.is_split_turn
-            else cut_point.first_kept_entry_index
-        )
+        history_end = cut_point.turn_start_index if cut_point.is_split_turn else cut_point.first_kept_entry_index
 
-        messages_to_summarize = [
-            e.message
-            for e in entries[boundary_start:history_end]
-            if isinstance(e, LLMMessageEntry)
-        ]
+        messages_to_summarize: List[LLMMessage] = []
+        for e in entries[boundary_start:history_end]:
+            msg = self._entry_to_message(e, skip_compaction=True)
+            if msg:
+                messages_to_summarize.append(msg)
 
-        turn_prefix_messages = []
+        turn_prefix_messages: List[LLMMessage] = []
         if cut_point.is_split_turn:
-            turn_prefix_messages = [
-                e.message
-                for e in entries[cut_point.turn_start_index : cut_point.first_kept_entry_index]
-                if isinstance(e, LLMMessageEntry)
-            ]
+            for e in entries[cut_point.turn_start_index:cut_point.first_kept_entry_index]:
+                msg = self._entry_to_message(e, skip_compaction=True)
+                if msg:
+                    turn_prefix_messages.append(msg)
 
-        file_ops = create_file_ops()
-
-        # Extract file operations from messages to be summarized
-        for message in messages_to_summarize:
-            extract_file_ops_from_message(message, file_ops)
-
-        # Extract from turn prefix if present
-        for message in turn_prefix_messages:
-            extract_file_ops_from_message(message, file_ops)
+        file_ops = self._extract_file_operations(messages_to_summarize, entries, prev_compaction_index)
+        if cut_point.is_split_turn:
+            for msg in turn_prefix_messages:
+                extract_file_ops_from_message(msg, file_ops)
 
         return CompactionPreparation(
-            first_kept_entry_id=first_kept_entry_id,
+            first_kept_entry_id=first_kept_entry.id,
             messages_to_summarize=messages_to_summarize,
             turn_prefix_messages=turn_prefix_messages,
             is_split_turn=cut_point.is_split_turn,
@@ -439,61 +366,155 @@ class Compact:
             settings=self.settings,
         )
 
-    async def execute(self, preparation: Optional[CompactionPreparation] = None) -> Optional[str]:
-        """Perform session compaction.
+    # -------------------------------------------------------------------------
+    # LLM summarization
+    # -------------------------------------------------------------------------
 
-        Args:
-            preparation: Pre-calculated preparation (None to auto-prepare)
+    async def generate_summary(
+        self,
+        messages: List[LLMMessage],
+        llm: LLM,
+        custom_instructions: Optional[str] = None,
+        previous_summary: Optional[str] = None,
+    ) -> str:
+        """Generate a summary of the conversation using the LLM."""
+        from program.llm.types import TextEndEvent, ErrorEvent, StopReason
 
-        Returns:
-            ID of the created compaction entry, or None if compaction not needed
-        """
+        base_prompt = UPDATE_SUMMARIZATION_PROMPT if previous_summary else SUMMARIZATION_PROMPT
+        if custom_instructions:
+            base_prompt = f"{base_prompt}\n\nAdditional focus: {custom_instructions}"
+
+        conversation_text = serialize_conversation(messages)
+        prompt_parts = [f"<conversation>\n{conversation_text}\n</conversation>"]
+        if previous_summary:
+            prompt_parts.append(f"<previous-summary>\n{previous_summary}\n</previous-summary>")
+        prompt_parts.append(base_prompt)
+        prompt_text = "\n\n".join(prompt_parts)
+
+        system_msg = SystemMessage(contents=[TextContent(content=SUMMARIZATION_SYSTEM_PROMPT)])
+        user_msg = UserMessage(contents=[TextContent(content=prompt_text)])
+
+        messages=[system_msg, user_msg]
+
+        events = await llm.invoke(messages)
+
+        text_parts: List[str] = []
+        error = ""
+        stop_reason = StopReason.Stop
+        for event in events:
+            if isinstance(event, TextEndEvent):
+                text_parts.append(event.text.content)
+            elif isinstance(event, ErrorEvent):
+                stop_reason = event.reason
+                error = event.error
+
+        if stop_reason == StopReason.Error:
+            raise RuntimeError(f"Summarization failed: {error}")
+
+        return "".join(text_parts)
+
+    async def _generate_turn_prefix_summary(
+        self,
+        messages: List[LLMMessage],
+        llm: LLM,
+    ) -> str:
+        """Generate a summary for the prefix of a split turn."""
+        from program.llm.types import TextEndEvent, ErrorEvent, StopReason
+
+        conversation_text = serialize_conversation(messages)
+        prompt_text = f"<conversation>\n{conversation_text}\n</conversation>\n\n{TURN_PREFIX_SUMMARIZATION_PROMPT}"
+
+        system_msg = SystemMessage(contents=[TextContent(content=SUMMARIZATION_SYSTEM_PROMPT)])
+        user_msg = UserMessage(contents=[TextContent(content=prompt_text)])
+
+        messages=[system_msg, user_msg]
+
+        events = await llm.invoke(messages)
+
+        text_parts: List[str] = []
+        error = ""
+        stop_reason = StopReason.Stop
+        for event in events:
+            if isinstance(event, TextEndEvent):
+                text_parts.append(event.text.content)
+            elif isinstance(event, ErrorEvent):
+                stop_reason = event.reason
+                error = event.error
+
+        if stop_reason == StopReason.Error:
+            raise RuntimeError(f"Turn prefix summarization failed: {error}")
+
+        return "".join(text_parts)
+
+    def _generate_basic_summary(self, preparation: CompactionPreparation) -> str:
+        """Fallback summary when no LLM is available."""
+        sections = []
+        if preparation.previous_summary:
+            sections.append(f"## Previous Summary\n{preparation.previous_summary}")
+        sections.append(f"## Compacted Messages\n- Summarized {len(preparation.messages_to_summarize)} messages")
+        if preparation.is_split_turn:
+            sections.append(f"## Split Turn Context\n- Prefix messages: {len(preparation.turn_prefix_messages)}")
+        return "\n\n".join(sections)
+
+    # -------------------------------------------------------------------------
+    # Execution
+    # -------------------------------------------------------------------------
+
+    async def execute(
+        self,
+        preparation: Optional[CompactionPreparation] = None,
+        llm: Optional[LLM] = None,
+        custom_instructions: Optional[str] = None,
+    ) -> Optional[str]:
+        """Perform session compaction, returning the new entry id or None."""
         if preparation is None:
             preparation = self.prepare()
             if preparation is None:
                 return None
 
-        summary = self._generate_basic_summary(preparation)
+        llm = llm or self.llm
 
-        if preparation.file_ops:
-            files_dict = compute_file_lists(preparation.file_ops)
-            file_ops_str = format_file_operations(
-                files_dict["read_files"],
-                files_dict["modified_files"],
+        if llm and preparation.is_split_turn and preparation.turn_prefix_messages:
+            import asyncio
+            if preparation.messages_to_summarize:
+                history_summary, prefix_summary = await asyncio.gather(
+                    self.generate_summary(
+                        preparation.messages_to_summarize, llm,
+                        custom_instructions, preparation.previous_summary,
+                    ),
+                    self._generate_turn_prefix_summary(
+                        preparation.turn_prefix_messages, llm
+                    ),
+                )
+            else:
+                history_summary = "No prior history."
+                prefix_summary = await self._generate_turn_prefix_summary(
+                    preparation.turn_prefix_messages, llm
+                )
+            summary = f"{history_summary}\n\n---\n\n**Turn Context (split turn):**\n\n{prefix_summary}"
+        elif llm:
+            summary = await self.generate_summary(
+                preparation.messages_to_summarize, llm,
+                custom_instructions, preparation.previous_summary,
             )
-            summary += file_ops_str
+        else:
+            summary = self._generate_basic_summary(preparation)
 
-        entry_id = generate_id(set(self.manager.by_id.keys()))
-        timestamp = datetime.now().isoformat()
+        files_dict = compute_file_lists(preparation.file_ops or create_file_ops())
+        summary += format_file_operations(files_dict["read_files"], files_dict["modified_files"])
 
-        compaction_entry = CompactionSummaryEntry(
-            id=entry_id,
+        entry = CompactionSummaryEntry(
+            id=generate_id(set(self.manager.by_id.keys())),
             parent_id=self.manager.leaf_id,
-            timestamp=timestamp,
+            timestamp=datetime.now().isoformat(),
             summary=summary,
             first_kept_entry_id=preparation.first_kept_entry_id,
             tokens_before=preparation.tokens_before,
             details={
-                "read_files": [],
-                "modified_files": [],
+                "read_files": files_dict["read_files"],
+                "modified_files": files_dict["modified_files"],
             },
         )
 
-        self.manager._append_entry(compaction_entry)
-        return entry_id
-
-    def _generate_basic_summary(self, preparation: CompactionPreparation) -> str:
-        """Generate a basic summary from preparation data."""
-        sections = []
-
-        if preparation.previous_summary:
-            sections.append(f"## Previous Summary\n{preparation.previous_summary}")
-
-        message_count = len(preparation.messages_to_summarize)
-        sections.append(f"## Compacted Messages\n- Summarized {message_count} messages")
-
-        if preparation.is_split_turn:
-            prefix_count = len(preparation.turn_prefix_messages)
-            sections.append(f"## Split Turn Context\n- Prefix messages: {prefix_count}")
-
-        return "\n\n".join(sections)
+        self.manager._append_entry(entry)
+        return entry.id
