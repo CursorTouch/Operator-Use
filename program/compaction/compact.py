@@ -19,6 +19,7 @@ from program.compaction.types import (
 from program.compaction.utils import (
     create_file_ops, compute_file_lists, format_file_operations,
     extract_file_ops_from_message, should_compact, serialize_conversation,
+    _get_assistant_usage, calculate_context_tokens, get_last_assistant_usage,
 )
 
 if TYPE_CHECKING:
@@ -35,39 +36,7 @@ from program.compaction.prompts import (
 
 
 # ============================================================================
-# Token calculation helpers
-# ============================================================================
-
-def _get_assistant_usage(message: LLMMessage) -> Optional[Usage]:
-    """Return usage from an assistant message, skipping aborted/errored ones."""
-    from program.llm.types import StopReason
-    if not isinstance(message, AssistantMessage):
-        return None
-    if message.stop_reason in (StopReason.Abort, StopReason.Error):
-        return None
-    usage = message.usage
-    if not usage or usage.input_tokens == 0:
-        return None
-    return usage
-
-
-def calculate_context_tokens(usage: Usage) -> int:
-    """Sum all token components from a Usage object."""
-    return usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens
-
-
-def get_last_assistant_usage(entries: List[SessionEntry]) -> Optional[Usage]:
-    """Find usage from the last non-aborted assistant message in session entries."""
-    for entry in reversed(entries):
-        if isinstance(entry, LLMMessageEntry):
-            usage = _get_assistant_usage(entry.message)
-            if usage:
-                return usage
-    return None
-
-
-# ============================================================================
-# Compact Service Class
+# Compact Class
 # ============================================================================
 
 class Compact:
@@ -110,9 +79,6 @@ class Compact:
             for block in contents:
                 if isinstance(block, ToolResultContent):
                     chars += len(block.content)
-                    # Rough image estimate if metadata suggests image content
-                    if block.metadata.get("has_image"):
-                        chars += 4800
 
         return max(1, chars // 4)
 

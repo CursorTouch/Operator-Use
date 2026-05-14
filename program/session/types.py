@@ -6,6 +6,7 @@ from program.message.types import LLMMessage
 from program.llm.types import ThinkingLevel
 from pathlib import Path
 
+
 class SessionEntryType(str, Enum):
     SESSION_HEADER = "session_header"
     LLM = "llm"
@@ -57,6 +58,7 @@ class CompactionSummaryEntry(BaseSessionEntry):
     first_kept_entry_id: str
     tokens_before: int
     details: Optional[Any] = None
+    from_hook: bool = False
 
 @dataclass
 class BranchSummaryEntry(BaseSessionEntry):
@@ -64,6 +66,7 @@ class BranchSummaryEntry(BaseSessionEntry):
     from_id: str
     summary: str
     details: Optional[Any] = None
+    from_hook: bool = False
 
 @dataclass
 class LabelEntry(BaseSessionEntry):
@@ -103,7 +106,7 @@ class SessionTreeNode:
 class SessionContext:
     """Context built from session entries for sending to LLM"""
     messages: List[LLMMessage]
-    thinking_level: str
+    thinking_level: Optional[ThinkingLevel] = None
     model: Optional[Dict[str, str]] = None
 
 SessionEntry = (

@@ -7,7 +7,7 @@ from program.session.types import SessionEntry, LLMMessageEntry
 from program.tool.types import ToolKind
 
 if TYPE_CHECKING:
-    from program.message.types import LLMMessage, AssistantMessage
+    from program.message.types import LLMMessage, AssistantMessage, Usage
 
 
 def create_file_ops() -> FileOperations:
@@ -149,92 +149,33 @@ def get_message_from_entry_for_compaction(entry: SessionEntry) -> Optional[LLMMe
     return get_message_from_entry(entry)
 
 
-def get_assistant_usage(message: AssistantMessage) -> ContextUsageEstimate:
-    """Extract usage information from an assistant message.
-
-    Args:
-        message: LLM message (typically an AssistantMessage)
-
-    Returns:
-        ContextUsageEstimate with token counts from the message
-    """
-    if not message.usage:
-        return ContextUsageEstimate()
-
+def _get_assistant_usage(message: LLMMessage) -> Optional[Usage]:
+    """Return usage from an assistant message, skipping aborted/errored ones."""
+    from program.llm.types import StopReason
+    from program.message.types import AssistantMessage as _AssistantMessage
+    if not isinstance(message, _AssistantMessage):
+        return None
+    if message.stop_reason in (StopReason.Abort, StopReason.Error):
+        return None
     usage = message.usage
-    total = (
-        usage.input_tokens
-        + usage.output_tokens
-        + usage.cache_read_tokens
-        + usage.cache_write_tokens
-    )
-
-    return ContextUsageEstimate(
-        tokens=total,
-        usage_tokens=total,
-        trailing_tokens=0,
-    )
+    if not usage or usage.input_tokens == 0:
+        return None
+    return usage
 
 
-def get_last_assistant_usage(messages: List[LLMMessage]) -> ContextUsageEstimate:
-    """Get usage information from the last assistant message in a list.
-
-    Args:
-        messages: List of LLM messages
-
-    Returns:
-        ContextUsageEstimate from the last assistant message, or empty if none found
-    """
-    for message in reversed(messages):
-        if hasattr(message, "role"):
-            from program.message.types import Role
-
-            if message.role == Role.ASSISTANT:
-                return get_assistant_usage(message)
-
-    return ContextUsageEstimate()
+def calculate_context_tokens(usage: Usage) -> int:
+    """Sum all token components from a Usage object."""
+    return usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens
 
 
-def get_last_assistant_usage_info(messages: List[LLMMessage]) -> str:
-    """Format last assistant message's usage as a readable string.
-
-    Args:
-        messages: List of LLM messages
-
-    Returns:
-        Formatted usage string, or empty string if no assistant message found
-    """
-    usage = get_last_assistant_usage(messages)
-
-    if usage.tokens == 0:
-        return ""
-
-    parts = [f"Total: {usage.tokens}"]
-    if usage.usage_tokens:
-        parts.append(f"Usage: {usage.usage_tokens}")
-    if usage.trailing_tokens:
-        parts.append(f"Trailing: {usage.trailing_tokens}")
-
-    return f"[{', '.join(parts)}]"
-
-
-def calculate_context_tokens(messages: List[LLMMessage]) -> int:
-    """Calculate actual context tokens from message usage data.
-
-    Sums the input tokens from all assistant messages, providing actual
-    token counts from the LLM rather than estimates.
-
-    Args:
-        messages: List of LLM messages
-
-    Returns:
-        Total input tokens from all assistant messages
-    """
-    total = 0
-    for message in messages:
-        if hasattr(message, "usage"):
-            total += message.usage.input_tokens
-    return total
+def get_last_assistant_usage(entries: List[SessionEntry]) -> Optional[Usage]:
+    """Find usage from the last non-aborted assistant message in session entries."""
+    for entry in reversed(entries):
+        if isinstance(entry, LLMMessageEntry):
+            usage = _get_assistant_usage(entry.message)
+            if usage:
+                return usage
+    return None
 
 
 def should_compact(

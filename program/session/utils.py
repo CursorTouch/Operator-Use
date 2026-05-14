@@ -10,7 +10,7 @@ if TYPE_CHECKING:
         SessionEntry, FileEntry, SessionHeader, LLMMessageEntry,
         ThinkingLevelChangeEntry, ModelChangeEntry, CompactionSummaryEntry,
         BranchSummaryEntry, LabelEntry, SessionInfoEntry, CustomInfoEntry,
-        CustomMessageEntry
+        CustomMessageEntry, SessionContext
     )
     from program.message.types import LLMMessage
 
@@ -38,18 +38,19 @@ def generate_id(existing_ids: Set[str]) -> str:
 
 def get_latest_compaction_entry(entries: List[SessionEntry]) -> Optional[Any]:
     """Get the most recent compaction entry from a list of entries."""
-    from program.session.types import SessionEntryType, CompactionEntry
+    from program.session.types import SessionEntryType, CompactionSummaryEntry
 
     for entry in reversed(entries):
-        if entry.type == SessionEntryType.COMPACTION and isinstance(entry, CompactionEntry):
+        if entry.type == SessionEntryType.COMPACTION_SUMMARY and isinstance(entry, CompactionSummaryEntry):
             return entry
     return None
 
 
 def get_default_session_dir(cwd: str) -> str:
     """Compute the default session directory for a cwd."""
-    safe_path = f"--{cwd.replace('/', '-').replace(chr(92), '-').replace(':', '-')}--"
-    session_dir = Path.home() / ".claude" / "sessions" / safe_path
+    from program.settings.paths import get_config_dir
+    safe_path = f"--{cwd.lstrip('/').lstrip(chr(92)).replace('/', '-').replace(chr(92), '-').replace(':', '-')}--"
+    session_dir = get_config_dir(None) / "sessions" / safe_path
     session_dir.mkdir(parents=True, exist_ok=True)
     return str(session_dir)
 
@@ -147,32 +148,29 @@ def find_most_recent_session_path(session_path: str) -> Optional[str]:
         return None
 
 
-def is_message_with_contents(message: LLMMessage) -> bool:
-    """Check if a message has text content."""
-    return hasattr(message, "role") and hasattr(message, "contents") and len(message.contents) > 0
-
+def is_message_with_content(message: LLMMessage) -> bool:
+    """Check if a message has content."""
+    return len(message.contents) > 0
 
 def extract_text_content(message: LLMMessage) -> str:
     """Extract text content from a message."""
-    if not hasattr(message, "contents"):
-        return ""
 
     from program.message.types import TextContent, ThinkingContent
 
     text_parts = []
-    for content_block in message.contents:
-        if isinstance(content_block, TextContent):
-            text_parts.append(content_block.content)
-        elif isinstance(content_block, ThinkingContent):
-            text_parts.append(content_block.content)
+    for content in message.contents:
+        match content:
+            case TextContent(content=content):
+                text_parts.append(content)
+            case ThinkingContent(content=content):
+                text_parts.append(content)
 
     return " ".join(text_parts)
-
 
 def get_last_activity_time(entries: List[FileEntry]) -> Optional[float]:
     """Get the timestamp of the last user/assistant message."""
     from program.session.types import SessionEntryType, LLMMessageEntry
-    from program.message.types import Role
+    from program.message.types import Role, AssistantMessage
 
     last_time: Optional[float] = None
 
@@ -184,14 +182,14 @@ def get_last_activity_time(entries: List[FileEntry]) -> Optional[float]:
             continue
 
         message = entry.message
-        if not is_message_with_contents(message):
+        if not is_message_with_content(message):
             continue
 
         if message.role not in (Role.USER, Role.ASSISTANT):
             continue
 
-        if hasattr(message, "timestamp") and isinstance(message.timestamp, (int, float)):
-            last_time = max(last_time or 0, message.timestamp)
+        if isinstance(message, AssistantMessage) and isinstance(entry.timestamp, (int, float)):
+            last_time = max(last_time or 0, entry.timestamp)
             continue
 
         try:
@@ -268,15 +266,15 @@ def build_session_info(file_path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def list_sessions_from_path(
-    session_path: str,
+def list_sessions_from_dir(
+    session_dir: str,
     on_progress: Optional[SessionListProgress] = None,
     progress_offset: int = 0,
-    progress_total: Optional[int] = None
+    progress_total: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """List all sessions in a directory."""
     sessions: List[Dict[str, Any]] = []
-    path = Path(session_path)
+    path = Path(session_dir)
 
     if not path.exists():
         return sessions
@@ -298,3 +296,127 @@ def list_sessions_from_path(
         pass
 
     return sessions
+
+
+def list_all_sessions(
+    on_progress: Optional[SessionListProgress] = None,
+) -> List[Dict[str, Any]]:
+    """List all sessions across all project directories."""
+    from program.settings.paths import get_config_dir
+
+    sessions_root = get_config_dir(None) / "sessions"
+    if not sessions_root.exists():
+        return []
+
+    try:
+        subdirs = [d for d in sessions_root.iterdir() if d.is_dir()]
+    except Exception:
+        return []
+
+    all_files: List[Path] = []
+    for subdir in subdirs:
+        try:
+            all_files.extend(subdir.glob("*.jsonl"))
+        except Exception:
+            pass
+
+    total = len(all_files)
+    loaded = 0
+    sessions: List[Dict[str, Any]] = []
+
+    for file_path in all_files:
+        info = build_session_info(str(file_path))
+        loaded += 1
+        if on_progress:
+            on_progress(loaded, total)
+        if info:
+            sessions.append(info)
+
+    sessions.sort(key=lambda s: s["modified"], reverse=True)
+    return sessions
+
+
+def build_session_context(
+    entries: List[SessionEntry],
+    leaf_id: Optional[str] = None,
+    by_id: Optional[Dict[str, Any]] = None,
+) -> "SessionContext":
+    """Build LLM message context from session entries via tree traversal."""
+    from program.session.types import (
+        SessionContext, SessionEntryType, LLMMessageEntry,
+        CompactionSummaryEntry, BranchSummaryEntry, CustomMessageEntry,
+    )
+    from program.message.types import UserMessage, TextContent, Role
+    from program.llm.types import ThinkingLevel
+
+    if by_id is None:
+        by_id = {e.id: e for e in entries}
+
+    leaf = by_id.get(leaf_id) if leaf_id else (entries[-1] if entries else None)
+    if not leaf:
+        return SessionContext(messages=[], thinking_level=None)
+
+    # Walk from leaf to root
+    entries: List[SessionEntry] = []
+    current: Optional[SessionEntry] = leaf
+    while current:
+        entries.insert(0, current)
+        current = by_id.get(current.parent_id) if current.parent_id else None
+
+    # Collect last thinking_level, model, and compaction along the path
+    thinking_level: Optional[ThinkingLevel] = None
+    model: Optional[Dict[str, str]] = None
+    compaction: Optional[CompactionSummaryEntry] = None
+
+    for entry in entries:
+        match entry:
+            case ThinkingLevelChangeEntry(thinking_level=thinking_level):
+                thinking_level = thinking_level
+            case ModelChangeEntry(provider=provider, model_id=model_id):
+                model = {"provider": provider, "model_id": model_id}
+            case CompactionSummaryEntry() as compaction:
+                compaction = compaction
+
+    messages: List[LLMMessage] = []
+
+    def _user_msg(text: str) -> UserMessage:
+        msg = UserMessage()
+        msg.contents = [TextContent(content=text)]
+        return msg
+
+    def _emit(entry: SessionEntry) -> None:
+        match entry:
+            case LLMMessageEntry(message=message):
+                messages.append(message)
+            case CustomMessageEntry(content=content):
+                if isinstance(content, str):
+                    messages.append(_user_msg(content))
+                else:
+                    msg = UserMessage()
+                    msg.contents = list(content)
+                    messages.append(msg)
+            case BranchSummaryEntry(from_id=from_id, summary=summary):
+                messages.append(_user_msg(f"[Branch summary from {from_id}]\n\n{summary}"))
+
+    if compaction:
+        messages.append(_user_msg(
+            f"[Compacted conversation. {compaction.tokens_before} tokens before.]\n\n{compaction.summary}"
+        ))
+        comp_idx = next(
+            (i for i, e in enumerate(entries) if isinstance(e, CompactionSummaryEntry) and e.id == compaction.id),
+            -1,
+        )
+        found_first_kept = False
+        for i in range(comp_idx):
+            e = entries[i]
+            if e.id == compaction.first_kept_entry_id:
+                found_first_kept = True
+            if found_first_kept:
+                _emit(e)
+        for i in range(comp_idx + 1, len(entries)):
+            _emit(entries[i])
+    else:
+        for entry in entries:
+            _emit(entry)
+
+    return SessionContext(messages=messages, thinking_level=thinking_level, model=model)

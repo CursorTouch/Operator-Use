@@ -3,6 +3,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, List, Set, Any, Dict
+from program.message.types import LLMMessage
 from enum import Enum
 
 
@@ -23,11 +24,10 @@ class FileOperations:
 @dataclass
 class ContextUsageEstimate:
     """Estimated token usage for context."""
-    input_tokens: int = 0
-    output_tokens: int = 0
-    cache_read_tokens: int = 0
-    cache_write_tokens: int = 0
-    total_tokens: int = 0
+    tokens: int = 0
+    usage_tokens: int = 0
+    trailing_tokens: int = 0
+    last_usage_index: Optional[int] = None
 
 
 @dataclass
@@ -50,8 +50,8 @@ class CutPointResult:
 class CompactionPreparation:
     """Prepared data for compaction before summarization."""
     first_kept_entry_id: str
-    messages_to_summarize: List[Any]
-    turn_prefix_messages: List[Any]
+    messages_to_summarize: List[LLMMessage]
+    turn_prefix_messages: List[LLMMessage]
     is_split_turn: bool
     tokens_before: int
     previous_summary: Optional[str] = None
