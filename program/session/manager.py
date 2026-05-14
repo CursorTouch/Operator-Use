@@ -11,7 +11,7 @@ from program.session.types import (
 from program.session.utils import (
     create_session_id, generate_id,
     get_default_session_dir, get_latest_compaction_entry,
-    load_entries_from_file, is_valid_session_file, find_most_recent_session_path,
+    load_entries_from_file, is_valid_session_file, find_most_recent_session_file,
     is_message_with_content, extract_text_content, get_last_activity_time,
     get_session_modified_date, build_session_info, list_sessions_from_dir,
     list_all_sessions, build_session_context, SessionListProgress,
@@ -37,7 +37,7 @@ class SessionManager:
         self.cwd: str = cwd
         self.session_dir: str = session_dir
         self.session_id: str = ""
-        self.session_path: Optional[str] = None  # specific JSONL file
+        self.session_file: Optional[str] = None  # specific JSONL file
         self.persist: bool = persist
         self.flushed: bool = False
         self.file_entries: List[FileEntry] = []
@@ -50,20 +50,20 @@ class SessionManager:
             Path(session_dir).mkdir(parents=True, exist_ok=True)
 
         if session_file:
-            self.set_session_path(session_file)
+            self.set_session_file(session_file)
         else:
             self.new_session()
 
-    def set_session_path(self, session_file: str) -> None:
+    def set_session_file(self, session_file: str) -> None:
         """Switch to a different session file (used for resume and branching)."""
-        self.session_path = str(Path(session_file).resolve())
-        if Path(self.session_path).exists():
-            self.file_entries = load_entries_from_file(self.session_path)
+        self.session_file = str(Path(session_file).resolve())
+        if Path(self.session_file).exists():
+            self.file_entries = load_entries_from_file(self.session_file)
 
             if not self.file_entries:
-                explicit = self.session_path
+                explicit = self.session_file
                 self.new_session()
-                self.session_path = explicit
+                self.session_file = explicit
                 self._rewrite_file()
                 self.flushed = True
                 return
@@ -74,9 +74,9 @@ class SessionManager:
             self._build_index()
             self.flushed = True
         else:
-            explicit = self.session_path
+            explicit = self.session_file
             self.new_session()
-            self.session_path = explicit
+            self.session_file = explicit
 
     def new_session(self) -> Optional[str]:
         """Create a new session, returning the new file path (or None for in-memory)."""
@@ -98,14 +98,15 @@ class SessionManager:
         self.label_timestamps_by_id = {}
         self.leaf_id = None
         self.flushed = False
+        self.session_file = None
 
         if self.persist and self.session_dir:
             file_timestamp = timestamp.replace(":", "-").replace(".", "-")
-            self.session_path = str(
+            self.session_file = str(
                 Path(self.session_dir) / f"{file_timestamp}_{self.session_id}.jsonl"
             )
 
-        return self.session_path
+        return self.session_file
 
     def get_session_name(self) -> Optional[str]:
         """Get the current session name from the latest session_info entry, if any."""
@@ -145,7 +146,7 @@ class SessionManager:
         self._persist(entry)
 
     def _persist(self, entry: SessionEntry) -> None:
-        if not self.persist or not self.session_path:
+        if not self.persist or not self.session_file:
             return
 
         has_assistant = any(
@@ -158,19 +159,19 @@ class SessionManager:
             return
 
         if not self.flushed:
-            path = Path(self.session_path)
+            path = Path(self.session_file)
             path.parent.mkdir(parents=True, exist_ok=True)
             content = "\n".join(json.dumps(asdict(e)) for e in self.file_entries) + "\n"
             path.write_text(content, encoding="utf-8")
             self.flushed = True
         else:
-            with open(self.session_path, "a", encoding="utf-8") as f:
+            with open(self.session_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(asdict(entry)) + "\n")
 
     def _rewrite_file(self) -> None:
-        if not self.persist or not self.session_path:
+        if not self.persist or not self.session_file:
             return
-        path = Path(self.session_path)
+        path = Path(self.session_file)
         path.parent.mkdir(parents=True, exist_ok=True)
         content = "\n".join(json.dumps(asdict(e)) for e in self.file_entries) + "\n"
         path.write_text(content, encoding="utf-8")
@@ -344,7 +345,7 @@ class SessionManager:
         return self.session_dir
 
     def get_session_file(self) -> Optional[str]:
-        return self.session_path
+        return self.session_file
 
     def get_cwd(self) -> str:
         return self.cwd
@@ -429,7 +430,7 @@ class SessionManager:
 
     def create_branched_session(self, leaf_id: str) -> Optional[str]:
         """Create a new session file containing only the path from root to the given leaf."""
-        previous_session_path = self.session_path
+        previous_session_file = self.session_file
         path = self.get_branch(leaf_id)
         if not path:
             raise ValueError(f"Entry {leaf_id} not found")
@@ -447,7 +448,7 @@ class SessionManager:
             timestamp=timestamp,
             parent_id=None,
             cwd=self.cwd,
-            parent_session_path=previous_session_path if self.persist else None,
+            parent_session_path=previous_session_file if self.persist else None,
         )
 
         # Collect labels for entries in the path
@@ -477,7 +478,7 @@ class SessionManager:
         self._build_index()
 
         if self.persist and self.session_dir:
-            self.session_path = str(
+            self.session_file = str(
                 Path(self.session_dir) / f"{file_timestamp}_{new_session_id}.jsonl"
             )
             has_assistant = any(
@@ -490,9 +491,9 @@ class SessionManager:
             else:
                 self.flushed = False
 
-            return self.session_path
+            return self.session_file
 
-        self.session_path = None
+        self.session_file = None
         return None
 
     # =========================================================================
@@ -518,11 +519,11 @@ class SessionManager:
     @staticmethod
     def continue_recent(cwd: str, session_dir: Optional[str] = None) -> "SessionManager":
         """Continue the most recent session, or create a new one if none exists."""
-        dir_ = session_dir or get_default_session_dir(cwd)
-        most_recent = find_most_recent_session_path(dir_)
+        session_dir = session_dir or get_default_session_dir(cwd)
+        most_recent = find_most_recent_session_file(session_dir)
         if most_recent:
-            return SessionManager(cwd, dir_, most_recent, True)
-        return SessionManager(cwd, dir_, None, True)
+            return SessionManager(cwd, session_dir, most_recent, True)
+        return SessionManager(cwd, session_dir, None, True)
 
     @staticmethod
     def in_memory(cwd: Optional[str] = None) -> "SessionManager":

@@ -127,10 +127,10 @@ def is_valid_session_file(session_file_path: str) -> bool:
         return False
 
 
-def find_most_recent_session_path(session_path: str) -> Optional[str]:
+def find_most_recent_session_file(session_dir: str) -> Optional[str]:
     """Find the most recently modified session file in a directory."""
     try:
-        path = Path(session_path)
+        path = Path(session_dir)
         if not path.exists():
             return None
 
@@ -345,6 +345,7 @@ def build_session_context(
     from program.session.types import (
         SessionContext, SessionEntryType, LLMMessageEntry,
         CompactionSummaryEntry, BranchSummaryEntry, CustomMessageEntry,
+        ThinkingLevelChangeEntry, ModelChangeEntry,
     )
     from program.message.types import UserMessage, TextContent, Role
     from program.llm.types import ThinkingLevel
