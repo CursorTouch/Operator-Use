@@ -26,6 +26,8 @@ class Model:
     context_window: int = 0
     input: list[Modality] = field(default_factory=list)
     output: list[Modality] = field(default_factory=list)
+    api: str | None = None
+    base_url: str | None = None
 
     def get_name(self) -> str:
         return self.name

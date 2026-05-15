@@ -29,9 +29,10 @@ class ImageLLM:
         if provider is None:
             raise ValueError(f"Image provider '{model.provider}' not found.")
 
-        api_class = self._apis.get(provider.api)
+        api_name = model.api or provider.api
+        api_class = self._apis.get(api_name)
         if api_class is None:
-            raise ValueError(f"Image API '{provider.api}' not found in registry.")
+            raise ValueError(f"Image API '{api_name}' not found in registry.")
 
         self.model = model
         self.provider = provider
@@ -41,7 +42,8 @@ class ImageLLM:
             or (options.api_key if options else None)
             or os.environ.get("OPENROUTER_API_KEY")
         )
-        base_opts = ImageOptions(api_key=resolved_key, base_url=provider.base_url)
+        base_url = model.base_url or provider.base_url
+        base_opts = ImageOptions(api_key=resolved_key, base_url=base_url)
         self.api = api_class(self._merge_options(base_opts, options))
 
     def _merge_options(self, base: ImageOptions, override: Optional[ImageOptions]) -> ImageOptions:

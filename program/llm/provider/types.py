@@ -52,6 +52,7 @@ class OAuthProvider(ABC):
 
 @dataclass
 class APIProvider:
+    id: str
     name: str
     api: Union[str, Type[BaseAPI]]
     options: Options

@@ -9,43 +9,35 @@ class ProviderRegistry:
         self._providers: dict[str, Provider] = {}
 
     def register(self, provider: Provider) -> None:
-        key = provider.id if isinstance(provider, OAuthProvider) else provider.name
-        self._providers[key] = provider
+        self._providers[provider.id] = provider
 
-    def is_using_oauth(self, name: str) -> bool:
-        if provider := self.get(name):
-            return provider.auth_type == AuthType.OAUTH
-        raise ValueError(f"Provider '{name}' not found.")
-
-    def unregister(self, name: str) -> None:
-        self._providers.pop(name, None)
-
-    def get_api_key(self):
-        pass
+    def unregister(self, provider_id: str) -> None:
+        self._providers.pop(provider_id, None)
 
     def list(self) -> list[Provider]:
         return list(self._providers.values())
 
-    def get(self, name: str) -> Provider | None:
-        return self._providers.get(name)
-    
-    def get_oauth_providers(self) -> list[OAuthProvider]:
-        return [p for p in self._providers.values() if p.auth_type==AuthType.OAUTH]
-    
-    def get_api_providers(self) -> list[APIProvider]:
-        return [p for p in self._providers.values() if p.auth_type==AuthType.API_KEY]
+    def get(self, provider_id: str) -> Provider | None:
+        return self._providers.get(provider_id)
 
-    def get_oauth_provider(self,provider:str)->OAuthProvider | None:
-        provider=self.get(provider)
-        if provider is None:
-            return None
-        return provider if provider.auth_type==AuthType.OAUTH else None
-    
-    def get_api_provider(self,provider:str) -> APIProvider | None:
-        provider=self.get(provider)
-        if provider is None:
-            return None
-        return provider if provider.auth_type==AuthType.API_KEY else None
+    def is_using_oauth(self, provider: str) -> bool:
+        if p := self.get(provider):
+            return p.auth_type == AuthType.OAUTH
+        raise ValueError(f"Provider '{provider}' not found.")
+
+    def get_oauth_providers(self) -> list[OAuthProvider]:
+        return [p for p in self._providers.values() if isinstance(p, OAuthProvider)]
+
+    def get_api_providers(self) -> list[APIProvider]:
+        return [p for p in self._providers.values() if isinstance(p, APIProvider)]
+
+    def get_oauth_provider(self, provider: str) -> OAuthProvider | None:
+        p = self.get(provider)
+        return p if isinstance(p, OAuthProvider) else None
+
+    def get_api_provider(self, provider: str) -> APIProvider | None:
+        p = self.get(provider)
+        return p if isinstance(p, APIProvider) else None
 
     def reset(self) -> None:
         self._providers.clear()

@@ -13,32 +13,38 @@ from program.llm.types import Options
 
 API_PROVIDERS: list[APIProvider] = [
     APIProvider(
-        name="openai",
+        id="openai",
+        name="OpenAI",
         api=OpenAIResponsesAPI,
         options=Options(),
     ),
     APIProvider(
-        name="anthropic",
+        id="anthropic",
+        name="Anthropic",
         api=AnthropicMessagesAPI,
         options=Options(),
     ),
     APIProvider(
-        name="google",
+        id="google",
+        name="Google",
         api=GeminiGenerateAPI,
         options=Options(),
     ),
     APIProvider(
-        name="nvidia",
+        id="nvidia",
+        name="NVIDIA",
         api=OpenAICompletionsAPI,
         options=Options(base_url="https://integrate.api.nvidia.com/v1"),
     ),
     APIProvider(
-        name="mistral",
+        id="mistral",
+        name="Mistral",
         api=MistralChatAPI,
         options=Options(),
     ),
     APIProvider(
-        name="ollama",
+        id="ollama",
+        name="Ollama",
         api=OllamaChatAPI,
         options=Options(base_url="http://localhost:11434"),
     ),

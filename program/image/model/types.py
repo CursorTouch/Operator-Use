@@ -13,3 +13,5 @@ class Model:
     cost: Cost = field(default_factory=Cost)
     input: list[Modality] = field(default_factory=list)
     output: list[Modality] = field(default_factory=list)
+    api: str | None = None
+    base_url: str | None = None

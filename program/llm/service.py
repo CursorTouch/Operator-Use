@@ -28,7 +28,7 @@ class LLM:
         provider: str | None = None,
         options: Options | None = None,
     ) -> None:
-        model = self._models.get(model_id)
+        model = self._models.get(model_id, provider=provider)
         if model is None:
             raise ValueError(f"Model '{model_id}' not found.")
 
@@ -39,14 +39,14 @@ class LLM:
 
         self.model = model
 
-        api_name_or_class = model.api if getattr(model, "api", None) else resolved_provider.api
+        api_name_or_class = model.api or resolved_provider.api
         api_class = api_name_or_class
         if isinstance(api_class, str):
             api_class = self._apis.get(api_class)
             if api_class is None:
                 raise ValueError(f"API '{api_name_or_class}' not found in registry.")
 
-        base_url_override = model.base_url if getattr(model, "base_url", None) else None
+        base_url_override = model.base_url
 
         if isinstance(resolved_provider, OAuthProvider):
             credential = self._auth_store.get(resolved_provider.id)
