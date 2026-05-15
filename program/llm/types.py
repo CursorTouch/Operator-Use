@@ -7,7 +7,8 @@ from program.llm.api.types import APIResponse
 import asyncio
 
 if TYPE_CHECKING:
-    from program.message.types import TextContent, ThinkingContent, ToolCallContent
+    from program.message.types import BaseMessage, TextContent, ThinkingContent, ToolCallContent
+    from program.tool.types import Tool
 
 
 class Transport(str, Enum):
@@ -95,6 +96,13 @@ class Options:
     signal: Optional[AbortSignal] = None
     on_payload: Optional[PayloadCallback] = None
     on_response: Optional[ResponseCallback] = None
+
+
+@dataclass
+class LLMContext:
+    messages: list["BaseMessage"]
+    tools: list["Tool"] = field(default_factory=list)
+    system_prompt: Optional[str] = None
 
 
 def _default_text_event_data():

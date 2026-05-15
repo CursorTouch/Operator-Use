@@ -9,6 +9,7 @@ from program.agent.types import (
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
 )
 from program.llm.types import (
+    LLMContext,
     ErrorEvent, EndEvent, TextDeltaEvent, TextEndEvent,
     ThinkingDeltaEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
 )
@@ -128,7 +129,7 @@ class Agent:
                     messages = self.options.transform_context(messages, signal)
 
                 await emit(MessageStartEvent(message=message))
-                async for event in self.llm.stream(messages, tools=self.tools):
+                async for event in self.llm.stream(LLMContext(messages=messages, tools=self.tools)):
                     match event:
                         case ToolCallEndEvent(tool_call=tool_call):
                             tool_calls.append(tool_call)
