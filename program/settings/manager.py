@@ -33,13 +33,13 @@ class SettingsManager:
         self._write_queue: Optional[asyncio.Task] = None  
         
     @staticmethod
-    def create(cwd: Path, agent_dir: Optional[Path] = None) -> 'SettingsManager':
+    def create(cwd: Path, agent_dir: Optional[Path] = None) -> SettingsManager:
         # Load settings from files in cwd (and optional agent_dir for project settings)
         storage = FileSettingsStorage(cwd, agent_dir)
         return SettingsManager.from_storage(storage)
 
     @staticmethod
-    def from_storage(storage: SettingsStorage) -> 'SettingsManager':
+    def from_storage(storage: SettingsStorage) -> SettingsManager:
         # Load both scopes independently; preserve load errors to gate future writes
         global_load = SettingsManager._try_load_from_storage(storage, "global")
         project_load = SettingsManager._try_load_from_storage(storage, "project")
@@ -52,7 +52,7 @@ class SettingsManager:
                                global_load[1], project_load[1], initial_errors)
 
     @staticmethod
-    def in_memory(settings: Dict = None) -> 'SettingsManager':
+    def in_memory(settings: Dict = None) -> SettingsManager:
         # Test helper: in-memory storage with optional seed data
         storage = InMemorySettingsStorage()
         settings_dict = settings or {}
