@@ -20,7 +20,7 @@ class LLM:
     _apis = APIRegistry.from_builtins()
     _models = ModelRegistry.from_builtin()
     _providers = ProviderRegistry.from_builtins()
-    _auth_store = AuthManager(_providers)
+    _auth_store = AuthManager.create(_providers)
 
     def __init__(
         self,

@@ -12,9 +12,11 @@ from program.compaction.types import (
     CompactionPreparation, CompactionResult, CompactionDetails,
     FileOperations,
 )
-from program.compaction.utils import (
+from program.compaction.prompts import (
     SUMMARIZATION_SYSTEM_PROMPT, SUMMARIZATION_PROMPT, UPDATE_SUMMARIZATION_PROMPT,
     TURN_PREFIX_SUMMARIZATION_PROMPT,
+)
+from program.compaction.utils import (
     estimate_context_tokens, find_cut_point,
     get_message_from_entry, get_message_from_entry_for_compaction,
     extract_file_ops_from_message, compute_file_lists, format_file_operations,

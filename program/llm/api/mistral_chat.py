@@ -2,10 +2,10 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from typing import Any
-from mistralai.client.sdk import Mistral
-from mistralai.client.models.thinkchunk import ThinkChunk
-from mistralai.client.models.textchunk import TextChunk
-from mistralai.client.types import UNSET_SENTINEL
+from mistralai import Mistral
+from mistralai.models.thinkchunk import ThinkChunk
+from mistralai.models.textchunk import TextChunk
+from mistralai.types import UNSET as UNSET_SENTINEL
 from program.llm.api.base import BaseAPI
 from program.llm.model.types import Model
 from program.llm.types import (
