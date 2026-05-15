@@ -102,16 +102,25 @@ class LLM:
             from program.llm.types import ErrorEvent, StopReason
             yield ErrorEvent(reason=StopReason.Error, error=str(e))
 
-    async def invoke(self, context: LLMContext) -> list[LLMEvent]:
+    async def invoke(
+        self,
+        context: LLMContext,
+        thinking_level: Optional['ThinkingLevel'] = None,
+    ) -> list[LLMEvent]:
+        from program.llm.types import ThinkingLevel
         api_key = await self._auth_store.get_api_key(self.provider_id)
         if api_key:
             self.api.options.api_key = api_key
 
-        messages = self._resolve_messages(context)
-        api_context = LLMContext(messages=messages, tools=context.tools)
-
+        original = self.api.options.thinking_level
+        if thinking_level is not None and thinking_level != ThinkingLevel.Off:
+            self.api.options.thinking_level = thinking_level
         try:
+            messages = self._resolve_messages(context)
+            api_context = LLMContext(messages=messages, tools=context.tools)
             return await self.api.invoke(api_context, model=self.model)
         except Exception as e:
             from program.llm.types import ErrorEvent, StopReason
             return [ErrorEvent(reason=StopReason.Error, error=str(e))]
+        finally:
+            self.api.options.thinking_level = original

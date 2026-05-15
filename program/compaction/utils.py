@@ -262,6 +262,56 @@ def find_cut_point(
 
 
 # ============================================================================
+# Prompt builders
+# ============================================================================
+
+def build_summary_prompt(
+    messages: list,
+    previous_summary: str | None,
+    custom_instructions: str | None,
+    summarization_prompt: str,
+    update_summarization_prompt: str,
+) -> str:
+    base = update_summarization_prompt if previous_summary else summarization_prompt
+    if custom_instructions:
+        base = f"{base}\n\nAdditional focus: {custom_instructions}"
+    conversation_text = serialize_conversation(messages)
+    prompt = f"<conversation>\n{conversation_text}\n</conversation>\n\n"
+    if previous_summary:
+        prompt += f"<previous-summary>\n{previous_summary}\n</previous-summary>\n\n"
+    return prompt + base
+
+
+def build_turn_prefix_prompt(messages: list, turn_prefix_prompt: str) -> str:
+    conversation_text = serialize_conversation(messages)
+    return f"<conversation>\n{conversation_text}\n</conversation>\n\n{turn_prefix_prompt}"
+
+
+# ============================================================================
+# LLM event helpers
+# ============================================================================
+
+def extract_text_from_events(events: list, error_label: str) -> str:
+    """Collect text from LLM events, raising RuntimeError on error stop reason."""
+    from program.llm.types import TextEndEvent, EndEvent, ErrorEvent, StopReason
+    text_parts: list[str] = []
+    stop_reason = StopReason.Stop
+    error = ""
+    for event in events:
+        match event:
+            case TextEndEvent():
+                text_parts.append(event.text.content)
+            case EndEvent():
+                stop_reason = event.reason
+            case ErrorEvent():
+                stop_reason = event.reason
+                error = event.error
+    if stop_reason == StopReason.Error:
+        raise RuntimeError(f"{error_label}: {error or 'Unknown error'}")
+    return "".join(text_parts)
+
+
+# ============================================================================
 # Compaction boundary helpers  (used by Compaction.prepare)
 # ============================================================================
 
