@@ -4,12 +4,33 @@ import io
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal, TYPE_CHECKING, Any, Optional
 from enum import Enum
 from PIL import Image
 
 from program.llm.types import StopReason
 from program.tool.types import ToolKind
+
+
+_PIL_MIME: dict[str, str] = {
+    "JPEG": "image/jpeg",
+    "PNG": "image/png",
+    "GIF": "image/gif",
+    "WEBP": "image/webp",
+}
+
+
+def _detect_mime(data: bytes) -> str:
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and len(data) >= 12 and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
 
 
 @dataclass
@@ -23,18 +44,37 @@ class ImageContent:
     type: Literal["image"] = field(default="image", init=False)
     images: list[str | Image.Image | bytes] = field(default_factory=list)
 
-    def to_base64(self) -> list[str]:
-        result = []
+    def to_base64(self) -> list[tuple[str, str]]:
+        """Returns (base64_data, mime_type) pairs. URL strings are passed through as-is."""
+        result: list[tuple[str, str]] = []
         for img in self.images:
             if isinstance(img, str):
-                result.append(img)
+                if img.startswith("http"):
+                    result.append((img, ""))
+                else:
+                    try:
+                        mime = _detect_mime(base64.b64decode(img[:16] + "=="))
+                    except Exception:
+                        mime = "image/png"
+                    result.append((img, mime))
             elif isinstance(img, Image.Image):
+                fmt = (img.format or "PNG").upper()
                 buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                result.append(base64.b64encode(buf.getvalue()).decode())
+                img.save(buf, format=fmt)
+                mime = _PIL_MIME.get(fmt, "image/png")
+                result.append((base64.b64encode(buf.getvalue()).decode(), mime))
             else:
-                result.append(base64.b64encode(img).decode())
+                mime = _detect_mime(img)
+                result.append((base64.b64encode(img).decode(), mime))
         return result
+
+    @classmethod
+    def from_file(cls, path: str | Path) -> ImageContent:
+        return cls(images=[Path(path).read_bytes()])
+
+    @classmethod
+    def from_url(cls, url: str) -> ImageContent:
+        return cls(images=[url])
 
 
 @dataclass

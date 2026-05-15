@@ -128,8 +128,8 @@ def _messages_to_contents(
                 if isinstance(item, TextContent):
                     parts.append({"text": item.content})
                 elif isinstance(item, ImageContent):
-                    for b64 in item.to_base64():
-                        parts.append({"inlineData": {"mimeType": "image/png", "data": b64}})
+                    for b64, mime in item.to_base64():
+                        parts.append({"inlineData": {"mimeType": mime or "image/png", "data": b64}})
             if parts:
                 raw.append({"role": "user", "parts": parts})
         elif isinstance(msg, AssistantMessage):

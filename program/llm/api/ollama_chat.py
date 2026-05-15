@@ -41,7 +41,7 @@ def _messages_to_ollama(messages: list[BaseMessage]) -> list[dict[str, Any]]:
                 if isinstance(item, TextContent):
                     text_parts.append(item.content)
                 elif isinstance(item, ImageContent):
-                    images.extend(item.to_base64())
+                    images.extend(b64 for b64, _ in item.to_base64())
             entry: dict[str, Any] = {"role": "user", "content": "\n".join(text_parts)}
             if images:
                 entry["images"] = images

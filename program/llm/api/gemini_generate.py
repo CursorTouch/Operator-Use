@@ -43,9 +43,9 @@ def _messages_to_gemini(
                 if isinstance(item, TextContent):
                     parts.append(genai_types.Part(text=item.content))
                 elif isinstance(item, ImageContent):
-                    for b64 in item.to_base64():
+                    for b64, mime in item.to_base64():
                         parts.append(genai_types.Part(
-                            inline_data=genai_types.Blob(mime_type="image/png", data=b64),
+                            inline_data=genai_types.Blob(mime_type=mime or "image/png", data=b64),
                         ))
             if parts:
                 contents.append(genai_types.Content(role="user", parts=parts))

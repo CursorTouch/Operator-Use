@@ -42,8 +42,8 @@ def _content_to_openai(content_items: list) -> list[dict[str, Any]]:
         if isinstance(item, TextContent):
             parts.append({"type": "input_text", "text": item.content})
         elif isinstance(item, ImageContent):
-            for b64 in item.to_base64():
-                url = b64 if b64.startswith("http") else f"data:image/png;base64,{b64}"
+            for b64, mime in item.to_base64():
+                url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
                 parts.append({"type": "input_image", "image_url": url})
         elif isinstance(item, ThinkingContent):
             parts.append({

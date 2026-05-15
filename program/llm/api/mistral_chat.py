@@ -39,8 +39,8 @@ def _user_content(content_items: list) -> str | list[dict[str, Any]]:
         if isinstance(item, TextContent):
             parts.append({"type": "text", "text": item.content})
         elif isinstance(item, ImageContent):
-            for b64 in item.to_base64():
-                url = b64 if b64.startswith("http") else f"data:image/png;base64,{b64}"
+            for b64, mime in item.to_base64():
+                url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
                 parts.append({"type": "image_url", "image_url": {"url": url}})
     if len(parts) == 1 and parts[0]["type"] == "text":
         return parts[0]["text"]

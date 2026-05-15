@@ -44,10 +44,10 @@ def _messages_to_anthropic(
                 if isinstance(item, TextContent):
                     parts.append({"type": "text", "text": item.content})
                 elif isinstance(item, ImageContent):
-                    for b64 in item.to_base64():
+                    for b64, mime in item.to_base64():
                         parts.append({
                             "type": "image",
-                            "source": {"type": "base64", "media_type": "image/png", "data": b64},
+                            "source": {"type": "base64", "media_type": mime or "image/png", "data": b64},
                         })
             result.append({"role": "user", "content": parts})
         elif isinstance(msg, AssistantMessage):
