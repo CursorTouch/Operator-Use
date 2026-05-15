@@ -12,7 +12,9 @@ from PIL import Image
 
 from program.llm.types import StopReason
 from program.tool.types import ToolKind
-from program.session.types import CustomMessageEntry, BranchEntry, CompactionEntry
+
+if TYPE_CHECKING:
+    from program.session.types import CustomMessageEntry, BranchEntry, CompactionEntry
 
 
 _PIL_MIME: dict[str, str] = {
@@ -208,15 +210,22 @@ LLMMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 class CustomMessage:
     role: Role = field(default=Role.CUSTOM, init=False)
     custom_type: str
+    timestamp: float
     contents: list[TextContent | ImageContent] = field(default_factory=list)
-    timestamp:float
     details: Any | None = None
 
     @classmethod
-    def from_session(cls,entry:CustomMessageEntry)->CustomMessage:
+    def from_session(cls, entry: CustomMessageEntry) -> CustomMessage:
+        raw = entry.content
+        if isinstance(raw, list):
+            contents = raw
+        elif isinstance(raw, str):
+            contents = [TextContent(content=raw)]
+        else:
+            contents = []
         return cls(
             custom_type=entry.custom_type,
-            contents=entry.contents,
+            contents=contents,
             timestamp=entry.timestamp,
             details=entry.details
         )

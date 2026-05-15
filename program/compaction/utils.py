@@ -1,0 +1,304 @@
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from program.llm.types import StopReason
+from program.message.types import (
+    AgentMessage, AssistantMessage, UserMessage, ToolMessage,
+    CustomMessage, BranchSummaryMessage, CompactionSummaryMessage,
+    TextContent, ThinkingContent, ImageContent, ToolCallContent, ToolResultContent,
+    Usage, Role,
+)
+from program.session.types import (
+    SessionEntry, MessageEntry, CompactionEntry, BranchEntry, CustomMessageEntry,
+)
+from program.tool.types import ToolKind
+from program.compaction.types import (
+    FileOperations, CutPointResult, ContextUsageEstimate,
+)
+
+from program.compaction.prompts import (
+    SUMMARIZATION_SYSTEM_PROMPT,
+    SUMMARIZATION_PROMPT,
+    UPDATE_SUMMARIZATION_PROMPT,
+    TURN_PREFIX_SUMMARIZATION_PROMPT,
+)
+
+
+# ============================================================================
+# Token calculation
+# ============================================================================
+
+def calculate_context_tokens(usage: Usage) -> int:
+    return usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens
+
+
+def estimate_tokens(message: AgentMessage) -> int:
+    chars = 0
+    if isinstance(message, UserMessage):
+        for c in message.contents:
+            if isinstance(c, TextContent):
+                chars += len(c.content)
+            elif isinstance(c, ImageContent):
+                chars += 4800
+    elif isinstance(message, AssistantMessage):
+        for c in message.contents:
+            if isinstance(c, TextContent):
+                chars += len(c.content)
+            elif isinstance(c, ThinkingContent):
+                chars += len(c.content)
+            elif isinstance(c, ToolCallContent):
+                chars += len(c.name) + len(json.dumps(c.args))
+    elif isinstance(message, ToolMessage):
+        for c in message.contents:
+            if isinstance(c, ToolResultContent) and isinstance(c.content, str):
+                chars += len(c.content)
+    elif isinstance(message, (BranchSummaryMessage, CompactionSummaryMessage)):
+        chars = len(message.summary)
+    elif isinstance(message, CustomMessage):
+        for c in message.contents:
+            if isinstance(c, TextContent):
+                chars += len(c.content)
+    return max(1, chars // 4)
+
+
+def get_last_assistant_usage(entries: list[SessionEntry]) -> Usage | None:
+    for entry in reversed(entries):
+        if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
+            msg = entry.message
+            if msg.stop_reason not in (StopReason.Error, StopReason.Abort) and msg.usage:
+                return msg.usage
+    return None
+
+
+def estimate_context_tokens(messages: list[AgentMessage]) -> ContextUsageEstimate:
+    last_usage_info: tuple[Usage, int] | None = None
+    for i in reversed(range(len(messages))):
+        msg = messages[i]
+        if isinstance(msg, AssistantMessage):
+            if msg.stop_reason not in (StopReason.Error, StopReason.Abort) and msg.usage:
+                last_usage_info = (msg.usage, i)
+                break
+
+    if last_usage_info is None:
+        total = sum(estimate_tokens(m) for m in messages)
+        return ContextUsageEstimate(
+            tokens=total,
+            usage_tokens=0,
+            trailing_tokens=total,
+            last_usage_index=None,
+        )
+
+    usage, idx = last_usage_info
+    usage_tokens = calculate_context_tokens(usage)
+    trailing = sum(estimate_tokens(messages[i]) for i in range(idx + 1, len(messages)))
+    return ContextUsageEstimate(
+        tokens=usage_tokens + trailing,
+        usage_tokens=usage_tokens,
+        trailing_tokens=trailing,
+        last_usage_index=idx,
+    )
+
+
+# ============================================================================
+# File operation tracking
+# ============================================================================
+
+def extract_file_ops_from_message(msg: AgentMessage, file_ops: FileOperations) -> None:
+    if not isinstance(msg, AssistantMessage):
+        return
+    for c in msg.contents:
+        if not isinstance(c, ToolCallContent):
+            continue
+        path = c.args.get("path") if c.args else None
+        if not path or not isinstance(path, str):
+            continue
+        if c.name == "read" or c.kind == ToolKind.Read:
+            file_ops.read.add(path)
+        elif c.name == "write" or c.kind == ToolKind.Write:
+            file_ops.written.add(path)
+        elif c.name == "edit" or c.kind == ToolKind.Edit:
+            file_ops.edited.add(path)
+
+
+def compute_file_lists(file_ops: FileOperations) -> tuple[list[str], list[str]]:
+    modified = file_ops.edited | file_ops.written
+    read_files = sorted(file_ops.read - modified)
+    modified_files = sorted(modified)
+    return read_files, modified_files
+
+
+def format_file_operations(read_files: list[str], modified_files: list[str]) -> str:
+    sections: list[str] = []
+    if read_files:
+        sections.append(f"<read-files>\n{chr(10).join(read_files)}\n</read-files>")
+    if modified_files:
+        sections.append(f"<modified-files>\n{chr(10).join(modified_files)}\n</modified-files>")
+    if not sections:
+        return ""
+    return "\n\n" + "\n\n".join(sections)
+
+
+# ============================================================================
+# Message extraction from session entries
+# ============================================================================
+
+def get_message_from_entry(entry: SessionEntry) -> AgentMessage | None:
+    if isinstance(entry, MessageEntry):
+        return entry.message
+    if isinstance(entry, CustomMessageEntry):
+        return CustomMessage.from_session(entry)
+    if isinstance(entry, BranchEntry):
+        return BranchSummaryMessage.from_session(entry)
+    if isinstance(entry, CompactionEntry):
+        return CompactionSummaryMessage.from_session(entry)
+    return None
+
+
+def get_message_from_entry_for_compaction(entry: SessionEntry) -> AgentMessage | None:
+    if isinstance(entry, CompactionEntry):
+        return None
+    return get_message_from_entry(entry)
+
+
+# ============================================================================
+# Cut point detection
+# ============================================================================
+
+def find_valid_cut_points(
+    entries: list[SessionEntry], start_index: int, end_index: int
+) -> list[int]:
+    cut_points: list[int] = []
+    for i in range(start_index, end_index):
+        entry = entries[i]
+        if isinstance(entry, MessageEntry):
+            role = entry.message.role
+            if role in (
+                Role.USER, Role.ASSISTANT, Role.CUSTOM,
+                Role.BRANCH_SUMMARY, Role.COMPACTION_SUMMARY,
+            ):
+                cut_points.append(i)
+        elif isinstance(entry, (BranchEntry, CustomMessageEntry)):
+            cut_points.append(i)
+    return cut_points
+
+
+def find_turn_start_index(
+    entries: list[SessionEntry], entry_index: int, start_index: int
+) -> int:
+    for i in range(entry_index, start_index - 1, -1):
+        entry = entries[i]
+        if isinstance(entry, (BranchEntry, CustomMessageEntry)):
+            return i
+        if isinstance(entry, MessageEntry) and entry.message.role == Role.USER:
+            return i
+    return -1
+
+
+def find_cut_point(
+    entries: list[SessionEntry],
+    start_index: int,
+    end_index: int,
+    keep_recent_tokens: int,
+) -> CutPointResult:
+    cut_points = find_valid_cut_points(entries, start_index, end_index)
+
+    if not cut_points:
+        return CutPointResult(
+            first_kept_entry_index=start_index,
+            turn_start_index=-1,
+            is_split_turn=False,
+        )
+
+    accumulated = 0
+    cut_index = cut_points[0]
+
+    for i in range(end_index - 1, start_index - 1, -1):
+        entry = entries[i]
+        if not isinstance(entry, MessageEntry):
+            continue
+        accumulated += estimate_tokens(entry.message)
+        if accumulated >= keep_recent_tokens:
+            for c in cut_points:
+                if c >= i:
+                    cut_index = c
+                    break
+            break
+
+    # Pull cut_index back over non-message, non-compaction entries
+    while cut_index > start_index:
+        prev = entries[cut_index - 1]
+        if isinstance(prev, (CompactionEntry, MessageEntry)):
+            break
+        cut_index -= 1
+
+    cut_entry = entries[cut_index]
+    is_user_message = (
+        isinstance(cut_entry, MessageEntry) and cut_entry.message.role == Role.USER
+    )
+    turn_start_index = (
+        -1 if is_user_message
+        else find_turn_start_index(entries, cut_index, start_index)
+    )
+
+    return CutPointResult(
+        first_kept_entry_index=cut_index,
+        turn_start_index=turn_start_index,
+        is_split_turn=not is_user_message and turn_start_index != -1,
+    )
+
+
+# ============================================================================
+# Conversation serialization
+# ============================================================================
+
+_TOOL_RESULT_MAX_CHARS = 2000
+
+
+def _truncate_for_summary(text: str, max_chars: int = _TOOL_RESULT_MAX_CHARS) -> str:
+    if len(text) <= max_chars:
+        return text
+    truncated_chars = len(text) - max_chars
+    return f"{text[:max_chars]}\n\n[... {truncated_chars} more characters truncated]"
+
+
+def serialize_conversation(messages: list[AgentMessage]) -> str:
+    parts: list[str] = []
+    for msg in messages:
+        if isinstance(msg, UserMessage):
+            text = " ".join(c.content for c in msg.contents if isinstance(c, TextContent))
+            if text:
+                parts.append(f"[User]: {text}")
+        elif isinstance(msg, AssistantMessage):
+            thinking_parts = [c.content for c in msg.contents if isinstance(c, ThinkingContent)]
+            text_parts = [c.content for c in msg.contents if isinstance(c, TextContent)]
+            tool_calls = [
+                "{name}({args})".format(
+                    name=c.name,
+                    args=", ".join(f"{k}={json.dumps(v)}" for k, v in (c.args or {}).items()),
+                )
+                for c in msg.contents if isinstance(c, ToolCallContent)
+            ]
+            if thinking_parts:
+                parts.append(f"[Assistant thinking]: {'\n'.join(thinking_parts)}")
+            if text_parts:
+                parts.append(f"[Assistant]: {'\n'.join(text_parts)}")
+            if tool_calls:
+                parts.append(f"[Assistant tool calls]: {'; '.join(tool_calls)}")
+        elif isinstance(msg, ToolMessage):
+            text = " ".join(
+                c.content for c in msg.contents
+                if isinstance(c, ToolResultContent) and isinstance(c.content, str)
+            )
+            if text:
+                parts.append(f"[Tool result]: {_truncate_for_summary(text)}")
+        elif isinstance(msg, CustomMessage):
+            text = " ".join(c.content for c in msg.contents if isinstance(c, TextContent))
+            if text:
+                parts.append(f"[{msg.custom_type.upper()}]: {text}")
+        elif isinstance(msg, BranchSummaryMessage):
+            parts.append(f"[Branch summary]: {msg.summary}")
+        elif isinstance(msg, CompactionSummaryMessage):
+            parts.append(f"[Compaction summary]: {msg.summary}")
+    return "\n\n".join(parts)

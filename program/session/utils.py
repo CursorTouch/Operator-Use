@@ -6,7 +6,7 @@ from pydantic import TypeAdapter, ValidationError
 import re
 
 from program.session.types import (
-    SessionEntry, SessionHeader, SessionInfo, MessageEntry, SessionFileEntry
+    SessionEntry, SessionHeader, SessionInfo, MessageEntry, SessionFileEntry, SessionType
 )
 from program.message.types import AgentMessage, LLMMessage, Role, TextContent, ImageContent
 from program.settings.paths import get_agent_dir
@@ -76,7 +76,7 @@ def read_session_file(session_file: Path) -> list[SessionFileEntry]:
 
     header = entries[0]
 
-    if header.type != "SESSION_HEADER":
+    if header.type != SessionType.SESSION_HEADER:
         return []
 
     return entries
@@ -145,29 +145,32 @@ def get_session_modified_date(entries: list[SessionEntry], header: SessionHeader
 def build_session_info(file: Path) -> SessionInfo | None:
     content = file.read_text(encoding="utf-8")
 
-    entries: list[SessionEntry] = []
+    file_entries: list[SessionFileEntry] = []
     lines = content.strip().splitlines()
-    adapter = TypeAdapter(SessionEntry)
+    adapter = TypeAdapter(SessionFileEntry)
 
     for line in lines:
         if not line.strip():
             continue
         try:
-            entries.append(adapter.validate_json(line))
+            file_entries.append(adapter.validate_json(line))
         except Exception:
             pass
-    
-    if len(entries) == 0:
+
+    if len(file_entries) == 0:
         return None
-    
+
     header: SessionHeader | None = None
+    entries: list[SessionEntry] = []
     message_count = 0
-    for entry in entries:
+    for entry in file_entries:
         if isinstance(entry, SessionHeader):
             header = entry
-        elif isinstance(entry, MessageEntry):
-            message_count += 1
-    
+        else:
+            entries.append(entry)
+            if isinstance(entry, MessageEntry):
+                message_count += 1
+
     if header is None:
         return None
     
