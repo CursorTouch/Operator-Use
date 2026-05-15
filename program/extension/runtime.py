@@ -84,6 +84,10 @@ class ExtensionRuntime:
         results = await asyncio.gather(*tasks)
         return [r for r in results if r is not None]
 
+    def has_handlers(self, event_type: str) -> bool:
+        """Return True if any loaded extension has at least one handler for event_type."""
+        return any(event_type in ext.handlers and ext.handlers[event_type] for ext in self._extensions)
+
     def get_tools(self) -> dict[str, Any]:
         """Collect all registered tools from all extensions (last-writer-wins on name)."""
         tools = {}

@@ -12,7 +12,7 @@ from program.settings.types import (
     CompactionSettings, BranchSummarySettings,
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
 )
-from program.agent.types import SteeringMode, FollowupMode
+from program.engine.types import SteeringMode, FollowupMode
 from program.llm.types import Transport, ThinkingLevel
 
 _NESTED_FIELD_TYPES: dict[str, type] = {

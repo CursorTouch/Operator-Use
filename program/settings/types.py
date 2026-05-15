@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Literal, Any
-from program.agent.types import SteeringMode, FollowupMode
+from program.engine.types import SteeringMode, FollowupMode
 from program.llm.types import Transport, ThinkingLevel
 
 SCOPE = Literal["global", "project"]
