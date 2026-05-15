@@ -196,7 +196,7 @@ class ToolMessage(BaseMessage):
 
     @classmethod
     def from_results(cls, results: list[ToolResultContent]) -> ToolMessage:
-        return cls(contents=results)  # type: ignore[arg-type]
+        return cls(contents=list(results))  # type: ignore[arg-type]
 
     @classmethod
     def from_result(cls, result: ToolResultContent) -> ToolMessage:

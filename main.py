@@ -13,6 +13,7 @@ from program.agent_session import AgentSessionRuntime, AgentSessionServicesConfi
 from program.engine.types import (
     MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent,
+    AgentStartEvent,
 )
 from program.message.types import Role
 
@@ -30,11 +31,18 @@ def _red(s: str) -> str:    return f"\033[1;31m{s}\033[0m"
 # ── Event renderer ────────────────────────────────────────────────────────────
 
 _streaming_role: str | None = None
+_attempt: int = 0
 
 
 def _render_event(event) -> None:
-    global _streaming_role
+    global _streaming_role, _attempt
     match event:
+        case AgentStartEvent():
+            if _attempt > 0:
+                print(f"{_yellow(f'[Retry {_attempt}]')} Retrying...", file=sys.stderr)
+            _attempt += 1
+            _streaming_role = None
+
         case MessageUpdateEvent(message=msg) if msg.role == Role.ASSISTANT:
             for c in msg.contents:
                 content = getattr(c, 'content', '')
@@ -103,10 +111,13 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
         if user_input in ('/quit', '/exit', '/q'):
             break
 
+        global _attempt
+        _attempt = 0
         try:
             await runtime.handle_input(user_input)
         except Exception as e:
-            print(f"{_red('[Error]')} {e}", file=sys.stderr)
+            err_msg = str(e) or f"{type(e).__name__} (no message)"
+            print(f"{_red('[Error]')} {err_msg}", file=sys.stderr)
 
 
 def main() -> None:

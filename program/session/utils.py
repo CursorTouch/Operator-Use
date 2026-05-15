@@ -129,7 +129,12 @@ def get_last_activity_time(entries: list[SessionEntry]) -> float | None:
             continue
         
         message_timestamp = getattr(entry.message, "timestamp", None)
-        timestamp = float(message_timestamp.timestamp()) if message_timestamp else entry.timestamp
+        if message_timestamp is None:
+            timestamp = entry.timestamp
+        elif isinstance(message_timestamp, (int, float)):
+            timestamp = float(message_timestamp)
+        else:
+            timestamp = float(message_timestamp.timestamp())
 
         last_activity_time = max(last_activity_time or 0.0, timestamp)
     
