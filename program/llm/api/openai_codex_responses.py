@@ -13,7 +13,7 @@ import websockets.asyncio.client
 from program.llm.api.base import BaseAPI
 from program.llm.api.types import APIResponse
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingLevel, Transport,
+    LLMContext, LLMEvent, Options, StopReason, ThinkingLevel, Transport,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -381,11 +381,11 @@ class OpenAICodexResponsesAPI(BaseAPI):
             async for event in _process_events(_map_codex_events(_parse_ws(ws))):
                 yield event
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: str = "gpt-4o") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         token = self.options.api_key or ""
         account_id = _extract_account_id(token)
-        instructions, input_items = _messages_to_input(messages)
-        body = _build_body(model, instructions, input_items, self.options, tools=tools)
+        instructions, input_items = _messages_to_input(context.messages)
+        body = _build_body(model, instructions, input_items, self.options, tools=context.tools or None)
 
         if self.options.on_payload:
             modified = self.options.on_payload(body)
@@ -407,8 +407,8 @@ class OpenAICodexResponsesAPI(BaseAPI):
                 return
             yield event
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: str = "gpt-4o") -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model, tools=tools):
+        async for event in self.stream(context, model=model):
             events.append(event)
         return events

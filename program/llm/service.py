@@ -93,10 +93,10 @@ class LLM:
             self.api.options.api_key = api_key
 
         messages = self._resolve_messages(context)
-        tools = context.tools or []
+        api_context = LLMContext(messages=messages, tools=context.tools)
 
         try:
-            async for event in self.api.stream(messages, model=self.model.id, tools=tools or None):
+            async for event in self.api.stream(api_context, model=self.model.id):
                 yield event
         except Exception as e:
             from program.llm.types import ErrorEvent, StopReason
@@ -108,10 +108,10 @@ class LLM:
             self.api.options.api_key = api_key
 
         messages = self._resolve_messages(context)
-        tools = context.tools or []
+        api_context = LLMContext(messages=messages, tools=context.tools)
 
         try:
-            return await self.api.invoke(messages, model=self.model.id, tools=tools or None)
+            return await self.api.invoke(api_context, model=self.model.id)
         except Exception as e:
             from program.llm.types import ErrorEvent, StopReason
             return [ErrorEvent(reason=StopReason.Error, error=str(e))]

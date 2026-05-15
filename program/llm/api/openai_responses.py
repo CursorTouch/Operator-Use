@@ -5,7 +5,7 @@ from typing import Any
 from openai import AsyncOpenAI
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingLevel,
+    LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -125,9 +125,9 @@ class OpenAIResponsesAPI(BaseAPI):
 
         return params
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
-        instructions, input_items = _messages_to_input(messages)
-        params = self._build_params(model, instructions, input_items, tools=tools)
+    async def stream(self, context: LLMContext, model: str = "gpt-4o") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        instructions, input_items = _messages_to_input(context.messages)
+        params = self._build_params(model, instructions, input_items, tools=context.tools or None)
 
         if self.options.on_payload:
             modified = self.options.on_payload(params)
@@ -197,8 +197,8 @@ class OpenAIResponsesAPI(BaseAPI):
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, error=str(event))
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: str = "gpt-4o") -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model, tools=tools):
+        async for event in self.stream(context, model=model):
             events.append(event)
         return events

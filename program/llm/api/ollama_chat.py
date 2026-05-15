@@ -5,7 +5,7 @@ from typing import Any
 from ollama import AsyncClient
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingLevel,
+    LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -90,8 +90,8 @@ class OllamaChatAPI(BaseAPI):
             opts["num_predict"] = self.options.max_tokens
         return opts
 
-    async def stream(self, messages: list[BaseMessage], model: str = "llama3.2", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
-        ollama_messages = _messages_to_ollama(messages)
+    async def stream(self, context: LLMContext, model: str = "llama3.2") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        ollama_messages = _messages_to_ollama(context.messages)
 
         think: bool | None = None
         if self.options.thinking_level is not None:
@@ -113,6 +113,7 @@ class OllamaChatAPI(BaseAPI):
                 "options": self._inference_options(),
             }
 
+            tools = context.tools or None
             if tools:
                 payload["tools"] = [
                     {
@@ -178,8 +179,8 @@ class OllamaChatAPI(BaseAPI):
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, error=str(e))
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "llama3.2", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: str = "llama3.2") -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model, tools=tools):
+        async for event in self.stream(context, model=model):
             events.append(event)
         return events

@@ -8,7 +8,7 @@ from mistralai.client.models.textchunk import TextChunk
 from mistralai.client.types import UNSET_SENTINEL
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingLevel,
+    LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -108,8 +108,8 @@ class MistralChatAPI(BaseAPI):
             timeout_ms=int(options.timeout.total_seconds() * 1000),
         )
 
-    async def stream(self, messages: list[BaseMessage], model: str = "mistral-medium-latest", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
-        mistral_messages = _messages_to_mistral(messages)
+    async def stream(self, context: LLMContext, model: str = "mistral-medium-latest") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        mistral_messages = _messages_to_mistral(context.messages)
 
         reasoning_effort = None
         if self.options.thinking_level is not None:
@@ -138,6 +138,7 @@ class MistralChatAPI(BaseAPI):
             if reasoning_effort is not None:
                 kwargs["reasoning_effort"] = reasoning_effort
 
+            tools = context.tools or None
             if tools:
                 kwargs["tools"] = [
                     {
@@ -259,8 +260,8 @@ class MistralChatAPI(BaseAPI):
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, error=str(e))
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "mistral-medium-latest", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: str = "mistral-medium-latest") -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model, tools=tools):
+        async for event in self.stream(context, model=model):
             events.append(event)
         return events

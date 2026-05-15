@@ -9,14 +9,14 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import AsyncIterator
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 import httpx
 
 from program.llm.api.base import BaseAPI
 from program.llm.api.types import APIResponse
 from program.llm.types import (
-    LLMEvent, Options, StopReason,
+    LLMContext, LLMEvent, Options, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -26,7 +26,6 @@ from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
     TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
-from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from program.tool.types import Tool
 
@@ -212,10 +211,10 @@ class GoogleAntigravityAPI(BaseAPI):
 
         return {"model": model, "project": project, "request": inner}
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gemini-2.5-flash", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: str = "gemini-2.5-flash") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         project = await self._ensure_project_id()
-        system, contents = _messages_to_contents(messages)
-        body = self._build_request_body(model, project, system, contents, tools=tools)
+        system, contents = _messages_to_contents(context.messages)
+        body = self._build_request_body(model, project, system, contents, tools=context.tools or None)
         headers = _antigravity_headers(self.options.api_key or "")
 
         if self.options.on_payload:
@@ -332,8 +331,8 @@ class GoogleAntigravityAPI(BaseAPI):
             yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.5-flash", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: str = "gemini-2.5-flash") -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model, tools=tools):
+        async for event in self.stream(context, model=model):
             events.append(event)
         return events

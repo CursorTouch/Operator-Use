@@ -6,7 +6,7 @@ from google import genai
 from google.genai import types as genai_types
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingBudgets,
+    LLMContext, LLMEvent, Options, StopReason, ThinkingBudgets,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -117,9 +117,9 @@ class GeminiGenerateAPI(BaseAPI):
 
         return genai_types.GenerateContentConfig(**params)
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
-        system, contents = _messages_to_gemini(messages)
-        config = self._build_config(tools=tools)
+    async def stream(self, context: LLMContext, model: str = "gemini-2.0-flash") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        system, contents = _messages_to_gemini(context.messages)
+        config = self._build_config(tools=context.tools or None)
         if system:
             config.system_instruction = system
 
@@ -201,8 +201,8 @@ class GeminiGenerateAPI(BaseAPI):
             yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gemini-2.0-flash", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: str = "gemini-2.0-flash") -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model, tools=tools):
+        async for event in self.stream(context, model=model):
             events.append(event)
         return events

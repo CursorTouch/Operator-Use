@@ -5,7 +5,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 from program.llm.api.base import BaseAPI
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingBudgets,
+    LLMContext, LLMEvent, Options, StopReason, ThinkingBudgets,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -129,9 +129,9 @@ class AnthropicMessagesAPI(BaseAPI):
             
         return params
 
-    async def stream(self, messages: list[BaseMessage], model: str = "claude-sonnet-4-6", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
-        system, anthropic_messages = _messages_to_anthropic(messages)
-        params = self._build_params(model, system, anthropic_messages, tools=tools)
+    async def stream(self, context: LLMContext, model: str = "claude-sonnet-4-6") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        system, anthropic_messages = _messages_to_anthropic(context.messages)
+        params = self._build_params(model, system, anthropic_messages, tools=context.tools or None)
 
         if self.options.on_payload:
             modified = self.options.on_payload(params)
@@ -213,8 +213,8 @@ class AnthropicMessagesAPI(BaseAPI):
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, error=str(event))
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "claude-sonnet-4-6", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: str = "claude-sonnet-4-6") -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model, tools=tools):
+        async for event in self.stream(context, model=model):
             events.append(event)
         return events

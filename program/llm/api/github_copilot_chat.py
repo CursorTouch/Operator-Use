@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 from program.llm.api.base import BaseAPI
 from program.llm.provider.oauth.github_copilot import get_copilot_base_url
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingLevel,
+    LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
@@ -127,9 +127,9 @@ class GitHubCopilotChatAPI(BaseAPI):
 
         return params
 
-    async def stream(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
-        chat_messages = _messages_to_chat(messages)
-        params = self._build_params(model, chat_messages, tools=tools)
+    async def stream(self, context: LLMContext, model: str = "gpt-4o") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        chat_messages = _messages_to_chat(context.messages)
+        params = self._build_params(model, chat_messages, tools=context.tools or None)
 
         if self.options.on_payload:
             modified = self.options.on_payload(params)
@@ -204,8 +204,8 @@ class GitHubCopilotChatAPI(BaseAPI):
                 stop_reason = _STOP_REASON.get(choice.finish_reason, StopReason.Stop)
                 yield EndEvent(reason=stop_reason)
 
-    async def invoke(self, messages: list[BaseMessage], model: str = "gpt-4o", tools: Optional[list[Tool]] = None) -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: str = "gpt-4o") -> list[LLMEvent]:
         events: list[LLMEvent] = []
-        async for event in self.stream(messages, model=model, tools=tools):
+        async for event in self.stream(context, model=model):
             events.append(event)
         return events
