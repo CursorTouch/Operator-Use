@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from program.agent_session.types import AgentSessionConfig, PromptOptions
+from program.agent_session.types import AgentSessionConfig, PromptOptions, RetryStartEvent, RetryEndEvent
 from program.extension.types import (
     ExtensionContext, ContextUsage, CompactOptions,
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
     SessionBeforeCompactEvent, SessionBeforeCompactResult, SessionCompactEvent,
     AgentEndEvent as ExtAgentEndEvent,
 )
-from program.message.types import UserMessage, TextContent, Role
+from program.message.types import AssistantMessage, UserMessage, TextContent, Role
+
 from program.prompts.builder import build_system_prompt
 from program.prompts.types import BuildSystemPromptOptions
 
@@ -20,7 +22,6 @@ if TYPE_CHECKING:
     from program.resource.types import ResourceLoader
     from program.extension.runtime import ExtensionRuntime
     from program.compaction.compact import Compaction
-    from program.llm.service import LLM
     from program.engine.types import AgentEvent
 
 
@@ -29,8 +30,9 @@ class AgentSession(ExtensionContext):
     High-level agent session tying together AgentLoop, SessionManager,
     ExtensionRuntime, ResourceLoader, and Compaction.
 
-    Call `prompt()` to run a user turn. The session persists each message
-    to the session file and triggers compaction when the context grows too large.
+    Call `prompt()` to run a user turn. The session persists each message,
+    tracks token usage, retries on transient errors, and triggers compaction
+    when the context budget is exceeded.
     """
 
     def __init__(
@@ -50,7 +52,7 @@ class AgentSession(ExtensionContext):
         self._config = config
         self._system_prompt: str = ""
         self._context_tokens: int = 0
-        self._context_window: int = 200_000
+        self._context_window: int = config.context_window
         self._compact_requested: bool = False
         self._compact_options: CompactOptions | None = None
 
@@ -123,12 +125,46 @@ class AgentSession(ExtensionContext):
         )
         return build_system_prompt(options)
 
+    def _make_event_handler(self, persisted_ids: list[str]):
+        """Return a loop event listener that persists messages and tracks token usage."""
+        async def _on_event(event: AgentEvent) -> None:
+            from program.engine.types import MessageEndEvent as EngineMessageEndEvent
+            match event:
+                case EngineMessageEndEvent(message=message):
+                    if message.role == Role.ASSISTANT:
+                        assert isinstance(message, AssistantMessage)
+                        # Update live context token count from the model's reported usage
+                        total = message.usage.input_tokens + message.usage.output_tokens
+                        if total:
+                            self._context_tokens = total
+                        entry_id = self._session.append_message(message)
+                        persisted_ids.append(entry_id)
+                    elif message.role == Role.TOOL:
+                        entry_id = self._session.append_message(message)
+                        persisted_ids.append(entry_id)
+        return _on_event
+
+    def _rewind_session(self, persisted_ids: list[str]) -> None:
+        """Remove session entries appended during a failed attempt."""
+        for entry_id in persisted_ids:
+            entry = self._session.by_id.pop(entry_id, None)
+            if entry and entry in self._session.entries:
+                self._session.entries.remove(entry)
+            # Restore leaf to the entry before the first one we added
+        if persisted_ids:
+            parent_of_first = None
+            first = self._session.by_id.get(persisted_ids[0])
+            if first:
+                parent_of_first = first.parent_id
+            self._session.leaf_id = parent_of_first
+        persisted_ids.clear()
+
     # -------------------------------------------------------------------------
     # Core turn entry point
     # -------------------------------------------------------------------------
 
     async def prompt(self, user_input: str, options: PromptOptions | None = None) -> None:
-        """Run one user turn: build context, invoke the loop, persist messages."""
+        """Run one user turn with retry on transient errors."""
         opts = options or PromptOptions()
 
         # Notify extensions of incoming input
@@ -148,39 +184,76 @@ class AgentSession(ExtensionContext):
 
         # Reconstruct message history from persisted session
         session_ctx = self._session.build_session_context()
-        messages = list(session_ctx.messages)
+        base_messages = list(session_ctx.messages)
 
-        # Append and persist the user message
+        # Persist the user message once (not retried)
         user_message = UserMessage(contents=[TextContent(content=user_input)])
-        messages.append(user_message)
-        self._session.append_message(user_message)
+        user_entry_id = self._session.append_message(user_message)
 
-        # Subscribe to loop events to persist each assistant/tool message
-        async def _on_event(event: AgentEvent) -> None:
-            from program.engine.types import MessageEndEvent as EngineMessageEndEvent
-            match event:
-                case EngineMessageEndEvent(message=message):
-                    if message.role in (Role.ASSISTANT, Role.TOOL):
-                        self._session.append_message(message)
+        await self._run_with_retry(base_messages + [user_message], user_entry_id)
 
-        unsubscribe = await self._loop.subscribe(_on_event)
-        try:
-            await self._loop.run(messages)
-        finally:
-            unsubscribe()
-
-        # Notify extensions that the agent turn has ended
+        # Notify extensions the turn ended
         await self._extensions.emit(
             'agent_end',
             ExtAgentEndEvent(messages=self._loop.state.messages),
         )
 
-        # Trigger compaction if explicitly requested or context budget exceeded
-        needs_compact = self._compact_requested or self._compaction.should_compact(
+        # Trigger compaction if requested or context budget exceeded
+        if self._compact_requested or self._compaction.should_compact(
             self._context_tokens, self._context_window
-        )
-        if needs_compact:
+        ):
             await self._run_compaction(opts.compaction_custom_instructions)
+
+    async def _run_with_retry(self, messages: list, user_entry_id: str) -> None:
+        max_retries = self._config.retry_max_retries if self._config.retry_enabled else 0
+        base_delay_s = self._config.retry_base_delay_ms / 1000
+
+        persisted_ids: list[str] = []
+
+        for attempt in range(max_retries + 1):
+            if attempt > 0:
+                delay = base_delay_s * (2 ** (attempt - 1))
+                await self._extensions.emit(
+                    'retry_start',
+                    RetryStartEvent(attempt=attempt, max_retries=max_retries),
+                )
+                await asyncio.sleep(delay)
+
+            persisted_ids.clear()
+            handler = self._make_event_handler(persisted_ids)
+            unsubscribe = await self._loop.subscribe(handler)
+            try:
+                await self._loop.run(messages)
+            finally:
+                unsubscribe()
+
+            error = self._loop.state.error_message
+            if error is None:
+                # Success
+                if attempt > 0:
+                    await self._extensions.emit(
+                        'retry_end',
+                        RetryEndEvent(attempt=attempt, success=True),
+                    )
+                return
+
+            # Failed attempt — rewind session entries from this attempt
+            self._rewind_session(persisted_ids)
+            self._loop.reset()
+
+            if attempt < max_retries:
+                await self._extensions.emit(
+                    'retry_end',
+                    RetryEndEvent(attempt=attempt, success=False, error=error),
+                )
+            else:
+                # All retries exhausted — rewind user message too and re-raise
+                self._session.entries = [
+                    e for e in self._session.entries if e.id != user_entry_id
+                ]
+                self._session.by_id.pop(user_entry_id, None)
+                self._session.leaf_id = self._session.entries[-1].id if self._session.entries else None
+                raise RuntimeError(f"Agent failed after {attempt + 1} attempt(s): {error}")
 
     # -------------------------------------------------------------------------
     # Compaction
@@ -196,7 +269,6 @@ class AgentSession(ExtensionContext):
         if preparation is None:
             return
 
-        # Let extensions inspect and optionally cancel / pre-supply the result
         before_results = await self._extensions.emit(
             'session_before_compact',
             SessionBeforeCompactEvent(
@@ -214,7 +286,6 @@ class AgentSession(ExtensionContext):
                 if r.compaction:
                     compaction_result = r.compaction
 
-        # Merge custom instructions from caller and compact() call
         ci = custom_instructions
         if compact_opts and compact_opts.custom_instructions:
             ci = compact_opts.custom_instructions
@@ -229,7 +300,6 @@ class AgentSession(ExtensionContext):
             details=compaction_result.details,
         )
 
-        # Notify extensions that compaction completed
         compact_entry = self._session.get_leaf_entry()
         await self._extensions.emit(
             'session_compact',

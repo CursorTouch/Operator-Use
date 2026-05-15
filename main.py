@@ -1,149 +1,122 @@
+from __future__ import annotations
+
+import argparse
 import asyncio
-import os
 import sys
-from program.llm.service import LLM, Options as LLMOptions
-from program.agent.loop import Agent
-from program.agent.types import (
-    Options as AgentOptions, AgentEvent, AgentEventType,
-    AgentStartEvent, AgentEndEvent,
-    TurnStartEvent, MessageUpdateEvent, MessageEndEvent,
-    ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent
-)
-from program.message.types import (
-    UserMessage, TextContent, AssistantMessage, ToolMessage, SystemMessage
-)
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SYSTEM_PROMPT = """You are a highly skilled AI coding agent. Your goal is to help the user with their programming tasks, including:
-1. Exploring the codebase using `list_dir`, `read_file`, and `search_file`.
-2. Making changes using `write_file` and `edit_file`.
-3. Running commands, tests, and builds using `terminal`.
-4. Researching documentation and libraries using `web_search` and `web_fetch`.
-
-Follow these rules:
-- Always explore before making changes.
-- When editing, use `edit_file` for small, precise changes. Use `write_file` for new files or complete rewrites.
-- Use `terminal` to verify your changes (e.g., run tests).
-- Be concise and professional.
-"""
-
-from program.agent.types import (
-    Options as AgentOptions, AgentEvent, AgentEventType,
-    AgentStartEvent, AgentEndEvent,
-    TurnStartEvent, MessageUpdateEvent, MessageEndEvent,
-    ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent
+from program.agent_session import AgentSessionRuntime, AgentSessionServicesConfig
+from program.engine.types import (
+    MessageUpdateEvent, MessageEndEvent,
+    ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent,
 )
+from program.message.types import Role
 
-# Global state to track labels during streaming
-streaming_state = {
-    "current_role": None,
-    "label_printed": False
-}
 
-def process_event(event: AgentEvent):
+# ── ANSI helpers ──────────────────────────────────────────────────────────────
+
+def _cyan(s: str) -> str:   return f"\033[1;36m{s}\033[0m"
+def _blue(s: str) -> str:   return f"\033[1;34m{s}\033[0m"
+def _yellow(s: str) -> str: return f"\033[1;33m{s}\033[0m"
+def _green(s: str) -> str:  return f"\033[1;32m{s}\033[0m"
+def _grey(s: str) -> str:   return f"\033[1;30m{s}\033[0m"
+def _red(s: str) -> str:    return f"\033[1;31m{s}\033[0m"
+
+
+# ── Event renderer ────────────────────────────────────────────────────────────
+
+_streaming_role: str | None = None
+
+
+def _render_event(event) -> None:
+    global _streaming_role
     match event:
-        case TurnStartEvent():
-            streaming_state["current_role"] = None
-            streaming_state["label_printed"] = False
-        case MessageUpdateEvent(message=msg):
-            if msg and msg.role == "assistant":
-                for c in msg.contents:
-                    if hasattr(c, 'type'):
-                        if c.type == "thinking" and c.content:
-                            if streaming_state["current_role"] != "thinking":
-                                print(f"\n\033[1;30m[Thinking]: \033[0m", end="", flush=True)
-                                streaming_state["current_role"] = "thinking"
-                            sys.stdout.write(f"\033[1;30m{c.content}\033[0m")
-                            sys.stdout.flush()
-                        elif c.type == "text" and c.content:
-                            if streaming_state["current_role"] != "assistant":
-                                print(f"\n\033[1;34m[Assistant]: \033[0m", end="", flush=True)
-                                streaming_state["current_role"] = "assistant"
-                            sys.stdout.write(c.content)
-                            sys.stdout.flush()
-        case MessageEndEvent(message=msg):
-            if msg and msg.role == "assistant":
-                # Print a final newline after streaming ends
+        case MessageUpdateEvent(message=msg) if msg.role == Role.ASSISTANT:
+            for c in msg.contents:
+                content = getattr(c, 'content', '')
+                kind = getattr(c, 'type', '')
+                if not content:
+                    continue
+                if kind == 'thinking':
+                    if _streaming_role != 'thinking':
+                        print(f"\n{_grey('[Thinking]')} ", end='', flush=True)
+                        _streaming_role = 'thinking'
+                    sys.stdout.write(_grey(content))
+                    sys.stdout.flush()
+                elif kind == 'text':
+                    if _streaming_role != 'assistant':
+                        print(f"\n{_blue('[Assistant]')} ", end='', flush=True)
+                        _streaming_role = 'assistant'
+                    sys.stdout.write(content)
+                    sys.stdout.flush()
+
+        case MessageEndEvent(message=msg) if msg.role == Role.ASSISTANT:
+            if _streaming_role is not None:
                 print()
-                streaming_state["current_role"] = None
+            _streaming_role = None
+
         case ToolExecutionStartEvent(tool_call=tc):
-            args_str = ", ".join(f"{k}={v}" for k, v in tc.args.items())
-            print(f"\n\033[1;33m[ToolCall]: {tc.name}({args_str})\033[0m")
+            args_str = ', '.join(f'{k}={v!r}' for k, v in tc.args.items())
+            print(f"\n{_yellow(f'[Tool] {tc.name}({args_str})')}")
+
         case ToolExecutionEndEvent(tool_result=res):
             content = str(res.content)
             if len(content) > 500:
-                content = content[:500] + " \033[1;30m... [Truncated]\033[0m"
-            print(f"\033[1;32m[ToolResult]:\033[0m {content}")
+                content = content[:500] + _grey(' … [truncated]')
+            print(f"{_green('[Result]')} {content}")
+
         case AgentErrorEvent(error=err):
-            print(f"\033[1;31m[Error]: {err}\033[0m")
+            print(f"{_red('[Error]')} {err}", file=sys.stderr)
 
-async def main():
-    api_key = os.environ.get("MISTRAL_API_KEY", "")
-    if not api_key:
-        api_key = input("Enter your Mistral API key: ").strip()
-        if not api_key:
-             print("Mistral API key is required.")
-             return
 
-    model_id = "mistral-medium-3-5"
-    
-    from program.agent.tools import (
-        ListDirTool, ReadFileTool, WriteFileTool, EditFileTool,
-        TerminalTool, WebFetchTool, WebSearchTool
-    )
-    
-    tools = [
-        ListDirTool(),
-        ReadFileTool(),
-        WriteFileTool(),
-        EditFileTool(),
-        TerminalTool(),
-        WebFetchTool(),
-        WebSearchTool()
-    ]
+# ── REPL ──────────────────────────────────────────────────────────────────────
 
-    llm = LLM(
-        model_id=model_id,
-        provider="mistral",
-        options=LLMOptions(api_key=api_key),
+async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
+    config = AgentSessionServicesConfig(
+        cwd=cwd,
+        model_id=model_id or 'claude-sonnet-4-6',
+        provider=provider,
     )
 
-    agent = Agent(
-        llm=llm,
-        tools=tools,
-        options=AgentOptions()
-    )
+    print(f"Agent starting in {cwd}  (model: {config.model_id})")
+    print("Type /help for commands, Ctrl-C or /quit to exit.\n")
 
-    agent.process_events = process_event
+    runtime = await AgentSessionRuntime.create(config)
 
-    print("--- AI Coding Agent Started ---")
-    print("Type 'exit' or 'quit' to stop.")
+    # Wire the event renderer into the agent loop
+    await runtime.current_session._loop.subscribe(_render_event)
 
-    messages = [SystemMessage(contents=[TextContent(content=SYSTEM_PROMPT)])]
-    
     while True:
         try:
-            user_input = input("\n\033[1;36m[User]:\033[0m ").strip()
-            if not user_input:
-                continue
-            if user_input.lower() in ("exit", "quit"):
-                break
-            
-            messages.append(UserMessage(contents=[TextContent(content=user_input)]))
-            
-            # Run the agent with the message history
-            await agent.run(messages)
-            
-            # The agent.run method appends Assistant and Tool messages to the list it receives.
-            # So the 'messages' list is now updated with the agent's response and tool interactions.
-            
-        except KeyboardInterrupt:
-            print("\nInterrupted by user.")
+            user_input = input(_cyan('\n[You] ')).strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
             break
-        except Exception as e:
-            print(f"\n[CRITICAL ERROR] {e}")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+        if not user_input:
+            continue
+
+        if user_input in ('/quit', '/exit', '/q'):
+            break
+
+        try:
+            await runtime.handle_input(user_input)
+        except Exception as e:
+            print(f"{_red('[Error]')} {e}", file=sys.stderr)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description='Agent harness REPL')
+    parser.add_argument('--cwd', type=Path, default=Path.cwd())
+    parser.add_argument('--model', default=None, help='Model ID (e.g. claude-sonnet-4-6)')
+    parser.add_argument('--provider', default=None, help='Provider override')
+    args = parser.parse_args()
+    asyncio.run(run(cwd=args.cwd.resolve(), model_id=args.model, provider=args.provider))
+
+
+if __name__ == '__main__':
+    main()

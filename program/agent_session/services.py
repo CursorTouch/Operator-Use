@@ -156,9 +156,13 @@ class AgentSessionServices:
         session_config = AgentSessionConfig(
             cwd=cwd,
             model=llm.model,
+            context_window=llm.model.context_window or 200_000,
             selected_tools=config.selected_tools,
             tool_snippets=config.tool_snippets,
             prompt_guidelines=config.prompt_guidelines,
+            retry_enabled=settings_manager.get_retry_enabled(),
+            retry_max_retries=settings_manager.get_retry_max_retries(),
+            retry_base_delay_ms=settings_manager.get_retry_base_delay_ms(),
         )
 
         # ── Wire everything together ──────────────────────────────────────────

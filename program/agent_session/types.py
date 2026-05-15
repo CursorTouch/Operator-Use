@@ -12,9 +12,13 @@ class AgentSessionConfig(BaseModel):
 
     cwd: Path
     model: Any | None = None                    # Model | None
+    context_window: int = 200_000
     selected_tools: list[str] | None = None
     tool_snippets: dict[str, str] = {}
     prompt_guidelines: list[str] = []
+    retry_enabled: bool = True
+    retry_max_retries: int = 3
+    retry_base_delay_ms: int = 2000
 
 
 class PromptOptions(BaseModel):

@@ -5,7 +5,7 @@ from typing import Any
 from mistralai import Mistral
 from mistralai.models.thinkchunk import ThinkChunk
 from mistralai.models.textchunk import TextChunk
-from mistralai.types import UNSET as UNSET_SENTINEL
+from mistralai.types import UNSET
 from program.llm.api.base import BaseAPI
 from program.llm.model.types import Model
 from program.llm.types import (
@@ -174,7 +174,7 @@ class MistralChatAPI(BaseAPI):
                     delta = choice.delta
 
                     content = delta.content
-                    if content and content != UNSET_SENTINEL:
+                    if content and content !=UNSET:
                         if isinstance(content, str):
                             if not text_started:
                                 yield TextStartEvent(text=TextContent(content=""))
@@ -208,7 +208,7 @@ class MistralChatAPI(BaseAPI):
                                     yield TextDeltaEvent(text=TextContent(content=chunk_item.text))
 
                     tool_calls = delta.tool_calls
-                    if tool_calls and tool_calls != UNSET_SENTINEL:
+                    if tool_calls and tool_calls != UNSET:
                         for tc in tool_calls:
                             idx = tc.index if tc.index is not None else 0
                             fn = tc.function
@@ -226,7 +226,7 @@ class MistralChatAPI(BaseAPI):
                                 )
 
                     finish = choice.finish_reason
-                    if finish and finish != UNSET_SENTINEL:
+                    if finish and finish != UNSET:
                         if thinking_started:
                             yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                             thinking_index += 1

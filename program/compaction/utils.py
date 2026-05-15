@@ -262,6 +262,73 @@ def find_cut_point(
 
 
 # ============================================================================
+# Compaction boundary helpers  (used by Compaction.prepare)
+# ============================================================================
+
+def find_prev_compaction_index(entries: list[SessionEntry]) -> int:
+    """Return the index of the most recent CompactionEntry, or -1."""
+    for i in reversed(range(len(entries))):
+        if isinstance(entries[i], CompactionEntry):
+            return i
+    return -1
+
+
+def resolve_boundary_start(entries: list[SessionEntry], prev_compaction_index: int) -> int:
+    """Return the first entry index to include when summarising after a prior compaction."""
+    if prev_compaction_index < 0:
+        return 0
+    prev = entries[prev_compaction_index]
+    assert isinstance(prev, CompactionEntry)
+    retained_idx = next(
+        (i for i, e in enumerate(entries) if e.id == prev.first_kept_entry_id), -1
+    )
+    return retained_idx if retained_idx >= 0 else prev_compaction_index + 1
+
+
+def collect_messages_in_range(
+    entries: list[SessionEntry],
+    start: int,
+    end: int,
+    for_compaction: bool = False,
+) -> list[AgentMessage]:
+    """Extract AgentMessages from entries[start:end]."""
+    fn = get_message_from_entry_for_compaction if for_compaction else get_message_from_entry
+    return [msg for i in range(start, end) if (msg := fn(entries[i])) is not None]
+
+
+def build_file_ops_from_prev_compaction(
+    entries: list[SessionEntry],
+    prev_compaction_index: int,
+) -> FileOperations:
+    """Seed a FileOperations from the saved details of the previous compaction."""
+    from program.compaction.types import CompactionDetails  # local to avoid circular at module level
+    file_ops = FileOperations()
+    if prev_compaction_index < 0:
+        return file_ops
+    entry = entries[prev_compaction_index]
+    if not isinstance(entry, CompactionEntry):
+        return file_ops
+    details = entry.details
+    if isinstance(details, CompactionDetails):
+        for f in details.read_files:
+            file_ops.read.add(f)
+        for f in details.modified_files:
+            file_ops.edited.add(f)
+    elif isinstance(details, dict):
+        for f in details.get("read_files", []):
+            file_ops.read.add(f)
+        for f in details.get("modified_files", []):
+            file_ops.edited.add(f)
+    return file_ops
+
+
+def accumulate_file_ops(file_ops: FileOperations, messages: list[AgentMessage]) -> None:
+    """Add file ops extracted from each message into file_ops in-place."""
+    for msg in messages:
+        extract_file_ops_from_message(msg, file_ops)
+
+
+# ============================================================================
 # Conversation serialization
 # ============================================================================
 
