@@ -122,40 +122,6 @@ class Compaction:
             settings=self.settings,
         )
 
-    async def _complete_simple(
-        self,
-        system_prompt: str,
-        prompt_text: str,
-        thinking_level: ThinkingLevel | None = None,
-    ) -> str:
-        original_thinking = self.llm.api.options.thinking_level
-        if thinking_level and thinking_level != ThinkingLevel.Off:
-            self.llm.api.options.thinking_level = thinking_level
-        try:
-            messages = [UserMessage(contents=[TextContent(content=prompt_text)])]
-            context = LLMContext(messages=messages, system_prompt=system_prompt)
-            events = await self.llm.invoke(context)
-        finally:
-            self.llm.api.options.thinking_level = original_thinking
-
-        text_parts: list[str] = []
-        stop_reason = StopReason.Stop
-        error = ""
-
-        for event in events:
-            if isinstance(event, TextEndEvent):
-                text_parts.append(event.text.content)
-            elif isinstance(event, EndEvent):
-                stop_reason = event.reason
-            elif isinstance(event, ErrorEvent):
-                stop_reason = event.reason
-                error = event.error
-
-        if stop_reason == StopReason.Error:
-            raise RuntimeError(f"Summarization failed: {error or 'Unknown error'}")
-
-        return "".join(text_parts)
-
     async def _generate_summary(
         self,
         messages: list[AgentMessage],
@@ -174,7 +140,34 @@ class Compaction:
             prompt_text += f"<previous-summary>\n{previous_summary}\n</previous-summary>\n\n"
         prompt_text += base_prompt
 
-        return await self._complete_simple(SUMMARIZATION_SYSTEM_PROMPT, prompt_text, thinking_level)
+        original_thinking = self.llm.api.options.thinking_level
+        if thinking_level and thinking_level != ThinkingLevel.Off:
+            self.llm.api.options.thinking_level = thinking_level
+        try:
+            context = LLMContext(
+                messages=[UserMessage(contents=[TextContent(content=prompt_text)])],
+                system_prompt=SUMMARIZATION_SYSTEM_PROMPT,
+            )
+            events = await self.llm.invoke(context)
+        finally:
+            self.llm.api.options.thinking_level = original_thinking
+
+        text_parts: list[str] = []
+        stop_reason = StopReason.Stop
+        error = ""
+        for event in events:
+            if isinstance(event, TextEndEvent):
+                text_parts.append(event.text.content)
+            elif isinstance(event, EndEvent):
+                stop_reason = event.reason
+            elif isinstance(event, ErrorEvent):
+                stop_reason = event.reason
+                error = event.error
+
+        if stop_reason == StopReason.Error:
+            raise RuntimeError(f"Summarization failed: {error or 'Unknown error'}")
+
+        return "".join(text_parts)
 
     async def _generate_turn_prefix_summary(
         self,
@@ -187,7 +180,35 @@ class Compaction:
             f"<conversation>\n{conversation_text}\n</conversation>\n\n"
             f"{TURN_PREFIX_SUMMARIZATION_PROMPT}"
         )
-        return await self._complete_simple(SUMMARIZATION_SYSTEM_PROMPT, prompt_text, thinking_level)
+
+        original_thinking = self.llm.api.options.thinking_level
+        if thinking_level and thinking_level != ThinkingLevel.Off:
+            self.llm.api.options.thinking_level = thinking_level
+        try:
+            context = LLMContext(
+                messages=[UserMessage(contents=[TextContent(content=prompt_text)])],
+                system_prompt=SUMMARIZATION_SYSTEM_PROMPT,
+            )
+            events = await self.llm.invoke(context)
+        finally:
+            self.llm.api.options.thinking_level = original_thinking
+
+        text_parts: list[str] = []
+        stop_reason = StopReason.Stop
+        error = ""
+        for event in events:
+            if isinstance(event, TextEndEvent):
+                text_parts.append(event.text.content)
+            elif isinstance(event, EndEvent):
+                stop_reason = event.reason
+            elif isinstance(event, ErrorEvent):
+                stop_reason = event.reason
+                error = event.error
+
+        if stop_reason == StopReason.Error:
+            raise RuntimeError(f"Turn prefix summarization failed: {error or 'Unknown error'}")
+
+        return "".join(text_parts)
 
     async def compact(
         self,
