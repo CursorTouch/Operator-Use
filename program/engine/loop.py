@@ -2,7 +2,7 @@ from __future__ import annotations
 from program.message.types import ToolResultContent
 import asyncio
 from typing import TYPE_CHECKING, Optional, Callable
-from program.agent.types import (
+from program.engine.types import (
     EmitEvent, TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent,
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from program.llm.service import LLM
     from program.tool.types import Tool
 
-from program.agent.types import (
+from program.engine.types import (
     AgentState,
     Options,
     AgentEvent,
@@ -32,7 +32,7 @@ from program.agent.types import (
 from program.message.types import BaseMessage, ToolMessage
 
 
-class Agent:
+class AgentLoop:
     def __init__(
         self,
         llm: LLM,
