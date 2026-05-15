@@ -103,7 +103,7 @@ class OpenAICompletionsAPI(BaseAPI):
     def __init__(self, options: Options) -> None:
         super().__init__(options)
         self._client = AsyncOpenAI(
-            api_key=options.api_key,
+            api_key=options.api_key or "placeholder",
             base_url=options.base_url,
             default_headers=options.headers,
             max_retries=options.max_retries,
@@ -138,6 +138,8 @@ class OpenAICompletionsAPI(BaseAPI):
         return params
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        if self.options.api_key:
+            self._client.api_key = self.options.api_key
         chat_messages = _messages_to_chat(context.messages)
         params = self._build_params(model, chat_messages, tools=context.tools or None)
 
