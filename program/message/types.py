@@ -156,4 +156,4 @@ class ToolMessage(BaseMessage):
         return cls(contents=[result])  # type: ignore[arg-type]
 
 
-Message = SystemMessage | UserMessage | AssistantMessage | ToolMessage
+LLMMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
