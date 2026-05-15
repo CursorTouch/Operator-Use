@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 from ollama import AsyncClient
 from program.llm.api.base import BaseAPI
+from program.llm.model.types import Model
 from program.llm.types import (
     LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
@@ -90,7 +91,7 @@ class OllamaChatAPI(BaseAPI):
             opts["num_predict"] = self.options.max_tokens
         return opts
 
-    async def stream(self, context: LLMContext, model: str = "llama3.2") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         ollama_messages = _messages_to_ollama(context.messages)
 
         think: bool | None = None
@@ -106,7 +107,7 @@ class OllamaChatAPI(BaseAPI):
 
         try:
             payload: dict[str, Any] = {
-                "model": model,
+                "model": model.id,
                 "messages": ollama_messages,
                 "stream": True,
                 "think": think,
@@ -179,7 +180,7 @@ class OllamaChatAPI(BaseAPI):
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, error=str(e))
 
-    async def invoke(self, context: LLMContext, model: str = "llama3.2") -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []
         async for event in self.stream(context, model=model):
             events.append(event)

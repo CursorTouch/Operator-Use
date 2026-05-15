@@ -15,6 +15,7 @@ import httpx
 
 from program.llm.api.base import BaseAPI
 from program.llm.api.types import APIResponse
+from program.llm.model.types import Model
 from program.llm.types import (
     LLMContext, LLMEvent, Options, StopReason,
     StartEvent, EndEvent, ErrorEvent,
@@ -186,7 +187,7 @@ class GoogleAntigravityAPI(BaseAPI):
 
     def _build_request_body(
         self,
-        model: str,
+        model: Model,
         project: str,
         system: str | None,
         contents: list[dict[str, Any]],
@@ -209,9 +210,9 @@ class GoogleAntigravityAPI(BaseAPI):
         if generation_config:
             inner["generationConfig"] = generation_config
 
-        return {"model": model, "project": project, "request": inner}
+        return {"model": model.id, "project": project, "request": inner}
 
-    async def stream(self, context: LLMContext, model: str = "gemini-2.5-flash") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         project = await self._ensure_project_id()
         system, contents = _messages_to_contents(context.messages)
         body = self._build_request_body(model, project, system, contents, tools=context.tools or None)
@@ -331,7 +332,7 @@ class GoogleAntigravityAPI(BaseAPI):
             yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
 
-    async def invoke(self, context: LLMContext, model: str = "gemini-2.5-flash") -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []
         async for event in self.stream(context, model=model):
             events.append(event)

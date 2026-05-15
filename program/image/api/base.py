@@ -6,7 +6,7 @@ from program.image.model.types import Model
 from program.image.types import GeneratedImage, ImageContext, ImageOptions
 
 
-class BaseImageAPI(ABC):
+class BaseAPI(ABC):
     def __init__(self, options: ImageOptions) -> None:
         self.options = options
 

@@ -5,7 +5,7 @@ from typing import Type
 from program.image.api.base import BaseImageAPI
 
 
-class ImageAPIRegistry:
+class APIRegistry:
     def __init__(self) -> None:
         self._apis: dict[str, Type[BaseImageAPI]] = {}
 
@@ -25,7 +25,7 @@ class ImageAPIRegistry:
         self._apis.clear()
 
     @classmethod
-    def from_builtins(cls) -> ImageAPIRegistry:
+    def from_builtins(cls) -> APIRegistry:
         from program.image.api.builtins import IMAGE_APIS
         instance = cls()
         for name, api in IMAGE_APIS:

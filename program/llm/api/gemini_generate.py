@@ -5,6 +5,7 @@ from typing import Any
 from google import genai
 from google.genai import types as genai_types
 from program.llm.api.base import BaseAPI
+from program.llm.model.types import Model
 from program.llm.types import (
     LLMContext, LLMEvent, Options, StopReason, ThinkingBudgets,
     StartEvent, EndEvent, ErrorEvent,
@@ -117,7 +118,7 @@ class GeminiGenerateAPI(BaseAPI):
 
         return genai_types.GenerateContentConfig(**params)
 
-    async def stream(self, context: LLMContext, model: str = "gemini-2.0-flash") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         system, contents = _messages_to_gemini(context.messages)
         config = self._build_config(tools=context.tools or None)
         if system:
@@ -142,7 +143,7 @@ class GeminiGenerateAPI(BaseAPI):
 
         try:
             async for chunk in await self._client.aio.models.generate_content_stream(
-                model=model,
+                model=model.id,
                 contents=contents,
                 config=config,
             ):
@@ -201,7 +202,7 @@ class GeminiGenerateAPI(BaseAPI):
             yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
 
-    async def invoke(self, context: LLMContext, model: str = "gemini-2.0-flash") -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []
         async for event in self.stream(context, model=model):
             events.append(event)

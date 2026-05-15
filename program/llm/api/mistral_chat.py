@@ -7,6 +7,7 @@ from mistralai.client.models.thinkchunk import ThinkChunk
 from mistralai.client.models.textchunk import TextChunk
 from mistralai.client.types import UNSET_SENTINEL
 from program.llm.api.base import BaseAPI
+from program.llm.model.types import Model
 from program.llm.types import (
     LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
@@ -108,7 +109,7 @@ class MistralChatAPI(BaseAPI):
             timeout_ms=int(options.timeout.total_seconds() * 1000),
         )
 
-    async def stream(self, context: LLMContext, model: str = "mistral-medium-latest") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         mistral_messages = _messages_to_mistral(context.messages)
 
         reasoning_effort = None
@@ -130,7 +131,7 @@ class MistralChatAPI(BaseAPI):
 
         try:
             kwargs: dict[str, Any] = {
-                "model": model,
+                "model": model.id,
                 "messages": mistral_messages,
                 "temperature": self.options.temperature,
                 "max_tokens": self.options.max_tokens,
@@ -260,7 +261,7 @@ class MistralChatAPI(BaseAPI):
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, error=str(e))
 
-    async def invoke(self, context: LLMContext, model: str = "mistral-medium-latest") -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []
         async for event in self.stream(context, model=model):
             events.append(event)

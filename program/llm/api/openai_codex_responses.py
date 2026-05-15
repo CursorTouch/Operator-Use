@@ -12,6 +12,7 @@ import websockets.asyncio.client
 
 from program.llm.api.base import BaseAPI
 from program.llm.api.types import APIResponse
+from program.llm.model.types import Model
 from program.llm.types import (
     LLMContext, LLMEvent, Options, StopReason, ThinkingLevel, Transport,
     StartEvent, EndEvent, ErrorEvent,
@@ -139,7 +140,7 @@ def _messages_to_input(messages: list[BaseMessage]) -> tuple[str, list[dict[str,
 # ── Request building ──────────────────────────────────────────────────────────
 
 def _build_body(
-    model: str,
+    model: Model,
     instructions: str,
     input_items: list[dict[str, Any]],
     options: Options,
@@ -147,7 +148,7 @@ def _build_body(
 ) -> dict[str, Any]:
     effort = _THINKING_EFFORT.get(options.thinking_level, "medium") if options.thinking_level else "medium"
     body: dict[str, Any] = {
-        "model": model,
+        "model": model.id,
         "store": False,
         "stream": True,
         "instructions": instructions,
@@ -381,7 +382,7 @@ class OpenAICodexResponsesAPI(BaseAPI):
             async for event in _process_events(_map_codex_events(_parse_ws(ws))):
                 yield event
 
-    async def stream(self, context: LLMContext, model: str = "gpt-4o") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         token = self.options.api_key or ""
         account_id = _extract_account_id(token)
         instructions, input_items = _messages_to_input(context.messages)
@@ -407,7 +408,7 @@ class OpenAICodexResponsesAPI(BaseAPI):
                 return
             yield event
 
-    async def invoke(self, context: LLMContext, model: str = "gpt-4o") -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []
         async for event in self.stream(context, model=model):
             events.append(event)

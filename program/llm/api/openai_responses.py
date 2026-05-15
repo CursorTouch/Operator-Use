@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 from openai import AsyncOpenAI
 from program.llm.api.base import BaseAPI
+from program.llm.model.types import Model
 from program.llm.types import (
     LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
@@ -99,9 +100,9 @@ class OpenAIResponsesAPI(BaseAPI):
             timeout=options.timeout.total_seconds(),
         )
 
-    def _build_params(self, model: str, instructions: str | None, input_items: list, tools: Optional[list[Tool]] = None) -> dict[str, Any]:
+    def _build_params(self, model: Model, instructions: str | None, input_items: list, tools: Optional[list[Tool]] = None) -> dict[str, Any]:
         params: dict[str, Any] = {
-            "model": model,
+            "model": model.id,
             "input": input_items,
             "temperature": self.options.temperature,
         }
@@ -125,7 +126,7 @@ class OpenAIResponsesAPI(BaseAPI):
 
         return params
 
-    async def stream(self, context: LLMContext, model: str = "gpt-4o") -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         instructions, input_items = _messages_to_input(context.messages)
         params = self._build_params(model, instructions, input_items, tools=context.tools or None)
 
@@ -197,7 +198,7 @@ class OpenAIResponsesAPI(BaseAPI):
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, error=str(event))
 
-    async def invoke(self, context: LLMContext, model: str = "gpt-4o") -> list[LLMEvent]:
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []
         async for event in self.stream(context, model=model):
             events.append(event)

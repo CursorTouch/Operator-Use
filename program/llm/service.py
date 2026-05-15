@@ -96,7 +96,7 @@ class LLM:
         api_context = LLMContext(messages=messages, tools=context.tools)
 
         try:
-            async for event in self.api.stream(api_context, model=self.model.id):
+            async for event in self.api.stream(api_context, model=self.model):
                 yield event
         except Exception as e:
             from program.llm.types import ErrorEvent, StopReason
@@ -111,7 +111,7 @@ class LLM:
         api_context = LLMContext(messages=messages, tools=context.tools)
 
         try:
-            return await self.api.invoke(api_context, model=self.model.id)
+            return await self.api.invoke(api_context, model=self.model)
         except Exception as e:
             from program.llm.types import ErrorEvent, StopReason
             return [ErrorEvent(reason=StopReason.Error, error=str(e))]

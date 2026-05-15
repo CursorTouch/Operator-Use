@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
+from program.llm.model.types import Model
 from program.llm.types import LLMContext, LLMEvent, Options, Transport
 from program.message.types import BaseMessage
 
@@ -19,7 +20,7 @@ class BaseAPI(ABC):
         return self.options.signal is not None and self.options.signal.is_set()
 
     @abstractmethod
-    def stream(self, context: LLMContext, model: str) -> AsyncIterator[LLMEvent]: ...
+    def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]: ...
 
     @abstractmethod
-    async def invoke(self, context: LLMContext, model: str) -> list[LLMEvent]: ...
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]: ...
