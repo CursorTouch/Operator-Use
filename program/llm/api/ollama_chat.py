@@ -31,47 +31,47 @@ _STOP_REASON: dict[str, StopReason] = {
 def _messages_to_ollama(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for msg in messages:
-        if isinstance(msg, SystemMessage):
-            text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            result.append({"role": "system", "content": text})
-
-        elif isinstance(msg, UserMessage):
-            text_parts: list[str] = []
-            images: list[str] = []
-            for item in msg.contents:
-                if isinstance(item, TextContent):
-                    text_parts.append(item.content)
-                elif isinstance(item, ImageContent):
-                    images.extend(b64 for b64, _ in item.to_base64())
-            entry: dict[str, Any] = {"role": "user", "content": "\n".join(text_parts)}
-            if images:
-                entry["images"] = images
-            result.append(entry)
-
-        elif isinstance(msg, AssistantMessage):
-            text_parts = []
-            thinking_parts: list[str] = []
-            tool_calls: list[dict[str, Any]] = []
-            for item in msg.contents:
-                if isinstance(item, TextContent):
-                    text_parts.append(item.content)
-                elif isinstance(item, ThinkingContent):
-                    thinking_parts.append(item.content)
-                elif isinstance(item, ToolCallContent):
-                    tool_calls.append({
-                        "function": {"name": item.name, "arguments": item.args}
-                    })
-            entry = {"role": "assistant", "content": "\n".join(text_parts)}
-            if thinking_parts:
-                entry["thinking"] = "\n".join(thinking_parts)
-            if tool_calls:
-                entry["tool_calls"] = tool_calls
-            result.append(entry)
-
-        elif isinstance(msg, ToolMessage):
-            for content in msg.contents:
-                if isinstance(content, ToolResultContent):
-                    result.append({"role": "tool", "content": content.content})
+        match msg:
+            case SystemMessage():
+                text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
+                result.append({"role": "system", "content": text})
+            case UserMessage():
+                text_parts: list[str] = []
+                images: list[str] = []
+                for item in msg.contents:
+                    match item:
+                        case TextContent():
+                            text_parts.append(item.content)
+                        case ImageContent():
+                            images.extend(b64 for b64, _ in item.to_base64())
+                entry: dict[str, Any] = {"role": "user", "content": "\n".join(text_parts)}
+                if images:
+                    entry["images"] = images
+                result.append(entry)
+            case AssistantMessage():
+                text_parts = []
+                thinking_parts: list[str] = []
+                tool_calls: list[dict[str, Any]] = []
+                for item in msg.contents:
+                    match item:
+                        case TextContent():
+                            text_parts.append(item.content)
+                        case ThinkingContent():
+                            thinking_parts.append(item.content)
+                        case ToolCallContent():
+                            tool_calls.append({
+                                "function": {"name": item.name, "arguments": item.args}
+                            })
+                entry = {"role": "assistant", "content": "\n".join(text_parts)}
+                if thinking_parts:
+                    entry["thinking"] = "\n".join(thinking_parts)
+                if tool_calls:
+                    entry["tool_calls"] = tool_calls
+                result.append(entry)
+            case ToolMessage():
+                for content in msg.contents:
+                    if isinstance(content, ToolResultContent):
+                        result.append({"role": "tool", "content": content.content})
 
     return result
 

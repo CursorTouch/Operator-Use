@@ -53,6 +53,7 @@ class AgentLoop:
             follow_up_queue=FollowupQueue(mode=self.options.followup_mode),
             steering_queue=SteeringQueue(mode=self.options.steering_mode),
         )
+        self._signal: asyncio.Event = asyncio.Event()
 
     async def steer(self, message: BaseMessage) -> None:
         """Add a steering message to the steering queue."""
@@ -86,6 +87,19 @@ class AgentLoop:
         self.state.error_message = None
         self.state.pending_tool_calls.clear()
         self.state.is_streaming = False
+
+    def abort(self) -> None:
+        """Signal the running loop to stop after the current operation."""
+        self._signal.set()
+
+    @property
+    def is_idle(self) -> bool:
+        return not self.state.is_streaming
+
+    async def wait_for_idle(self) -> None:
+        """Wait until the loop is no longer streaming."""
+        while self.state.is_streaming:
+            await asyncio.sleep(0.05)
 
     async def subscribe(self, listener: Callable[[AgentEvent], None]) -> Callable[[], None]:
         """Subscribe to agent events."""
@@ -128,8 +142,16 @@ class AgentLoop:
                 if self.options.transform_context is not None:
                     messages = self.options.transform_context(messages, signal)
 
+                if signal.is_set():
+                    await emit(TurnEndEvent(message=message, tool_results=tool_results))
+                    break
+
                 await emit(MessageStartEvent(message=message))
-                async for event in self.llm.stream(LLMContext(messages=messages, tools=self.tools)):
+                async for event in self.llm.stream(LLMContext(
+                    messages=messages,
+                    tools=self.tools,
+                    system_prompt=self.state.system_prompt,
+                )):
                     match event:
                         case ToolCallEndEvent(tool_call=tool_call):
                             tool_calls.append(tool_call)
@@ -168,6 +190,10 @@ class AgentLoop:
                         await emit(MessageStartEvent(message=tool_message))
                         await emit(MessageEndEvent(message=tool_message))
                         messages.append(tool_message)
+
+                        if signal.is_set():
+                            await emit(TurnEndEvent(message=message, tool_results=tool_results))
+                            break
 
                         if self.options.get_steering_messages is not None:
                             steering_messages = self.options.get_steering_messages()
@@ -235,10 +261,10 @@ class AgentLoop:
                     _llm=self.llm,
                 )
 
-    async def run(self, messages: list[BaseMessage]):
-        signal: AbortSignal = asyncio.Event()
+    async def run(self, messages: list[BaseMessage]) -> None:
+        self._signal = asyncio.Event()
         self.state.is_streaming = True
-        await self._loop(messages, self.process_events, signal)
+        await self._loop(messages, self.process_events, self._signal)
         self.state.is_streaming = False
 
     async def run_continue(self) -> None:
@@ -267,7 +293,7 @@ class AgentLoop:
 
     async def _loop_continue(self) -> None:
         """Continue the agent loop from existing context without adding new messages."""
-        signal: AbortSignal = asyncio.Event()
+        self._signal = asyncio.Event()
         self.state.is_streaming = True
-        await self._loop(self.state.messages, self.process_events, signal)
+        await self._loop(self.state.messages, self.process_events, self._signal)
         self.state.is_streaming = False

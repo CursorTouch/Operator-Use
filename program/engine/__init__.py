@@ -1,4 +1,4 @@
-from program.agent.types import (
+from program.engine.types import (
     AgentState,
     Options,
     AgentEvent,
@@ -20,7 +20,7 @@ from program.agent.types import (
     SteeringQueue,
 )
 from program.tool.types import ToolExecutionMode
-from program.agent.loop import Agent
+from program.engine.loop import AgentLoop as Agent
 
 __all__ = [
     "Agent",

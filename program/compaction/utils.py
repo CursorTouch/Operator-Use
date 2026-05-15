@@ -18,13 +18,6 @@ from program.compaction.types import (
     FileOperations, CutPointResult, ContextUsageEstimate,
 )
 
-from program.compaction.prompts import (
-    SUMMARIZATION_SYSTEM_PROMPT,
-    SUMMARIZATION_PROMPT,
-    UPDATE_SUMMARIZATION_PROMPT,
-    TURN_PREFIX_SUMMARIZATION_PROMPT,
-)
-
 
 # ============================================================================
 # Token calculation
@@ -36,52 +29,63 @@ def calculate_context_tokens(usage: Usage) -> int:
 
 def estimate_tokens(message: AgentMessage) -> int:
     chars = 0
-    if isinstance(message, UserMessage):
-        for c in message.contents:
-            if isinstance(c, TextContent):
-                chars += len(c.content)
-            elif isinstance(c, ImageContent):
-                chars += 4800
-    elif isinstance(message, AssistantMessage):
-        for c in message.contents:
-            if isinstance(c, TextContent):
-                chars += len(c.content)
-            elif isinstance(c, ThinkingContent):
-                chars += len(c.content)
-            elif isinstance(c, ToolCallContent):
-                chars += len(c.name) + len(json.dumps(c.args))
-    elif isinstance(message, ToolMessage):
-        for c in message.contents:
-            if isinstance(c, ToolResultContent) and isinstance(c.content, str):
-                chars += len(c.content)
-    elif isinstance(message, (BranchSummaryMessage, CompactionSummaryMessage)):
-        chars = len(message.summary)
-    elif isinstance(message, CustomMessage):
-        for c in message.contents:
-            if isinstance(c, TextContent):
-                chars += len(c.content)
+    match message:
+        case UserMessage(contents=contents):
+            for content in contents:
+                match content:
+                    case TextContent(content=text):
+                        chars += len(text)
+                    case ImageContent():
+                        chars += 4800
+        case AssistantMessage(contents=contents):
+            for content in contents:
+                match content:
+                    case TextContent(content=text):
+                        chars += len(text)
+                    case ThinkingContent(content=text):
+                        chars += len(text)
+                    case ToolCallContent(name=name, args=args):
+                        chars += len(name) + len(json.dumps(args))
+        case ToolMessage(contents=contents):
+            for content in contents:
+                match content:
+                    case ToolResultContent(content=text):
+                        chars += len(text)
+        case BranchSummaryMessage(summary=summary) | CompactionSummaryMessage(summary=summary):
+            chars = len(summary)
+        case CustomMessage(contents=contents):
+            for content in contents:
+                match content:
+                    case TextContent(content=text):
+                        chars += len(text)
     return max(1, chars // 4)
+
+
+def get_assistant_usage(message:AgentMessage) -> Usage|None:
+    if isinstance(message, AssistantMessage):
+        if message.stop_reason not in (StopReason.Error, StopReason.Abort) and message.usage:
+            return message.usage
+    return None
 
 
 def get_last_assistant_usage(entries: list[SessionEntry]) -> Usage | None:
     for entry in reversed(entries):
-        if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
-            msg = entry.message
-            if msg.stop_reason not in (StopReason.Error, StopReason.Abort) and msg.usage:
-                return msg.usage
+        if message := get_message_from_entry(entry=entry):
+            if usage := get_assistant_usage(message=message):
+                return usage
+    return None
+
+def get_last_assistant_usage_info(messages: list[AgentMessage])->tuple[Usage, int] | None:
+    for i, message in enumerate(reversed(messages)):
+        if usage := get_assistant_usage(message=message):
+            original_index = len(messages) - 1 - i
+            return (usage, original_index)
     return None
 
 
 def estimate_context_tokens(messages: list[AgentMessage]) -> ContextUsageEstimate:
-    last_usage_info: tuple[Usage, int] | None = None
-    for i in reversed(range(len(messages))):
-        msg = messages[i]
-        if isinstance(msg, AssistantMessage):
-            if msg.stop_reason not in (StopReason.Error, StopReason.Abort) and msg.usage:
-                last_usage_info = (msg.usage, i)
-                break
-
-    if last_usage_info is None:
+    usage_info = get_last_assistant_usage_info(messages=messages)
+    if usage_info is None:
         total = sum(estimate_tokens(m) for m in messages)
         return ContextUsageEstimate(
             tokens=total,
@@ -90,14 +94,14 @@ def estimate_context_tokens(messages: list[AgentMessage]) -> ContextUsageEstimat
             last_usage_index=None,
         )
 
-    usage, idx = last_usage_info
-    usage_tokens = calculate_context_tokens(usage)
-    trailing = sum(estimate_tokens(messages[i]) for i in range(idx + 1, len(messages)))
+    usage, last_usage_index = usage_info
+    usage_tokens = calculate_context_tokens(usage=usage)
+    trailing = sum(estimate_tokens(messages[i]) for i in range(last_usage_index + 1, len(messages)))
     return ContextUsageEstimate(
         tokens=usage_tokens + trailing,
         usage_tokens=usage_tokens,
         trailing_tokens=trailing,
-        last_usage_index=idx,
+        last_usage_index=last_usage_index,
     )
 
 
@@ -106,20 +110,21 @@ def estimate_context_tokens(messages: list[AgentMessage]) -> ContextUsageEstimat
 # ============================================================================
 
 def extract_file_ops_from_message(msg: AgentMessage, file_ops: FileOperations) -> None:
-    if not isinstance(msg, AssistantMessage):
-        return
-    for c in msg.contents:
-        if not isinstance(c, ToolCallContent):
-            continue
-        path = c.args.get("path") if c.args else None
-        if not path or not isinstance(path, str):
-            continue
-        if c.name == "read" or c.kind == ToolKind.Read:
-            file_ops.read.add(path)
-        elif c.name == "write" or c.kind == ToolKind.Write:
-            file_ops.written.add(path)
-        elif c.name == "edit" or c.kind == ToolKind.Edit:
-            file_ops.edited.add(path)
+    match msg:
+        case AssistantMessage(contents=contents):
+            for content in contents:
+                match content:
+                    case ToolCallContent(kind=kind, args=args):
+                        path = args.get("path") if args else None
+                        if not path or not isinstance(path, str):
+                            continue
+                        match kind:
+                            case ToolKind.Read:
+                                file_ops.read.add(path)
+                            case ToolKind.Write:
+                                file_ops.written.add(path)
+                            case ToolKind.Edit:
+                                file_ops.edited.add(path)
 
 
 def compute_file_lists(file_ops: FileOperations) -> tuple[list[str], list[str]]:
@@ -145,15 +150,17 @@ def format_file_operations(read_files: list[str], modified_files: list[str]) -> 
 # ============================================================================
 
 def get_message_from_entry(entry: SessionEntry) -> AgentMessage | None:
-    if isinstance(entry, MessageEntry):
-        return entry.message
-    if isinstance(entry, CustomMessageEntry):
-        return CustomMessage.from_session(entry)
-    if isinstance(entry, BranchEntry):
-        return BranchSummaryMessage.from_session(entry)
-    if isinstance(entry, CompactionEntry):
-        return CompactionSummaryMessage.from_session(entry)
-    return None
+    match entry:
+        case MessageEntry(message=message):
+            return message
+        case CustomMessageEntry():
+            return CustomMessage.from_session(entry=entry)
+        case BranchEntry():
+            return BranchSummaryMessage.from_session(entry=entry)
+        case CompactionEntry():
+            return CompactionSummaryMessage.from_session(entry=entry)
+        case _:
+            return None
 
 
 def get_message_from_entry_for_compaction(entry: SessionEntry) -> AgentMessage | None:
@@ -172,15 +179,13 @@ def find_valid_cut_points(
     cut_points: list[int] = []
     for i in range(start_index, end_index):
         entry = entries[i]
-        if isinstance(entry, MessageEntry):
-            role = entry.message.role
-            if role in (
-                Role.USER, Role.ASSISTANT, Role.CUSTOM,
-                Role.BRANCH_SUMMARY, Role.COMPACTION_SUMMARY,
-            ):
+        match entry:
+            case MessageEntry():
+                match entry.message.role:
+                    case Role.USER | Role.ASSISTANT | Role.CUSTOM | Role.BRANCH_SUMMARY | Role.COMPACTION_SUMMARY:
+                        cut_points.append(i)
+            case BranchEntry() | CustomMessageEntry():
                 cut_points.append(i)
-        elif isinstance(entry, (BranchEntry, CustomMessageEntry)):
-            cut_points.append(i)
     return cut_points
 
 
@@ -189,10 +194,17 @@ def find_turn_start_index(
 ) -> int:
     for i in range(entry_index, start_index - 1, -1):
         entry = entries[i]
-        if isinstance(entry, (BranchEntry, CustomMessageEntry)):
-            return i
-        if isinstance(entry, MessageEntry) and entry.message.role == Role.USER:
-            return i
+        match entry:
+            case BranchEntry() | CustomMessageEntry():
+                return i
+            case MessageEntry(message=message):
+                match message.role:
+                    case Role.USER:
+                        return i
+                    case _:  # Role.ASSISTANT | Role.CUSTOM | Role.BRANCH_SUMMARY | Role.COMPACTION_SUMMARY
+                        continue
+            case _: # Label
+                continue
     return -1
 
 
@@ -266,39 +278,49 @@ def _truncate_for_summary(text: str, max_chars: int = _TOOL_RESULT_MAX_CHARS) ->
 def serialize_conversation(messages: list[AgentMessage]) -> str:
     parts: list[str] = []
     for msg in messages:
-        if isinstance(msg, UserMessage):
-            text = " ".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            if text:
-                parts.append(f"[User]: {text}")
-        elif isinstance(msg, AssistantMessage):
-            thinking_parts = [c.content for c in msg.contents if isinstance(c, ThinkingContent)]
-            text_parts = [c.content for c in msg.contents if isinstance(c, TextContent)]
-            tool_calls = [
-                "{name}({args})".format(
-                    name=c.name,
-                    args=", ".join(f"{k}={json.dumps(v)}" for k, v in (c.args or {}).items()),
-                )
-                for c in msg.contents if isinstance(c, ToolCallContent)
-            ]
-            if thinking_parts:
-                parts.append(f"[Assistant thinking]: {'\n'.join(thinking_parts)}")
-            if text_parts:
-                parts.append(f"[Assistant]: {'\n'.join(text_parts)}")
-            if tool_calls:
-                parts.append(f"[Assistant tool calls]: {'; '.join(tool_calls)}")
-        elif isinstance(msg, ToolMessage):
-            text = " ".join(
-                c.content for c in msg.contents
-                if isinstance(c, ToolResultContent) and isinstance(c.content, str)
-            )
-            if text:
-                parts.append(f"[Tool result]: {_truncate_for_summary(text)}")
-        elif isinstance(msg, CustomMessage):
-            text = " ".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            if text:
-                parts.append(f"[{msg.custom_type.upper()}]: {text}")
-        elif isinstance(msg, BranchSummaryMessage):
-            parts.append(f"[Branch summary]: {msg.summary}")
-        elif isinstance(msg, CompactionSummaryMessage):
-            parts.append(f"[Compaction summary]: {msg.summary}")
+        match msg:
+            case UserMessage(contents=contents):
+                text_parts: list[str] = []
+                for c in contents:
+                    match c:
+                        case TextContent(content=text):
+                            text_parts.append(text)
+                if text_parts:
+                    parts.append(f"[User]: {'\n'.join(text_parts)}")
+            case AssistantMessage(contents=contents):
+                thinking_parts: list[str] = []
+                text_parts: list[str] = []
+                tool_calls: list[str] = []
+                for c in contents:
+                    match c:
+                        case ThinkingContent(content=text):
+                            thinking_parts.append(text)
+                        case TextContent(content=text):
+                            text_parts.append(text)
+                        case ToolCallContent(name=name, args=args):
+                            tool_calls.append(f"{name}({', '.join(f'{k}={json.dumps(v)}' for k, v in (args or {}).items())})")
+                if thinking_parts:
+                    parts.append(f"[Assistant thinking]: {'\n'.join(thinking_parts)}")
+                if text_parts:
+                    parts.append(f"[Assistant]: {'\n'.join(text_parts)}")
+                if tool_calls:
+                    parts.append(f"[Assistant tool calls]: {'; '.join(tool_calls)}")
+            case ToolMessage(contents=contents):
+                text_parts: list[str] = []
+                for c in contents:
+                    match c:
+                        case ToolResultContent(content=text):
+                            text_parts.append(text)
+                if text_parts:
+                    parts.append(f"[Tool result]: {_truncate_for_summary('\n'.join(text_parts))}")
+            case CustomMessage(custom_type=custom_type, contents=contents):
+                text_parts: list[str] = []
+                for c in contents:
+                    match c:
+                        case TextContent(content=text):
+                            text_parts.append(text)
+                if text_parts:
+                    parts.append(f"[{custom_type.upper()}]: {'\n'.join(text_parts)}")
+            case BranchSummaryMessage(summary=summary) | CompactionSummaryMessage(summary=summary):
+                parts.append(f"[{type(msg).__name__.replace('Message', '')}]: {summary}")
     return "\n\n".join(parts)

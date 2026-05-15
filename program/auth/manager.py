@@ -149,21 +149,21 @@ class AuthManager:
 
         credential = self.get(provider)
 
-        if isinstance(credential, APICredential):
-            return credential.key
-
-        if isinstance(credential, OAuthCredential):
-            oauth_provider = self.registry.get_oauth_provider(provider=provider)
-            if not oauth_provider:
-                return None
-
-            if oauth_provider.is_expired(credential=credential):
-                refreshed_credential = await self._refresh_oauth_token_with_lock(provider=provider)
-                if refreshed_credential:
-                    credential = refreshed_credential
-                else:
+        match credential:
+            case APICredential():
+                return credential.key
+            case OAuthCredential():
+                oauth_provider = self.registry.get_oauth_provider(provider=provider)
+                if not oauth_provider:
                     return None
-            return oauth_provider.get_api_key(credential=credential)
+
+                if oauth_provider.is_expired(credential=credential):
+                    refreshed_credential = await self._refresh_oauth_token_with_lock(provider=provider)
+                    if refreshed_credential:
+                        credential = refreshed_credential
+                    else:
+                        return None
+                return oauth_provider.get_api_key(credential=credential)
 
         # 2. Environment variable fallback
         return _get_env_api_key(provider)

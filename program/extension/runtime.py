@@ -11,13 +11,13 @@ from program.extension.types import (
 )
 
 
-class ExtensionRunner:
+class ExtensionRuntime:
     """
     Dispatches lifecycle events to all loaded extensions.
 
     Usage:
-        runner = ExtensionRunner(load_result, context)
-        await runner.emit('session_start', event)
+        runtime = ExtensionRuntime(load_result, context)
+        await runtime.emit('session_start', event)
     """
 
     def __init__(self, load_result: LoadExtensionsResult, context: ExtensionContext) -> None:

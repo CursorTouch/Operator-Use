@@ -36,46 +36,49 @@ def _messages_to_gemini(
     contents: list[genai_types.Content] = []
 
     for msg in messages:
-        if isinstance(msg, SystemMessage):
-            system = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-        elif isinstance(msg, UserMessage):
-            parts: list[genai_types.Part] = []
-            for item in msg.contents:
-                if isinstance(item, TextContent):
-                    parts.append(genai_types.Part(text=item.content))
-                elif isinstance(item, ImageContent):
-                    for b64, mime in item.to_base64():
+        match msg:
+            case SystemMessage():
+                system = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
+            case UserMessage():
+                parts: list[genai_types.Part] = []
+                for item in msg.contents:
+                    match item:
+                        case TextContent():
+                            parts.append(genai_types.Part(text=item.content))
+                        case ImageContent():
+                            for b64, mime in item.to_base64():
+                                parts.append(genai_types.Part(
+                                    inline_data=genai_types.Blob(mime_type=mime or "image/png", data=b64),
+                                ))
+                if parts:
+                    contents.append(genai_types.Content(role="user", parts=parts))
+            case AssistantMessage():
+                parts = []
+                for item in msg.contents:
+                    match item:
+                        case TextContent():
+                            parts.append(genai_types.Part(text=item.content))
+                        case ToolCallContent():
+                            parts.append(genai_types.Part(
+                                function_call=genai_types.FunctionCall(
+                                    name=item.name,
+                                    args=item.args,
+                                ),
+                            ))
+                if parts:
+                    contents.append(genai_types.Content(role="model", parts=parts))
+            case ToolMessage():
+                parts = []
+                for content in msg.contents:
+                    if isinstance(content, ToolResultContent):
                         parts.append(genai_types.Part(
-                            inline_data=genai_types.Blob(mime_type=mime or "image/png", data=b64),
+                            function_response=genai_types.FunctionResponse(
+                                name=content.id,
+                                response={"result": content.content},
+                            ),
                         ))
-            if parts:
-                contents.append(genai_types.Content(role="user", parts=parts))
-        elif isinstance(msg, AssistantMessage):
-            parts = []
-            for item in msg.contents:
-                if isinstance(item, TextContent):
-                    parts.append(genai_types.Part(text=item.content))
-                elif isinstance(item, ToolCallContent):
-                    parts.append(genai_types.Part(
-                        function_call=genai_types.FunctionCall(
-                            name=item.name,
-                            args=item.args,
-                        ),
-                    ))
-            if parts:
-                contents.append(genai_types.Content(role="model", parts=parts))
-        elif isinstance(msg, ToolMessage):
-            parts = []
-            for content in msg.contents:
-                if isinstance(content, ToolResultContent):
-                    parts.append(genai_types.Part(
-                        function_response=genai_types.FunctionResponse(
-                            name=content.id,
-                            response={"result": content.content},
-                        ),
-                    ))
-            if parts:
-                contents.append(genai_types.Content(role="user", parts=parts))
+                if parts:
+                    contents.append(genai_types.Content(role="user", parts=parts))
 
     return system, contents
 

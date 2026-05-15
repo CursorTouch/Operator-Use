@@ -74,17 +74,19 @@ def collect_entries_for_branch_summary(
 # ============================================================================
 
 def _get_message_from_entry(entry: SessionEntry) -> AgentMessage | None:
-    if isinstance(entry, MessageEntry):
-        if isinstance(entry.message, ToolMessage):
-            return None  # skip tool results; context is in assistant's tool call
-        return entry.message
-    if isinstance(entry, CustomMessageEntry):
-        return CustomMessage.from_session(entry)
-    if isinstance(entry, BranchEntry):
-        return BranchSummaryMessage.from_session(entry)
-    if isinstance(entry, CompactionEntry):
-        return CompactionSummaryMessage.from_session(entry)
-    return None
+    match entry:
+        case MessageEntry():
+            if isinstance(entry.message, ToolMessage):
+                return None  # skip tool results; context is in assistant's tool call
+            return entry.message
+        case CustomMessageEntry():
+            return CustomMessage.from_session(entry)
+        case BranchEntry():
+            return BranchSummaryMessage.from_session(entry)
+        case CompactionEntry():
+            return CompactionSummaryMessage.from_session(entry)
+        case _:
+            return None
 
 # ============================================================================
 # Preparation
@@ -182,13 +184,14 @@ async def generate_branch_summary(
     error_msg = ""
 
     for event in events:
-        if isinstance(event, TextEndEvent):
-            text_parts.append(event.text.content)
-        elif isinstance(event, EndEvent):
-            stop_reason = event.reason
-        elif isinstance(event, ErrorEvent):
-            stop_reason = event.reason
-            error_msg = event.error
+        match event:
+            case TextEndEvent():
+                text_parts.append(event.text.content)
+            case EndEvent():
+                stop_reason = event.reason
+            case ErrorEvent():
+                stop_reason = event.reason
+                error_msg = event.error
 
     if stop_reason == StopReason.Abort:
         return BranchSummaryResult(aborted=True)

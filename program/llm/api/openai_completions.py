@@ -40,12 +40,13 @@ _STOP_REASON: dict[str, StopReason] = {
 def _user_content(content_items: list) -> str | list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     for item in content_items:
-        if isinstance(item, TextContent):
-            parts.append({"type": "text", "text": item.content})
-        elif isinstance(item, ImageContent):
-            for b64, mime in item.to_base64():
-                url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
-                parts.append({"type": "image_url", "image_url": {"url": url}})
+        match item:
+            case TextContent():
+                parts.append({"type": "text", "text": item.content})
+            case ImageContent():
+                for b64, mime in item.to_base64():
+                    url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
+                    parts.append({"type": "image_url", "image_url": {"url": url}})
     if len(parts) == 1 and parts[0]["type"] == "text":
         return parts[0]["text"]
     return parts
@@ -55,14 +56,15 @@ def _assistant_content(content_items: list) -> tuple[str | None, list[dict[str, 
     text_parts: list[str] = []
     tool_calls: list[dict[str, Any]] = []
     for item in content_items:
-        if isinstance(item, TextContent):
-            text_parts.append(item.content)
-        elif isinstance(item, ToolCallContent):
-            tool_calls.append({
-                "id": item.id,
-                "type": "function",
-                "function": {"name": item.name, "arguments": json.dumps(item.args)},
-            })
+        match item:
+            case TextContent():
+                text_parts.append(item.content)
+            case ToolCallContent():
+                tool_calls.append({
+                    "id": item.id,
+                    "type": "function",
+                    "function": {"name": item.name, "arguments": json.dumps(item.args)},
+                })
     text = "".join(text_parts) or None
     return text, tool_calls
 
@@ -70,29 +72,30 @@ def _assistant_content(content_items: list) -> tuple[str | None, list[dict[str, 
 def _messages_to_chat(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for msg in messages:
-        if isinstance(msg, SystemMessage):
-            text = "\n".join(
-                c.content for c in msg.contents if isinstance(c, TextContent)
-            )
-            result.append({"role": "system", "content": text})
-        elif isinstance(msg, UserMessage):
-            result.append({"role": "user", "content": _user_content(msg.contents)})
-        elif isinstance(msg, AssistantMessage):
-            text, tool_calls = _assistant_content(msg.contents)
-            entry: dict[str, Any] = {"role": "assistant"}
-            if text is not None:
-                entry["content"] = text
-            if tool_calls:
-                entry["tool_calls"] = tool_calls
-            result.append(entry)
-        elif isinstance(msg, ToolMessage):
-            for content in msg.contents:
-                if isinstance(content, ToolResultContent):
-                    result.append({
-                        "role": "tool",
-                        "tool_call_id": content.id,
-                        "content": content.content,
-                    })
+        match msg:
+            case SystemMessage():
+                text = "\n".join(
+                    c.content for c in msg.contents if isinstance(c, TextContent)
+                )
+                result.append({"role": "system", "content": text})
+            case UserMessage():
+                result.append({"role": "user", "content": _user_content(msg.contents)})
+            case AssistantMessage():
+                text, tool_calls = _assistant_content(msg.contents)
+                entry: dict[str, Any] = {"role": "assistant"}
+                if text is not None:
+                    entry["content"] = text
+                if tool_calls:
+                    entry["tool_calls"] = tool_calls
+                result.append(entry)
+            case ToolMessage():
+                for content in msg.contents:
+                    if isinstance(content, ToolResultContent):
+                        result.append({
+                            "role": "tool",
+                            "tool_call_id": content.id,
+                            "content": content.content,
+                        })
     return result
 
 

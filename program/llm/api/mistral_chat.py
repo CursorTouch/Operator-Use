@@ -37,12 +37,13 @@ _MINIMAL_LEVELS = {ThinkingLevel.Low, ThinkingLevel.Minimal}
 def _user_content(content_items: list) -> str | list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     for item in content_items:
-        if isinstance(item, TextContent):
-            parts.append({"type": "text", "text": item.content})
-        elif isinstance(item, ImageContent):
-            for b64, mime in item.to_base64():
-                url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
-                parts.append({"type": "image_url", "image_url": {"url": url}})
+        match item:
+            case TextContent():
+                parts.append({"type": "text", "text": item.content})
+            case ImageContent():
+                for b64, mime in item.to_base64():
+                    url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
+                    parts.append({"type": "image_url", "image_url": {"url": url}})
     if len(parts) == 1 and parts[0]["type"] == "text":
         return parts[0]["text"]
     return parts
@@ -51,52 +52,54 @@ def _user_content(content_items: list) -> str | list[dict[str, Any]]:
 def _messages_to_mistral(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for msg in messages:
-        if isinstance(msg, SystemMessage):
-            text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            result.append({"role": "system", "content": text})
-        elif isinstance(msg, UserMessage):
-            result.append({"role": "user", "content": _user_content(msg.contents)})
-        elif isinstance(msg, AssistantMessage):
-            text_parts: list[str] = []
-            tool_calls: list[dict[str, Any]] = []
-            content_chunks: list[dict[str, Any]] = []
-            has_thinking = any(isinstance(c, ThinkingContent) for c in msg.contents)
-            for item in msg.contents:
-                if isinstance(item, ThinkingContent):
-                    content_chunks.append({
-                        "type": "thinking",
-                        "thinking": [{"type": "text", "text": item.content}],
-                        "signature": item.signature,
-                    })
-                elif isinstance(item, TextContent):
-                    if has_thinking:
-                        content_chunks.append({"type": "text", "text": item.content})
-                    else:
-                        text_parts.append(item.content)
-                elif isinstance(item, ToolCallContent):
-                    tool_calls.append({
-                        "id": item.id,
-                        "type": "function",
-                        "function": {"name": item.name, "arguments": json.dumps(item.args)},
-                    })
-            entry: dict[str, Any] = {"role": "assistant"}
-            if has_thinking:
-                entry["content"] = content_chunks
-            else:
-                text = "".join(text_parts) or None
-                if text is not None:
-                    entry["content"] = text
-            if tool_calls:
-                entry["tool_calls"] = tool_calls
-            result.append(entry)
-        elif isinstance(msg, ToolMessage):
-            for content in msg.contents:
-                if isinstance(content, ToolResultContent):
-                    result.append({
-                        "role": "tool",
-                        "tool_call_id": content.id,
-                        "content": content.content,
-                    })
+        match msg:
+            case SystemMessage():
+                text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
+                result.append({"role": "system", "content": text})
+            case UserMessage():
+                result.append({"role": "user", "content": _user_content(msg.contents)})
+            case AssistantMessage():
+                text_parts: list[str] = []
+                tool_calls: list[dict[str, Any]] = []
+                content_chunks: list[dict[str, Any]] = []
+                has_thinking = any(isinstance(c, ThinkingContent) for c in msg.contents)
+                for item in msg.contents:
+                    match item:
+                        case ThinkingContent():
+                            content_chunks.append({
+                                "type": "thinking",
+                                "thinking": [{"type": "text", "text": item.content}],
+                                "signature": item.signature,
+                            })
+                        case TextContent():
+                            if has_thinking:
+                                content_chunks.append({"type": "text", "text": item.content})
+                            else:
+                                text_parts.append(item.content)
+                        case ToolCallContent():
+                            tool_calls.append({
+                                "id": item.id,
+                                "type": "function",
+                                "function": {"name": item.name, "arguments": json.dumps(item.args)},
+                            })
+                entry: dict[str, Any] = {"role": "assistant"}
+                if has_thinking:
+                    entry["content"] = content_chunks
+                else:
+                    text = "".join(text_parts) or None
+                    if text is not None:
+                        entry["content"] = text
+                if tool_calls:
+                    entry["tool_calls"] = tool_calls
+                result.append(entry)
+            case ToolMessage():
+                for content in msg.contents:
+                    if isinstance(content, ToolResultContent):
+                        result.append({
+                            "role": "tool",
+                            "tool_call_id": content.id,
+                            "content": content.content,
+                        })
     return result
 
 

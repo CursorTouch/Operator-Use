@@ -93,21 +93,22 @@ def _resolve_ws_url(base_url: str | None) -> str:
 def _content_to_input(content_items: list) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     for item in content_items:
-        if isinstance(item, TextContent):
-            parts.append({"type": "input_text", "text": item.content})
-        elif isinstance(item, ImageContent):
-            for b64, mime in item.to_base64():
-                url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
-                parts.append({"type": "input_image", "image_url": url})
-        elif isinstance(item, ThinkingContent):
-            parts.append({"type": "thinking", "thinking": item.content, "signature": item.signature})
-        elif isinstance(item, ToolCallContent):
-            parts.append({
-                "type": "function_call",
-                "call_id": item.id,
-                "name": item.name,
-                "arguments": json.dumps(item.args),
-            })
+        match item:
+            case TextContent():
+                parts.append({"type": "input_text", "text": item.content})
+            case ImageContent():
+                for b64, mime in item.to_base64():
+                    url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
+                    parts.append({"type": "input_image", "image_url": url})
+            case ThinkingContent():
+                parts.append({"type": "thinking", "thinking": item.content, "signature": item.signature})
+            case ToolCallContent():
+                parts.append({
+                    "type": "function_call",
+                    "call_id": item.id,
+                    "name": item.name,
+                    "arguments": json.dumps(item.args),
+                })
     return parts
 
 
@@ -116,23 +117,24 @@ def _messages_to_input(messages: list[BaseMessage]) -> tuple[str, list[dict[str,
     input_items: list[dict[str, Any]] = []
 
     for msg in messages:
-        if isinstance(msg, SystemMessage):
-            text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-            if text:
-                instructions = text
-        elif isinstance(msg, ToolMessage):
-            for content in msg.contents:
-                if isinstance(content, ToolResultContent):
-                    input_items.append({
-                        "type": "function_call_output",
-                        "call_id": content.id,
-                        "output": content.content,
-                    })
-        else:
-            role = "user" if isinstance(msg, UserMessage) else "assistant"
-            parts = _content_to_input(msg.contents)
-            if parts:
-                input_items.append({"role": role, "content": parts})
+        match msg:
+            case SystemMessage():
+                text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
+                if text:
+                    instructions = text
+            case ToolMessage():
+                for content in msg.contents:
+                    if isinstance(content, ToolResultContent):
+                        input_items.append({
+                            "type": "function_call_output",
+                            "call_id": content.id,
+                            "output": content.content,
+                        })
+            case UserMessage() | AssistantMessage():
+                role = "user" if isinstance(msg, UserMessage) else "assistant"
+                parts = _content_to_input(msg.contents)
+                if parts:
+                    input_items.append({"role": role, "content": parts})
 
     return instructions, input_items
 

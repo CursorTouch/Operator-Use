@@ -4,8 +4,8 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from program.llm.types import LLMContext, TextEndEvent, EndEvent, ErrorEvent, StopReason, ThinkingLevel
-from program.message.types import AgentMessage, UserMessage, TextContent
-from program.session.types import SessionEntry, CompactionEntry
+from program.message.types import AgentMessage, UserMessage, TextContent, CompactionSummaryMessage, BranchSummaryMessage, CustomMessage
+from program.session.types import SessionEntry, CompactionEntry, MessageEntry, CustomMessageEntry, BranchEntry
 
 from program.compaction.types import (
     CompactionSettings,
@@ -28,6 +28,24 @@ class Compaction:
     def __init__(self, llm: LLM, settings: CompactionSettings | None = None):
         self.llm = llm
         self.settings = settings or CompactionSettings()
+
+    def extract_file_operations(self, messages: list[AgentMessage], entries: list[SessionEntry], prev_compaction_idx:int) -> FileOperations:
+        file_ops = FileOperations()
+
+        if prev_compaction_idx >= 0:
+            if isinstance(entries[prev_compaction_idx], CompactionEntry):
+                prev_compaction=entries[prev_compaction_idx]
+                if prev_details:=prev_compaction.details:
+                    if isinstance(prev_details, CompactionDetails):
+                        for f in prev_details.read_files:
+                            file_ops.read.add(f)
+                        for f in prev_details.modified_files:
+                            file_ops.edited.add(f)
+
+        for message in messages:
+            extract_file_ops_from_message(message, file_ops)
+
+    
 
     def should_compact(self, context_tokens: int, context_window: int) -> bool:
         if not self.settings.enabled:
@@ -156,13 +174,14 @@ class Compaction:
         stop_reason = StopReason.Stop
         error = ""
         for event in events:
-            if isinstance(event, TextEndEvent):
-                text_parts.append(event.text.content)
-            elif isinstance(event, EndEvent):
-                stop_reason = event.reason
-            elif isinstance(event, ErrorEvent):
-                stop_reason = event.reason
-                error = event.error
+            match event:
+                case TextEndEvent():
+                    text_parts.append(event.text.content)
+                case EndEvent():
+                    stop_reason = event.reason
+                case ErrorEvent():
+                    stop_reason = event.reason
+                    error = event.error
 
         if stop_reason == StopReason.Error:
             raise RuntimeError(f"Summarization failed: {error or 'Unknown error'}")
@@ -197,13 +216,14 @@ class Compaction:
         stop_reason = StopReason.Stop
         error = ""
         for event in events:
-            if isinstance(event, TextEndEvent):
-                text_parts.append(event.text.content)
-            elif isinstance(event, EndEvent):
-                stop_reason = event.reason
-            elif isinstance(event, ErrorEvent):
-                stop_reason = event.reason
-                error = event.error
+            match event:
+                case TextEndEvent():
+                    text_parts.append(event.text.content)
+                case EndEvent():
+                    stop_reason = event.reason
+                case ErrorEvent():
+                    stop_reason = event.reason
+                    error = event.error
 
         if stop_reason == StopReason.Error:
             raise RuntimeError(f"Turn prefix summarization failed: {error or 'Unknown error'}")

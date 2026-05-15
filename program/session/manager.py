@@ -285,21 +285,23 @@ class SessionManager:
             )
 
         for entry in entries:
-            if isinstance(entry, ThinkingLevelChangeEntry):
-                thinking_level = entry.thinking_level
-            elif isinstance(entry, ModelChangeEntry):
-                model_id = entry.model_id
-                provider_id = entry.provider_id
-            elif isinstance(entry, CompactionEntry):
-                compaction = entry
+            match entry:
+                case ThinkingLevelChangeEntry():
+                    thinking_level = entry.thinking_level
+                case ModelChangeEntry():
+                    model_id = entry.model_id
+                    provider_id = entry.provider_id
+                case CompactionEntry():
+                    compaction = entry
 
         def append_message(entry: SessionEntry):
-            if isinstance(entry, MessageEntry):
-                messages.append(entry.message)
-            elif isinstance(entry, CustomMessageEntry):
-                messages.append(CustomMessage.from_session(entry=entry))
-            elif isinstance(entry, BranchEntry):
-                messages.append(BranchSummaryMessage.from_session(entry=entry))
+            match entry:
+                case MessageEntry():
+                    messages.append(entry.message)
+                case CustomMessageEntry():
+                    messages.append(CustomMessage.from_session(entry=entry))
+                case BranchEntry():
+                    messages.append(BranchSummaryMessage.from_session(entry=entry))
 
         if not compaction:
             for entry in entries:

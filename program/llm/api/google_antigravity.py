@@ -120,46 +120,49 @@ def _messages_to_contents(
     raw: list[dict[str, Any]] = []
 
     for msg in messages:
-        if isinstance(msg, SystemMessage):
-            system = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
-        elif isinstance(msg, UserMessage):
-            parts: list[dict[str, Any]] = []
-            for item in msg.contents:
-                if isinstance(item, TextContent):
-                    parts.append({"text": item.content})
-                elif isinstance(item, ImageContent):
-                    for b64, mime in item.to_base64():
-                        parts.append({"inlineData": {"mimeType": mime or "image/png", "data": b64}})
-            if parts:
-                raw.append({"role": "user", "parts": parts})
-        elif isinstance(msg, AssistantMessage):
-            parts = []
-            for item in msg.contents:
-                if isinstance(item, TextContent):
-                    parts.append({"text": item.content})
-                elif isinstance(item, ThinkingContent):
-                    parts.append({"thought": True, "text": item.content})
-                elif isinstance(item, ToolCallContent):
-                    parts.append({
-                        "functionCall": {
-                            "name": item.name,
-                            "args": item.args if isinstance(item.args, dict) else {},
-                        }
-                    })
-            if parts:
-                raw.append({"role": "model", "parts": parts})
-        elif isinstance(msg, ToolMessage):
-            parts = []
-            for content in msg.contents:
-                if isinstance(content, ToolResultContent):
-                    parts.append({
-                        "functionResponse": {
-                            "name": content.id,
-                            "response": {"result": content.content}
-                        }
-                    })
-            if parts:
-                raw.append({"role": "user", "parts": parts})
+        match msg:
+            case SystemMessage():
+                system = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
+            case UserMessage():
+                parts: list[dict[str, Any]] = []
+                for item in msg.contents:
+                    match item:
+                        case TextContent():
+                            parts.append({"text": item.content})
+                        case ImageContent():
+                            for b64, mime in item.to_base64():
+                                parts.append({"inlineData": {"mimeType": mime or "image/png", "data": b64}})
+                if parts:
+                    raw.append({"role": "user", "parts": parts})
+            case AssistantMessage():
+                parts = []
+                for item in msg.contents:
+                    match item:
+                        case TextContent():
+                            parts.append({"text": item.content})
+                        case ThinkingContent():
+                            parts.append({"thought": True, "text": item.content})
+                        case ToolCallContent():
+                            parts.append({
+                                "functionCall": {
+                                    "name": item.name,
+                                    "args": item.args if isinstance(item.args, dict) else {},
+                                }
+                            })
+                if parts:
+                    raw.append({"role": "model", "parts": parts})
+            case ToolMessage():
+                parts = []
+                for content in msg.contents:
+                    if isinstance(content, ToolResultContent):
+                        parts.append({
+                            "functionResponse": {
+                                "name": content.id,
+                                "response": {"result": content.content}
+                            }
+                        })
+                if parts:
+                    raw.append({"role": "user", "parts": parts})
 
     # Merge consecutive same-role turns (Gemini requires strict alternation)
     contents: list[dict[str, Any]] = []

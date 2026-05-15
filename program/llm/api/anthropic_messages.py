@@ -37,53 +37,56 @@ def _messages_to_anthropic(
     result: list[dict[str, Any]] = []
 
     for msg in messages:
-        if isinstance(msg, SystemMessage):
-            system = "\n".join(
-                c.content for c in msg.contents if isinstance(c, TextContent)
-            )
-        elif isinstance(msg, UserMessage):
-            parts: list[dict[str, Any]] = []
-            has_text = False
-            has_image = False
-            for item in msg.contents:
-                if isinstance(item, TextContent):
-                    has_text = True
-                    parts.append({"type": "text", "text": item.content})
-                elif isinstance(item, ImageContent):
-                    has_image = True
-                    for b64, mime in item.to_base64():
-                        parts.append({
-                            "type": "image",
-                            "source": {"type": "base64", "media_type": mime or "image/png", "data": b64},
+        match msg:
+            case SystemMessage():
+                system = "\n".join(
+                    c.content for c in msg.contents if isinstance(c, TextContent)
+                )
+            case UserMessage():
+                parts: list[dict[str, Any]] = []
+                has_text = False
+                has_image = False
+                for item in msg.contents:
+                    match item:
+                        case TextContent():
+                            has_text = True
+                            parts.append({"type": "text", "text": item.content})
+                        case ImageContent():
+                            has_image = True
+                            for b64, mime in item.to_base64():
+                                parts.append({
+                                    "type": "image",
+                                    "source": {"type": "base64", "media_type": mime or "image/png", "data": b64},
+                                })
+                if has_image and not has_text:
+                    parts.append({"type": "text", "text": "(see attached image)"})
+                result.append({"role": "user", "content": parts})
+            case AssistantMessage():
+                parts = []
+                for item in msg.contents:
+                    match item:
+                        case TextContent():
+                            parts.append({"type": "text", "text": item.content})
+                        case ThinkingContent():
+                            parts.append({"type": "thinking", "thinking": item.content, "signature": item.signature})
+                        case ToolCallContent():
+                            parts.append({"type": "tool_use", "id": item.id, "name": item.name, "input": item.args})
+                result.append({"role": "assistant", "content": parts})
+            case ToolMessage():
+                tool_results = []
+                for content in msg.contents:
+                    if isinstance(content, ToolResultContent):
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": content.id,
+                            "content": content.content,
+                            "is_error": content.is_error,
                         })
-            if has_image and not has_text:
-                parts.append({"type": "text", "text": "(see attached image)"})
-            result.append({"role": "user", "content": parts})
-        elif isinstance(msg, AssistantMessage):
-            parts = []
-            for item in msg.contents:
-                if isinstance(item, TextContent):
-                    parts.append({"type": "text", "text": item.content})
-                elif isinstance(item, ThinkingContent):
-                    parts.append({"type": "thinking", "thinking": item.content, "signature": item.signature})
-                elif isinstance(item, ToolCallContent):
-                    parts.append({"type": "tool_use", "id": item.id, "name": item.name, "input": item.args})
-            result.append({"role": "assistant", "content": parts})
-        elif isinstance(msg, ToolMessage):
-            tool_results = []
-            for content in msg.contents:
-                if isinstance(content, ToolResultContent):
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": content.id,
-                        "content": content.content,
-                        "is_error": content.is_error,
+                if tool_results:
+                    result.append({
+                        "role": "user",
+                        "content": tool_results,
                     })
-            if tool_results:
-                result.append({
-                    "role": "user",
-                    "content": tool_results,
-                })
 
     return system, result
 
