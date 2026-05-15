@@ -17,7 +17,7 @@ _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
 def _build_content(context: ImageContext) -> list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
-    for item in context.input:
+    for item in context.contents:
         if isinstance(item, TextContent):
             parts.append({"type": "text", "text": item.content})
         elif isinstance(item, ImageContent):

@@ -40,15 +40,21 @@ def _messages_to_anthropic(
             system = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
         elif isinstance(msg, UserMessage):
             parts: list[dict[str, Any]] = []
+            has_text = False
+            has_image = False
             for item in msg.contents:
                 if isinstance(item, TextContent):
+                    has_text = True
                     parts.append({"type": "text", "text": item.content})
                 elif isinstance(item, ImageContent):
+                    has_image = True
                     for b64, mime in item.to_base64():
                         parts.append({
                             "type": "image",
                             "source": {"type": "base64", "media_type": mime or "image/png", "data": b64},
                         })
+            if has_image and not has_text:
+                parts.append({"type": "text", "text": "(see attached image)"})
             result.append({"role": "user", "content": parts})
         elif isinstance(msg, AssistantMessage):
             parts = []

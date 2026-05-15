@@ -28,7 +28,7 @@ class ImageOptions:
 
 @dataclass
 class ImageContext:
-    input: list[TextContent | ImageContent]
+    contents: list[TextContent | ImageContent]
 
 
 @dataclass
