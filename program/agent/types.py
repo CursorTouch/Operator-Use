@@ -1,10 +1,8 @@
 from __future__ import annotations
 from asyncio import Queue
-from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Optional
-from program.llm.model.types import Model
+from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 import asyncio
 
 if TYPE_CHECKING:
@@ -16,13 +14,7 @@ from program.message.types import BaseMessage, ToolCallContent, ToolResultConten
 from program.tool.types import ToolInvocation, ToolResult, ToolExecutionMode
 
 AbortSignal = asyncio.Event
-EmitEvent = Callable[['AgentEvent'], None]
-
-class AgentContext:
-    system_prompt:str
-    model:Model
-    messages: list[BaseMessage]
-    tools: list[Tool]
+EmitEvent = Callable[['AgentEvent'], Awaitable[None]]
 
 class SteeringMode(str, Enum):
     OneAtATime = "one_at_a_time"

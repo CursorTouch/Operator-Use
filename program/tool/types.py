@@ -3,7 +3,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional, Type
+from typing import Any, Awaitable, Callable, Optional, Type
 from pydantic import BaseModel
 
 
@@ -53,7 +53,7 @@ class ToolResult:
     ) -> ToolResult:
         return cls(id=id, content=content, is_error=True, metadata=metadata or {})
 
-ToolExecutionUpdateCallback = Callable[[ToolResult], None]
+ToolExecutionUpdateCallback = Callable[[ToolResult], Awaitable[None]]
 
 AbortSignal = asyncio.Event
 

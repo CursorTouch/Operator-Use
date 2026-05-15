@@ -1,19 +1,18 @@
 from __future__ import annotations
 from program.message.types import ToolResultContent
 import asyncio
-from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Optional, Callable
 from program.agent.types import (
-    EmitEvent, AgentEventType, TurnStartEvent, TurnEndEvent,
+    EmitEvent, TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
-    ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
-    AgentStartEvent, AgentEndEvent,AgentErrorEvent,ToolExecutionMode
+    ToolExecutionStartEvent, ToolExecutionEndEvent,
+    AgentStartEvent, AgentEndEvent, AgentErrorEvent,
 )
 from program.llm.types import (
-    LLMEventType, ErrorEvent, EndEvent, TextDeltaEvent, TextStartEvent, TextEndEvent,
-    ThinkingDeltaEvent, ThinkingStartEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
+    ErrorEvent, EndEvent, TextDeltaEvent, TextEndEvent,
+    ThinkingDeltaEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
 )
-from program.tool.types import ToolResult
+from program.tool.types import ToolExecutionMode
 from program.tool.registry import ToolRegistry
 from program.message.types import AssistantMessage, ToolCallContent, Role
 
@@ -29,7 +28,7 @@ from program.agent.types import (
     SteeringQueue,
     AbortSignal,
 )
-from program.message.types import BaseMessage,ToolMessage
+from program.message.types import BaseMessage, ToolMessage
 
 
 class Agent:
@@ -91,51 +90,53 @@ class Agent:
         """Subscribe to agent events."""
         self.listeners.append(listener)
         return lambda: self.listeners.remove(listener)
-    
-    async def process_events(self, event: AgentEvent) -> None:  
-        """Process an agent event and update internal state."""  
+
+    async def process_events(self, event: AgentEvent) -> None:
+        """Process an agent event and update internal state."""
         match event:
-            case MessageStartEvent(message=message):  
-                self.state.streaming_message = message  
-            case MessageUpdateEvent(message=message):  
-                self.state.streaming_message = message  
-            case MessageEndEvent(message=message):  
-                self.state.streaming_message = None  
-                self.state.messages.append(message)  
-            case ToolExecutionStartEvent(tool_call=tool_call):  
-                self.state.pending_tool_calls.add(tool_call.id)  
-            case ToolExecutionEndEvent(tool_result=tool_result):  
+            case MessageStartEvent(message=message):
+                self.state.streaming_message = message
+            case MessageUpdateEvent(message=message):
+                self.state.streaming_message = message
+            case MessageEndEvent(message=message):
+                self.state.streaming_message = None
+                self.state.messages.append(message)
+            case ToolExecutionStartEvent(tool_call=tool_call):
+                self.state.pending_tool_calls.add(tool_call.id)
+            case ToolExecutionEndEvent(tool_result=tool_result):
                 self.state.pending_tool_calls.discard(tool_result.id)
-            case AgentErrorEvent(error=error):  
+            case AgentErrorEvent(error=error):
                 self.state.error_message = error
-        # Notify all listeners  
-        await asyncio.gather(*[listener(event) for listener in self.listeners])
+        for listener in self.listeners:
+            result = listener(event)
+            if asyncio.iscoroutine(result):
+                await result
 
     async def _loop(self, messages: list[BaseMessage], emit: EmitEvent, signal: AbortSignal):
-        emit(AgentStartEvent())
+        await emit(AgentStartEvent())
 
         tool_calls: list[ToolCallContent] = []
         tool_results: list[ToolResultContent] = []
 
         try:
             while True:
-                emit(TurnStartEvent())
+                await emit(TurnStartEvent())
                 message = AssistantMessage()
                 tool_calls.clear()
 
                 if self.options.transform_context is not None:
-                    messages = self.options.transform_context(messages,signal)
+                    messages = self.options.transform_context(messages, signal)
 
-                emit(MessageStartEvent(message=message))
+                await emit(MessageStartEvent(message=message))
                 async for event in self.llm.stream(messages, tools=self.tools):
                     match event:
                         case ToolCallEndEvent(tool_call=tool_call):
                             tool_calls.append(tool_call)
                             message.contents.append(tool_call)
                         case TextDeltaEvent(text=text):
-                            emit(MessageUpdateEvent(message=AssistantMessage(contents=[text])))
+                            await emit(MessageUpdateEvent(message=AssistantMessage(contents=[text])))
                         case ThinkingDeltaEvent(thinking=thinking):
-                            emit(MessageUpdateEvent(message=AssistantMessage(contents=[thinking])))
+                            await emit(MessageUpdateEvent(message=AssistantMessage(contents=[thinking])))
                         case TextEndEvent(text=text):
                             message.contents.append(text)
                         case ThinkingEndEvent(thinking=thinking):
@@ -145,64 +146,68 @@ class Agent:
                             message.error = error
                         case EndEvent(reason=reason):
                             message.stop_reason = reason
-                
-                emit(MessageEndEvent(message=message))
+
+                await emit(MessageEndEvent(message=message))
                 messages.append(message)
 
                 match message.stop_reason:
                     case StopReason.Error | StopReason.Abort:
                         err_msg = message.error or f"Turn failed with reason: {message.stop_reason.value}"
-                        emit(AgentErrorEvent(error=err_msg))
-                        emit(TurnEndEvent(message=message, tool_results=tool_results))
+                        await emit(AgentErrorEvent(error=err_msg))
+                        await emit(TurnEndEvent(message=message, tool_results=tool_results))
                         break
 
                     case StopReason.ToolCalls:
                         tool_results = await self._execute_tool_calls(
-                            tool_calls=tool_calls, 
-                            emit=emit, 
-                            signal=signal
+                            tool_calls=tool_calls,
+                            emit=emit,
+                            signal=signal,
                         )
-                        tool_messages = [
-                            ToolMessage(contents=[
-                                tool_result
-                            ]) for tool_result in tool_results
-                        ]
-                        for msg in tool_messages:
-                            emit(MessageStartEvent(message=msg))
-                            emit(MessageEndEvent(message=msg))
-                            messages.append(msg)
+                        tool_message = ToolMessage.from_results(tool_results)
+                        await emit(MessageStartEvent(message=tool_message))
+                        await emit(MessageEndEvent(message=tool_message))
+                        messages.append(tool_message)
 
-                        if steering_messages:=self.options.get_steering_messages():
+                        if self.options.get_steering_messages is not None:
+                            steering_messages = self.options.get_steering_messages()
                             for msg in steering_messages:
-                                emit(MessageStartEvent(message=msg))
-                                emit(MessageEndEvent(message=msg))
+                                await emit(MessageStartEvent(message=msg))
+                                await emit(MessageEndEvent(message=msg))
                                 messages.append(msg)
 
                     case StopReason.Stop:
-                        if follow_up_messages:=self.options.get_follow_up_messages():
+                        if self.options.get_follow_up_messages is not None:
+                            follow_up_messages = self.options.get_follow_up_messages()
+                        else:
+                            follow_up_messages = []
+
+                        if follow_up_messages:
                             for msg in follow_up_messages:
-                                emit(MessageStartEvent(message=msg))
-                                emit(MessageEndEvent(message=msg))
+                                await emit(MessageStartEvent(message=msg))
+                                await emit(MessageEndEvent(message=msg))
                                 messages.append(msg)
                         else:
-                            # No more work to do
-                            emit(TurnEndEvent(message=message, tool_results=tool_results))
+                            await emit(TurnEndEvent(message=message, tool_results=tool_results))
                             break
-                
-                emit(TurnEndEvent(message=message, tool_results=tool_results))
 
-                # Check if an external hook wants to stop the turn
+                await emit(TurnEndEvent(message=message, tool_results=tool_results))
+
                 if self.options.should_stop_after_turn:
                     if self.options.should_stop_after_turn(message, tool_results):
                         break
-                
+
                 tool_results.clear()
         except Exception as e:
-            emit(AgentErrorEvent(error=str(e)))
+            await emit(AgentErrorEvent(error=str(e)))
 
-        emit(AgentEndEvent(messages=messages))
+        await emit(AgentEndEvent(messages=messages))
 
-    async def _execute_tool_calls(self, tool_calls: list[ToolCallContent], emit: EmitEvent, signal:Optional[AbortSignal]=None)->list[ToolResultContent]:
+    async def _execute_tool_calls(
+        self,
+        tool_calls: list[ToolCallContent],
+        emit: EmitEvent,
+        signal: Optional[AbortSignal] = None,
+    ) -> list[ToolResultContent]:
         match self.options.execution_mode:
             case ToolExecutionMode.Batch:
                 return await self.tool_registry.batch_execute(
@@ -210,7 +215,7 @@ class Agent:
                     options=self.options,
                     emit=emit,
                     signal=signal,
-                    _llm=self.llm
+                    _llm=self.llm,
                 )
             case ToolExecutionMode.Parallel:
                 return await self.tool_registry.parallel_execute(
@@ -218,15 +223,15 @@ class Agent:
                     options=self.options,
                     emit=emit,
                     signal=signal,
-                    _llm=self.llm
+                    _llm=self.llm,
                 )
-            case ToolExecutionMode.Sequential:
+            case _:
                 return await self.tool_registry.sequential_execute(
                     tool_calls=tool_calls,
                     options=self.options,
                     emit=emit,
                     signal=signal,
-                    _llm=self.llm
+                    _llm=self.llm,
                 )
 
     async def run(self, messages: list[BaseMessage]):
@@ -235,37 +240,33 @@ class Agent:
         await self._loop(messages, self.process_events, signal)
         self.state.is_streaming = False
 
-    async def run_continue(self) -> None:  
-        """Continue from the current transcript. The last message must be a user or tool-result message."""  
-        if self.state.is_streaming:  
-            raise RuntimeError("Agent is already processing. Wait for completion before continuing.")  
-        
-        if not self.state.messages:  
-            raise RuntimeError("No messages to continue from")  
-        
-        last_message = self.state.messages[-1]  
-        if last_message.role == Role.ASSISTANT:  
-            # Check for queued steering messages first  
-            if not self.state.steering_queue.is_empty():  
-                steering_messages = await self.state.steering_queue.dequeue()  
-                await self.run(steering_messages)  
-                return  
-            
-            # Check for queued follow-up messages  
-            if not self.state.follow_up_queue.is_empty():  
-                follow_up_messages = await self.state.follow_up_queue.dequeue()  
-                await self.run(follow_up_messages)  
-                return  
-            
-            raise RuntimeError("Cannot continue from message role: assistant")  
-        
-        await self._loop_continue()  
-    
-    async def _loop_continue(self) -> None:  
-        """Continue the agent loop from existing context without adding new messages."""  
-        signal: AbortSignal = asyncio.Event()  
-        self.state.is_streaming = True   
-        await self._loop(self.state.messages, self.process_events, signal)  
+    async def run_continue(self) -> None:
+        """Continue from the current transcript. The last message must be a user or tool-result message."""
+        if self.state.is_streaming:
+            raise RuntimeError("Agent is already processing. Wait for completion before continuing.")
+
+        if not self.state.messages:
+            raise RuntimeError("No messages to continue from")
+
+        last_message = self.state.messages[-1]
+        if last_message.role == Role.ASSISTANT:
+            if not self.state.steering_queue.is_empty():
+                steering_messages = await self.state.steering_queue.dequeue()
+                await self.run(self.state.messages + steering_messages)
+                return
+
+            if not self.state.follow_up_queue.is_empty():
+                follow_up_messages = await self.state.follow_up_queue.dequeue()
+                await self.run(self.state.messages + follow_up_messages)
+                return
+
+            raise RuntimeError("Cannot continue from message role: assistant")
+
+        await self._loop_continue()
+
+    async def _loop_continue(self) -> None:
+        """Continue the agent loop from existing context without adding new messages."""
+        signal: AbortSignal = asyncio.Event()
+        self.state.is_streaming = True
+        await self._loop(self.state.messages, self.process_events, signal)
         self.state.is_streaming = False
-
-

@@ -49,30 +49,36 @@ class ToolRegistry:
             content = f"Invalid parameters for '{tool_call.name}':\n{chr(10).join(errors)}"
             return ToolResultContent(id=tool_call.id, is_error=True, content=content, metadata={})
 
+        async def tool_execution_update_callback(partial_tool_result):
+            if emit is not None:
+                await emit(ToolExecutionUpdateEvent(partial_tool_result=partial_tool_result))
+
+        tool_result: ToolResultContent
         try:
             invocation = ToolInvocation(id=tool_call.id, params=tool_call.args)
             if options is not None and options.before_tool_call is not None:
                 invocation = options.before_tool_call(invocation, signal)
 
-            emit(ToolExecutionStartEvent(tool_call=tool_call))
+            if emit is not None:
+                await emit(ToolExecutionStartEvent(tool_call=tool_call))
 
-            tool_result=await tool.execute(
-                invocation=invocation, 
-                tool_execution_update_callback=lambda partial_tool_result: emit(ToolExecutionUpdateEvent(partial_tool_result=partial_tool_result)), 
+            raw = await tool.execute(
+                invocation=invocation,
+                tool_execution_update_callback=tool_execution_update_callback,
                 signal=signal,
                 **kwargs
             )
 
             if options is not None and options.after_tool_call is not None:
-                tool_result = options.after_tool_call(tool_result, signal) or tool_result
-            tool_result = ToolResultContent(id=tool_call.id, is_error=tool_result.is_error, content=tool_result.content, metadata=tool_result.metadata)
+                raw = options.after_tool_call(raw, signal) or raw
+            tool_result = ToolResultContent(id=tool_call.id, is_error=raw.is_error, content=raw.content, metadata=raw.metadata)
         except Exception as e:
             content = f"Tool '{tool_call.name}' execution failed:\n{str(e)}"
-            tool_result=ToolResultContent(id=tool_call.id, is_error=True, content=content, metadata={})
+            tool_result = ToolResultContent(id=tool_call.id, is_error=True, content=content, metadata={})
 
-        finally:
-            emit(ToolExecutionEndEvent(tool_result=tool_result))
-            return tool_result
+        if emit is not None:
+            await emit(ToolExecutionEndEvent(tool_result=tool_result))
+        return tool_result
 
 
     async def sequential_execute(
