@@ -9,8 +9,10 @@ from typing import Any, Literal, Annotated, TYPE_CHECKING
 from pydantic import BaseModel, Field, ConfigDict
 from program.llm.types import ThinkingLevel
 
+from program.message.types import AgentMessage, ImageContent, TextContent
+
 if TYPE_CHECKING:
-    from program.message.types import AgentMessage, ImageContent, TextContent
+    pass
 
 
 def generate_timestamp() -> float:
