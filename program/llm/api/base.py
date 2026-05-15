@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from program.llm.types import LLMEvent, Options, TransportType
+from program.llm.types import LLMEvent, Options, Transport
 from program.message.types import BaseMessage
 from typing import TYPE_CHECKING, Optional
 from program.tool.types import Tool
 
 
 class BaseAPI(ABC):
-    SUPPORTED_TRANSPORTS: tuple[TransportType, ...] = (TransportType.HTTP,)
+    SUPPORTED_TRANSPORTS: tuple[Transport, ...] = (Transport.HTTP,)
 
     def __init__(self, options: Options) -> None:
         if options.transport not in self.SUPPORTED_TRANSPORTS:

@@ -10,7 +10,8 @@ if TYPE_CHECKING:
     from program.message.types import TextContent, ThinkingContent, ToolCallContent
 
 
-class TransportType(str, Enum):
+class Transport(str, Enum):
+    Auto = "auto"
     HTTP = "http"
     WEBSOCKET = "websocket"
     SSE = "sse"
@@ -31,6 +32,7 @@ class StopReason(str, Enum):
 
 
 class ThinkingLevel(str, Enum):
+    Off = "off"
     Minimal = "minimal"
     Low = "low"
     Medium = "medium"
@@ -87,7 +89,7 @@ class Options:
     timeout: timedelta = field(default_factory=lambda: timedelta(seconds=10))
     temperature: float = 1.0
     max_tokens: Optional[int] = None
-    transport: TransportType = TransportType.HTTP
+    transport: Transport = Transport.HTTP
     thinking_level: Optional[ThinkingLevel] = None
     thinking_budgets: Optional[ThinkingBudgets] = None
     signal: Optional[AbortSignal] = None

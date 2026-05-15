@@ -13,7 +13,7 @@ import websockets.asyncio.client
 from program.llm.api.base import BaseAPI
 from program.llm.api.types import APIResponse
 from program.llm.types import (
-    LLMEvent, Options, StopReason, ThinkingLevel, TransportType,
+    LLMEvent, Options, StopReason, ThinkingLevel, Transport,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -317,7 +317,7 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
 # ── API class ─────────────────────────────────────────────────────────────────
 
 class OpenAICodexResponsesAPI(BaseAPI):
-    SUPPORTED_TRANSPORTS = (TransportType.HTTP, TransportType.WEBSOCKET)
+    SUPPORTED_TRANSPORTS = (Transport.HTTP, Transport.WEBSOCKET)
 
     def __init__(self, options: Options) -> None:
         super().__init__(options)
@@ -394,7 +394,7 @@ class OpenAICodexResponsesAPI(BaseAPI):
 
         yield StartEvent()
 
-        if self.options.transport == TransportType.WEBSOCKET:
+        if self.options.transport == Transport.WEBSOCKET:
             headers = _build_headers(token, account_id, websocket=True)
             stream_iter = self._stream_ws(body, headers)
         else:

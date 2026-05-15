@@ -7,7 +7,7 @@ from typing import Optional, Type, Union, TYPE_CHECKING
 
 from dataclasses import field
 from program.llm.api.base import BaseAPI
-from program.llm.types import AuthType, Options, TransportType
+from program.llm.types import AuthType, Options, Transport
 
 if TYPE_CHECKING:
     from program.llm.provider.oauth.types import OAuthCredential, OAuthLoginCallbacks, AbortSignal
@@ -56,7 +56,7 @@ class APIProvider:
     api: Union[str, Type[BaseAPI]]
     options: Options
     auth_type: AuthType = AuthType.ApiKey
-    supported_transports: list[TransportType] = field(default_factory=lambda: [TransportType.HTTP])
+    supported_transports: list[Transport] = field(default_factory=lambda: [Transport.HTTP])
 
     def get_api_key(self) -> Optional[str]:
         return self.options.api_key
