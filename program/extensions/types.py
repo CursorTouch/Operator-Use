@@ -3,32 +3,87 @@ import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Awaitable, Callable, Literal, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, Optional, Protocol, Type, Union, runtime_checkable
 
 from program.compaction.types import CompactionPreparation, CompactionResult
+from program.llm.model.registry import ModelRegistry
 from program.llm.model.types import Model
 from program.llm.types import ThinkingLevel
 from program.message.types import BaseMessage, ImageContent, TextContent
+from program.session.manager import SessionManager
 from program.session.types import (
     BranchSummaryEntry,
     CompactionSummaryEntry,
     SessionEntry,
+    SessionHeader,
+    SessionTreeNode,
 )
 from program.tool.types import ToolExecutionMode, ToolInvocation, ToolResult
 
+from program.skill.types import Skill
+
+if TYPE_CHECKING:
+    from program.resource.loader import SourceInfo
+
 AbortSignal = asyncio.Event
 
-# ---------------------------------------------------------------------------
-# Stubs for non-UI types not yet implemented
-# ---------------------------------------------------------------------------
-ReadonlySessionManager = Any
-SessionManager = Any
-ModelRegistry = Any
-SlashCommandInfo = Any
-BashOperations = Any
-BashResult = Any
-SourceInfo = Any
-BuildSystemPromptOptions = Any
+
+@runtime_checkable
+class ReadonlySessionManager(Protocol):
+    def get_cwd(self) -> str: ...
+    def get_session_dir(self) -> str: ...
+    def get_session_id(self) -> str: ...
+    def get_session_file(self) -> Optional[str]: ...
+    def get_leaf_id(self) -> Optional[str]: ...
+    def get_leaf_entry(self) -> Optional[SessionEntry]: ...
+    def get_entry(self, entry_id: str) -> Optional[SessionEntry]: ...
+    def get_label(self, entry_id: str) -> Optional[str]: ...
+    def get_branch(self, from_id: Optional[str] = None) -> list[SessionEntry]: ...
+    def get_header(self) -> Optional[SessionHeader]: ...
+    def get_entries(self) -> list[SessionEntry]: ...
+    def get_tree(self) -> list[SessionTreeNode]: ...
+    def get_session_name(self) -> Optional[str]: ...
+
+
+@dataclass
+class SlashCommandInfo:
+    name: str
+    description: Optional[str]
+    source: Literal["extension", "prompt", "skill"]
+    source_info: SourceInfo
+
+
+class BashOperations(Protocol):
+    async def exec(
+        self,
+        command: str,
+        cwd: str,
+        on_data: Callable[[bytes], None],
+        signal: Optional[AbortSignal] = None,
+        timeout: Optional[float] = None,
+        env: Optional[dict[str, str]] = None,
+    ) -> Optional[int]: ...
+
+
+@dataclass
+class BashResult:
+    output: str
+    exit_code: Optional[int]
+    cancelled: bool
+    truncated: bool
+    full_output_path: Optional[str] = None
+
+
+@dataclass
+class BuildSystemPromptOptions:
+    cwd: str
+    custom_prompt: Optional[str] = None
+    selected_tools: Optional[list[str]] = None
+    tool_snippets: Optional[dict[str, str]] = None
+    prompt_guidelines: Optional[list[str]] = None
+    append_system_prompt: Optional[str] = None
+    context_files: Optional[list[dict[str, str]]] = None
+    skills: Optional[list[Skill]] = None
 
 
 # ---------------------------------------------------------------------------

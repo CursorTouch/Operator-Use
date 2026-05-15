@@ -10,6 +10,7 @@ from typing import Any, Callable, Optional, TYPE_CHECKING
 from program.llm.service import LLM
 
 from program.agent.loop import Agent
+from program.agent.system_prompt import build_system_prompt
 from program.agent.types import (
     AgentEvent, AgentStartEvent, AgentEndEvent,
     TurnStartEvent, TurnEndEvent,
@@ -296,10 +297,16 @@ class AgentSession:
 
     def _build_system_prompt(self) -> str:
         loader = self._resource_loader
-        system_prompt = loader.get_system_prompt()
-        if system_prompt:
-            return system_prompt
-        return ""
+        skills = loader.get_skills().get("skills", [])
+        context_files = loader.get_agents_files().get("agents_files", [])
+        append_parts = loader.get_append_system_prompt()
+        return build_system_prompt(
+            self._cwd,
+            custom_prompt=loader.get_system_prompt(),
+            context_files=context_files,
+            skills=skills,
+            append_system_prompt="\n\n".join(append_parts) if append_parts else None,
+        )
 
     def _build_extension_runner(self) -> None:
         extensions_result: LoadExtensionsResult = self._resource_loader.get_extensions()

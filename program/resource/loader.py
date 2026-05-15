@@ -27,6 +27,9 @@ from program.extensions.types import (
 )
 from program.settings.manager import SettingsManager
 from program.settings.paths import CONFIG_DIR_NAME, CONFIG_DIR_PATH
+from program.skill import LoadSkillsResult
+from program.skill.loader import load_skills
+from program.skill.types import Skill
 
 logger = logging.getLogger(__name__)
 
@@ -64,14 +67,6 @@ class SourceInfo:
     scope: str
     origin: str
     base_dir: Optional[str] = None
-
-
-@dataclass
-class Skill:
-    name: str
-    content: str
-    file_path: str
-    source_info: Optional[SourceInfo] = None
 
 
 @dataclass
@@ -133,68 +128,6 @@ def _is_under_path(target: str, root: str) -> bool:
     if target == norm_root:
         return True
     return target.startswith(norm_root + os.sep)
-
-
-# ---------------------------------------------------------------------------
-# Skills loader
-# ---------------------------------------------------------------------------
-
-def load_skills(
-    cwd: str,
-    agent_dir: str,
-    skill_paths: list[str],
-    include_defaults: bool = False,
-) -> dict:
-    skills: list[Skill] = []
-    diagnostics: list[ResourceDiagnostic] = []
-
-    paths_to_load: list[str] = []
-    if include_defaults:
-        paths_to_load += [
-            os.path.join(agent_dir, "skills"),
-            os.path.join(cwd, CONFIG_DIR_NAME, "skills"),
-        ]
-    paths_to_load += skill_paths
-
-    for p in paths_to_load:
-        if not os.path.exists(p):
-            continue
-        try:
-            if os.path.isfile(p) and p.endswith(".md"):
-                skill = _load_skill_from_file(p)
-                if skill:
-                    skills.append(skill)
-            elif os.path.isdir(p):
-                _load_skills_from_dir(p, skills, diagnostics)
-        except OSError as exc:
-            diagnostics.append(ResourceDiagnostic(type="warning", message=str(exc), path=p))
-
-    return {"skills": skills, "diagnostics": diagnostics}
-
-
-def _load_skill_from_file(file_path: str) -> Optional[Skill]:
-    try:
-        with open(file_path, encoding="utf-8") as fh:
-            content = fh.read()
-        name = os.path.splitext(os.path.basename(file_path))[0]
-        return Skill(name=name, content=content, file_path=file_path)
-    except OSError:
-        return None
-
-
-def _load_skills_from_dir(directory: str, skills: list, diagnostics: list) -> None:
-    try:
-        for entry in sorted(os.scandir(directory), key=lambda e: e.name):
-            if entry.is_file() and entry.name.upper() in ("SKILL.MD",):
-                skill = _load_skill_from_file(entry.path)
-                if skill:
-                    skills.append(skill)
-            elif entry.is_file() and entry.name.endswith(".md"):
-                skill = _load_skill_from_file(entry.path)
-                if skill:
-                    skills.append(skill)
-    except OSError as exc:
-        diagnostics.append(ResourceDiagnostic(type="warning", message=str(exc), path=directory))
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +393,7 @@ class DefaultResourceLoader:
             extensions=[], errors=[], runtime=create_extension_runtime()
         )
         self._skills: list[Skill] = []
-        self._skill_diagnostics: list[ResourceDiagnostic] = []
+        self._skill_diagnostics: list[dict] = []
         self._prompts: list[PromptTemplate] = []
         self._prompt_diagnostics: list[ResourceDiagnostic] = []
         self._agents_files: list[dict] = []
@@ -628,9 +561,9 @@ class DefaultResourceLoader:
         self._update_skills_from_paths(skill_paths, metadata_by_path)
         for p in self._additional_skill_paths:
             if _is_local_path(p) and not os.path.exists(p):
-                if not any(d.path == p for d in self._skill_diagnostics):
+                if not any(d.get("path") == p for d in self._skill_diagnostics):
                     self._skill_diagnostics.append(
-                        ResourceDiagnostic(type="error", message="Skill path does not exist", path=p)
+                        {"type": "error", "message": "Skill path does not exist", "path": p}
                     )
 
         # Prompts
@@ -778,10 +711,12 @@ class DefaultResourceLoader:
         self, paths: list[str], metadata_by_path: Optional[dict] = None
     ) -> None:
         if self._no_skills and not paths:
-            result = {"skills": [], "diagnostics": []}
+            result = LoadSkillsResult()
         else:
             result = load_skills(self._cwd, self._agent_dir, paths, include_defaults=False)
-        result = self._skills_override(result) if self._skills_override else result
+        if self._skills_override:
+            raw = self._skills_override({"skills": result.skills, "diagnostics": result.diagnostics})
+            result = LoadSkillsResult(skills=raw.get("skills", []), diagnostics=raw.get("diagnostics", []))
         self._skills = [
             Skill(
                 **{
@@ -795,9 +730,9 @@ class DefaultResourceLoader:
                     ),
                 }
             )
-            for s in result["skills"]
+            for s in result.skills
         ]
-        self._skill_diagnostics = result["diagnostics"]
+        self._skill_diagnostics = result.diagnostics
 
     def _update_prompts_from_paths(
         self, paths: list[str], metadata_by_path: Optional[dict] = None
