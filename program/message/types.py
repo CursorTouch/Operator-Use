@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import base64
 import io
 import time
@@ -11,6 +12,7 @@ from PIL import Image
 
 from program.llm.types import StopReason
 from program.tool.types import ToolKind
+from program.session.types import CustomMessageEntry, BranchEntry, CompactionEntry
 
 
 _PIL_MIME: dict[str, str] = {
@@ -134,6 +136,9 @@ class Role(Enum):
     USER = "user"
     ASSISTANT = "assistant"
     TOOL = "tool"
+    CUSTOM = "custom"
+    BRANCH_SUMMARY="branch_summary"
+    COMPACTION_SUMMARY="compaction_summary"
 
 
 @dataclass
@@ -197,3 +202,57 @@ class ToolMessage(BaseMessage):
 
 
 LLMMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
+
+
+@dataclass
+class CustomMessage:
+    role: Role = field(default=Role.CUSTOM, init=False)
+    custom_type: str
+    contents: list[TextContent | ImageContent] = field(default_factory=list)
+    timestamp:float
+    details: Any | None = None
+
+    @classmethod
+    def from_session(cls,entry:CustomMessageEntry)->CustomMessage:
+        return cls(
+            custom_type=entry.custom_type,
+            contents=entry.contents,
+            timestamp=entry.timestamp,
+            details=entry.details
+        )
+
+
+@dataclass
+class BranchSummaryMessage:
+    role: Role = field(default=Role.BRANCH_SUMMARY, init=False)
+    summary: str
+    from_id:str
+    timestamp:float
+
+    @classmethod
+    def from_session(cls,entry:BranchEntry)->BranchSummaryMessage:
+        return cls(
+            summary=entry.summary,
+            from_id=entry.from_id,
+            timestamp=entry.timestamp
+        )
+
+@dataclass
+class CompactionSummaryMessage:
+    role: Role = field(default=Role.COMPACTION_SUMMARY, init=False)
+    summary: str
+    tokens_before:int
+    timestamp:float
+
+    @classmethod
+    def from_session(cls,entry:CompactionEntry)->CompactionSummaryMessage:
+        return cls(
+            summary=entry.summary,
+            tokens_before=entry.tokens_before,
+            timestamp=entry.timestamp
+        )
+
+
+SessionMessage = CustomMessage|BranchSummaryMessage|CompactionSummaryMessage
+
+AgentMessage = LLMMessage|SessionMessage
