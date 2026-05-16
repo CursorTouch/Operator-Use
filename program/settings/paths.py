@@ -12,10 +12,6 @@ def get_config_dir(cwd: Path | None = None) -> Path:
     return CONFIG_DIR_PATH
 
 
-def get_agent_dir(cwd: Path | None = None) -> Path:
-    return get_config_dir(cwd) / "agent"
-
-
 def get_settings_path(cwd: Path | None = None) -> Path:
     return get_config_dir(cwd) / "settings.json"
 
@@ -28,8 +24,8 @@ def get_models_path() -> Path:
     return get_config_dir() / "models.json"
 
 
-def get_sessions_dir() -> Path:
-    return get_config_dir() / "sessions"
+def get_sessions_dir(cwd: Path | None = None) -> Path:
+    return get_config_dir(cwd) / "sessions"
 
 
 def get_prompts_dir(cwd: Path | None = None) -> Path:
@@ -38,10 +34,6 @@ def get_prompts_dir(cwd: Path | None = None) -> Path:
 
 def get_tools_dir(cwd: Path | None = None) -> Path:
     return get_config_dir(cwd) / "tools"
-
-
-def get_themes_dir(cwd: Path | None = None) -> Path:
-    return get_config_dir(cwd) / "themes"
 
 
 def get_extensions_dir(cwd: Path | None = None) -> Path:
