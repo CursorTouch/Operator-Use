@@ -91,7 +91,7 @@ class LLMOptions:
     base_url: Optional[str] = None
     headers: Optional[dict[str, str]] = None
     max_retries: int = 3
-    timeout: timedelta = field(default_factory=lambda: timedelta(seconds=10))
+    timeout: timedelta = field(default_factory=lambda: timedelta(seconds=60))
     temperature: float = 1.0
     max_tokens: Optional[int] = None
     transport: Transport = Transport.HTTP

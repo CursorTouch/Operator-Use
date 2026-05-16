@@ -2,10 +2,10 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from typing import Any
-from mistralai import Mistral
-from mistralai.models.thinkchunk import ThinkChunk
-from mistralai.models.textchunk import TextChunk
-from mistralai.types import UNSET
+from mistralai.client import Mistral
+from mistralai.client.models.thinkchunk import ThinkChunk
+from mistralai.client.models.textchunk import TextChunk
+from mistralai.client.types import UNSET
 from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
