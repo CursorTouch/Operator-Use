@@ -80,7 +80,7 @@ class RuntimeContext:
     ) -> None:
         self.agent = agent
         self.llm = llm
-        self.engine = loop
+        self.engine = engine
         self.session_manager = session_manager
         self.resource_loader = resource_loader
         self.extension_runtime = extension_runtime
