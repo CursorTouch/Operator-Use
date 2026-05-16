@@ -173,7 +173,7 @@ class TestReg001ToolMessageContentsCleared:
         )
         session._extensions = ExtensionRuntime(load_result, session)
 
-        await session.prompt("run the tool")
+        await session.invoke("run the tool")
 
         tool_msgs = [
             sm.by_id[e.id].message

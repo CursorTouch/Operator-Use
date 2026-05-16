@@ -112,7 +112,7 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
         global _attempt
         _attempt = 0
         try:
-            await runtime.handle_input(user_input)
+            await runtime.user_input(user_input)
         except Exception as e:
             err_msg = str(e) or f"{type(e).__name__} (no message)"
             print(f"{_red('[Error]')} {err_msg}", file=sys.stderr)

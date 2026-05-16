@@ -1,4 +1,4 @@
-"""Integration tests for Runtime: handle_input routing, session lifecycle."""
+"""Integration tests for Runtime: user_input routing, session lifecycle."""
 import pytest
 from pathlib import Path
 from typing import AsyncIterator
@@ -107,14 +107,14 @@ def make_runtime(llm: FakeLLM, extensions: list[Extension] | None = None) -> Run
     return rt
 
 
-# ── handle_input routing ──────────────────────────────────────────────────────
+# ── user_input routing ────────────────────────────────────────────────────────
 
 class TestHandleInputRouting:
     @pytest.mark.asyncio
     async def test_plain_text_routes_to_prompt(self):
         llm = FakeLLM(text_seq("hi"))
         rt = make_runtime(llm)
-        await rt.handle_input("hello there")
+        await rt.user_input("hello there")
         sm = rt.session_manager
         entries = [e for e in sm.get_entries() if isinstance(sm.by_id.get(e.id), MessageEntry)]
         assert any(sm.by_id[e.id].message.role == Role.USER for e in entries)
@@ -123,7 +123,7 @@ class TestHandleInputRouting:
     async def test_slash_help_dispatched(self, capsys):
         llm = FakeLLM(text_seq("unused"))
         rt = make_runtime(llm)
-        await rt.handle_input("/help")
+        await rt.user_input("/help")
         out = capsys.readouterr().out
         assert "compact" in out.lower() or "help" in out.lower()
 
@@ -131,7 +131,7 @@ class TestHandleInputRouting:
     async def test_unknown_command_handled(self, capsys):
         llm = FakeLLM(text_seq("unused"))
         rt = make_runtime(llm)
-        await rt.handle_input("/nosuchcommand")
+        await rt.user_input("/nosuchcommand")
         out = capsys.readouterr().out
         assert "Unknown" in out
 
@@ -145,7 +145,7 @@ class TestHandleInputRouting:
             dispatched_args.extend(args)
 
         rt.commands.register(SlashCommandInfo(name="testcmd", description="t", handler=handler))
-        await rt.handle_input("/testcmd arg1 arg2")
+        await rt.user_input("/testcmd arg1 arg2")
         assert dispatched_args == ["arg1", "arg2"]
 
 
@@ -166,7 +166,7 @@ class TestCurrentSession:
     async def test_prompt_on_runtime_works(self):
         llm = FakeLLM(text_seq("response"))
         rt = make_runtime(llm)
-        await rt.prompt("direct prompt")
+        await rt.invoke("direct prompt")
         sm = rt.session_manager
         entries = [e for e in sm.get_entries() if isinstance(sm.by_id.get(e.id), MessageEntry)]
         assert len(entries) >= 1
@@ -213,7 +213,7 @@ class TestExtensionCommands:
 
         llm = FakeLLM(text_seq("unused"))
         rt = make_runtime(llm, extensions=[ext])
-        await rt.handle_input("/extcmd foo bar")
+        await rt.user_input("/extcmd foo bar")
         assert called == [['foo', 'bar']]
 
 
@@ -290,8 +290,8 @@ class TestMultiTurnContext:
         )
         session._extensions = ExtensionRuntime(load_result, session)
 
-        await session.prompt("first question")
-        await session.prompt("second question")
+        await session.invoke("first question")
+        await session.invoke("second question")
 
         # Second call should include prior user+assistant messages
         assert len(captured_contexts[1]) > len(captured_contexts[0])

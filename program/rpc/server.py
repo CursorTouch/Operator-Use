@@ -193,7 +193,7 @@ class RPCServer:
                     return
                 await self._ok(cmd_id, 'prompt')   # ack before async work
                 asyncio.create_task(
-                    self._runtime.handle_input(message, PromptOptions(source='rpc'))
+                    self._runtime.user_input(message, PromptOptions(source='rpc'))
                 )
 
             case 'steer':
