@@ -62,21 +62,43 @@ class ThinkingBudgetsSettings:
 
 
 @dataclass
+class ImageSettings:
+    auto_resize: Optional[bool] = None    # resize images to 2000×2000 max before sending to LLM (default: True)
+    block_images: Optional[bool] = None   # prevent all images from being sent to the LLM (default: False)
+
+
+@dataclass
 class Settings:
+    # Model / provider
     default_provider: Optional[str] = None
     default_model: Optional[str] = None
     default_thinking_level: Optional[ThinkingLevel] = None
     transport: Optional[Transport] = None
+    enabled_models: Optional[list[str]] = None
+
+    # Queue behaviour
     steering_mode: Optional[SteeringMode] = None
     follow_up_mode: Optional[FollowupMode] = None
+
+    # Nested sub-settings
     compaction: Optional[CompactionSettings] = None
     retry: Optional[RetrySettings] = None
     thinking_budgets: Optional[ThinkingBudgetsSettings] = None
-    enabled_models: Optional[list[str]] = None
     branch_summary: Optional[BranchSummarySettings] = None
-    session_dir: Optional[str] = None
+    image: Optional[ImageSettings] = None
+
+    # Resource paths
     packages: Optional[list[str]] = None
     extensions: Optional[list[str]] = None
     skills: Optional[list[str]] = None
     prompts: Optional[list[str]] = None
+
+    # Shell / execution
+    shell_path: Optional[str] = None
+    shell_command_prefix: Optional[str] = None
+
+    # Session
+    session_dir: Optional[str] = None
+
+    # Feature flags
     enable_skill_commands: Optional[bool] = None

@@ -11,6 +11,7 @@ from program.settings.types import (
     Settings, SCOPE, SettingsError,
     CompactionSettings, BranchSummarySettings,
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
+    ImageSettings,
 )
 from program.engine.types import SteeringMode, FollowupMode
 from program.inference.types import Transport, ThinkingLevel
@@ -19,6 +20,7 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
     'compaction': CompactionSettings,
     'branch_summary': BranchSummarySettings,
     'thinking_budgets': ThinkingBudgetsSettings,
+    'image': ImageSettings,
 }
 
 
@@ -508,3 +510,77 @@ class SettingsManager:
         if session_dir.startswith("~/"):
             return Path.home() / session_dir[2:]
         return Path(session_dir).resolve()
+
+    def set_session_dir(self, path: str | None):
+        """Set the session storage directory and persist to global settings."""
+        self.global_settings.session_dir = path
+        self._mark_modified("session_dir")
+        self._save()
+
+    # ── Image ─────────────────────────────────────────────────────────────────
+
+    def get_image_auto_resize(self) -> bool:
+        """Return whether images are auto-resized to 2000×2000 before being sent to the LLM (default: True)."""
+        i = self.settings.image
+        return i.auto_resize if i and i.auto_resize is not None else True
+
+    def set_image_auto_resize(self, enabled: bool):
+        if not self.global_settings.image:
+            self.global_settings.image = ImageSettings()
+        self.global_settings.image.auto_resize = enabled
+        self._mark_modified("image", "auto_resize")
+        self._save()
+
+    def get_image_block_images(self) -> bool:
+        """Return whether sending images to the LLM is blocked entirely (default: False)."""
+        i = self.settings.image
+        return i.block_images if i and i.block_images is not None else False
+
+    def set_image_block_images(self, enabled: bool):
+        if not self.global_settings.image:
+            self.global_settings.image = ImageSettings()
+        self.global_settings.image.block_images = enabled
+        self._mark_modified("image", "block_images")
+        self._save()
+
+    # ── Shell / execution ─────────────────────────────────────────────────────
+
+    def get_shell_path(self) -> str | None:
+        """Return the custom shell executable path, or None to use the system default."""
+        return self.settings.shell_path
+
+    def set_shell_path(self, path: str | None):
+        self.global_settings.shell_path = path
+        self._mark_modified("shell_path")
+        self._save()
+
+    def get_shell_command_prefix(self) -> str | None:
+        """Return the prefix prepended to every shell command, or None if unset."""
+        return self.settings.shell_command_prefix
+
+    def set_shell_command_prefix(self, prefix: str | None):
+        self.global_settings.shell_command_prefix = prefix
+        self._mark_modified("shell_command_prefix")
+        self._save()
+
+    # ── Shell / execution ─────────────────────────────────────────────────────
+
+    def get_shell_path(self) -> str | None:
+        """Return the custom shell executable path, or None to use the system default."""
+        return self.settings.shell_path
+
+    def set_shell_path(self, path: str | None):
+        """Set the custom shell executable path and persist to global settings."""
+        self.global_settings.shell_path = path
+        self._mark_modified("shell_path")
+        self._save()
+
+    def get_shell_command_prefix(self) -> str | None:
+        """Return the prefix prepended to every shell command, or None if unset."""
+        return self.settings.shell_command_prefix
+
+    def set_shell_command_prefix(self, prefix: str | None):
+        """Set the shell command prefix and persist to global settings."""
+        self.global_settings.shell_command_prefix = prefix
+        self._mark_modified("shell_command_prefix")
+        self._save()
