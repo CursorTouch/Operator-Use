@@ -11,7 +11,7 @@ from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings, CompactionPreparation
 from program.message.types import AgentMessage as _AgentMessage
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": _AgentMessage})
-from program.engine.engine import Engine
+from program.engine.service import Engine
 from program.engine.types import Options
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import (

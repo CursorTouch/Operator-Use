@@ -9,7 +9,7 @@ import pytest
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.engine.engine import Engine
+from program.engine.service import Engine
 from program.engine.types import MessageEndEvent, Options
 from program.inference.types import (
     LLMContext, LLMEvent, StopReason,

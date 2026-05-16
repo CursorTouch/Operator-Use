@@ -140,6 +140,8 @@ class OpenAIResponsesAPI(BaseAPI):
                 params = modified
 
         tool_names: dict[str, str] = {}
+        _input_tokens = 0
+        _output_tokens = 0
 
         yield StartEvent()
 
@@ -192,12 +194,15 @@ class OpenAIResponsesAPI(BaseAPI):
 
                 elif etype == "response.done":
                     resp = event.response
-                    raw_reason = getattr(resp, "incomplete_details", None)
+                    u = getattr(resp, 'usage', None)
+                    if u:
+                        _input_tokens = getattr(u, 'input_tokens', 0) or 0
+                        _output_tokens = getattr(u, 'output_tokens', 0) or 0
                     stop_reason = _STOP_REASON.get(
                         getattr(resp, "stop_reason", None) or "",
                         StopReason.Stop,
                     )
-                    yield EndEvent(reason=stop_reason)
+                    yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, error=str(event))

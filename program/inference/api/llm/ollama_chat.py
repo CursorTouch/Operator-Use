@@ -104,6 +104,8 @@ class OllamaChatAPI(BaseAPI):
         text_buf = ""
         thinking_started = False
         thinking_buf = ""
+        _input_tokens = 0
+        _output_tokens = 0
 
         yield StartEvent()
 
@@ -172,12 +174,14 @@ class OllamaChatAPI(BaseAPI):
                         yield ToolCallEndEvent(tool_call=ToolCallContent(name=fn.name, args=args))
 
                 if chunk.done:
+                    _input_tokens = getattr(chunk, 'prompt_eval_count', 0) or 0
+                    _output_tokens = getattr(chunk, 'eval_count', 0) or 0
                     if thinking_started:
                         yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
                     if text_started:
                         yield TextEndEvent(text=TextContent(content=text_buf))
                     stop_reason = _STOP_REASON.get(chunk.done_reason or "", StopReason.Stop)
-                    yield EndEvent(reason=stop_reason)
+                    yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, error=str(e))

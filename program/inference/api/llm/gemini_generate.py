@@ -142,6 +142,8 @@ class GeminiGenerateAPI(BaseAPI):
         thinking_started = False
         text_buf = ""
         thinking_buf = ""
+        _input_tokens = 0
+        _output_tokens = 0
 
         yield StartEvent()
 
@@ -154,6 +156,11 @@ class GeminiGenerateAPI(BaseAPI):
                 if self._cancelled():
                     yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                     return
+                um = getattr(chunk, 'usage_metadata', None)
+                if um:
+                    _input_tokens = getattr(um, 'prompt_token_count', 0) or 0
+                    _output_tokens = getattr(um, 'candidates_token_count', 0) or 0
+
                 if not chunk.candidates:
                     continue
 
@@ -193,7 +200,7 @@ class GeminiGenerateAPI(BaseAPI):
                     if text_started:
                         yield TextEndEvent(text=TextContent(content=text_buf))
                     reason_str = finish_reason.name if hasattr(finish_reason, "name") else str(finish_reason)
-                    yield EndEvent(reason=_STOP_REASON.get(reason_str, StopReason.Stop))
+                    yield EndEvent(reason=_STOP_REASON.get(reason_str, StopReason.Stop), input_tokens=_input_tokens, output_tokens=_output_tokens)
                     return
 
         except Exception as exc:
@@ -204,7 +211,7 @@ class GeminiGenerateAPI(BaseAPI):
             yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
         if text_started:
             yield TextEndEvent(text=TextContent(content=text_buf))
-        yield EndEvent(reason=StopReason.Stop)
+        yield EndEvent(reason=StopReason.Stop, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
     async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []

@@ -11,7 +11,7 @@ from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings
 from program.commands.registry import CommandRegistry
 from program.commands.types import SlashCommandInfo
-from program.engine.engine import Engine
+from program.engine.service import Engine
 from program.engine.types import Options
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult, Extension, SessionStartEvent, SessionShutdownEvent

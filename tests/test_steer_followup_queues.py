@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel
 from typing import AsyncIterator
 
-from program.engine.engine import Engine
+from program.engine.service import Engine
 from program.engine.types import Options, SteeringMode, FollowupMode
 from program.inference.types import (
     LLMContext, LLMEvent,

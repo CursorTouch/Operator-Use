@@ -10,7 +10,7 @@ from program.agent.service import Agent
 from program.agent.types import AgentConfig
 from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings
-from program.engine.engine import Engine
+from program.engine.service import Engine
 from program.engine.types import Options
 from program.extension.loader import discover_and_load_extensions
 from program.extension.runtime import ExtensionRuntime

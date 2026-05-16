@@ -261,6 +261,8 @@ def _is_retryable(status: int, body: str) -> bool:
 
 async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
     tool_names: dict[str, str] = {}
+    _input_tokens = 0
+    _output_tokens = 0
 
     async for event in events:
         etype = event.get("type", "")
@@ -313,8 +315,11 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
 
         elif etype == "response.completed":
             response = event.get("response") or {}
+            usage = response.get("usage") or {}
+            _input_tokens = usage.get("input_tokens", 0) or 0
+            _output_tokens = usage.get("output_tokens", 0) or 0
             stop_reason = _STOP_REASON.get(response.get("stop_reason") or "", StopReason.Stop)
-            yield EndEvent(reason=stop_reason)
+            yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
 
 # ── API class ─────────────────────────────────────────────────────────────────

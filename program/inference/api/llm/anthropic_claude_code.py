@@ -148,6 +148,10 @@ class AnthropicClaudeCodeAPI(BaseAPI):
         text_bufs: dict[int, str] = {}
         thinking_bufs: dict[int, str] = {}
         tool_bufs: dict[int, str] = {}
+        _input_tokens = 0
+        _output_tokens = 0
+        _cache_read_tokens = 0
+        _cache_write_tokens = 0
 
         yield StartEvent()
 
@@ -207,9 +211,25 @@ class AnthropicClaudeCodeAPI(BaseAPI):
                                 args=args
                             ))
 
+                elif etype == "message_start":
+                    u = getattr(event.message, 'usage', None)
+                    if u:
+                        _input_tokens = getattr(u, 'input_tokens', 0) or 0
+                        _cache_read_tokens = getattr(u, 'cache_read_input_tokens', 0) or 0
+                        _cache_write_tokens = getattr(u, 'cache_creation_input_tokens', 0) or 0
+
                 elif etype == "message_delta":
+                    u = getattr(event, 'usage', None)
+                    if u:
+                        _output_tokens = getattr(u, 'output_tokens', 0) or 0
                     stop_reason = _STOP_REASON.get(event.delta.stop_reason or "", StopReason.Stop)
-                    yield EndEvent(reason=stop_reason)
+                    yield EndEvent(
+                        reason=stop_reason,
+                        input_tokens=_input_tokens,
+                        output_tokens=_output_tokens,
+                        cache_read_tokens=_cache_read_tokens,
+                        cache_write_tokens=_cache_write_tokens,
+                    )
 
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, error=str(event))

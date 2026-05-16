@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from program.engine.engine import Engine
+from program.engine.service import Engine
 from program.engine.types import (
     AgentEndEvent, AgentErrorEvent, AgentStartEvent,
     MessageEndEvent, TurnEndEvent, Options,

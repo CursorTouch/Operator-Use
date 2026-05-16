@@ -21,7 +21,7 @@ from program.prompt.builder import build_system_prompt
 from program.prompt.types import SystemPromptOptions
 
 if TYPE_CHECKING:
-    from program.engine.engine import Engine
+    from program.engine.service import Engine
     from program.session.manager import SessionManager
     from program.resource.types import BaseResourceLoader
     from program.extension.runtime import ExtensionRuntime
