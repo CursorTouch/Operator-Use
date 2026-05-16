@@ -36,9 +36,6 @@ class Runtime:
         self.commands.register_from_extensions(
             self._context.extension_runtime.get_commands()
         )
-        # Give the agent a back-reference so ctx.new_session() / fork() / switch_session() work
-        if context.agent is not None:
-            context.agent._runtime = self
 
     # -------------------------------------------------------------------------
     # Factory
@@ -100,8 +97,6 @@ class Runtime:
         self.commands.register_from_extensions(
             self._context.extension_runtime.get_commands()
         )
-        if self._context.agent is not None:
-            self._context.agent._runtime = self
         await self._emit_session_start('new')
 
     async def resume_session(self, session_file: Path) -> None:
@@ -121,8 +116,6 @@ class Runtime:
         self.commands.register_from_extensions(
             self._context.extension_runtime.get_commands()
         )
-        if self._context.agent is not None:
-            self._context.agent._runtime = self
         await self._emit_session_start('resume')
 
     async def fork_session(self, from_entry_id: str) -> None:

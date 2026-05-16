@@ -15,7 +15,7 @@ from program.inference.types import (
     ThinkingDeltaEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
 )
 from program.tool.types import ToolExecutionMode, ToolInvocation, ToolResult
-from program.message.types import AssistantMessage, ToolCallContent, Role
+from program.message.types import AssistantMessage, ToolCallContent, Role, Usage
 
 if TYPE_CHECKING:
     from program.inference.api.llm.service import LLM
@@ -274,8 +274,14 @@ class Engine:
                         case ErrorEvent(reason=reason, error=error):
                             message.stop_reason = reason
                             message.error = error
-                        case EndEvent(reason=reason):
-                            message.stop_reason = reason
+                        case EndEvent() as ev:
+                            message.stop_reason = ev.reason
+                            message.usage = Usage(
+                                input_tokens=ev.input_tokens,
+                                output_tokens=ev.output_tokens,
+                                cache_read_tokens=ev.cache_read_tokens,
+                                cache_write_tokens=ev.cache_write_tokens,
+                            )
 
                 await emit(MessageEndEvent(message=message))
                 messages.append(message)

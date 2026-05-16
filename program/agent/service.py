@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from program.resource.types import BaseResourceLoader
     from program.extension.runtime import ExtensionRuntime
     from program.compaction.compact import Compaction
+    from program.runtime.service import Runtime
 
 
 class Agent(ExtensionContext):
@@ -58,6 +59,7 @@ class Agent(ExtensionContext):
         self._context_window: int = config.context_window
         self._compact_requested: bool = False
         self._compact_options: CompactOptions | None = None
+        self._runtime: "Runtime" | None = None
 
         self._phase: str = "idle"
         self._engine.options.before_tool_call = self._before_tool_call
@@ -86,6 +88,14 @@ class Agent(ExtensionContext):
     @property
     def model(self) -> Any | None:
         return self._config.model
+
+    @property
+    def model_registry(self) -> Any:
+        return self._engine.llm._models
+
+    @property
+    def signal(self) -> Any:
+        return self._engine._signal
 
     def is_idle(self) -> bool:
         return self._engine.is_idle
@@ -116,6 +126,24 @@ class Agent(ExtensionContext):
         """Request compaction after the current (or next) turn completes."""
         self._compact_requested = True
         self._compact_options = options
+
+    async def reload(self) -> None:
+        await self._resources.reload()
+
+    async def wait_for_idle(self) -> None:
+        await self._engine.wait_for_idle()
+
+    async def new_session(self) -> None:
+        if self._runtime is not None:
+            await self._runtime.new_session()
+
+    async def fork(self, entry_id: str) -> None:
+        if self._runtime is not None:
+            await self._runtime.fork_session(entry_id)
+
+    async def switch_session(self, session_file: Path) -> None:
+        if self._runtime is not None:
+            await self._runtime.resume_session(session_file)
 
     # -------------------------------------------------------------------------
     # Engine-level tool hooks

@@ -57,7 +57,9 @@ class CompactOptions(BaseModel):
 
 
 class ExtensionContext(ABC):
-    """Read-only context passed to every event handler."""
+    """Context passed to every event handler and slash-command."""
+
+    # ── Identity & state ──────────────────────────────────────────────────────
 
     @property
     @abstractmethod
@@ -71,11 +73,31 @@ class ExtensionContext(ABC):
     @abstractmethod
     def model(self) -> Any | None: ...
 
+    @property
+    @abstractmethod
+    def model_registry(self) -> Any: ...
+
+    @property
+    @abstractmethod
+    def signal(self) -> Any:
+        """The engine's current abort signal (asyncio.Event)."""
+        ...
+
+    # ── Query ─────────────────────────────────────────────────────────────────
+
     @abstractmethod
     def is_idle(self) -> bool: ...
 
     @abstractmethod
     def has_pending_messages(self) -> bool: ...
+
+    @abstractmethod
+    def get_context_usage(self) -> ContextUsage | None: ...
+
+    @abstractmethod
+    def get_system_prompt(self) -> str: ...
+
+    # ── Control ───────────────────────────────────────────────────────────────
 
     @abstractmethod
     def abort(self) -> None: ...
@@ -84,13 +106,34 @@ class ExtensionContext(ABC):
     def shutdown(self) -> None: ...
 
     @abstractmethod
-    def get_context_usage(self) -> ContextUsage | None: ...
-
-    @abstractmethod
-    def get_system_prompt(self) -> str: ...
-
-    @abstractmethod
     def compact(self, options: CompactOptions | None = None) -> None: ...
+
+    @abstractmethod
+    async def reload(self) -> None:
+        """Hot-reload extensions, skills, and context files."""
+        ...
+
+    @abstractmethod
+    async def wait_for_idle(self) -> None:
+        """Suspend until the engine finishes its current turn."""
+        ...
+
+    # ── Session lifecycle (delegates to Runtime) ──────────────────────────────
+
+    @abstractmethod
+    async def new_session(self) -> None:
+        """Shut down the current session and start a fresh one."""
+        ...
+
+    @abstractmethod
+    async def fork(self, entry_id: str) -> None:
+        """Branch the session tree at entry_id and start a new leaf."""
+        ...
+
+    @abstractmethod
+    async def switch_session(self, session_file: Path) -> None:
+        """Shut down the current session and resume one from a file."""
+        ...
 
 
 # ============================================================================

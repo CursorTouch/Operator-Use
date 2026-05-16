@@ -143,6 +143,8 @@ class MistralChatAPI(BaseAPI):
         tool_started: dict[int, bool] = {}
         tool_bufs: dict[int, str] = {}
         tool_meta: dict[int, dict[str, str]] = {}
+        _input_tokens = 0
+        _output_tokens = 0
 
         yield StartEvent()
 
@@ -182,6 +184,10 @@ class MistralChatAPI(BaseAPI):
                         yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
                         return
                     chunk = event.data
+                    usage_data = getattr(chunk, 'usage', None)
+                    if usage_data and usage_data != UNSET:
+                        _input_tokens = getattr(usage_data, 'prompt_tokens', 0) or 0
+                        _output_tokens = getattr(usage_data, 'completion_tokens', 0) or 0
                     if not chunk.choices:
                         continue
                     choice = chunk.choices[0]
@@ -273,7 +279,7 @@ class MistralChatAPI(BaseAPI):
                             tool_meta.clear()
 
                         stop_reason = _STOP_REASON.get(str(finish), StopReason.Stop)
-                        yield EndEvent(reason=stop_reason)
+                        yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Abort, error=str(e))
