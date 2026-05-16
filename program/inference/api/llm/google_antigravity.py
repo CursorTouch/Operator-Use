@@ -17,7 +17,7 @@ from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
 from program.inference.api.llm.types import APIResponse
 from program.inference.model.types import Model
 from program.inference.types import (
-    LLMContext, LLMEvent, Options, StopReason,
+    LLMContext, LLMEvent, LLMOptions, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -176,7 +176,7 @@ def _messages_to_contents(
 
 
 class GoogleAntigravityAPI(BaseAPI):
-    def __init__(self, options: Options) -> None:
+    def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         self._base_url = (options.base_url or _DEFAULT_BASE_URL).rstrip("/")
         self._project_id: Optional[str] = (options.headers or {}).get("x-goog-user-project")

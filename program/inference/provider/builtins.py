@@ -9,15 +9,15 @@ from program.inference.provider.oauth.anthropic_claude_code import AnthropicClau
 from program.inference.provider.oauth.github_copilot import GitHubCopilotOAuthProvider
 from program.inference.provider.oauth.google_antigravity import GoogleAntigravityOAuthProvider
 from program.inference.provider.types import APIProvider, OAuthProvider, ImageProvider
-from program.inference.types import Options
+from program.inference.types import LLMOptions
 
 LLM_API_PROVIDERS: list[APIProvider] = [
-    APIProvider(id="openai",     name="OpenAI",     api=OpenAIResponsesAPI,  options=Options()),
-    APIProvider(id="anthropic",  name="Anthropic",  api=AnthropicMessagesAPI, options=Options()),
-    APIProvider(id="google",     name="Google",     api=GeminiGenerateAPI,   options=Options()),
-    APIProvider(id="nvidia",     name="NVIDIA",     api=OpenAICompletionsAPI, options=Options(base_url="https://integrate.api.nvidia.com/v1")),
-    APIProvider(id="mistral",    name="Mistral",    api=MistralChatAPI,      options=Options()),
-    APIProvider(id="ollama",     name="Ollama",     api=OllamaChatAPI,       options=Options(base_url="http://localhost:11434")),
+    APIProvider(id="openai",     name="OpenAI",     api=OpenAIResponsesAPI,  options=LLMOptions()),
+    APIProvider(id="anthropic",  name="Anthropic",  api=AnthropicMessagesAPI, options=LLMOptions()),
+    APIProvider(id="google",     name="Google",     api=GeminiGenerateAPI,   options=LLMOptions()),
+    APIProvider(id="nvidia",     name="NVIDIA",     api=OpenAICompletionsAPI, options=LLMOptions(base_url="https://integrate.api.nvidia.com/v1")),
+    APIProvider(id="mistral",    name="Mistral",    api=MistralChatAPI,      options=LLMOptions()),
+    APIProvider(id="ollama",     name="Ollama",     api=OllamaChatAPI,       options=LLMOptions(base_url="http://localhost:11434")),
 ]
 
 LLM_OAUTH_PROVIDERS: list[OAuthProvider] = [

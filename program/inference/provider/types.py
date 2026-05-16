@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, Type, Union, TYPE_CHECKING
 
-from program.inference.types import AuthType, Options, Transport
+from program.inference.types import AuthType, LLMOptions, Transport
 
 if TYPE_CHECKING:
     from program.inference.api.llm.base import BaseLLMAPI
@@ -54,7 +54,7 @@ class APIProvider:
     id: str
     name: str
     api: Union[str, Type["BaseLLMAPI"]]
-    options: Options
+    options: LLMOptions
     auth_type: AuthType = AuthType.ApiKey
     supported_transports: list[Transport] = field(default_factory=lambda: [Transport.HTTP])
 

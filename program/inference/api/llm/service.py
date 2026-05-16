@@ -7,7 +7,7 @@ from program.inference.provider.registry import ProviderRegistry
 from program.inference.provider.types import APIProvider, OAuthProvider
 from program.auth.manager import AuthManager
 from program.auth.types import OAuthCredential
-from program.inference.types import LLMContext, LLMEvent, Options
+from program.inference.types import LLMContext, LLMEvent, LLMOptions
 from program.message.types import BaseMessage, SystemMessage
 from typing import TYPE_CHECKING, Optional
 
@@ -26,7 +26,7 @@ class LLM:
         self,
         model_id: str,
         provider: str | None = None,
-        options: Options | None = None,
+        options: LLMOptions | None = None,
     ) -> None:
         model = self._models.get(model_id, provider=provider)
         if model is None:
@@ -54,7 +54,7 @@ class LLM:
                 raise RuntimeError(
                     f"No credentials found for '{provider}'. Please log in first."
                 )
-            base_opts = Options(api_key=resolved_provider.get_api_key(credential))
+            base_opts = LLMOptions(api_key=resolved_provider.get_api_key(credential))
             if base_url_override:
                 base_opts.base_url = base_url_override
             merged = self._merge_options(base_opts, options)
@@ -63,16 +63,16 @@ class LLM:
         else:
             base_opts = resolved_provider.options
             if base_url_override:
-                override_opts = Options(base_url=base_url_override)
+                override_opts = LLMOptions(base_url=base_url_override)
                 base_opts = self._merge_options(base_opts, override_opts)
             merged = self._merge_options(base_opts, options)
             self.provider_id = resolved_provider.id
             self.api = api_class(merged)
 
-    def _merge_options(self, base: Options, override: Options | None) -> Options:
+    def _merge_options(self, base: LLMOptions, override: LLMOptions | None) -> LLMOptions:
         if override is None:
             return base
-        merged = Options(**{f.name: getattr(base, f.name) for f in fields(base)})
+        merged = LLMOptions(**{f.name: getattr(base, f.name) for f in fields(base)})
         for f in fields(override):
             value = getattr(override, f.name)
             if value is not None:

@@ -14,7 +14,7 @@ from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
 from program.inference.api.llm.types import APIResponse
 from program.inference.model.types import Model
 from program.inference.types import (
-    LLMContext, LLMEvent, Options, StopReason, ThinkingLevel, Transport,
+    LLMContext, LLMEvent, LLMOptions, StopReason, ThinkingLevel, Transport,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -145,7 +145,7 @@ def _build_body(
     model: Model,
     instructions: str,
     input_items: list[dict[str, Any]],
-    options: Options,
+    options: LLMOptions,
     tools: Optional[list[Tool]] = None,
 ) -> dict[str, Any]:
     effort = _THINKING_EFFORT.get(options.thinking_level, "medium") if options.thinking_level else "medium"
@@ -322,7 +322,7 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
 class OpenAICodexResponsesAPI(BaseAPI):
     SUPPORTED_TRANSPORTS = (Transport.HTTP, Transport.WEBSOCKET)
 
-    def __init__(self, options: Options) -> None:
+    def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         self._http_url = _resolve_http_url(options.base_url)
         self._ws_url = _resolve_ws_url(options.base_url)

@@ -7,7 +7,7 @@ from google.genai import types as genai_types
 from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
-    LLMContext, LLMEvent, Options, StopReason, ThinkingBudgets,
+    LLMContext, LLMEvent, LLMOptions, StopReason, ThinkingBudgets,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -84,7 +84,7 @@ def _messages_to_gemini(
 
 
 class GeminiGenerateAPI(BaseAPI):
-    def __init__(self, options: Options) -> None:
+    def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         self._client = genai.Client(api_key=options.api_key)
 

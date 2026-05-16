@@ -3,7 +3,7 @@ Top-level access to inference clients and shared types.
 
 Usage:
     from program.inference import LLM, ImageLLM
-    from program.inference import LLMContext, Options, StopReason
+    from program.inference import LLMContext, LLMOptions, StopReason
     from program.inference import ImageContext, ImageOptions, GeneratedImage
 """
 
@@ -13,7 +13,7 @@ from program.inference.types import (
     LLMContext,
     LLMEvent,
     LLMEventType,
-    Options,
+    LLMOptions,
     StopReason,
     ThinkingLevel,
     ThinkingBudgets,
@@ -81,7 +81,7 @@ __all__ = [
     "LLMContext",
     "LLMEvent",
     "LLMEventType",
-    "Options",
+    "LLMOptions",
     "StopReason",
     "ThinkingLevel",
     "ThinkingBudgets",

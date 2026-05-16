@@ -7,7 +7,7 @@ from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.provider.oauth.github_copilot import get_copilot_base_url
 from program.inference.types import (
-    LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
+    LLMContext, LLMEvent, LLMOptions, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
@@ -95,7 +95,7 @@ def _messages_to_chat(messages: list[BaseMessage]) -> list[dict[str, Any]]:
 
 
 class GitHubCopilotChatAPI(BaseAPI):
-    def __init__(self, options: Options) -> None:
+    def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         base_url = options.base_url or get_copilot_base_url(options.api_key)
         self._client = AsyncOpenAI(

@@ -9,7 +9,7 @@ from mistralai.types import UNSET
 from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
-    LLMContext, LLMEvent, Options, StopReason, ThinkingLevel,
+    LLMContext, LLMEvent, LLMOptions, StopReason, ThinkingLevel,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -104,7 +104,7 @@ def _messages_to_mistral(messages: list[BaseMessage]) -> list[dict[str, Any]]:
 
 
 class MistralChatAPI(BaseAPI):
-    def __init__(self, options: Options) -> None:
+    def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         self._client = Mistral(
             api_key=options.api_key,

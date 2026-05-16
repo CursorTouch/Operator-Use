@@ -1,14 +1,14 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from program.inference.model.types import Model
-from program.inference.types import LLMContext, LLMEvent, Options, Transport
+from program.inference.types import LLMContext, LLMEvent, LLMOptions, Transport
 from program.message.types import BaseMessage
 
 
 class BaseLLMAPI(ABC):
     SUPPORTED_TRANSPORTS: tuple[Transport, ...] = (Transport.HTTP,)
 
-    def __init__(self, options: Options) -> None:
+    def __init__(self, options: LLMOptions) -> None:
         if options.transport not in self.SUPPORTED_TRANSPORTS:
             raise ValueError(
                 f"{self.__class__.__name__} does not support transport '{options.transport.value}'. "

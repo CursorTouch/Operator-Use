@@ -6,7 +6,7 @@ from anthropic import AsyncAnthropic
 from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
-    LLMContext, LLMEvent, Options, StopReason,
+    LLMContext, LLMEvent, LLMOptions, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -92,7 +92,7 @@ def _messages_to_anthropic(
 class AnthropicClaudeCodeAPI(BaseAPI):
     """Anthropic Messages API using OAuth Bearer token auth (Claude Pro/Max)."""
 
-    def __init__(self, options: Options) -> None:
+    def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         self._client = AsyncAnthropic(
             auth_token=options.api_key,

@@ -86,7 +86,7 @@ ResponseCallback = Callable[[Any], None]
 
 
 @dataclass
-class Options:
+class LLMOptions:
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     headers: Optional[dict[str, str]] = None
