@@ -69,6 +69,9 @@ class LLM:
             self.provider_id = resolved_provider.id
             self.api = api_class(merged)
 
+        if self.api.options.max_tokens is None:
+            self.api.options.max_tokens = model.max_tokens
+
     def _merge_options(self, base: LLMOptions, override: LLMOptions | None) -> LLMOptions:
         if override is None:
             return base

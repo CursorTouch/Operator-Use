@@ -24,6 +24,7 @@ class Model:
     cost: Cost = field(default_factory=Cost)
     thinking: bool = False
     context_window: int = 0
+    max_tokens: int = 16384
     input: list[Modality] = field(default_factory=list)
     output: list[Modality] = field(default_factory=list)
     api: str | None = None
