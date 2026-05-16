@@ -543,24 +543,24 @@ class SettingsManager:
         self._mark_modified("image", "block_images")
         self._save()
 
-    # ── Shell / execution ─────────────────────────────────────────────────────
+    # ── Execution ─────────────────────────────────────────────────────────────
 
-    def get_shell_path(self) -> str | None:
-        """Return the custom shell executable path, or None to use the system default."""
-        return self.settings.shell_path
+    def get_execute_path(self) -> str | None:
+        """Return the custom execute path, or None to use the system default."""
+        return self.settings.execute_path
 
-    def set_shell_path(self, path: str | None):
-        self.global_settings.shell_path = path
-        self._mark_modified("shell_path")
+    def set_execute_path(self, path: str | None):
+        self.global_settings.execute_path = path
+        self._mark_modified("execute_path")
         self._save()
 
-    def get_shell_command_prefix(self) -> str | None:
-        """Return the prefix prepended to every shell command, or None if unset."""
-        return self.settings.shell_command_prefix
+    def get_execute_command_prefix(self) -> str | None:
+        """Return the prefix prepended to every execute command, or None if unset."""
+        return self.settings.execute_command_prefix
 
-    def set_shell_command_prefix(self, prefix: str | None):
-        self.global_settings.shell_command_prefix = prefix
-        self._mark_modified("shell_command_prefix")
+    def set_execute_command_prefix(self, prefix: str | None):
+        self.global_settings.execute_command_prefix = prefix
+        self._mark_modified("execute_command_prefix")
         self._save()
 
     # ── Shell / execution ─────────────────────────────────────────────────────

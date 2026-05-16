@@ -66,6 +66,7 @@ AfterToolCallCallback = Callable[[ToolInvocation, ToolResult, Optional[AbortSign
 BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Awaitable[Optional[ToolInvocation | ToolResultContent]]]
 GetFollowUpMessagesCallback = Callable[[], list[BaseMessage]]
 GetSteeringMessagesCallback = Callable[[], list[BaseMessage]]
+OnEventCallback = Callable[['AgentEvent'], Awaitable[None]]
 ShouldSkipToolCallsCallback = Callable[[ToolCallContent], ToolResultContent]
 ShouldStopAfterTurnCallback = Callable[[BaseMessage,list[ToolResultContent]], bool]
 TransformContextCallback = Callable[[list[BaseMessage], Optional[AbortSignal]], list[BaseMessage]]
@@ -90,6 +91,7 @@ class AgentState:
 class Options:
     after_tool_call: Optional[AfterToolCallCallback] = None
     before_tool_call: Optional[BeforeToolCallCallback] = None
+    on_event: Optional[OnEventCallback] = None
     execution_mode: Optional[ToolExecutionMode] = None
     steering_mode: SteeringMode = SteeringMode.OneAtATime
     followup_mode: FollowupMode = FollowupMode.OneAtATime

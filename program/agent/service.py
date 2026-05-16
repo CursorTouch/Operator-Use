@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
+import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from program.agent.types import AgentConfig, AgentContext, PromptOptions, RetryStartEvent, RetryEndEvent
 from program.extension.types import (
-    ExtensionContext, ContextUsage, CompactOptions,
+    ExtensionContext, ExtensionError, ExtensionTool, ContextUsage, CompactOptions,
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
     SessionBeforeCompactEvent, SessionBeforeCompactResult, SessionCompactEvent,
     AgentEndEvent as ExtAgentEndEvent,
@@ -64,6 +66,7 @@ class Agent(ExtensionContext):
         self._phase: str = "idle"
         self._engine.options.before_tool_call = self._before_tool_call
         self._engine.options.after_tool_call = self._after_tool_call
+        self._engine.options.on_event = self._on_engine_event
 
     # -------------------------------------------------------------------------
     # Hooks
@@ -144,6 +147,29 @@ class Agent(ExtensionContext):
     async def switch_session(self, session_file: Path) -> None:
         if self._runtime is not None:
             await self._runtime.resume_session(session_file)
+
+    # -------------------------------------------------------------------------
+    # Engine event fan-out (pi-style: agent is the single funnel)
+    # -------------------------------------------------------------------------
+
+    async def _on_engine_event(self, event: Any) -> None:
+        """Forward every engine-emitted event to extension handlers registered via api.on()."""
+        event_type = getattr(event, 'type', None)
+        if event_type is None:
+            return
+        for ext in self._extensions._extensions:
+            for handler in ext.handlers.get(event_type, []):
+                try:
+                    result = handler(event, self)
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception:
+                    self._extensions._errors.append(ExtensionError(
+                        extension_path=ext.path,
+                        event=event_type,
+                        error=traceback.format_exc().strip().splitlines()[-1],
+                        stack=traceback.format_exc(),
+                    ))
 
     # -------------------------------------------------------------------------
     # Engine-level tool hooks
@@ -298,11 +324,19 @@ class Agent(ExtensionContext):
         user_message = UserMessage(contents=[TextContent(content=user_input)])
         user_entry_id = self._session_manager.append_message(user_message)
 
+        # Assemble tools: base tools + extension tools (base names take priority)
+        base_tool_names = {t.name for t in self._engine.tools}
+        ext_tools = [
+            ExtensionTool(rt.definition, self)
+            for name, rt in self._extensions.get_tools().items()
+            if name not in base_tool_names
+        ]
+
         # Build the context snapshot that the loop will receive
         ctx = AgentContext(
             system_prompt=self._system_prompt,
             messages=base_messages + [user_message],
-            tools=self._engine.tools,
+            tools=list(self._engine.tools) + ext_tools,
         )
 
         self._phase = "turn"

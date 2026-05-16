@@ -24,8 +24,9 @@ class ToolKind(str, Enum):
     Read = "read"
     Edit = "edit"
     Write = "write"
-    Shell = "shell"
+    Execute = "execute"
     Web = "web"
+    Unknown = "unknown"
 
 
 class ToolExecutionMode(str, Enum):

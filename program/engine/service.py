@@ -111,6 +111,8 @@ class Engine:
                 self.state.error_message = error
         if self._hooks is not None:
             await self._hooks.emit(event)
+        if self.options.on_event is not None:
+            await self.options.on_event(event)
 
     # -------------------------------------------------------------------------
     # Tool execution

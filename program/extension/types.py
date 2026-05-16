@@ -7,7 +7,7 @@ from typing import Any, Awaitable, Callable, TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from program.tool.types import ToolExecutionMode, ToolResult
+from program.tool.types import Tool, ToolKind, ToolInvocation, ToolExecutionMode, ToolResult, ToolExecutionUpdateCallback, AbortSignal
 from program.skill.types import SourceInfo, ResourceDiagnostic
 from program.bus.service import EventBus
 
@@ -150,12 +150,37 @@ class ToolDefinition:
     prompt_snippet: str | None = None
     prompt_guidelines: list[str] = field(default_factory=list)
     execution_mode: ToolExecutionMode = ToolExecutionMode.Sequential
+    kind: ToolKind = ToolKind.Unknown
 
 
 @dataclass
 class RegisteredTool:
     definition: ToolDefinition
     source_info: SourceInfo
+
+
+class ExtensionTool(Tool):
+    """Adapts a ToolDefinition from an extension into a Tool the engine can execute."""
+
+    def __init__(self, definition: ToolDefinition, ctx: ExtensionContext) -> None:
+        super().__init__(
+            name=definition.name,
+            description=definition.description,
+            schema=definition.parameters,
+            kind=definition.kind,
+            execution_mode=definition.execution_mode,
+        )
+        self._definition = definition
+        self._ctx = ctx
+
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback: ToolExecutionUpdateCallback | None = None,
+        signal: AbortSignal | None = None,
+    ) -> ToolResult:
+        params = self._definition.parameters.model_validate(invocation.params)
+        return await self._definition.execute(params, invocation, self._ctx)
 
 
 # ============================================================================

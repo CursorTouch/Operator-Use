@@ -49,7 +49,7 @@ class TerminalTool(Tool):
             name="terminal",
             description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, or any CLI task. Destructive commands are blocked.",
             schema=TerminalSchema,
-            kind=ToolKind.Shell,
+            kind=ToolKind.Execute,
             execution_mode=ToolExecutionMode.Parallel
         )
 

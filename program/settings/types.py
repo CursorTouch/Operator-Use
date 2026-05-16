@@ -93,9 +93,9 @@ class Settings:
     skills: Optional[list[str]] = None
     prompts: Optional[list[str]] = None
 
-    # Shell / execution
-    shell_path: Optional[str] = None
-    shell_command_prefix: Optional[str] = None
+    # Execution
+    execute_path: Optional[str] = None
+    execute_command_prefix: Optional[str] = None
 
     # Session
     session_dir: Optional[str] = None
