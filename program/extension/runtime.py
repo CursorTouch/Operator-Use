@@ -9,20 +9,27 @@ from program.extension.types import (
     Extension, ExtensionContext, ExtensionError, ExtensionEvent,
     LoadExtensionsResult,
 )
+from program.hooks.service import Hooks
 
 
 class ExtensionRuntime:
     """
-    Dispatches lifecycle events to all loaded extensions.
+    Dispatches lifecycle events to all loaded extensions and the system Hooks registry.
 
     Usage:
-        runtime = ExtensionRuntime(load_result, context)
+        runtime = ExtensionRuntime(load_result, context, hooks)
         await runtime.emit('session_start', event)
     """
 
-    def __init__(self, load_result: LoadExtensionsResult, context: ExtensionContext) -> None:
+    def __init__(
+        self,
+        load_result: LoadExtensionsResult,
+        context: ExtensionContext,
+        hooks: Hooks | None = None,
+    ) -> None:
         self._extensions = load_result.extensions
         self._ctx = context
+        self._hooks = hooks or Hooks()
         self._errors: list[ExtensionError] = list(load_result.errors)
         self._subscribers: list = []  # catch-all listeners registered via subscribe()
 
@@ -41,7 +48,7 @@ class ExtensionRuntime:
 
     async def emit(self, event_type: str, event: Any) -> list[Any]:
         """
-        Emit an event to all extensions that subscribed to event_type.
+        Emit an event to all extensions and the system Hooks registry.
         Returns a list of non-None results from handlers.
         """
         results: list[Any] = []
@@ -63,6 +70,10 @@ class ExtensionRuntime:
                         stack=traceback.format_exc(),
                     ))
 
+        # Fire system-level hooks (non-extension consumers)
+        hook_results = await self._hooks.emit(event)
+        results.extend(r for r in hook_results if r is not None)
+
         for subscriber in list(self._subscribers):
             try:
                 result = subscriber(event_type, event)
@@ -75,7 +86,7 @@ class ExtensionRuntime:
 
     async def emit_parallel(self, event_type: str, event: Any) -> list[Any]:
         """
-        Emit an event to all extensions concurrently.
+        Emit an event to all extensions and Hooks concurrently.
         Use for fire-and-forget events where order doesn't matter.
         """
         tasks = []
@@ -99,8 +110,16 @@ class ExtensionRuntime:
 
                 tasks.append(_run())
 
-        results = await asyncio.gather(*tasks)
-        return [r for r in results if r is not None]
+        tasks.append(self._hooks.emit(event))
+
+        all_results = await asyncio.gather(*tasks)
+        results = []
+        for r in all_results:
+            if isinstance(r, list):
+                results.extend(x for x in r if x is not None)
+            elif r is not None:
+                results.append(r)
+        return results
 
     def has_handlers(self, event_type: str) -> bool:
         """Return True if any loaded extension has at least one handler for event_type."""

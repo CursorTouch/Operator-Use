@@ -49,9 +49,9 @@ class SettingsManager:
         self._write_queue = None
 
     @staticmethod
-    def create(cwd: Path, agent_dir: Optional[Path] = None) -> SettingsManager:
-        """Create a SettingsManager backed by files in cwd (and optional agent_dir for global settings)."""
-        storage = FileSettingsStorage(cwd, agent_dir)
+    def create(cwd: Path, config_dir: Optional[Path] = None) -> SettingsManager:
+        """Create a SettingsManager backed by files in cwd (and optional config_dir for global settings)."""
+        storage = FileSettingsStorage(cwd, config_dir)
         return SettingsManager.from_storage(storage)
 
     @staticmethod

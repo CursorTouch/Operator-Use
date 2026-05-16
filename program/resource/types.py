@@ -70,7 +70,7 @@ class ResourceLoaderOptions(BaseModel):
     model_config = {'arbitrary_types_allowed': True}
 
     cwd: Path
-    agent_dir: Path
+    config_dir: Path
     additional_extension_dirs: list[Path] = Field(default_factory=list)
     additional_skill_paths: list[str] = Field(default_factory=list)
     no_extensions: bool = False

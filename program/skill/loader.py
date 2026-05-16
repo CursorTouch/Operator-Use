@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from program.settings.paths import get_config_dir
+from program.settings.paths import get_skills_dir
 from program.skill.types import (
     CollisionInfo, LoadSkillsOptions, LoadSkillsResult,
     ResourceDiagnostic, Skill, SkillFrontmatter, SourceInfo,
@@ -196,7 +196,6 @@ def load_skills_from_dir(dir_path: Path, source: str) -> LoadSkillsResult:
 
 def load_skills(options: LoadSkillsOptions) -> LoadSkillsResult:
     cwd = options.cwd
-    agent_dir = options.agent_dir or get_config_dir()
     all_diagnostics: list[ResourceDiagnostic] = []
     collision_diagnostics: list[ResourceDiagnostic] = []
 
@@ -227,8 +226,8 @@ def load_skills(options: LoadSkillsOptions) -> LoadSkillsResult:
                 seen_real_paths.add(real)
 
     if options.include_defaults:
-        add_skills(_load_from_dir_internal(agent_dir / 'skills', 'user', True))
-        add_skills(_load_from_dir_internal(cwd / '.program' / 'skills', 'project', True))
+        add_skills(_load_from_dir_internal(get_skills_dir(), 'user', True))
+        add_skills(_load_from_dir_internal(get_skills_dir(cwd), 'project', True))
 
     for raw_path in options.skill_paths:
         resolved = Path(raw_path).expanduser()

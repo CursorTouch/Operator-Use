@@ -71,8 +71,7 @@ class RPCServer:
         self._runtime = runtime
         self._lock = asyncio.Lock()
         self._pending_ui: dict[str, asyncio.Future] = {}
-        self._unsub_ext: Callable | None = None
-        self._unsub_engine: Callable | None = None
+        self._unsub_hooks: Callable | None = None
         self._shutdown = False
 
     # ------------------------------------------------------------------
@@ -107,42 +106,26 @@ class RPCServer:
         if session is None:
             return
 
-        # Extension-level events (session, compaction, tool hooks, etc.)
-        self._unsub_ext = session._extensions.subscribe(self._on_ext_event)
-
-        # Engine-level events (streaming, tool execution, etc.)
-        async def _engine_listener(event) -> None:
+        async def _on_event(event: Any) -> None:
             d = _to_jsonable(event)
-            if isinstance(d, dict):
-                d.setdefault('type', event.type.value if hasattr(event, 'type') else 'unknown')
+            if not isinstance(d, dict):
+                d = {'data': d}
+            if 'type' not in d:
+                raw_type = getattr(event, 'type', 'unknown')
+                d['type'] = raw_type.value if hasattr(raw_type, 'value') else raw_type
             await self._write(d)
 
-        # subscribe is async but only does list.append — run it synchronously
-        asyncio.get_event_loop().create_task(self._attach_engine(session, _engine_listener))
-
-    async def _attach_engine(self, session, listener) -> None:
-        self._unsub_engine = await session._loop.subscribe(listener)
+        # Single subscription covers both engine events (via AgentLoop → Hooks)
+        # and extension/session events (via ExtensionRuntime → Hooks).
+        self._unsub_hooks = session.hooks.subscribe(_on_event)
 
     def _close(self) -> None:
-        if self._unsub_ext:
+        if self._unsub_hooks:
             try:
-                self._unsub_ext()
+                self._unsub_hooks()
             except Exception:
                 pass
-            self._unsub_ext = None
-        if self._unsub_engine:
-            try:
-                self._unsub_engine()
-            except Exception:
-                pass
-            self._unsub_engine = None
-
-    async def _on_ext_event(self, event_type: str, event: Any) -> None:
-        d = _to_jsonable(event)
-        if not isinstance(d, dict):
-            d = {'data': d}
-        d['type'] = event_type
-        await self._write(d)
+            self._unsub_hooks = None
 
     # ------------------------------------------------------------------
     # I/O

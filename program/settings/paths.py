@@ -2,15 +2,22 @@ from pathlib import Path
 
 APP_NAME = "Program"
 CONFIG_DIR_NAME = ".program"
+AGENT_DIR_NAME = "agent"
 
 CONFIG_DIR_PATH = Path.home() / CONFIG_DIR_NAME
 
+
+# ── Config root ───────────────────────────────────────────────────────────────
+# ~/.program/  or  <project>/.program/
+# Contains user-editable files: settings.json, auth.json, SYSTEM.md, AGENTS.md
 
 def get_config_dir(cwd: Path | None = None) -> Path:
     if cwd is not None and cwd.exists():
         return cwd / CONFIG_DIR_NAME
     return CONFIG_DIR_PATH
 
+
+# ── User-facing files (at config root, human-editable) ───────────────────────
 
 def get_settings_path(cwd: Path | None = None) -> Path:
     return get_config_dir(cwd) / "settings.json"
@@ -20,21 +27,38 @@ def get_auth_path() -> Path:
     return get_config_dir() / "auth.json"
 
 
-def get_models_path() -> Path:
-    return get_config_dir() / "models.json"
+def get_system_prompt_path(cwd: Path | None = None) -> Path:
+    return get_config_dir(cwd) / "SYSTEM.md"
 
 
-def get_sessions_dir(cwd: Path | None = None) -> Path:
-    return get_config_dir(cwd) / "sessions"
+def get_append_system_prompt_path(cwd: Path | None = None) -> Path:
+    return get_config_dir(cwd) / "APPEND_SYSTEM.md"
 
 
-def get_prompts_dir(cwd: Path | None = None) -> Path:
-    return get_config_dir(cwd) / "prompts"
+# ── Agent runtime dir ─────────────────────────────────────────────────────────
+# ~/.program/agent/  or  <project>/.program/agent/
+# Managed by the runtime — extensions, prompts, sessions, tools, skills
+
+def get_agent_dir(cwd: Path | None = None) -> Path:
+    return get_config_dir(cwd) / AGENT_DIR_NAME
 
 
-def get_tools_dir(cwd: Path | None = None) -> Path:
-    return get_config_dir(cwd) / "tools"
+def get_sessions_dir() -> Path:
+    """Global session storage — always ~/.program/agent/sessions/, keyed by project cwd slug."""
+    return get_agent_dir() / "sessions"
 
 
 def get_extensions_dir(cwd: Path | None = None) -> Path:
-    return get_config_dir(cwd) / "extensions"
+    return get_agent_dir(cwd) / "extensions"
+
+
+def get_prompts_dir(cwd: Path | None = None) -> Path:
+    return get_agent_dir(cwd) / "prompts"
+
+
+def get_tools_dir(cwd: Path | None = None) -> Path:
+    return get_agent_dir(cwd) / "tools"
+
+
+def get_skills_dir(cwd: Path | None = None) -> Path:
+    return get_agent_dir(cwd) / "skills"

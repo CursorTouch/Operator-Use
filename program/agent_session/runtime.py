@@ -10,7 +10,7 @@ from program.commands.registry import CommandRegistry
 from program.commands.types import parse_command
 from program.extension.types import (
     SessionStartEvent, SessionShutdownEvent, SessionBeforeSwitchEvent,
-    SessionBeforeSwitchResult,
+    SessionBeforeSwitchResult, SessionBeforeForkEvent, SessionBeforeForkResult,
 )
 
 
@@ -123,6 +123,15 @@ class AgentSessionRuntime:
         sm = self._services.session_manager
         if from_entry_id not in sm.by_id:
             raise KeyError(f"Entry '{from_entry_id}' not found in session.")
+
+        before_results = await self._services.extension_runtime.emit(
+            'session_before_fork',
+            SessionBeforeForkEvent(entry_id=from_entry_id),
+        )
+        for r in before_results:
+            if isinstance(r, SessionBeforeForkResult) and r.cancel:
+                return
+
         sm.branch(from_entry_id)
         await self._emit_session_start('fork')
 

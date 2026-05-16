@@ -52,6 +52,5 @@ class LoadSkillsResult(BaseModel):
 
 class LoadSkillsOptions(BaseModel):
     cwd: Path
-    agent_dir: Path
     skill_paths: list[str] = Field(default_factory=list)
     include_defaults: bool = True

@@ -18,9 +18,9 @@ class SettingsStorage(ABC):
 class FileSettingsStorage(SettingsStorage):
     """File-based storage backend with locking."""
 
-    def __init__(self, cwd: Path, agent_dir: Path | None = None):
+    def __init__(self, cwd: Path, config_dir: Path | None = None):
         self.global_settings_path = (
-            agent_dir / "settings.json" if agent_dir else get_settings_path()
+            config_dir / "settings.json" if config_dir else get_settings_path()
         )
         self.project_settings_path = get_settings_path(cwd)
         self._ensure_parent_dir(self.global_settings_path)

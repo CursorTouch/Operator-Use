@@ -65,6 +65,14 @@ class AgentSession(ExtensionContext):
         self._loop.options.after_tool_call = self._after_tool_call
 
     # -------------------------------------------------------------------------
+    # Hooks
+    # -------------------------------------------------------------------------
+
+    @property
+    def hooks(self):
+        return self._extensions._hooks
+
+    # -------------------------------------------------------------------------
     # ExtensionContext interface
     # -------------------------------------------------------------------------
 

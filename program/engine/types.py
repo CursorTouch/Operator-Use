@@ -40,6 +40,28 @@ class AgentEventType(str, Enum):
     AgentError = "agent_error"
 
 
+# Hook event types — canonical definitions live in program.hooks
+from program.hooks.types import (
+    AgentStartEvent, AgentEndEvent, AgentErrorEvent,
+    TurnStartEvent, TurnEndEvent,
+    MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
+    ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
+)
+
+AgentEvent = (
+    AgentStartEvent
+    | AgentEndEvent
+    | TurnStartEvent
+    | TurnEndEvent
+    | MessageStartEvent
+    | MessageUpdateEvent
+    | MessageEndEvent
+    | ToolExecutionStartEvent
+    | ToolExecutionUpdateEvent
+    | ToolExecutionEndEvent
+    | AgentErrorEvent
+)
+
 AfterToolCallCallback = Callable[[ToolInvocation, ToolResult, Optional[AbortSignal]], Awaitable[Optional[ToolResult]]]
 BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Awaitable[Optional[ToolInvocation | ToolResultContent]]]
 GetFollowUpMessagesCallback = Callable[[], list[BaseMessage]]
@@ -128,84 +150,3 @@ class SteeringQueue:
         return messages
 
 
-# Agent lifecycle
-@dataclass
-class AgentStartEvent:
-    type: AgentEventType = field(default=AgentEventType.AgentStart, init=False)
-
-
-@dataclass
-class AgentEndEvent:
-    type: AgentEventType = field(default=AgentEventType.AgentEnd, init=False)
-    messages: list[BaseMessage] = field(default_factory=list)
-
-
-# Turn lifecycle
-@dataclass
-class TurnStartEvent:
-    type: AgentEventType = field(default=AgentEventType.TurnStart, init=False)
-
-
-@dataclass
-class TurnEndEvent:
-    type: AgentEventType = field(default=AgentEventType.TurnEnd, init=False)
-    message: Optional[BaseMessage] = None
-    tool_results: list[ToolResultContent] = field(default_factory=list)
-
-
-# Message lifecycle
-@dataclass
-class MessageStartEvent:
-    type: AgentEventType = field(default=AgentEventType.MessageStart, init=False)
-    message: Optional[BaseMessage] = None
-
-
-@dataclass
-class MessageUpdateEvent:
-    type: AgentEventType = field(default=AgentEventType.MessageUpdate, init=False)
-    message: Optional[BaseMessage] = None
-
-
-@dataclass
-class MessageEndEvent:
-    type: AgentEventType = field(default=AgentEventType.MessageEnd, init=False)
-    message: Optional[BaseMessage] = None
-
-
-# Tool execution lifecycle
-@dataclass
-class ToolExecutionStartEvent:
-    type: AgentEventType = field(default=AgentEventType.ToolExecutionStart, init=False)
-    tool_call: ToolCallContent
-
-
-@dataclass
-class ToolExecutionUpdateEvent:
-    type: AgentEventType = field(default=AgentEventType.ToolExecutionUpdate, init=False)
-    partial_tool_result: ToolResultContent
-
-
-@dataclass
-class ToolExecutionEndEvent:
-    type: AgentEventType = field(default=AgentEventType.ToolExecutionEnd, init=False)
-    tool_result: ToolResultContent
-
-@dataclass
-class AgentErrorEvent:
-    type: AgentEventType = field(default=AgentEventType.AgentError, init=False)
-    error: str
-
-
-AgentEvent = (
-    AgentStartEvent
-    | AgentEndEvent
-    | TurnStartEvent
-    | TurnEndEvent
-    | MessageStartEvent
-    | MessageUpdateEvent
-    | MessageEndEvent
-    | ToolExecutionStartEvent
-    | ToolExecutionUpdateEvent
-    | ToolExecutionEndEvent
-    | AgentErrorEvent
-)

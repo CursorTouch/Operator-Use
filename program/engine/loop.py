@@ -2,6 +2,7 @@ from __future__ import annotations
 from program.message.types import ToolResultContent
 import asyncio
 from typing import TYPE_CHECKING, Optional, Callable
+from program.hooks.service import Hooks
 from program.engine.types import (
     EmitEvent, TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
@@ -38,11 +39,13 @@ class AgentLoop:
         tools: list[Tool],
         system_prompt: Optional[str] = None,
         options: Optional[Options] = None,
+        hooks: Optional[Hooks] = None,
     ) -> None:
         self.llm = llm
         self.tools = tools
         self.system_prompt = system_prompt
         self.options = options or Options()
+        self._hooks = hooks
         self._tools: dict[str, Tool] = {t.name: t for t in (tools or [])}
         self.listeners: list[Callable[[AgentEvent], None]] = []
         self.state = AgentState(
@@ -114,6 +117,8 @@ class AgentLoop:
             result = listener(event)
             if asyncio.iscoroutine(result):
                 await result
+        if self._hooks is not None:
+            await self._hooks.emit(event)
 
     # -------------------------------------------------------------------------
     # Tool execution

@@ -18,15 +18,15 @@ def _load_context_file_from_dir(directory: Path) -> ContextFile | None:
     return None
 
 
-def load_project_context_files(cwd: Path, agent_dir: Path) -> list[ContextFile]:
+def load_project_context_files(cwd: Path, config_dir: Path) -> list[ContextFile]:
     """
-    Load AGENTS.md / CLAUDE.md from the agent dir and every ancestor of cwd up to root.
-    Returns files ordered: agent-global first, then cwd ancestors root→cwd.
+    Load AGENTS.md / CLAUDE.md from the global config dir and every ancestor of cwd up to root.
+    Returns files ordered: global first, then cwd ancestors root→cwd.
     """
     context_files: list[ContextFile] = []
     seen: set[str] = set()
 
-    global_ctx = _load_context_file_from_dir(agent_dir)
+    global_ctx = _load_context_file_from_dir(config_dir)
     if global_ctx:
         context_files.append(global_ctx)
         seen.add(global_ctx.path)

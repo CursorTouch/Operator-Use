@@ -9,7 +9,7 @@ from program.session.types import (
     SessionEntry, SessionHeader, SessionInfo, MessageEntry, SessionFileEntry, SessionType
 )
 from program.message.types import AgentMessage, LLMMessage, Role, TextContent, ImageContent
-from program.settings.paths import get_config_dir
+from program.settings.paths import get_agent_dir
 
 def create_session_id() -> str:
     """Create a new session ID using UUIDv7."""
@@ -35,16 +35,15 @@ def generate_timestamp() -> float:
     now = datetime.now()
     return now.timestamp()
 
-def get_default_session_dir(cwd: str | Path, config_dir: str | Path | None = None) -> Path:
+def get_default_session_dir(cwd: str | Path) -> Path:
     """
     Get the default session directory for a cwd.
-    Encodes cwd into a safe directory name under <config_dir>/sessions/.
+    Encodes cwd into a safe directory name under ~/.program/agent/sessions/.
     Creates the directory if it doesn't exist.
     """
-    base = Path(config_dir) if config_dir is not None else get_config_dir()
     cwd = Path(cwd).as_posix()
     safe_path = f"--{re.sub(r'^[/\\]', '', cwd).replace('/', '-').replace('\\', '-').replace(':', '-')}--"
-    session_dir = base / "sessions" / safe_path
+    session_dir = get_agent_dir() / "sessions" / safe_path
     session_dir.mkdir(parents=True, exist_ok=True)
     return session_dir
 

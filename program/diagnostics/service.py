@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from program.diagnostics.types import CollisionInfo, ResourceDiagnostic
-from program.extension.types import ExtensionError, LoadExtensionsResult
-from program.skill.types import LoadSkillsResult
 
 if TYPE_CHECKING:
+    from program.extension.types import ExtensionError, LoadExtensionsResult
     from program.extension.runtime import ExtensionRuntime
+    from program.skill.types import LoadSkillsResult
 
 
 def detect_extension_tool_collisions(result: LoadExtensionsResult) -> list[ResourceDiagnostic]:

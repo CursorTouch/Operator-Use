@@ -15,6 +15,7 @@ from program.engine.types import Options
 from program.extension.loader import discover_and_load_extensions
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult
+from program.hooks.service import Hooks
 from program.inference.api.llm.service import LLM
 from program.resource.loader import ResourceLoader
 from program.resource.types import ResourceLoaderOptions
@@ -35,7 +36,7 @@ class AgentSessionServicesConfig(BaseModel):
     model_config = {'arbitrary_types_allowed': True}
 
     cwd: Path
-    agent_dir: Path | None = None
+    config_dir: Path | None = None
 
     # LLM
     model_id: str = 'claude-sonnet-4-6'
@@ -88,6 +89,7 @@ class AgentSessionServices:
         extension_runtime: ExtensionRuntime,
         compaction: Compaction,
         settings_manager: SettingsManager | None,
+        hooks: Hooks | None = None,
     ) -> None:
         self.session = session
         self.llm = llm
@@ -97,6 +99,7 @@ class AgentSessionServices:
         self.extension_runtime = extension_runtime
         self.compaction = compaction
         self.settings_manager = settings_manager
+        self.hooks: Hooks = hooks or extension_runtime._hooks
 
     @classmethod
     async def create(
@@ -105,11 +108,11 @@ class AgentSessionServices:
         settings_manager: SettingsManager | None = None,
     ) -> AgentSessionServices:
         cwd = config.cwd.resolve()
-        agent_dir = (config.agent_dir or get_config_dir()).resolve()
+        config_dir = (config.config_dir or get_config_dir()).resolve()
 
         # ── Settings ──────────────────────────────────────────────────────────
         if settings_manager is None:
-            settings_manager = SettingsManager.create(cwd, agent_dir)
+            settings_manager = SettingsManager.create(cwd, config_dir)
 
         # ── LLM ───────────────────────────────────────────────────────────────
         model_id = config.model_id or settings_manager.get_default_model()
@@ -119,7 +122,7 @@ class AgentSessionServices:
         # ── Resource loader ───────────────────────────────────────────────────
         loader_opts = ResourceLoaderOptions(
             cwd=cwd,
-            agent_dir=agent_dir,
+            config_dir=config_dir,
             no_extensions=config.no_extensions,
             no_skills=config.no_skills,
             no_context_files=config.no_context_files,
@@ -128,6 +131,9 @@ class AgentSessionServices:
         )
         resource_loader = ResourceLoader(loader_opts)
         await resource_loader.reload()
+
+        # ── Hooks ─────────────────────────────────────────────────────────────
+        hooks = Hooks()
 
         # ── Extension runtime ─────────────────────────────────────────────────
         load_result = resource_loader.get_extensions()
@@ -156,6 +162,7 @@ class AgentSessionServices:
             llm=llm,
             tools=config.tools,
             options=Options(),
+            hooks=hooks,
         )
 
         # ── Agent session config ──────────────────────────────────────────────
@@ -183,7 +190,7 @@ class AgentSessionServices:
         )
 
         # Now replace with a real runtime pointing at the session as context
-        real_runtime = ExtensionRuntime(load_result, agent_session)
+        real_runtime = ExtensionRuntime(load_result, agent_session, hooks=hooks)
         agent_session._extensions = real_runtime
 
         return cls(
@@ -195,6 +202,7 @@ class AgentSessionServices:
             extension_runtime=real_runtime,
             compaction=compaction,
             settings_manager=settings_manager,
+            hooks=hooks,
         )
 
 
