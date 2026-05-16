@@ -10,8 +10,12 @@ from program.extension.types import (
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
     SessionBeforeCompactEvent, SessionBeforeCompactResult, SessionCompactEvent,
     AgentEndEvent as ExtAgentEndEvent,
+    ToolCallEvent, ToolCallEventResult, ToolResultEvent, ToolResultEventResult,
+    ContextEvent, ContextEventResult,
+    SavePointEvent, SettledEvent,
 )
-from program.message.types import AssistantMessage, UserMessage, TextContent, Role
+from program.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent
+from program.tool.types import ToolInvocation, ToolResult
 
 from program.prompts.builder import build_system_prompt
 from program.prompts.types import BuildSystemPromptOptions
@@ -55,6 +59,10 @@ class AgentSession(ExtensionContext):
         self._context_window: int = config.context_window
         self._compact_requested: bool = False
         self._compact_options: CompactOptions | None = None
+
+        self._phase: str = "idle"
+        self._loop.options.before_tool_call = self._before_tool_call
+        self._loop.options.after_tool_call = self._after_tool_call
 
     # -------------------------------------------------------------------------
     # ExtensionContext interface
@@ -101,6 +109,62 @@ class AgentSession(ExtensionContext):
         """Request compaction after the current (or next) turn completes."""
         self._compact_requested = True
         self._compact_options = options
+
+    # -------------------------------------------------------------------------
+    # Engine-level tool hooks
+    # -------------------------------------------------------------------------
+
+    async def _before_tool_call(
+        self,
+        invocation: ToolInvocation,
+        signal: object,
+    ) -> ToolInvocation | ToolResultContent | None:
+        results = await self._extensions.emit(
+            'tool_call',
+            ToolCallEvent(
+                tool_call_id=invocation.id,
+                tool_name=invocation.name,
+                input=invocation.params,
+            ),
+        )
+        for r in results:
+            if isinstance(r, ToolCallEventResult) and r.block:
+                return ToolResultContent(
+                    id=invocation.id,
+                    is_error=True,
+                    content=r.reason or 'Tool call blocked by extension.',
+                    metadata={},
+                )
+        return invocation
+
+    async def _after_tool_call(
+        self,
+        invocation: ToolInvocation,
+        result: ToolResult,
+        signal: object,
+    ) -> ToolResult | None:
+        results = await self._extensions.emit(
+            'tool_result',
+            ToolResultEvent(
+                tool_call_id=result.id,
+                tool_name=invocation.name,
+                input=invocation.params,
+                content=result.content,
+                is_error=result.is_error,
+            ),
+        )
+        modified = result
+        for r in results:
+            if isinstance(r, ToolResultEventResult):
+                if r.content is not None or r.is_error is not None or r.terminate:
+                    modified = ToolResult(
+                        id=result.id,
+                        content=r.content if r.content is not None else result.content,
+                        is_error=r.is_error if r.is_error is not None else result.is_error,
+                        metadata=result.metadata,
+                        terminate=r.terminate or result.terminate,
+                    )
+        return modified
 
     # -------------------------------------------------------------------------
     # Internal helpers
@@ -165,6 +229,9 @@ class AgentSession(ExtensionContext):
 
     async def prompt(self, user_input: str, options: PromptOptions | None = None) -> None:
         """Run one user turn with retry on transient errors."""
+        if self._phase != "idle":
+            raise RuntimeError(f"Agent is busy (phase={self._phase!r}). Wait for the current operation to finish.")
+
         opts = options or PromptOptions()
 
         # Notify extensions of incoming input
@@ -186,11 +253,27 @@ class AgentSession(ExtensionContext):
         session_ctx = self._session.build_session_context()
         base_messages = list(session_ctx.messages)
 
+        # context hook — extensions can replace the messages sent to the LLM
+        context_results = await self._extensions.emit(
+            'context',
+            ContextEvent(messages=base_messages),
+        )
+        for r in context_results:
+            if isinstance(r, ContextEventResult) and r.messages is not None:
+                base_messages = r.messages
+
         # Persist the user message once (not retried)
         user_message = UserMessage(contents=[TextContent(content=user_input)])
         user_entry_id = self._session.append_message(user_message)
 
-        await self._run_with_retry(base_messages + [user_message], user_entry_id)
+        self._phase = "turn"
+        try:
+            await self._run_with_retry(base_messages + [user_message], user_entry_id)
+        finally:
+            self._phase = "idle"
+
+        # Session writes are now flushed — notify observers
+        await self._extensions.emit('save_point', SavePointEvent())
 
         # Notify extensions the turn ended
         await self._extensions.emit(
@@ -203,6 +286,10 @@ class AgentSession(ExtensionContext):
             self._context_tokens, self._context_window
         ):
             await self._run_compaction(opts.compaction_custom_instructions)
+
+        # Agent is done with no more queued turns
+        if not self._loop.has_pending_messages():
+            await self._extensions.emit('settled', SettledEvent())
 
     async def _run_with_retry(self, messages: list, user_entry_id: str) -> None:
         max_retries = self._config.retry_max_retries if self._config.retry_enabled else 0
@@ -263,6 +350,7 @@ class AgentSession(ExtensionContext):
         self._compact_requested = False
         compact_opts = self._compact_options
         self._compact_options = None
+        self._phase = "compaction"
 
         path_entries = self._session.get_branch()
         preparation = self._compaction.prepare(path_entries)
@@ -301,6 +389,7 @@ class AgentSession(ExtensionContext):
         )
 
         compact_entry = self._session.get_leaf_entry()
+        self._phase = "idle"
         await self._extensions.emit(
             'session_compact',
             SessionCompactEvent(compaction_entry=compact_entry),

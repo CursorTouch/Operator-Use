@@ -24,10 +24,20 @@ class ExtensionRuntime:
         self._extensions = load_result.extensions
         self._ctx = context
         self._errors: list[ExtensionError] = list(load_result.errors)
+        self._subscribers: list = []  # catch-all listeners registered via subscribe()
 
     @property
     def errors(self) -> list[ExtensionError]:
         return self._errors
+
+    def subscribe(self, listener) -> callable:
+        """
+        Register a catch-all listener that receives every emitted event.
+        The listener signature is: (event_type: str, event: Any) -> Awaitable | None.
+        Returns an unsubscribe callable.
+        """
+        self._subscribers.append(listener)
+        return lambda: self._subscribers.remove(listener)
 
     async def emit(self, event_type: str, event: Any) -> list[Any]:
         """
@@ -52,6 +62,14 @@ class ExtensionRuntime:
                         error=traceback.format_exc().strip().splitlines()[-1],
                         stack=traceback.format_exc(),
                     ))
+
+        for subscriber in list(self._subscribers):
+            try:
+                result = subscriber(event_type, event)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                pass
 
         return results
 

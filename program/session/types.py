@@ -37,6 +37,7 @@ class SessionType(str, Enum):
     CUSTOM_INFO = "custom"
     SESSION_INFO = "session_info"
     CUSTOM_MESSAGE = "custom_message"
+    LEAF = "leaf"
 
 
 class BaseSessionEntry(BaseModel):
@@ -100,6 +101,11 @@ class LabelEntry(BaseSessionEntry):
     target_id: str
 
 
+class LeafEntry(BaseSessionEntry):
+    type: Literal[SessionType.LEAF] = Field(SessionType.LEAF, init=False)
+    target_id: str | None = None
+
+
 class CustomInfoEntry(BaseSessionEntry):
     type: Literal[SessionType.CUSTOM_INFO] = Field(SessionType.CUSTOM_INFO, init=False)
     custom_type: str
@@ -122,6 +128,7 @@ SessionEntries = (
     | CompactionEntry
     | BranchEntry
     | LabelEntry
+    | LeafEntry
     | CustomInfoEntry
     | CustomMessageEntry
 )

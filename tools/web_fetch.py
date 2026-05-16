@@ -28,7 +28,7 @@ class WebFetchSchema(BaseModel):
     )
 
 class WebFetchTool(Tool):
-    def __init__(self):
+    def __init__(self, llm=None):
         super().__init__(
             name="web_fetch",
             description=(
@@ -41,6 +41,7 @@ class WebFetchTool(Tool):
             kind=ToolKind.Web,
             execution_mode=ToolExecutionMode.Parallel
         )
+        self._llm = llm
 
     async def _extract_relevant(self, text: str, prompt: str, llm) -> str:
         """Use LLM to extract the relevant portion of a page for the given prompt."""
@@ -61,7 +62,7 @@ class WebFetchTool(Tool):
             pass
         return text
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(self, invocation: ToolInvocation, tool_execution_update_callback=None, signal=None) -> ToolResult:
         params = invocation.params
         url = params.get("url")
         prompt = params.get("prompt")
@@ -89,9 +90,8 @@ class WebFetchTool(Tool):
                 if not text:
                     return ToolResult.error(id=invocation.id, content=f"No content returned from {url}")
 
-                llm = kwargs.get("_llm")
-                if prompt and llm:
-                    text = await self._extract_relevant(text, prompt, llm)
+                if prompt and self._llm:
+                    text = await self._extract_relevant(text, prompt, self._llm)
                 if len(text) > MAX_TOOL_OUTPUT_LENGTH:
                     text = text[:MAX_TOOL_OUTPUT_LENGTH] + "..."
 

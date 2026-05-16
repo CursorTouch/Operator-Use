@@ -40,8 +40,8 @@ class AgentEventType(str, Enum):
     AgentError = "agent_error"
 
 
-AfterToolCallCallback = Callable[[ToolResult, Optional[AbortSignal]], Optional[ToolResult]]
-BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Optional[ToolInvocation]]
+AfterToolCallCallback = Callable[[ToolInvocation, ToolResult, Optional[AbortSignal]], Awaitable[Optional[ToolResult]]]
+BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Awaitable[Optional[ToolInvocation | ToolResultContent]]]
 GetFollowUpMessagesCallback = Callable[[], list[BaseMessage]]
 GetSteeringMessagesCallback = Callable[[], list[BaseMessage]]
 ShouldSkipToolCallsCallback = Callable[[ToolCallContent], ToolResultContent]

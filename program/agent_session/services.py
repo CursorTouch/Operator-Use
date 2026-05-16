@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+from typing import TYPE_CHECKING
 
 from program.agent_session.session import AgentSession
 from program.agent_session.types import AgentSessionConfig
@@ -19,6 +20,11 @@ from program.resource.loader import DefaultResourceLoader
 from program.resource.types import ResourceLoaderOptions
 from program.session.manager import SessionManager
 from program.settings.manager import SettingsManager
+from program.settings.paths import get_config_dir
+
+if TYPE_CHECKING:
+    from program.tool.types import Tool
+
 
 
 # ============================================================================
@@ -40,7 +46,7 @@ class AgentSessionServicesConfig(BaseModel):
     persist_session: bool = True
 
     # Tools & prompt
-    tools: list[Any] = Field(default_factory=list)     # list[Tool]
+    tools: list['Tool'] = Field(default_factory=list)
     selected_tools: list[str] | None = None
     tool_snippets: dict[str, str] = Field(default_factory=dict)
     prompt_guidelines: list[str] = Field(default_factory=list)
@@ -99,14 +105,14 @@ class AgentSessionServices:
         settings_manager: SettingsManager | None = None,
     ) -> AgentSessionServices:
         cwd = config.cwd.resolve()
-        agent_dir = (config.agent_dir or Path.home() / '.program').resolve()
+        agent_dir = (config.agent_dir or get_config_dir()).resolve()
 
         # ── Settings ──────────────────────────────────────────────────────────
         if settings_manager is None:
             settings_manager = SettingsManager.create(cwd, agent_dir)
 
         # ── LLM ───────────────────────────────────────────────────────────────
-        model_id = config.model_id or settings_manager.get_default_model() or 'claude-sonnet-4-6'
+        model_id = config.model_id or settings_manager.get_default_model()
         provider = config.provider or settings_manager.get_default_provider()
         llm = LLM(model_id=model_id, provider=provider)
 

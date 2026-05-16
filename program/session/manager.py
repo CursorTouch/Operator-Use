@@ -5,7 +5,7 @@ from pathlib import Path
 
 from program.session.types import (
     SessionFileEntry, SessionHeader,
-    SessionEntry, LabelEntry, CompactionEntry,
+    SessionEntry, LabelEntry, LeafEntry, CompactionEntry,
     SessionOptions, SessionType, MessageEntry,
     ThinkingLevelChangeEntry, SessionInfoEntry,
     ModelChangeEntry, BranchEntry, CustomInfoEntry,
@@ -129,7 +129,11 @@ class SessionManager:
             if isinstance(entry, SessionHeader):
                 continue
             self.by_id[entry.id] = entry
-            self.leaf_id = entry.id
+            if isinstance(entry, LeafEntry):
+                # LeafEntry records a navigation point — target_id is the new leaf.
+                self.leaf_id = entry.target_id
+            else:
+                self.leaf_id = entry.id
             if isinstance(entry, LabelEntry):
                 if entry.label:
                     self.labels_by_id[entry.target_id] = entry.label
@@ -380,6 +384,11 @@ class SessionManager:
     def branch(self, from_id: str):
         if from_id not in self.by_id:
             raise KeyError(f"Entry {from_id} not found.")
+        # Persist a LeafEntry so the navigation point survives restarts.
+        leaf_entry = LeafEntry(parent_id=self.leaf_id, target_id=from_id)
+        self.entries.append(leaf_entry)
+        self.by_id[leaf_entry.id] = leaf_entry
+        self._persist(leaf_entry)
         self.leaf_id = from_id
 
     def reset_leaf(self):

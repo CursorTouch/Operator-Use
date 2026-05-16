@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional, Callable
 from program.engine.types import (
     EmitEvent, TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
-    ToolExecutionStartEvent, ToolExecutionEndEvent,
+    ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
 )
 from program.inference.types import (
@@ -13,8 +13,7 @@ from program.inference.types import (
     ErrorEvent, EndEvent, TextDeltaEvent, TextEndEvent,
     ThinkingDeltaEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
 )
-from program.tool.types import ToolExecutionMode
-from program.tool.registry import ToolRegistry
+from program.tool.types import ToolExecutionMode, ToolInvocation, ToolResult
 from program.message.types import AssistantMessage, ToolCallContent, Role
 
 if TYPE_CHECKING:
@@ -44,7 +43,7 @@ class AgentLoop:
         self.tools = tools
         self.system_prompt = system_prompt
         self.options = options or Options()
-        self.tool_registry = ToolRegistry(tools)
+        self._tools: dict[str, Tool] = {t.name: t for t in (tools or [])}
         self.listeners: list[Callable[[AgentEvent], None]] = []
         self.state = AgentState(
             llm=llm,
@@ -56,32 +55,25 @@ class AgentLoop:
         self._signal: asyncio.Event = asyncio.Event()
 
     async def steer(self, message: BaseMessage) -> None:
-        """Add a steering message to the steering queue."""
         await self.state.steering_queue.enqueue(message)
 
     async def follow_up(self, message: BaseMessage) -> None:
-        """Add a follow-up message to the follow-up queue."""
         await self.state.follow_up_queue.enqueue(message)
 
     def clear_steering(self) -> None:
-        """Clear all messages from the steering queue."""
         self.state.steering_queue.clear()
 
     def clear_follow_up(self) -> None:
-        """Clear all messages from the follow-up queue."""
         self.state.follow_up_queue.clear()
 
     def clear_all_queues(self) -> None:
-        """Clear all messages from the steering and follow-up queues."""
         self.state.steering_queue.clear()
         self.state.follow_up_queue.clear()
 
     def has_pending_messages(self) -> bool:
-        """Check if there are any pending messages."""
         return not self.state.steering_queue.is_empty() or not self.state.follow_up_queue.is_empty()
 
     def reset(self) -> None:
-        """Reset agent state: clear queues, error message, tool calls, and streaming flag."""
         self.state.follow_up_queue.clear()
         self.state.steering_queue.clear()
         self.state.error_message = None
@@ -89,7 +81,6 @@ class AgentLoop:
         self.state.is_streaming = False
 
     def abort(self) -> None:
-        """Signal the running loop to stop after the current operation."""
         self._signal.set()
 
     @property
@@ -97,17 +88,14 @@ class AgentLoop:
         return not self.state.is_streaming
 
     async def wait_for_idle(self) -> None:
-        """Wait until the loop is no longer streaming."""
         while self.state.is_streaming:
             await asyncio.sleep(0.05)
 
     async def subscribe(self, listener: Callable[[AgentEvent], None]) -> Callable[[], None]:
-        """Subscribe to agent events."""
         self.listeners.append(listener)
         return lambda: self.listeners.remove(listener)
 
     async def process_events(self, event: AgentEvent) -> None:
-        """Process an agent event and update internal state."""
         match event:
             case MessageStartEvent(message=message):
                 self.state.streaming_message = message
@@ -126,6 +114,128 @@ class AgentLoop:
             result = listener(event)
             if asyncio.iscoroutine(result):
                 await result
+
+    # -------------------------------------------------------------------------
+    # Tool execution
+    # -------------------------------------------------------------------------
+
+    async def _execute(
+        self,
+        tool_call: ToolCallContent,
+        emit: EmitEvent,
+        signal: Optional[AbortSignal],
+    ) -> ToolResultContent:
+        if self.options.should_skip_tool_calls is not None:
+            return self.options.should_skip_tool_calls(tool_call)
+
+        tool = self._tools.get(tool_call.name)
+        if tool is None:
+            return ToolResultContent(
+                id=tool_call.id, is_error=True,
+                content=f"Tool '{tool_call.name}' not found.", metadata={},
+            )
+
+        tool_call.kind = tool.kind
+        ok, errors = tool.validate(params=tool_call.args)
+        if not ok:
+            content = f"Invalid parameters for '{tool_call.name}':\n{chr(10).join(errors)}"
+            return ToolResultContent(id=tool_call.id, is_error=True, content=content, metadata={})
+
+        invocation = ToolInvocation(id=tool_call.id, params=tool_call.args, name=tool_call.name)
+
+        # before hook — returning ToolResultContent cancels execution
+        if self.options.before_tool_call is not None:
+            before_result = await self.options.before_tool_call(invocation, signal)
+            if isinstance(before_result, ToolResultContent):
+                await emit(ToolExecutionEndEvent(tool_result=before_result))
+                return before_result
+            elif before_result is not None:
+                invocation = before_result
+
+        async def on_update(partial: ToolResult) -> None:
+            await emit(ToolExecutionUpdateEvent(partial_tool_result=partial))
+
+        tool_result: ToolResultContent
+        try:
+            await emit(ToolExecutionStartEvent(tool_call=tool_call))
+            raw = await tool.execute(
+                invocation=invocation,
+                tool_execution_update_callback=on_update,
+                signal=signal,
+            )
+            if self.options.after_tool_call is not None:
+                raw = await self.options.after_tool_call(invocation, raw, signal) or raw
+            tool_result = ToolResultContent(
+                id=tool_call.id, is_error=raw.is_error,
+                content=raw.content, metadata=raw.metadata,
+                terminate=raw.terminate,
+            )
+        except Exception as e:
+            tool_result = ToolResultContent(
+                id=tool_call.id, is_error=True,
+                content=f"Tool '{tool_call.name}' execution failed:\n{e}", metadata={},
+            )
+
+        await emit(ToolExecutionEndEvent(tool_result=tool_result))
+        return tool_result
+
+    async def _sequential_execute(
+        self,
+        tool_calls: list[ToolCallContent],
+        emit: EmitEvent,
+        signal: Optional[AbortSignal],
+    ) -> list[ToolResultContent]:
+        results = []
+        for tc in tool_calls:
+            results.append(await self._execute(tc, emit, signal))
+        return results
+
+    async def _parallel_execute(
+        self,
+        tool_calls: list[ToolCallContent],
+        emit: EmitEvent,
+        signal: Optional[AbortSignal],
+    ) -> list[ToolResultContent]:
+        return list(await asyncio.gather(
+            *[self._execute(tc, emit, signal) for tc in tool_calls]
+        ))
+
+    async def _execute_tool_calls(
+        self,
+        tool_calls: list[ToolCallContent],
+        emit: EmitEvent,
+        signal: Optional[AbortSignal] = None,
+    ) -> list[ToolResultContent]:
+        match self.options.execution_mode:
+            case ToolExecutionMode.Parallel:
+                return await self._parallel_execute(tool_calls, emit, signal)
+            case ToolExecutionMode.Batch:
+                results: list[ToolResultContent] = []
+                parallel_calls: list[ToolCallContent] = []
+                sequential_calls: list[ToolCallContent] = []
+                for tc in tool_calls:
+                    tool = self._tools.get(tc.name)
+                    if tool is None:
+                        results.append(ToolResultContent(
+                            id=tc.id, is_error=True,
+                            content=f"Tool '{tc.name}' not found.", metadata={},
+                        ))
+                        continue
+                    if tool.execution_mode == ToolExecutionMode.Parallel:
+                        parallel_calls.append(tc)
+                    else:
+                        sequential_calls.append(tc)
+                if parallel_calls:
+                    results.extend(await self._parallel_execute(parallel_calls, emit, signal))
+                if sequential_calls:
+                    results.extend(await self._sequential_execute(sequential_calls, emit, signal))
+                return results
+            case _:
+                return await self._sequential_execute(tool_calls, emit, signal)
+
+    # -------------------------------------------------------------------------
+    # Main loop
+    # -------------------------------------------------------------------------
 
     async def _loop(self, messages: list[BaseMessage], emit: EmitEvent, signal: AbortSignal):
         await emit(AgentStartEvent())
@@ -191,6 +301,11 @@ class AgentLoop:
                         await emit(MessageEndEvent(message=tool_message))
                         messages.append(tool_message)
 
+                        # If every tool signalled terminate, stop without another LLM call.
+                        if tool_results and all(r.terminate for r in tool_results):
+                            await emit(TurnEndEvent(message=message, tool_results=tool_results))
+                            break
+
                         if signal.is_set():
                             await emit(TurnEndEvent(message=message, tool_results=tool_results))
                             break
@@ -229,38 +344,6 @@ class AgentLoop:
 
         await emit(AgentEndEvent(messages=messages))
 
-    async def _execute_tool_calls(
-        self,
-        tool_calls: list[ToolCallContent],
-        emit: EmitEvent,
-        signal: Optional[AbortSignal] = None,
-    ) -> list[ToolResultContent]:
-        match self.options.execution_mode:
-            case ToolExecutionMode.Batch:
-                return await self.tool_registry.batch_execute(
-                    tool_calls=tool_calls,
-                    options=self.options,
-                    emit=emit,
-                    signal=signal,
-                    _llm=self.llm,
-                )
-            case ToolExecutionMode.Parallel:
-                return await self.tool_registry.parallel_execute(
-                    tool_calls=tool_calls,
-                    options=self.options,
-                    emit=emit,
-                    signal=signal,
-                    _llm=self.llm,
-                )
-            case _:
-                return await self.tool_registry.sequential_execute(
-                    tool_calls=tool_calls,
-                    options=self.options,
-                    emit=emit,
-                    signal=signal,
-                    _llm=self.llm,
-                )
-
     async def run(self, messages: list[BaseMessage]) -> None:
         self._signal = asyncio.Event()
         self.state.is_streaming = True
@@ -268,7 +351,6 @@ class AgentLoop:
         self.state.is_streaming = False
 
     async def run_continue(self) -> None:
-        """Continue from the current transcript. The last message must be a user or tool-result message."""
         if self.state.is_streaming:
             raise RuntimeError("Agent is already processing. Wait for completion before continuing.")
 
@@ -292,7 +374,6 @@ class AgentLoop:
         await self._loop_continue()
 
     async def _loop_continue(self) -> None:
-        """Continue the agent loop from existing context without adding new messages."""
         self._signal = asyncio.Event()
         self.state.is_streaming = True
         await self._loop(self.state.messages, self.process_events, self._signal)

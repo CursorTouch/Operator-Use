@@ -23,9 +23,10 @@ class ToolExecutionMode(str, Enum):
 
 @dataclass
 class ToolInvocation:
-    id:str
+    id: str
     params: dict[str, Any] = field(default_factory=dict)
     cwd: str = ""
+    name: str = ""
 
 
 @dataclass
@@ -34,6 +35,7 @@ class ToolResult:
     content: str
     is_error: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
+    terminate: bool = False
 
     @classmethod
     def ok(

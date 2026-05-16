@@ -104,6 +104,7 @@ class ToolResultContent:
     content: str = ""
     is_error: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
+    terminate: bool = False
 
 
 Content = TextContent | ImageContent | ThinkingContent | ToolCallContent | ToolResultContent

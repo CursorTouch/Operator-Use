@@ -338,6 +338,18 @@ class ResourcesDiscoverEvent:
     reason: Literal['startup', 'reload'] = 'startup'
 
 
+@dataclass
+class SavePointEvent:
+    """Fires after session writes are flushed — the harness is idle and consistent."""
+    type: Literal['save_point'] = field(default='save_point', init=False)
+
+
+@dataclass
+class SettledEvent:
+    """Fires when the agent finishes a prompt() call with no more queued turns."""
+    type: Literal['settled'] = field(default='settled', init=False)
+
+
 # Union of all events
 ExtensionEvent = (
     ResourcesDiscoverEvent
@@ -367,6 +379,8 @@ ExtensionEvent = (
     | ThinkingLevelSelectEvent
     | InputEvent
     | UserBashEvent
+    | SavePointEvent
+    | SettledEvent
 )
 
 # ============================================================================
@@ -390,6 +404,7 @@ class ToolCallEventResult:
 class ToolResultEventResult:
     content: str | None = None
     is_error: bool | None = None
+    terminate: bool = False
 
 @dataclass
 class MessageEndEventResult:

@@ -55,22 +55,22 @@ class SettingsManager:
     @staticmethod
     def from_storage(storage: SettingsStorage) -> SettingsManager:
         """Create a SettingsManager from an arbitrary storage backend."""
-        global_load = SettingsManager._try_load_from_storage(storage, "global")
-        project_load = SettingsManager._try_load_from_storage(storage, "project")
+        global_settings, global_error = SettingsManager._try_load_from_storage(storage, "global")
+        project_settings, project_error = SettingsManager._try_load_from_storage(storage, "project")
         initial_errors = []
-        if global_load[1]:
-            initial_errors.append(SettingsError(scope="global", error=global_load[1]))
-        if project_load[1]:
-            initial_errors.append(SettingsError(scope="project", error=project_load[1]))
-        return SettingsManager(storage, global_load[0], project_load[0],
-                               global_load[1], project_load[1], initial_errors)
+        if global_error:
+            initial_errors.append(SettingsError(scope=SCOPE.GLOBAL, error=global_error))
+        if project_error:
+            initial_errors.append(SettingsError(scope=SCOPE.PROJECT, error=project_error))
+        return SettingsManager(storage, global_settings, project_settings,
+                global_error, project_error, initial_errors)
 
     @staticmethod
     def in_memory(settings: Dict = None) -> SettingsManager:
         """Create an in-memory SettingsManager with optional seed data (no file I/O, useful for testing)."""
         storage = InMemorySettingsStorage()
         settings_dict = settings or {}
-        storage.with_lock("global", lambda _: LockResult(result=None, next=json.dumps(settings_dict, indent=2)))
+        storage.with_lock(SCOPE.GLOBAL, lambda _: LockResult(result=None, next=json.dumps(settings_dict, indent=2)))
         return SettingsManager.from_storage(storage)
 
     @staticmethod
@@ -155,10 +155,10 @@ class SettingsManager:
     def _clear_modified_scope(self, scope: SCOPE):
         """Reset modification tracking for a scope after a successful write."""
         match scope:
-            case "global":
+            case SCOPE.GLOBAL:
                 self.modified_fields.clear()
                 self.modified_nested_fields.clear()
-            case "project":
+            case SCOPE.PROJECT:
                 self.modified_project_fields.clear()
                 self.modified_project_nested_fields.clear()
 
@@ -220,9 +220,9 @@ class SettingsManager:
         modified_nested_fields = self._clone_modified_nested_fields(self.modified_nested_fields)
 
         def write_task():
-            self._persist_scoped_settings("global", snapshot_global, modified_fields, modified_nested_fields)
+            self._persist_scoped_settings(SCOPE.GLOBAL, snapshot_global, modified_fields, modified_nested_fields)
 
-        self._enqueue_write("global", write_task)
+        self._enqueue_write(SCOPE.GLOBAL, write_task)
 
     def _save_project_settings(self, settings: Settings):
         """Update the merged view and enqueue an async write of modified project settings."""
@@ -235,9 +235,9 @@ class SettingsManager:
         modified_nested_fields = self._clone_modified_nested_fields(self.modified_project_nested_fields)
 
         def write_task():
-            self._persist_scoped_settings("project", snapshot_project, modified_fields, modified_nested_fields)
+            self._persist_scoped_settings(SCOPE.PROJECT, snapshot_project, modified_fields, modified_nested_fields)
 
-        self._enqueue_write("project", write_task)
+        self._enqueue_write(SCOPE.PROJECT, write_task)
 
     async def flush(self) -> None:
         """Wait for any pending async writes to complete."""
@@ -253,26 +253,26 @@ class SettingsManager:
     async def reload(self) -> None:
         """Flush pending writes, reload both scopes from storage, and recompute the merged view."""
         await self.flush()
-        global_load = SettingsManager._try_load_from_storage(self.storage, "global")
+        global_load = SettingsManager._try_load_from_storage(self.storage, SCOPE.GLOBAL)
         if not global_load[1]:
             self.global_settings = global_load[0]
             self.global_settings_load_error = None
         else:
             self.global_settings_load_error = global_load[1]
-            self._record_error("global", global_load[1])
+            self._record_error(SCOPE.GLOBAL, global_load[1])
 
         self.modified_fields.clear()
         self.modified_nested_fields.clear()
         self.modified_project_fields.clear()
         self.modified_project_nested_fields.clear()
 
-        project_load = SettingsManager._try_load_from_storage(self.storage, "project")
+        project_load = SettingsManager._try_load_from_storage(self.storage, SCOPE.PROJECT)
         if not project_load[1]:
             self.project_settings = project_load[0]
             self.project_settings_load_error = None
         else:
             self.project_settings_load_error = project_load[1]
-            self._record_error("project", project_load[1])
+            self._record_error(SCOPE.PROJECT, project_load[1])
 
         self.settings = self._deep_merge_settings(self.global_settings, self.project_settings)
 

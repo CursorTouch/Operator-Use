@@ -34,7 +34,7 @@ class FileSettingsStorage(SettingsStorage):
             path.chmod(0o600)  
       
     def with_lock(self, scope: SCOPE, fn: Callable[[str | None], LockResult]) -> LockResult:  
-        path = self.global_settings_path if scope == "global" else self.project_settings_path  
+        path = self.global_settings_path if scope == SCOPE.GLOBAL else self.project_settings_path  
         lock_path = path.with_suffix(".lock")  
           
         with FileLock(lock_path):  
@@ -53,10 +53,10 @@ class InMemorySettingsStorage(SettingsStorage):
         self.project_data: str = "{}"  
       
     def with_lock(self, scope: SCOPE, fn: Callable[[str | None], LockResult]) -> LockResult:  
-        current = self.global_data if scope == "global" else self.project_data  
+        current = self.global_data if scope == SCOPE.GLOBAL else self.project_data  
         result = fn(current)  
         if result.next is not None:  
-            if scope == "global":  
+            if scope == SCOPE.GLOBAL:  
                 self.global_data = result.next  
             else:  
                 self.project_data = result.next  

@@ -1,10 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional, Literal, Any
 from program.engine.types import SteeringMode, FollowupMode
 from program.inference.types import Transport, ThinkingLevel
 
-SCOPE = Literal["global", "project"]
+
+class SCOPE(str, Enum):
+    GLOBAL = "global"
+    PROJECT = "project"
 
 
 @dataclass
