@@ -218,6 +218,8 @@ class GoogleAntigravityAPI(BaseAPI):
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         project = await self._ensure_project_id()
         system, contents = _messages_to_contents(context.messages)
+        if context.system_prompt:
+            system = context.system_prompt
         body = self._build_request_body(model, project, system, contents, tools=context.tools or None)
         headers = _antigravity_headers(self.options.api_key or "")
 

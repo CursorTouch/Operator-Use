@@ -114,6 +114,8 @@ class MistralChatAPI(BaseAPI):
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         mistral_messages = _messages_to_mistral(context.messages)
+        if context.system_prompt:
+            mistral_messages = [{"role": "system", "content": context.system_prompt}] + mistral_messages
 
         reasoning_effort = None
         if self.options.thinking_level is not None:

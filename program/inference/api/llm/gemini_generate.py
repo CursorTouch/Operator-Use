@@ -124,8 +124,9 @@ class GeminiGenerateAPI(BaseAPI):
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         system, contents = _messages_to_gemini(context.messages)
         config = self._build_config(tools=context.tools or None)
-        if system:
-            config.system_instruction = system
+        effective_system = context.system_prompt or system
+        if effective_system:
+            config.system_instruction = effective_system
 
         if self.options.on_payload:
             payload = {"config": config, "contents": contents}

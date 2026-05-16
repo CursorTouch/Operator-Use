@@ -133,6 +133,8 @@ class AnthropicClaudeCodeAPI(BaseAPI):
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         system, anthropic_messages = _messages_to_anthropic(context.messages)
+        if context.system_prompt:
+            system = context.system_prompt
         params = self._build_params(model, system, anthropic_messages, tools=context.tools or None)
 
         if self.options.on_payload:

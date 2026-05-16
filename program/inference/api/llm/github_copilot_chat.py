@@ -133,6 +133,8 @@ class GitHubCopilotChatAPI(BaseAPI):
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         chat_messages = _messages_to_chat(context.messages)
+        if context.system_prompt:
+            chat_messages = [{"role": "system", "content": context.system_prompt}] + chat_messages
         params = self._build_params(model, chat_messages, tools=context.tools or None)
 
         if self.options.on_payload:

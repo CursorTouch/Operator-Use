@@ -37,6 +37,27 @@ _STOP_REASON: dict[str, StopReason] = {
 }
 
 
+def _clean_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Strip fields that trip up strict OpenAI-compatible APIs (title, $defs, etc.)."""
+    result: dict[str, Any] = {}
+    for k, v in schema.items():
+        if k in ("title", "$schema"):
+            continue
+        if k == "anyOf" and isinstance(v, list):
+            non_null = [_clean_schema(s) if isinstance(s, dict) else s for s in v if s != {"type": "null"}]
+            if len(non_null) == 1:
+                result.update(non_null[0])
+            else:
+                result[k] = non_null
+        elif isinstance(v, dict):
+            result[k] = _clean_schema(v)
+        elif isinstance(v, list):
+            result[k] = [_clean_schema(i) if isinstance(i, dict) else i for i in v]
+        else:
+            result[k] = v
+    return result
+
+
 def _user_content(content_items: list) -> str | list[dict[str, Any]]:
     parts: list[dict[str, Any]] = []
     for item in content_items:
@@ -128,7 +149,7 @@ class OpenAICompletionsAPI(BaseAPI):
                     "function": {
                         "name": tool.name,
                         "description": tool.description,
-                        "parameters": tool.schema.model_json_schema(),
+                        "parameters": _clean_schema(tool.schema.model_json_schema()),
                     }
                 }
                 for tool in tools
@@ -141,6 +162,8 @@ class OpenAICompletionsAPI(BaseAPI):
         if self.options.api_key:
             self._client.api_key = self.options.api_key
         chat_messages = _messages_to_chat(context.messages)
+        if context.system_prompt:
+            chat_messages = [{"role": "system", "content": context.system_prompt}] + chat_messages
         params = self._build_params(model, chat_messages, tools=context.tools or None)
 
         if self.options.on_payload:

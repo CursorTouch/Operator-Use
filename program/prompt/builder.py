@@ -7,18 +7,12 @@ from program.prompt.types import SystemPromptOptions
 
 if TYPE_CHECKING:
     from program.skill.types import Skill
-    from program.tool.types import Tool
 
 
 def _build_guidelines(extra: list[str]) -> str:
     lines = [f"- {g.strip()}" for g in extra if g.strip()]
     return "\n".join(lines)
 
-
-def _build_tools_list(tools: list[Tool]) -> str:
-    if not tools:
-        return "(none)"
-    return "\n".join(f"- {t.name}: {t.description}" for t in tools)
 
 
 def _context_files_section(context_files: list) -> str:
@@ -81,10 +75,9 @@ def build_system_prompt(options: SystemPromptOptions) -> str:
     if options.custom_prompt:
         return options.custom_prompt + append_section + context_section + skills_section + footer
 
-    tools_list = _build_tools_list(options.tools)
     guidelines = _build_guidelines(options.prompt_guidelines)
 
-    prompt = f"You are a helpful assistant.\n\nAvailable tools:\n{tools_list}"
+    prompt = "You are a helpful assistant."
 
     if guidelines:
         prompt += f"\n\nGuidelines:\n{guidelines}"

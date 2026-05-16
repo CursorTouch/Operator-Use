@@ -93,6 +93,8 @@ class OllamaChatAPI(BaseAPI):
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         ollama_messages = _messages_to_ollama(context.messages)
+        if context.system_prompt:
+            ollama_messages = [{"role": "system", "content": context.system_prompt}] + ollama_messages
 
         think: bool | None = None
         if self.options.thinking_level is not None:

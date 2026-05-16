@@ -38,6 +38,7 @@ LLM_MODELS: list[Model] = [
     Model(id="nvidia/llama-3.3-nemotron-super-49b-v1",    name="Nemotron Super 49B",    provider="nvidia", cost=Cost(input=0.23, output=0.42), thinking=True, context_window=131_072, input=_TEXT, output=_TEXT),
     Model(id="meta/llama-3.3-70b-instruct",               name="Llama 3.3 70B Instruct",provider="nvidia", cost=Cost(input=0.23, output=0.42),          context_window=128_000, input=_TEXT, output=_TEXT),
     Model(id="meta/llama-3.1-8b-instruct",                name="Llama 3.1 8B Instruct", provider="nvidia", cost=Cost(input=0.10, output=0.10),          context_window=128_000, input=_TEXT, output=_TEXT),
+    Model(id="qwen/qwen3.5-397b-a17b",                    name="Qwen 3.5 397B",         provider="nvidia", cost=Cost(input=0.90, output=0.90), thinking=True, context_window=131_072, input=_TEXT, output=_TEXT),
     # Mistral
     Model(id="mistral-medium-3-5",    name="Mistral Medium 3.5", provider="mistral", cost=Cost(input=0.80, output=4.0,  cache_read=0.08, cache_write=1.0), context_window=256_000, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="mistral-large-latest",  name="Mistral Large",      provider="mistral", cost=Cost(input=2.0,  output=6.0),                                   context_window=131_072, input=_TEXT_IMAGE, output=_TEXT),
