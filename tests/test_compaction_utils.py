@@ -31,7 +31,7 @@ from program.message.types import (
 )
 from program.session.manager import SessionManager
 from program.session.types import MessageEntry, CompactionEntry
-from program.llm.types import (
+from program.inference.types import (
     StopReason, TextEndEvent, EndEvent, ErrorEvent, StartEvent,
     TextStartEvent, TextDeltaEvent,
 )

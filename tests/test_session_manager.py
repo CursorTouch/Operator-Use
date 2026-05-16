@@ -7,7 +7,7 @@ from program.session.types import (
     ThinkingLevelChangeEntry, ModelChangeEntry,
 )
 from program.message.types import UserMessage, AssistantMessage, TextContent, Role
-from program.llm.types import ThinkingLevel
+from program.inference.types import ThinkingLevel
 
 
 def make_sm() -> SessionManager:

@@ -9,7 +9,7 @@ from program.message.types import AgentMessage
 # rebuild the model so Pydantic can validate it at runtime.
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": AgentMessage})
 from program.session.manager import SessionManager
-from program.llm.types import (
+from program.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, TextStartEvent, TextDeltaEvent, TextEndEvent,
 )

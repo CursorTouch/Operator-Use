@@ -12,7 +12,7 @@ from program.engine.types import (
     ToolExecutionStartEvent, ToolExecutionEndEvent,
     Options, AgentEvent,
 )
-from program.llm.types import (
+from program.inference.types import (
     LLMContext, LLMEvent,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,

@@ -1,4 +1,4 @@
-from program.llm.types import AuthType
+from program.inference.types import AuthType
 from dataclasses import dataclass, field
 from typing import TypeVar, Optional, Literal
 

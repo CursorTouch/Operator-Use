@@ -10,7 +10,7 @@ from typing import Literal, TYPE_CHECKING, Any, Optional
 from enum import Enum
 from PIL import Image
 
-from program.llm.types import StopReason
+from program.inference.types import StopReason
 from program.tool.types import ToolKind
 
 if TYPE_CHECKING:

@@ -15,7 +15,7 @@ from program.engine.loop import AgentLoop
 from program.engine.types import Options
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult, Extension, SessionStartEvent, SessionShutdownEvent
-from program.llm.types import (
+from program.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,

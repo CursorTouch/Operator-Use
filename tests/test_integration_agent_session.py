@@ -17,7 +17,7 @@ from program.extension.types import (
     LoadExtensionsResult, Extension, BeforeAgentStartEventResult,
     SessionCompactEvent,
 )
-from program.llm.types import (
+from program.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,

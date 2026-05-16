@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from program.session.types import SessionEntry, CompactionEntry, BranchEntry
     from program.compaction.types import CompactionPreparation, CompactionResult
     from program.message.types import AgentMessage
-    from program.llm.types import ThinkingLevel
-    from program.llm.model.types import Model
+    from program.inference.types import ThinkingLevel
+    from program.inference.model.types import Model
 
 
 # ============================================================================

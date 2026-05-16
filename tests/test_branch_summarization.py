@@ -14,11 +14,11 @@ from program.compaction.types import (
 )
 from program.message.types import AgentMessage as _AgentMessage
 from program.session.types import SessionEntry as _SessionEntry
-from program.llm.service import LLM as _LLM
+from program.inference.api.llm.service import LLM as _LLM
 CollectEntriesResult.model_rebuild(_types_namespace={"SessionEntry": _SessionEntry})
 BranchPreparation.model_rebuild(_types_namespace={"AgentMessage": _AgentMessage})
 GenerateBranchSummaryOptions.model_rebuild(_types_namespace={"LLM": _LLM})
-from program.llm.types import (
+from program.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,

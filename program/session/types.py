@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Annotated, TYPE_CHECKING
 
 from pydantic import BaseModel, Field, ConfigDict
-from program.llm.types import ThinkingLevel
+from program.inference.types import ThinkingLevel
 
 from program.message.types import AgentMessage, ImageContent, TextContent
 

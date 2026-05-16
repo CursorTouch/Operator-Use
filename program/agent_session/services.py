@@ -14,7 +14,7 @@ from program.engine.types import Options
 from program.extension.loader import discover_and_load_extensions
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult
-from program.llm.service import LLM
+from program.inference.api.llm.service import LLM
 from program.resource.loader import DefaultResourceLoader
 from program.resource.types import ResourceLoaderOptions
 from program.session.manager import SessionManager

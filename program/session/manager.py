@@ -23,7 +23,7 @@ from program.message.types import (
     AgentMessage, AssistantMessage, CustomMessage, CompactionSummaryMessage,
     BranchSummaryMessage, ImageContent, TextContent, LLMMessage, Role,
 )
-from program.llm.types import ThinkingLevel
+from program.inference.types import ThinkingLevel
 
 
 class SessionManager:

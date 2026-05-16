@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from program.llm.types import LLMContext, ThinkingLevel
+from program.inference.types import LLMContext, ThinkingLevel
 from program.message.types import AgentMessage, UserMessage, TextContent
 from program.session.types import SessionEntry, CompactionEntry
 
@@ -23,7 +23,7 @@ from program.compaction.utils import (
 )
 
 if TYPE_CHECKING:
-    from program.llm.service import LLM
+    from program.inference.api.llm.service import LLM
 
 
 class Compaction:

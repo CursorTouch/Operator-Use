@@ -7,7 +7,7 @@ from program.settings.types import (
     RetrySettings, ProviderRetrySettings, SettingsError,
 )
 from program.engine.types import SteeringMode, FollowupMode
-from program.llm.types import Transport, ThinkingLevel
+from program.inference.types import Transport, ThinkingLevel
 
 
 def make_manager(global_data: dict | None = None, project_data: dict | None = None) -> SettingsManager:

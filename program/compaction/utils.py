@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from program.llm.types import StopReason
+from program.inference.types import StopReason
 from program.message.types import (
     AgentMessage, AssistantMessage, UserMessage, ToolMessage,
     CustomMessage, BranchSummaryMessage, CompactionSummaryMessage,
@@ -293,7 +293,7 @@ def build_turn_prefix_prompt(messages: list, turn_prefix_prompt: str) -> str:
 
 def extract_text_from_events(events: list, error_label: str) -> str:
     """Collect text from LLM events, raising RuntimeError on error stop reason."""
-    from program.llm.types import TextEndEvent, EndEvent, ErrorEvent, StopReason
+    from program.inference.types import TextEndEvent, EndEvent, ErrorEvent, StopReason
     text_parts: list[str] = []
     stop_reason = StopReason.Stop
     error = ""

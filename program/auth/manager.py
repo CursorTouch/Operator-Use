@@ -3,8 +3,8 @@ import os
 import json
 from pathlib import Path
 
-from program.llm.provider.registry import ProviderRegistry
-from program.llm.provider.oauth import OAuthLoginCallbacks
+from program.inference.provider.registry import ProviderRegistry
+from program.inference.provider.oauth import OAuthLoginCallbacks
 from program.settings.paths import get_auth_path
 from program.auth.types import AuthCredential, AuthStatus, OAuthCredential, APICredential, AuthType, LockResult
 from program.auth.storage import AuthStorage, FileAuthStorage, InMemoryAuthStorage

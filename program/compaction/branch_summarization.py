@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from program.llm.types import LLMContext, TextEndEvent, EndEvent, ErrorEvent, StopReason, ThinkingLevel
+from program.inference.types import LLMContext, TextEndEvent, EndEvent, ErrorEvent, StopReason, ThinkingLevel
 from program.message.types import (
     AgentMessage, UserMessage, TextContent,
     ToolMessage, CustomMessage, BranchSummaryMessage, CompactionSummaryMessage,

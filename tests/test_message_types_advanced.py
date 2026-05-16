@@ -103,7 +103,7 @@ class TestAssistantMessageAccessors:
         assert thoughts[0].content == "let me reason"
 
     def test_default_stop_reason(self):
-        from program.llm.types import StopReason
+        from program.inference.types import StopReason
         msg = AssistantMessage()
         assert msg.stop_reason == StopReason.Stop
 

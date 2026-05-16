@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from program.engine.loop import AgentLoop
 from program.engine.types import MessageEndEvent, Options
-from program.llm.types import (
+from program.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,

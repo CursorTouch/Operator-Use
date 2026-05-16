@@ -5,7 +5,7 @@ from program.message.types import (
     UserMessage, AssistantMessage, SystemMessage, ToolMessage,
     Role, Usage,
 )
-from program.llm.types import StopReason
+from program.inference.types import StopReason
 
 
 class TestTextContent:

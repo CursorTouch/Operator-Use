@@ -8,7 +8,7 @@ from program.engine.types import (
     ToolExecutionStartEvent, ToolExecutionEndEvent,
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
 )
-from program.llm.types import (
+from program.inference.types import (
     LLMContext,
     ErrorEvent, EndEvent, TextDeltaEvent, TextEndEvent,
     ThinkingDeltaEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
@@ -18,7 +18,7 @@ from program.tool.registry import ToolRegistry
 from program.message.types import AssistantMessage, ToolCallContent, Role
 
 if TYPE_CHECKING:
-    from program.llm.service import LLM
+    from program.inference.api.llm.service import LLM
     from program.tool.types import Tool
 
 from program.engine.types import (

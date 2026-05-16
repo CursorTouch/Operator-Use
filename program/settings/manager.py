@@ -13,7 +13,7 @@ from program.settings.types import (
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
 )
 from program.engine.types import SteeringMode, FollowupMode
-from program.llm.types import Transport, ThinkingLevel
+from program.inference.types import Transport, ThinkingLevel
 
 _NESTED_FIELD_TYPES: dict[str, type] = {
     'compaction': CompactionSettings,

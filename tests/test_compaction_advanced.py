@@ -7,7 +7,7 @@ from program.compaction.types import (
 from program.message.types import AgentMessage, UserMessage, AssistantMessage, TextContent
 from program.session.manager import SessionManager
 from program.session.types import CompactionEntry
-from program.llm.types import (
+from program.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallEndEvent,
