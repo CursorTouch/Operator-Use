@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from program.tool.types import Tool
+from program.tool.types import Tool
 
 
 class SessionConfig(BaseModel):
