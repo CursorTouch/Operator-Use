@@ -41,8 +41,6 @@ class RuntimeConfig(BaseModel):
 
     # Tools & prompt
     tools: list[Tool] = Field(default_factory=list)
-    selected_tools: list[str] | None = None
-    tool_snippets: dict[str, str] = Field(default_factory=dict)
     prompt_guidelines: list[str] = Field(default_factory=list)
 
     # Resource loader
@@ -158,8 +156,6 @@ class RuntimeContext:
             cwd=cwd,
             model=llm.model,
             context_window=llm.model.context_window or 200_000,
-            selected_tools=config.selected_tools,
-            tool_snippets=config.tool_snippets,
             prompt_guidelines=config.prompt_guidelines,
             retry_enabled=settings_manager.get_retry_enabled(),
             retry_max_retries=settings_manager.get_retry_max_retries(),

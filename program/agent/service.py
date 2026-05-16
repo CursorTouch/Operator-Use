@@ -18,7 +18,7 @@ from program.message.types import AssistantMessage, UserMessage, TextContent, Ro
 from program.tool.types import ToolInvocation, ToolResult
 
 from program.prompt.builder import build_system_prompt
-from program.prompt.types import BuildSystemPromptOptions
+from program.prompt.types import SystemPromptOptions
 
 if TYPE_CHECKING:
     from program.engine.loop import Loop
@@ -184,11 +184,10 @@ class Agent(ExtensionContext):
         append_parts = self._resources.get_append_system_prompt()
         append_system_prompt = "\n\n".join(append_parts) if append_parts else None
 
-        options = BuildSystemPromptOptions(
+        options = SystemPromptOptions(
             cwd=str(self._config.cwd),
             custom_prompt=custom_prompt,
-            selected_tools=self._config.selected_tools,
-            tool_snippets=self._config.tool_snippets,
+            tools=self._loop.state.tools,
             prompt_guidelines=self._config.prompt_guidelines,
             append_system_prompt=append_system_prompt,
             context_files=context_files,

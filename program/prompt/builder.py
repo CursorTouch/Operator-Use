@@ -3,19 +3,11 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from program.prompt.types import BuildSystemPromptOptions
-from program.skill.loader import format_skills_for_prompt
+from program.prompt.types import SystemPromptOptions
 
 if TYPE_CHECKING:
     from program.skill.types import Skill
-
-_DEFAULT_TOOLS = ["read", "bash", "edit", "write"]
-
-_TOOL_GUIDELINES: dict[str, list[str]] = {
-    "grep": ["Prefer grep over bash for text search — faster and respects .gitignore"],
-    "glob": ["Prefer glob over bash for file pattern matching"],
-    "ls":   ["Prefer ls tool over bash for directory listing"],
-}
+    from program.tool.types import Tool
 
 _BASE_GUIDELINES = [
     "Be concise in your responses",
@@ -23,7 +15,8 @@ _BASE_GUIDELINES = [
 ]
 
 
-def _build_guidelines(tools: list[str], extra: list[str]) -> str:
+def _build_guidelines(tools: list[Tool], extra: list[str]) -> str:
+    names = {t.name for t in tools}
     seen: set[str] = set()
     lines: list[str] = []
 
@@ -32,14 +25,12 @@ def _build_guidelines(tools: list[str], extra: list[str]) -> str:
             seen.add(g)
             lines.append(f"- {g}")
 
-    has_bash = "bash" in tools or "terminal" in tools
-    has_grep = "grep" in tools
-    has_glob = "glob" in tools
-    has_ls = "ls" in tools
+    has_bash = bool(names & {"bash", "terminal"})
+    has_file_tools = bool(names & {"grep", "glob", "ls"})
 
-    if has_bash and not has_grep and not has_glob and not has_ls:
+    if has_bash and not has_file_tools:
         add("Use bash for file operations like ls, grep, find")
-    elif has_bash and (has_grep or has_glob or has_ls):
+    elif has_bash and has_file_tools:
         add("Prefer grep/glob/ls tools over bash for file exploration (faster, respects .gitignore)")
 
     for guideline in extra:
@@ -53,11 +44,10 @@ def _build_guidelines(tools: list[str], extra: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _build_tools_list(tools: list[str], snippets: dict[str, str]) -> str:
-    visible = [t for t in tools if t in snippets]
-    if not visible:
+def _build_tools_list(tools: list[Tool]) -> str:
+    if not tools:
         return "(none)"
-    return "\n".join(f"- {t}: {snippets[t]}" for t in visible)
+    return "\n".join(f"- {t.name}: {t.description}" for t in tools)
 
 
 def _context_files_section(context_files: list) -> str:
@@ -69,29 +59,59 @@ def _context_files_section(context_files: list) -> str:
     return "\n".join(parts)
 
 
-def build_system_prompt(options: BuildSystemPromptOptions) -> str:
+def _escape_xml(text: str) -> str:
+    return (
+        text.replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;')
+            .replace('"', '&quot;')
+            .replace("'", '&apos;')
+    )
+
+
+def format_skills_for_prompt(skills: list[Skill]) -> str:
+    visible = [s for s in skills if not s.disable_model_invocation]
+    if not visible:
+        return ''
+
+    lines = [
+        '',
+        '',
+        'The following skills provide specialized instructions for specific tasks.',
+        "Use the read tool to load a skill's file when the task matches its description.",
+        'When a skill file references a relative path, resolve it against the skill directory '
+        '(parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.',
+        '',
+        '<available_skills>',
+    ]
+
+    for skill in visible:
+        lines.append('  <skill>')
+        lines.append(f'    <name>{_escape_xml(skill.name)}</name>')
+        lines.append(f'    <description>{_escape_xml(skill.description)}</description>')
+        lines.append(f'    <location>{_escape_xml(str(skill.file_path))}</location>')
+        lines.append('  </skill>')
+
+    lines.append('</available_skills>')
+    return '\n'.join(lines)
+
+
+def build_system_prompt(options: SystemPromptOptions) -> str:
     today = date.today().isoformat()
     cwd = options.cwd.replace("\\", "/")
+    footer = f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
 
-    tools = options.selected_tools if options.selected_tools is not None else _DEFAULT_TOOLS
-    has_read = "read" in tools
+    has_read = any(t.name == "read" for t in options.tools)
 
     append_section = f"\n\n{options.append_system_prompt}" if options.append_system_prompt else ""
     context_section = _context_files_section(options.context_files)
-    skills_section = format_skills_for_prompt(options.skills) if has_read and options.skills else ""  # type: ignore[arg-type]
-
-    footer = f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
+    skills_section = format_skills_for_prompt(options.skills) if has_read and options.skills else ""
 
     if options.custom_prompt:
-        prompt = options.custom_prompt
-        prompt += append_section
-        prompt += context_section
-        prompt += skills_section
-        prompt += footer
-        return prompt
+        return options.custom_prompt + append_section + context_section + skills_section + footer
 
-    tools_list = _build_tools_list(tools, options.tool_snippets)
-    guidelines = _build_guidelines(tools, options.prompt_guidelines)
+    tools_list = _build_tools_list(options.tools)
+    guidelines = _build_guidelines(options.tools, options.prompt_guidelines)
 
     prompt = f"""You are an expert coding assistant operating inside a coding agent harness. \
 You help users by reading files, executing commands, editing code, and writing new files.
@@ -104,9 +124,4 @@ In addition to the tools above, you may have access to other custom tools depend
 Guidelines:
 {guidelines}"""
 
-    prompt += append_section
-    prompt += context_section
-    prompt += skills_section
-    prompt += footer
-
-    return prompt
+    return prompt + append_section + context_section + skills_section + footer

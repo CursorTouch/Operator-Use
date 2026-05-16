@@ -1,13 +1,13 @@
 """Tests for prompts/builder.py: system prompt construction."""
 import pytest
 from program.prompt.builder import build_system_prompt, _build_guidelines, _build_tools_list
-from program.prompt.types import BuildSystemPromptOptions, ContextFile
+from program.prompt.types import SystemPromptOptions, ContextFile
 
 
-def opts(**kwargs) -> BuildSystemPromptOptions:
+def opts(**kwargs) -> SystemPromptOptions:
     defaults = dict(cwd="/project")
     defaults.update(kwargs)
-    return BuildSystemPromptOptions(**defaults)
+    return SystemPromptOptions(**defaults)
 
 
 # ── build_system_prompt: default (no custom_prompt) ──────────────────────────

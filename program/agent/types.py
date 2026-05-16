@@ -26,8 +26,6 @@ class AgentConfig(BaseModel):
     cwd: Path
     model: Any | None = None
     context_window: int = 200_000
-    selected_tools: list[str] | None = None
-    tool_snippets: dict[str, str] = {}
     prompt_guidelines: list[str] = []
     retry_enabled: bool = True
     retry_max_retries: int = 3
