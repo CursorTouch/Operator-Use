@@ -1,16 +1,17 @@
-"""Integration tests for AgentSession: prompt flow, retry, compaction, extensions, tools."""
+"""Integration tests for Agent: prompt flow, retry, compaction, extensions, tools."""
 import pytest
 from pathlib import Path
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.agent_session.session import AgentSession
-from program.agent_session.types import AgentSessionConfig, PromptOptions
+from program.runtime.session import Agent
+from program.runtime.types import RuntimeConfig
+from program.agent.types import AgentConfig, PromptOptions
 from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings, CompactionPreparation
 from program.message.types import AgentMessage as _AgentMessage
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": _AgentMessage})
-from program.engine.loop import AgentLoop
+from program.engine.loop import Loop
 from program.engine.types import Options
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import (
@@ -144,15 +145,15 @@ def make_session(
     retry_enabled: bool = False,
     retry_max_retries: int = 0,
     context_window: int = 200_000,
-) -> tuple[AgentSession, SessionManager]:
+) -> tuple[Agent, SessionManager]:
     sm = SessionManager.in_memory()
-    loop = AgentLoop(llm=llm, tools=tools or [], options=Options())
+    loop = Loop(llm=llm, tools=tools or [], options=Options())
     comp_settings = compaction_settings or CompactionSettings(enabled=False)
     compaction = Compaction(llm=llm, settings=comp_settings)
     resource_loader = FakeResourceLoader(system_prompt=system_prompt)
     ext_result = LoadExtensionsResult()
 
-    config = AgentSessionConfig(
+    config = AgentConfig(
         cwd=Path("/tmp"),
         context_window=context_window,
         retry_enabled=retry_enabled,
@@ -165,7 +166,7 @@ def make_session(
         pass
     ext_runtime = ExtensionRuntime(ext_result, _NullCtx())  # type: ignore[arg-type]
 
-    session = AgentSession(
+    session = Agent(
         loop=loop,
         session_manager=sm,
         resource_loader=resource_loader,
@@ -330,17 +331,17 @@ class TestCompactionIntegration:
 class TestExtensionHooks:
     def _make_session_with_ext(self, llm, ext: Extension):
         sm = SessionManager.in_memory()
-        loop = AgentLoop(llm=llm, tools=[], options=Options())
+        loop = Loop(llm=llm, tools=[], options=Options())
         compaction = Compaction(llm=llm, settings=CompactionSettings(enabled=False))
         resource_loader = FakeResourceLoader()
-        config = AgentSessionConfig(
+        config = AgentConfig(
             cwd=Path("/tmp"), retry_enabled=False, retry_max_retries=0, retry_base_delay_ms=0
         )
         load_result = LoadExtensionsResult(extensions=[ext])
 
         class _NullCtx:
             pass
-        session = AgentSession(
+        session = Agent(
             loop=loop, session_manager=sm, resource_loader=resource_loader,
             extension_runtime=ExtensionRuntime(load_result, _NullCtx()),  # type: ignore[arg-type]
             compaction=compaction, config=config,

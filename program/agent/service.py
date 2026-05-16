@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from program.runtime.types import SessionConfig, PromptOptions, RetryStartEvent, RetryEndEvent
+from program.agent.types import AgentConfig, PromptOptions, RetryStartEvent, RetryEndEvent
 from program.extension.types import (
     ExtensionContext, ContextUsage, CompactOptions,
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
@@ -21,16 +21,16 @@ from program.prompts.builder import build_system_prompt
 from program.prompts.types import BuildSystemPromptOptions
 
 if TYPE_CHECKING:
-    from program.engine.loop import AgentLoop
+    from program.engine.loop import Loop
     from program.session.manager import SessionManager
     from program.resource.types import BaseResourceLoader
     from program.extension.runtime import ExtensionRuntime
     from program.compaction.compact import Compaction
 
 
-class AgentSession(ExtensionContext):
+class Agent(ExtensionContext):
     """
-    High-level agent session tying together AgentLoop, SessionManager,
+    High-level agent session tying together Loop, SessionManager,
     ExtensionRuntime, ResourceLoader, and Compaction.
 
     Call `prompt()` to run a user turn. The session persists each message,
@@ -40,12 +40,12 @@ class AgentSession(ExtensionContext):
 
     def __init__(
         self,
-        loop: AgentLoop,
+        loop: Loop,
         session_manager: SessionManager,
         resource_loader: BaseResourceLoader,
         extension_runtime: ExtensionRuntime,
         compaction: Compaction,
-        config: SessionConfig,
+        config: AgentConfig,
     ) -> None:
         self._loop = loop
         self._session = session_manager

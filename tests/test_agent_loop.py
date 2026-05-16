@@ -1,10 +1,10 @@
-"""Tests for AgentLoop: event ordering, state transitions, tool calls, errors, abort."""
+"""Tests for Loop: event ordering, state transitions, tool calls, errors, abort."""
 import asyncio
 import pytest
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.engine.loop import AgentLoop
+from program.engine.loop import Loop
 from program.engine.types import (
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
     TurnStartEvent, TurnEndEvent,
@@ -88,9 +88,9 @@ def make_tool(name: str, result: str = "ok", is_error: bool = False) -> Tool:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-async def run_loop(llm, tools=None, messages=None, options=None) -> tuple[list, AgentLoop]:
+async def run_loop(llm, tools=None, messages=None, options=None) -> tuple[list, Loop]:
     """Run the loop and return (collected_events, loop)."""
-    loop = AgentLoop(llm=llm, tools=tools or [], options=options or Options())
+    loop = Loop(llm=llm, tools=tools or [], options=options or Options())
     events: list[AgentEvent] = []
     await loop.subscribe(lambda e: events.append(e))
     msgs = messages or [UserMessage.text("hello")]
@@ -223,7 +223,7 @@ class TestAbort:
         # Only one sequence: if the loop incorrectly makes a second call it will IndexError
         llm = FakeLLM(tool_events)
 
-        loop_ref: list[AgentLoop] = []
+        loop_ref: list[Loop] = []
 
         def after_tool(raw, signal):
             # Abort after the tool executes; the next iteration will see the signal
@@ -232,7 +232,7 @@ class TestAbort:
             return raw
 
         opts = Options(after_tool_call=after_tool)
-        loop = AgentLoop(llm=llm, tools=[make_tool("my_tool")], options=opts)
+        loop = Loop(llm=llm, tools=[make_tool("my_tool")], options=opts)
         loop_ref.append(loop)
 
         events: list = []
@@ -285,14 +285,14 @@ class TestAgentState:
     @pytest.mark.asyncio
     async def test_is_idle_after_run(self):
         llm = FakeLLM(text_sequence("hi"))
-        loop = AgentLoop(llm=llm, tools=[])
+        loop = Loop(llm=llm, tools=[])
         await loop.run([UserMessage.text("hello")])
         assert loop.is_idle
 
     @pytest.mark.asyncio
     async def test_reset_clears_error(self):
         llm = FakeLLM(error_sequence("err"))
-        loop = AgentLoop(llm=llm, tools=[])
+        loop = Loop(llm=llm, tools=[])
         await loop.run([UserMessage.text("go")])
         assert loop.state.error_message is not None
         loop.reset()
@@ -301,7 +301,7 @@ class TestAgentState:
     @pytest.mark.asyncio
     async def test_messages_in_state(self):
         llm = FakeLLM(text_sequence("hello back"))
-        loop = AgentLoop(llm=llm, tools=[])
+        loop = Loop(llm=llm, tools=[])
         msgs = [UserMessage.text("hello")]
         await loop.run(msgs)
         # State should record the assistant message

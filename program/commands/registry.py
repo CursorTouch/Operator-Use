@@ -7,16 +7,16 @@ from program.commands.builtins import BUILTIN_COMMANDS
 from program.commands.types import SlashCommandInfo, CommandParseResult
 
 if TYPE_CHECKING:
-    from program.runtime.runtime import AgentSessionRuntime
+    from program.runtime.service import Runtime
 
 
 class CommandRegistry:
     """
     Holds all registered slash commands and dispatches parsed input.
-    Attach to AgentSessionRuntime via `runtime` so handlers can call back.
+    Attach to Runtime via `runtime` so handlers can call back.
     """
 
-    def __init__(self, runtime: AgentSessionRuntime | None = None) -> None:
+    def __init__(self, runtime: Runtime | None = None) -> None:
         self.runtime = runtime
         self._commands: dict[str, SlashCommandInfo] = {}
         self._register_builtins()

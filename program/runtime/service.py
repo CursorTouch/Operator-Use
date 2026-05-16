@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from program.runtime.loader import AgentSessionLoader
-from program.runtime.types import AgentSessionConfig
-from program.runtime.session import AgentSession
-from program.runtime.types import PromptOptions
+from program.runtime.loader import RuntimeLoader
+from program.runtime.types import RuntimeConfig
+from program.agent.service import Agent
+from program.agent.types import PromptOptions
 from program.commands.registry import CommandRegistry
 from program.commands.types import parse_command
 from program.extension.types import (
@@ -15,21 +15,21 @@ from program.extension.types import (
 )
 
 
-class AgentSessionRuntime:
+class Runtime:
     """
     Orchestrates the full session lifecycle: creation, switching, forking,
-    and slash-command dispatch on top of AgentSession / AgentSessionLoader.
+    and slash-command dispatch on top of Agent / RuntimeLoader.
 
     Usage:
-        runtime = await AgentSessionRuntime.create(config)
+        runtime = await Runtime.create(config)
         await runtime.handle_input("/compact shrink the history")
         await runtime.handle_input("explain this code")
     """
 
     def __init__(
         self,
-        services: AgentSessionLoader,
-        config: AgentSessionConfig,
+        services: RuntimeLoader,
+        config: RuntimeConfig,
     ) -> None:
         self._services = services
         self._config = config
@@ -45,9 +45,9 @@ class AgentSessionRuntime:
     @classmethod
     async def create(
         cls,
-        config: AgentSessionConfig,
-    ) -> AgentSessionRuntime:
-        services = await AgentSessionLoader.create(config)
+        config: RuntimeConfig,
+    ) -> Runtime:
+        services = await RuntimeLoader.create(config)
         runtime = cls(services=services, config=config)
         await runtime._emit_session_start('startup')
         return runtime
@@ -57,8 +57,8 @@ class AgentSessionRuntime:
     # -------------------------------------------------------------------------
 
     @property
-    def current_session(self) -> AgentSession | None:
-        return self._services.session
+    def current_session(self) -> Agent | None:
+        return self._services.agent
 
     @property
     def session_manager(self):
@@ -71,7 +71,7 @@ class AgentSessionRuntime:
     async def handle_input(self, text: str, options: PromptOptions | None = None) -> None:
         """
         Route user input. Slash commands go to CommandRegistry;
-        everything else is forwarded to the active AgentSession.
+        everything else is forwarded to the active Agent.
         """
         parsed = parse_command(text)
         if parsed is not None:
@@ -81,9 +81,9 @@ class AgentSessionRuntime:
 
     async def prompt(self, user_input: str, options: PromptOptions | None = None) -> None:
         """Forward a plain prompt to the current session."""
-        if self._services.session is None:
+        if self._services.agent is None:
             raise RuntimeError("No active session.")
-        await self._services.session.prompt(user_input, options)
+        await self._services.agent.prompt(user_input, options)
 
     # -------------------------------------------------------------------------
     # Session lifecycle
@@ -93,7 +93,7 @@ class AgentSessionRuntime:
         """Shut down the current session and start a fresh one."""
         await self._emit_session_shutdown('new')
         self._config = self._config.model_copy(update={'session_file': None})
-        self._services = await AgentSessionLoader.create(self._config)
+        self._services = await RuntimeLoader.create(self._config)
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
             self._services.extension_runtime.get_commands()
@@ -112,7 +112,7 @@ class AgentSessionRuntime:
 
         await self._emit_session_shutdown('resume')
         self._config = self._config.model_copy(update={'session_file': session_file})
-        self._services = await AgentSessionLoader.create(self._config)
+        self._services = await RuntimeLoader.create(self._config)
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
             self._services.extension_runtime.get_commands()

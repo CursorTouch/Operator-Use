@@ -1,17 +1,17 @@
-"""Integration tests for AgentSessionRuntime: handle_input routing, session lifecycle."""
+"""Integration tests for Runtime: handle_input routing, session lifecycle."""
 import pytest
 from pathlib import Path
 from typing import AsyncIterator
 
-from program.agent_session.runtime import AgentSessionRuntime
-from program.agent_session.services import AgentSessionServices, AgentSessionServicesConfig
-from program.agent_session.session import AgentSession
-from program.agent_session.types import AgentSessionConfig
+from program.runtime.service import Runtime
+from program.runtime.loader import RuntimeLoader
+from program.agent.service import Agent
+from program.agent.types import AgentConfig
 from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings
 from program.commands.registry import CommandRegistry
 from program.commands.types import SlashCommandInfo
-from program.engine.loop import AgentLoop
+from program.engine.loop import Loop
 from program.engine.types import Options
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult, Extension, SessionStartEvent, SessionShutdownEvent
@@ -71,12 +71,12 @@ class FakeResourceLoader(BaseResourceLoader):
 
 # ── Runtime factory ───────────────────────────────────────────────────────────
 
-def make_runtime(llm: FakeLLM, extensions: list[Extension] | None = None) -> AgentSessionRuntime:
+def make_runtime(llm: FakeLLM, extensions: list[Extension] | None = None) -> Runtime:
     sm = SessionManager.in_memory()
-    loop = AgentLoop(llm=llm, tools=[], options=Options())
+    loop = Loop(llm=llm, tools=[], options=Options())
     compaction = Compaction(llm=llm, settings=CompactionSettings(enabled=False))
     resource_loader = FakeResourceLoader()
-    config = AgentSessionConfig(
+    config = AgentConfig(
         cwd=Path("/tmp"), retry_enabled=False, retry_max_retries=0, retry_base_delay_ms=0
     )
     load_result = LoadExtensionsResult(extensions=extensions or [])
@@ -84,22 +84,22 @@ def make_runtime(llm: FakeLLM, extensions: list[Extension] | None = None) -> Age
     class _NullCtx:
         pass
 
-    session = AgentSession(
+    agent = Agent(
         loop=loop, session_manager=sm, resource_loader=resource_loader,
         extension_runtime=ExtensionRuntime(load_result, _NullCtx()),  # type: ignore
         compaction=compaction, config=config,
     )
-    real_runtime = ExtensionRuntime(load_result, session)
-    session._extensions = real_runtime
+    real_runtime = ExtensionRuntime(load_result, agent)
+    agent._extensions = real_runtime
 
     class _FakeServices:
-        session = None
+        agent = None
         session_manager = sm
         extension_runtime = real_runtime
 
-    _FakeServices.session = session
+    _FakeServices.agent = agent
 
-    rt = AgentSessionRuntime.__new__(AgentSessionRuntime)
+    rt = Runtime.__new__(Runtime)
     rt._services = _FakeServices()
     rt._config = None
     rt.commands = CommandRegistry(runtime=rt)
@@ -229,7 +229,7 @@ class TestLifecycleEvents:
 
         llm = FakeLLM(text_seq("ok"))
         rt = make_runtime(llm, extensions=[ext])
-        # Manually fire session_start (normally done by AgentSessionRuntime.create)
+        # Manually fire session_start (normally done by Runtime.create)
         await rt._services.extension_runtime.emit(
             'session_start', SessionStartEvent(reason='startup')
         )
@@ -272,10 +272,10 @@ class TestMultiTurnContext:
 
         llm = CapturingLLM()
         sm = SessionManager.in_memory()
-        loop = AgentLoop(llm=llm, tools=[], options=Options())
+        loop = Loop(llm=llm, tools=[], options=Options())
         compaction = Compaction(llm=llm, settings=CompactionSettings(enabled=False))
 
-        config = AgentSessionConfig(
+        config = AgentConfig(
             cwd=Path("/tmp"), retry_enabled=False, retry_max_retries=0, retry_base_delay_ms=0
         )
         load_result = LoadExtensionsResult()
@@ -283,7 +283,7 @@ class TestMultiTurnContext:
         class _NullCtx:
             pass
 
-        session = AgentSession(
+        session = Agent(
             loop=loop, session_manager=sm, resource_loader=FakeResourceLoader(),
             extension_runtime=ExtensionRuntime(load_result, _NullCtx()),  # type: ignore
             compaction=compaction, config=config,

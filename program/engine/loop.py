@@ -32,7 +32,7 @@ from program.engine.types import (
 from program.message.types import BaseMessage, ToolMessage
 
 
-class AgentLoop:
+class Loop:
     def __init__(
         self,
         llm: LLM,

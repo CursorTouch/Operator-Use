@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from program.runtime.session import AgentSession
-from program.runtime.types import AgentSessionConfig, SessionConfig
+from program.agent.service import Agent
+from program.agent.types import AgentConfig
+from program.runtime.types import RuntimeConfig
 from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings
-from program.engine.loop import AgentLoop
+from program.engine.loop import Loop
 from program.engine.types import Options
 from program.extension.loader import discover_and_load_extensions
 from program.extension.runtime import ExtensionRuntime
@@ -23,21 +24,21 @@ if TYPE_CHECKING:
     pass
 
 
-class AgentSessionLoader:
+class RuntimeLoader:
     """
-    Constructs and owns all dependencies for one AgentSession.
+    Constructs and owns all dependencies for one Agent.
 
     Usage:
-        loader = await AgentSessionLoader.create(config)
-        session = loader.session
-        await session.prompt("hello")
+        loader = await RuntimeLoader.create(config)
+        agent = loader.agent
+        await agent.prompt("hello")
     """
 
     def __init__(
         self,
-        session: AgentSession,
+        agent: Agent,
         llm: LLM,
-        loop: AgentLoop,
+        loop: Loop,
         session_manager: SessionManager,
         resource_loader: ResourceLoader,
         extension_runtime: ExtensionRuntime,
@@ -45,7 +46,7 @@ class AgentSessionLoader:
         settings_manager: SettingsManager | None,
         hooks: Hooks | None = None,
     ) -> None:
-        self.session = session
+        self.agent = agent
         self.llm = llm
         self.loop = loop
         self.session_manager = session_manager
@@ -58,9 +59,9 @@ class AgentSessionLoader:
     @classmethod
     async def create(
         cls,
-        config: AgentSessionConfig,
+        config: RuntimeConfig,
         settings_manager: SettingsManager | None = None,
-    ) -> AgentSessionLoader:
+    ) -> RuntimeLoader:
         cwd = config.cwd.resolve()
         config_dir = (config.config_dir or get_config_dir()).resolve()
 
@@ -91,7 +92,7 @@ class AgentSessionLoader:
 
         # ── Extension runtime ─────────────────────────────────────────────────
         load_result = resource_loader.get_extensions()
-        # Placeholder context — replaced once AgentSession is created
+        # Placeholder context — replaced once Agent is created
         extension_runtime = _DeferredExtensionRuntime(load_result)
 
         # ── Compaction ────────────────────────────────────────────────────────
@@ -112,15 +113,15 @@ class AgentSessionLoader:
         )
 
         # ── Agent loop ────────────────────────────────────────────────────────
-        loop = AgentLoop(
+        loop = Loop(
             llm=llm,
             tools=config.tools,
             options=Options(),
             hooks=hooks,
         )
 
-        # ── Session config ────────────────────────────────────────────────────
-        session_config = SessionConfig(
+        # ── Agent config ────────────────────────────────────────────────────
+        config = AgentConfig(
             cwd=cwd,
             model=llm.model,
             context_window=llm.model.context_window or 200_000,
@@ -133,21 +134,21 @@ class AgentSessionLoader:
         )
 
         # ── Wire everything together ──────────────────────────────────────────
-        agent_session = AgentSession(
+        agent = Agent(
             loop=loop,
             session_manager=session_manager,
             resource_loader=resource_loader,
             extension_runtime=extension_runtime,  # type: ignore[arg-type]
             compaction=compaction,
-            config=session_config,
+            config=config,
         )
 
         # Replace placeholder with real runtime pointing at the session as context
-        real_runtime = ExtensionRuntime(load_result, agent_session, hooks=hooks)
-        agent_session._extensions = real_runtime
+        real_runtime = ExtensionRuntime(load_result, agent, hooks=hooks)
+        agent._extensions = real_runtime
 
         return cls(
-            session=agent_session,
+            agent=agent,
             llm=llm,
             loop=loop,
             session_manager=session_manager,
@@ -164,7 +165,7 @@ class AgentSessionLoader:
 # ──────────────────────────────────────────────────────────────────────────────
 
 class _DeferredExtensionRuntime(ExtensionRuntime):
-    """No-op runtime used before the real context (AgentSession) is available."""
+    """No-op runtime used before the real context (Agent) is available."""
 
     def __init__(self, load_result: LoadExtensionsResult) -> None:
         class _NullCtx:

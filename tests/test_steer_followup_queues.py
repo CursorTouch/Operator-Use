@@ -4,7 +4,7 @@ import pytest
 from pydantic import BaseModel
 from typing import AsyncIterator
 
-from program.engine.loop import AgentLoop
+from program.engine.loop import Loop
 from program.engine.types import Options, SteeringMode, FollowupMode
 from program.inference.types import (
     LLMContext, LLMEvent,
@@ -75,7 +75,7 @@ class TestSteeringQueueDrainedInLoop:
             tool_seq("t1", "noop", {}),
             text_seq("final"),
         )
-        loop = AgentLoop(
+        loop = Loop(
             llm=llm,
             tools=[tool],
             options=Options(steering_mode=SteeringMode.OneAtATime),
@@ -109,7 +109,7 @@ class TestSteeringQueueDrainedInLoop:
         """After _loop() drains the steering queue, it is empty."""
         tool = make_noop_tool("noop")
         llm = FakeLLM(tool_seq("t1", "noop", {}), text_seq())
-        loop = AgentLoop(llm=llm, tools=[tool], options=Options())
+        loop = Loop(llm=llm, tools=[tool], options=Options())
         await loop.steer(UserMessage.text("steer"))
         assert not loop.state.steering_queue.is_empty()
         await loop.run([UserMessage.text("go")])
@@ -124,7 +124,7 @@ class TestFollowupQueueDrainedInLoop:
             text_seq("first stop"),
             text_seq("second stop"),
         )
-        loop = AgentLoop(
+        loop = Loop(
             llm=llm,
             tools=[],
             options=Options(followup_mode=FollowupMode.OneAtATime),
@@ -143,7 +143,7 @@ class TestFollowupQueueDrainedInLoop:
     async def test_empty_follow_up_queue_stops_loop(self):
         """Loop stops on StopReason.Stop when follow-up queue is empty and no callback."""
         llm = FakeLLM(text_seq("only turn"))
-        loop = AgentLoop(llm=llm, tools=[], options=Options())
+        loop = Loop(llm=llm, tools=[], options=Options())
         messages = [UserMessage(contents=[TextContent(content="hi")])]
         await loop.run(messages)
         assert llm._call_index == 1
@@ -176,7 +176,7 @@ class TestSteeringQueueAndCallbackCombined:
         def callback_steering() -> list:
             return [UserMessage(contents=[TextContent(content="from-callback")])]
 
-        loop = AgentLoop(
+        loop = Loop(
             llm=llm,
             tools=[tool],
             options=Options(

@@ -9,7 +9,7 @@ import pytest
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.engine.loop import AgentLoop
+from program.engine.loop import Loop
 from program.engine.types import MessageEndEvent, Options
 from program.inference.types import (
     LLMContext, LLMEvent, StopReason,
@@ -103,14 +103,14 @@ class TestReg001ToolMessageContentsCleared:
     @pytest.mark.asyncio
     async def test_tool_message_contents_survive_loop_run(self):
         """
-        After AgentLoop.run() completes, ToolMessage.contents must still hold
+        After Loop.run() completes, ToolMessage.contents must still hold
         the tool results. This was the integration manifestation of REG-001:
         the loop called tool_results.clear() at the end of each turn, which
         emptied the ToolMessage that had captured the same list object.
         """
         llm = FakeLLM(tool_call_seq("t1", "my_tool"), text_seq("done"))
         tool = make_tool("my_tool", "expected_output")
-        loop = AgentLoop(llm=llm, tools=[tool])
+        loop = Loop(llm=llm, tools=[tool])
 
         messages_seen: list = []
         async def capture(event):
@@ -131,11 +131,11 @@ class TestReg001ToolMessageContentsCleared:
     async def test_tool_message_persisted_in_session_after_run(self):
         """
         The session-level manifestation: ToolMessage stored in SessionManager
-        must retain its contents after the AgentSession finishes a turn.
+        must retain its contents after the Agent finishes a turn.
         """
         from pathlib import Path
-        from program.agent_session.session import AgentSession
-        from program.agent_session.types import AgentSessionConfig
+        from program.agent.service import Agent
+        from program.runtime.types import RuntimeConfig as AgentConfig
         from program.compaction.compact import Compaction
         from program.compaction.types import CompactionSettings
         from program.extension.runtime import ExtensionRuntime
@@ -157,13 +157,13 @@ class TestReg001ToolMessageContentsCleared:
         llm = FakeLLM(tool_call_seq("t1", "my_tool"), text_seq("done"))
         tool = make_tool("my_tool", "session_output")
         sm = SessionManager.in_memory()
-        loop = AgentLoop(llm=llm, tools=[tool])
+        loop = Loop(llm=llm, tools=[tool])
         load_result = LoadExtensionsResult()
-        config = AgentSessionConfig(
+        config = AgentConfig(
             cwd=Path("/tmp"), retry_enabled=False,
             retry_max_retries=0, retry_base_delay_ms=0,
         )
-        session = AgentSession(
+        session = Agent(
             loop=loop,
             session_manager=sm,
             resource_loader=FakeResourceLoader(),

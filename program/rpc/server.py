@@ -9,8 +9,8 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from program.runtime.runtime import AgentSessionRuntime
-from program.runtime.types import PromptOptions
+from program.runtime.service import Runtime
+from program.agent.types import PromptOptions
 from program.engine.types import AgentEventType
 
 
@@ -67,7 +67,7 @@ class RPCServer:
                       "value": ..., "cancelled": bool }
     """
 
-    def __init__(self, runtime: AgentSessionRuntime) -> None:
+    def __init__(self, runtime: Runtime) -> None:
         self._runtime = runtime
         self._lock = asyncio.Lock()
         self._pending_ui: dict[str, asyncio.Future] = {}
@@ -115,7 +115,7 @@ class RPCServer:
                 d['type'] = raw_type.value if hasattr(raw_type, 'value') else raw_type
             await self._write(d)
 
-        # Single subscription covers both engine events (via AgentLoop → Hooks)
+        # Single subscription covers both engine events (via Loop → Hooks)
         # and extension/session events (via ExtensionRuntime → Hooks).
         self._unsub_hooks = session.hooks.subscribe(_on_event)
 
@@ -395,7 +395,7 @@ class RPCServer:
         self._close()
 
 
-async def run_rpc_server(runtime: AgentSessionRuntime) -> None:
+async def run_rpc_server(runtime: Runtime) -> None:
     """Entry point: start the RPC server and block until stdin closes."""
     server = RPCServer(runtime)
     await server.run()
