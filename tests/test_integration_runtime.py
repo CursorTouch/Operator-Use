@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from program.runtime.service import Runtime
-from program.runtime.loader import RuntimeLoader
+from program.runtime.types import RuntimeContext
 from program.agent.service import Agent
 from program.agent.types import AgentConfig
 from program.compaction.compact import Compaction

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from program.prompts.types import BuildSystemPromptOptions
+from program.prompt.types import BuildSystemPromptOptions
 from program.skill.loader import format_skills_for_prompt
 
 if TYPE_CHECKING:

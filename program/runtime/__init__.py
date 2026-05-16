@@ -1,9 +1,8 @@
-from program.runtime.loader import RuntimeLoader
 from program.runtime.service import Runtime
-from program.runtime.types import RuntimeConfig
+from program.runtime.types import RuntimeConfig, RuntimeContext
 
 __all__ = [
-    'RuntimeLoader',
+    'RuntimeContext',
     'Runtime',
     'RuntimeConfig',
 ]

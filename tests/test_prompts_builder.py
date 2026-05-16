@@ -1,7 +1,7 @@
 """Tests for prompts/builder.py: system prompt construction."""
 import pytest
-from program.prompts.builder import build_system_prompt, _build_guidelines, _build_tools_list
-from program.prompts.types import BuildSystemPromptOptions, ContextFile
+from program.prompt.builder import build_system_prompt, _build_guidelines, _build_tools_list
+from program.prompt.types import BuildSystemPromptOptions, ContextFile
 
 
 def opts(**kwargs) -> BuildSystemPromptOptions:

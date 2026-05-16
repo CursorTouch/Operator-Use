@@ -3,8 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from program.runtime.loader import RuntimeLoader
-from program.runtime.types import RuntimeConfig
+from program.runtime.types import RuntimeConfig, RuntimeContext
 from program.agent.service import Agent
 from program.agent.types import PromptOptions
 from program.commands.registry import CommandRegistry
@@ -18,7 +17,7 @@ from program.extension.types import (
 class Runtime:
     """
     Orchestrates the full session lifecycle: creation, switching, forking,
-    and slash-command dispatch on top of Agent / RuntimeLoader.
+    and slash-command dispatch on top of Agent / RuntimeContext.
 
     Usage:
         runtime = await Runtime.create(config)
@@ -28,7 +27,7 @@ class Runtime:
 
     def __init__(
         self,
-        services: RuntimeLoader,
+        services: RuntimeContext,
         config: RuntimeConfig,
     ) -> None:
         self._services = services
@@ -47,7 +46,7 @@ class Runtime:
         cls,
         config: RuntimeConfig,
     ) -> Runtime:
-        services = await RuntimeLoader.create(config)
+        services = await RuntimeContext.create(config)
         runtime = cls(services=services, config=config)
         await runtime._emit_session_start('startup')
         return runtime
@@ -93,7 +92,7 @@ class Runtime:
         """Shut down the current session and start a fresh one."""
         await self._emit_session_shutdown('new')
         self._config = self._config.model_copy(update={'session_file': None})
-        self._services = await RuntimeLoader.create(self._config)
+        self._services = await RuntimeContext.create(self._config)
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
             self._services.extension_runtime.get_commands()
@@ -112,7 +111,7 @@ class Runtime:
 
         await self._emit_session_shutdown('resume')
         self._config = self._config.model_copy(update={'session_file': session_file})
-        self._services = await RuntimeLoader.create(self._config)
+        self._services = await RuntimeContext.create(self._config)
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
             self._services.extension_runtime.get_commands()

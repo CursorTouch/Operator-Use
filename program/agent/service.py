@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from program.agent.types import AgentConfig, PromptOptions, RetryStartEvent, RetryEndEvent
+from program.agent.types import AgentConfig, AgentContext, PromptOptions, RetryStartEvent, RetryEndEvent
 from program.extension.types import (
     ExtensionContext, ContextUsage, CompactOptions,
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
@@ -17,8 +17,8 @@ from program.extension.types import (
 from program.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent
 from program.tool.types import ToolInvocation, ToolResult
 
-from program.prompts.builder import build_system_prompt
-from program.prompts.types import BuildSystemPromptOptions
+from program.prompt.builder import build_system_prompt
+from program.prompt.types import BuildSystemPromptOptions
 
 if TYPE_CHECKING:
     from program.engine.loop import Loop
@@ -48,7 +48,7 @@ class Agent(ExtensionContext):
         config: AgentConfig,
     ) -> None:
         self._loop = loop
-        self._session = session_manager
+        self._session_manager = session_manager
         self._resources = resource_loader
         self._extensions = extension_runtime
         self._compaction = compaction
@@ -81,7 +81,7 @@ class Agent(ExtensionContext):
 
     @property
     def session_manager(self) -> Any:
-        return self._session
+        return self._session_manager
 
     @property
     def model(self) -> Any | None:
@@ -207,10 +207,10 @@ class Agent(ExtensionContext):
                 total = message.usage.input_tokens + message.usage.output_tokens
                 if total:
                     self._context_tokens = total
-                entry_id = self._session.append_message(message)
+                entry_id = self._session_manager.append_message(message)
                 persisted_ids.append(entry_id)
             elif message.role == Role.TOOL:
-                entry_id = self._session.append_message(message)
+                entry_id = self._session_manager.append_message(message)
                 persisted_ids.append(entry_id)
 
         return self.hooks.register('message_end', _on_message_end)
@@ -218,16 +218,16 @@ class Agent(ExtensionContext):
     def _rewind_session(self, persisted_ids: list[str]) -> None:
         """Remove session entries appended during a failed attempt."""
         for entry_id in persisted_ids:
-            entry = self._session.by_id.pop(entry_id, None)
-            if entry and entry in self._session.entries:
-                self._session.entries.remove(entry)
+            entry = self._session_manager.by_id.pop(entry_id, None)
+            if entry and entry in self._session_manager.entries:
+                self._session_manager.entries.remove(entry)
             # Restore leaf to the entry before the first one we added
         if persisted_ids:
             parent_of_first = None
-            first = self._session.by_id.get(persisted_ids[0])
+            first = self._session_manager.by_id.get(persisted_ids[0])
             if first:
                 parent_of_first = first.parent_id
-            self._session.leaf_id = parent_of_first
+            self._session_manager.leaf_id = parent_of_first
         persisted_ids.clear()
 
     # -------------------------------------------------------------------------
@@ -254,10 +254,8 @@ class Agent(ExtensionContext):
             if isinstance(result, BeforeAgentStartEventResult) and result.system_prompt:
                 self._system_prompt = result.system_prompt
 
-        self._loop.state.system_prompt = self._system_prompt
-
         # Reconstruct message history from persisted session
-        session_ctx = self._session.build_session_context()
+        session_ctx = self._session_manager.build_session_context()
         base_messages = list(session_ctx.messages)
 
         # context hook — extensions can replace the messages sent to the LLM
@@ -271,11 +269,18 @@ class Agent(ExtensionContext):
 
         # Persist the user message once (not retried)
         user_message = UserMessage(contents=[TextContent(content=user_input)])
-        user_entry_id = self._session.append_message(user_message)
+        user_entry_id = self._session_manager.append_message(user_message)
+
+        # Build the context snapshot that the loop will receive
+        ctx = AgentContext(
+            system_prompt=self._system_prompt,
+            messages=base_messages + [user_message],
+            tools=self._loop.tools,
+        )
 
         self._phase = "turn"
         try:
-            await self._run_with_retry(base_messages + [user_message], user_entry_id)
+            await self._run_with_retry(ctx, user_entry_id)
         finally:
             self._phase = "idle"
 
@@ -298,7 +303,7 @@ class Agent(ExtensionContext):
         if not self._loop.has_pending_messages():
             await self._extensions.emit('settled', SettledEvent())
 
-    async def _run_with_retry(self, messages: list, user_entry_id: str) -> None:
+    async def _run_with_retry(self, ctx: AgentContext, user_entry_id: str) -> None:
         max_retries = self._config.retry_max_retries if self._config.retry_enabled else 0
         base_delay_s = self._config.retry_base_delay_ms / 1000
 
@@ -316,7 +321,7 @@ class Agent(ExtensionContext):
             persisted_ids.clear()
             unsubscribe = self._register_message_handler(persisted_ids)
             try:
-                await self._loop.run(messages)
+                await self._loop.run(ctx)
             finally:
                 unsubscribe()
 
@@ -341,11 +346,11 @@ class Agent(ExtensionContext):
                 )
             else:
                 # All retries exhausted — rewind user message too and re-raise
-                self._session.entries = [
-                    e for e in self._session.entries if e.id != user_entry_id
+                self._session_manager.entries = [
+                    e for e in self._session_manager.entries if e.id != user_entry_id
                 ]
-                self._session.by_id.pop(user_entry_id, None)
-                self._session.leaf_id = self._session.entries[-1].id if self._session.entries else None
+                self._session_manager.by_id.pop(user_entry_id, None)
+                self._session_manager.leaf_id = self._session_manager.entries[-1].id if self._session_manager.entries else None
                 raise RuntimeError(f"Agent failed after {attempt + 1} attempt(s): {error}")
 
     # -------------------------------------------------------------------------
@@ -358,7 +363,7 @@ class Agent(ExtensionContext):
         self._compact_options = None
         self._phase = "compaction"
 
-        path_entries = self._session.get_branch()
+        path_entries = self._session_manager.get_branch()
         preparation = self._compaction.prepare(path_entries)
         if preparation is None:
             return
@@ -387,14 +392,14 @@ class Agent(ExtensionContext):
         if compaction_result is None:
             compaction_result = await self._compaction.compact(preparation, ci)
 
-        self._session.append_compaction(
+        self._session_manager.append_compaction(
             summary=compaction_result.summary,
             first_kept_entry_id=compaction_result.retained_from_id,
             tokens_before=compaction_result.tokens_before,
             details=compaction_result.details,
         )
 
-        compact_entry = self._session.get_leaf_entry()
+        compact_entry = self._session_manager.get_leaf_entry()
         self._phase = "idle"
         await self._extensions.emit(
             'session_compact',

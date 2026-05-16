@@ -7,6 +7,19 @@ from typing import Any, Awaitable, Callable, Optional, Type
 from pydantic import BaseModel
 
 
+@dataclass
+class ToolError:
+    path: str
+    error: str
+    stack: str = ''
+
+
+@dataclass
+class LoadToolsResult:
+    tools: list[Tool] = field(default_factory=list)
+    errors: list[ToolError] = field(default_factory=list)
+
+
 class ToolKind(str, Enum):
     Read = "read"
     Edit = "edit"

@@ -2,9 +2,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
+from program.message.types import BaseMessage
+
+if TYPE_CHECKING:
+    from program.tool.types import Tool
+
+
+@dataclass
+class AgentContext:
+    """Snapshot of everything the LLM receives for one turn."""
+    system_prompt: str
+    messages: list[BaseMessage]
+    tools: list[Tool] = field(default_factory=list)
 
 
 class AgentConfig(BaseModel):

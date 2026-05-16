@@ -20,6 +20,7 @@ from program.message.types import AssistantMessage, ToolCallContent, Role
 if TYPE_CHECKING:
     from program.inference.api.llm.service import LLM
     from program.tool.types import Tool
+    from program.agent.types import AgentContext
 
 from program.engine.types import (
     AgentState,
@@ -255,7 +256,7 @@ class Loop:
                 await emit(MessageStartEvent(message=message))
                 async for event in self.llm.stream(LLMContext(
                     messages=messages,
-                    tools=self.tools,
+                    tools=self.state.tools,
                     system_prompt=self.state.system_prompt,
                 )):
                     match event:
@@ -346,10 +347,13 @@ class Loop:
 
         await emit(AgentEndEvent(messages=messages))
 
-    async def run(self, messages: list[BaseMessage]) -> None:
+    async def run(self, ctx: AgentContext) -> None:
         self._signal = asyncio.Event()
         self.state.is_streaming = True
-        await self._loop(messages, self.process_events, self._signal)
+        self.state.system_prompt = ctx.system_prompt
+        self.state.tools = ctx.tools
+        self._tools = {t.name: t for t in ctx.tools}
+        await self._loop(ctx.messages, self.process_events, self._signal)
         self.state.is_streaming = False
 
     async def run_continue(self) -> None:
@@ -363,12 +367,20 @@ class Loop:
         if last_message.role == Role.ASSISTANT:
             if not self.state.steering_queue.is_empty():
                 steering_messages = await self.state.steering_queue.dequeue()
-                await self.run(self.state.messages + steering_messages)
+                from program.agent.types import AgentContext
+                await self.run(AgentContext(
+                    system_prompt=self.state.system_prompt or '',
+                    messages=self.state.messages + steering_messages,
+                ))
                 return
 
             if not self.state.follow_up_queue.is_empty():
                 follow_up_messages = await self.state.follow_up_queue.dequeue()
-                await self.run(self.state.messages + follow_up_messages)
+                from program.agent.types import AgentContext
+                await self.run(AgentContext(
+                    system_prompt=self.state.system_prompt or '',
+                    messages=self.state.messages + follow_up_messages,
+                ))
                 return
 
             raise RuntimeError("Cannot continue from message role: assistant")

@@ -1,6 +1,6 @@
 from program.agent.service import Agent
 from program.agent.types import (
-    AgentConfig, PromptOptions,
+    AgentConfig, AgentContext, PromptOptions,
     CompactionStartEvent, CompactionEndEvent,
     RetryStartEvent, RetryEndEvent,
 )
@@ -8,6 +8,7 @@ from program.agent.types import (
 __all__ = [
     'Agent',
     'AgentConfig',
+    'AgentContext',
     'PromptOptions',
     'CompactionStartEvent',
     'CompactionEndEvent',
