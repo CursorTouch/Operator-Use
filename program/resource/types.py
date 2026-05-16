@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from program.skill.types import Skill, ResourceDiagnostic
+    from program.diagnostics.types import ResourceDiagnostic
+    from program.extension.runtime import ExtensionRuntime
+    from program.skill.types import Skill
     from program.extension.types import LoadExtensionsResult
 
 
@@ -53,6 +55,11 @@ class BaseResourceLoader(ABC):
 
     @abstractmethod
     async def reload(self) -> None: ...
+
+    @abstractmethod
+    def get_diagnostics(self, runtime: 'ExtensionRuntime | None' = None) -> list['ResourceDiagnostic']:
+        """Return all diagnostics: extension errors, collisions, and skill warnings."""
+        ...
 
 
 # ============================================================================

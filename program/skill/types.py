@@ -5,6 +5,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+# CollisionInfo and ResourceDiagnostic are defined in the diagnostics module
+# and re-exported here so existing imports keep working.
+from program.diagnostics.types import CollisionInfo, ResourceDiagnostic
+
 
 # ============================================================================
 # Source Info
@@ -15,24 +19,6 @@ class SourceInfo(BaseModel):
     source: str                  # "user", "project", "path", or custom
     scope: str | None = None     # "user" | "project" | None
     base_dir: str | None = None
-
-
-# ============================================================================
-# Diagnostics
-# ============================================================================
-
-class CollisionInfo(BaseModel):
-    resource_type: str           # "skill"
-    name: str
-    winner_path: str
-    loser_path: str
-
-
-class ResourceDiagnostic(BaseModel):
-    type: Literal["warning", "collision"]
-    message: str
-    path: str
-    collision: CollisionInfo | None = None
 
 
 # ============================================================================

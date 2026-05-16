@@ -310,18 +310,24 @@ class AgentLoop:
                             await emit(TurnEndEvent(message=message, tool_results=tool_results))
                             break
 
+                        # Drain the live steering queue first, then call the options callback.
+                        steering_messages: list[BaseMessage] = []
+                        if self.state.steering_queue and not self.state.steering_queue.is_empty():
+                            steering_messages.extend(await self.state.steering_queue.dequeue())
                         if self.options.get_steering_messages is not None:
-                            steering_messages = self.options.get_steering_messages()
-                            for msg in steering_messages:
-                                await emit(MessageStartEvent(message=msg))
-                                await emit(MessageEndEvent(message=msg))
-                                messages.append(msg)
+                            steering_messages.extend(self.options.get_steering_messages())
+                        for msg in steering_messages:
+                            await emit(MessageStartEvent(message=msg))
+                            await emit(MessageEndEvent(message=msg))
+                            messages.append(msg)
 
                     case StopReason.Stop:
+                        # Drain the live follow-up queue first, then call the options callback.
+                        follow_up_messages: list[BaseMessage] = []
+                        if self.state.follow_up_queue and not self.state.follow_up_queue.is_empty():
+                            follow_up_messages.extend(await self.state.follow_up_queue.dequeue())
                         if self.options.get_follow_up_messages is not None:
-                            follow_up_messages = self.options.get_follow_up_messages()
-                        else:
-                            follow_up_messages = []
+                            follow_up_messages.extend(self.options.get_follow_up_messages())
 
                         if follow_up_messages:
                             for msg in follow_up_messages:

@@ -65,6 +65,7 @@ class FakeResourceLoader(BaseResourceLoader):
     def get_system_prompt(self): return None
     def get_append_system_prompt(self): return []
     def extend_resources(self, paths): pass
+    def get_diagnostics(self, runtime=None): return []
     async def reload(self): pass
 
 

@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from program.bus.service import EventBus
+from program.diagnostics.service import run_diagnostics
+from program.diagnostics.types import ResourceDiagnostic
 from program.extension.loader import discover_and_load_extensions
 from program.extension.types import LoadExtensionsResult
 from program.resource.context import load_project_context_files
 from program.resource.types import ContextFile, ResourceExtensionPaths, BaseResourceLoader, ResourceLoaderOptions
 from program.skill.loader import load_skills
-from program.skill.types import ResourceDiagnostic, Skill, LoadSkillsOptions
+from program.skill.types import Skill, LoadSkillsOptions
+
+if TYPE_CHECKING:
+    from program.extension.runtime import ExtensionRuntime
 
 _SYSTEM_PROMPT_FILE = "SYSTEM.md"
 _APPEND_SYSTEM_PROMPT_FILE = "APPEND_SYSTEM.md"
@@ -92,6 +98,12 @@ class ResourceLoader(BaseResourceLoader):
             return
         self._extension_skill_paths.extend(new_paths)
         self._reload_skills()
+
+    def get_diagnostics(self, runtime: ExtensionRuntime | None = None) -> list[ResourceDiagnostic]:
+        """Return all diagnostics: extension load errors, collisions, skill warnings, and (optionally) runtime errors."""
+        from program.skill.types import LoadSkillsResult
+        skills_result = LoadSkillsResult(skills=self._skills, diagnostics=self._skill_diagnostics)
+        return run_diagnostics(self._extensions_result, skills_result=skills_result, runtime=runtime)
 
     async def reload(self) -> None:
         await self._reload_extensions()

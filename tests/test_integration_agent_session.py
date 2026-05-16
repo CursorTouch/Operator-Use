@@ -114,6 +114,9 @@ class FakeResourceLoader(BaseResourceLoader):
     def extend_resources(self, paths: ResourceExtensionPaths) -> None:
         pass
 
+    def get_diagnostics(self, runtime=None):
+        return []
+
     async def reload(self) -> None:
         pass
 
