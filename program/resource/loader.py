@@ -6,7 +6,7 @@ from program.bus.service import EventBus
 from program.extension.loader import discover_and_load_extensions
 from program.extension.types import LoadExtensionsResult
 from program.resource.context import load_project_context_files
-from program.resource.types import ContextFile, ResourceExtensionPaths, ResourceLoader, ResourceLoaderOptions
+from program.resource.types import ContextFile, ResourceExtensionPaths, BaseResourceLoader, ResourceLoaderOptions
 from program.skill.loader import load_skills
 from program.skill.types import ResourceDiagnostic, Skill, LoadSkillsOptions
 
@@ -38,7 +38,7 @@ def _discover_append_system_prompt(cwd: Path, agent_dir: Path) -> str | None:
     return _read_optional_file(global_)
 
 
-class DefaultResourceLoader(ResourceLoader):
+class ResourceLoader(BaseResourceLoader):
     """
     Discovers and caches skills, extensions, and context files for one cwd.
     Call reload() once before use. reload() is also called to refresh after settings change.

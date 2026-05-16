@@ -21,7 +21,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
 )
 from program.message.types import TextContent, UserMessage, AssistantMessage, Role
-from program.resource.types import ResourceLoader, ResourceExtensionPaths
+from program.resource.types import BaseResourceLoader, ResourceExtensionPaths
 from program.session.manager import SessionManager
 from program.session.types import MessageEntry
 from program.skill.types import SourceInfo
@@ -58,7 +58,7 @@ def text_seq(text: str) -> list[LLMEvent]:
 
 # ── Fake resource loader ──────────────────────────────────────────────────────
 
-class FakeResourceLoader(ResourceLoader):
+class FakeResourceLoader(BaseResourceLoader):
     def get_extensions(self): return LoadExtensionsResult()
     def get_skills(self): return [], []
     def get_context_files(self): return []

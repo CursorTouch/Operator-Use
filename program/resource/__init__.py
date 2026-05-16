@@ -1,10 +1,10 @@
-from program.resource.loader import DefaultResourceLoader
-from program.resource.types import ResourceLoader, ResourceLoaderOptions, ResourceExtensionPaths, ContextFile
+from program.resource.loader import ResourceLoader
+from program.resource.types import BaseResourceLoader, ResourceLoaderOptions, ResourceExtensionPaths, ContextFile
 from program.resource.context import load_project_context_files
 
 __all__ = [
-    "DefaultResourceLoader",
     "ResourceLoader",
+    "BaseResourceLoader",
     "ResourceLoaderOptions",
     "ResourceExtensionPaths",
     "ContextFile",

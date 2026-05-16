@@ -140,9 +140,9 @@ class TestReg001ToolMessageContentsCleared:
         from program.compaction.types import CompactionSettings
         from program.extension.runtime import ExtensionRuntime
         from program.extension.types import LoadExtensionsResult
-        from program.resource.types import ResourceLoader, ResourceExtensionPaths
+        from program.resource.types import BaseResourceLoader, ResourceExtensionPaths
 
-        class FakeResourceLoader(ResourceLoader):
+        class FakeResourceLoader(BaseResourceLoader):
             def get_extensions(self): return LoadExtensionsResult()
             def get_skills(self): return [], []
             def get_context_files(self): return []

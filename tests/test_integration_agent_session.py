@@ -27,7 +27,7 @@ from program.message.types import (
     TextContent, ToolCallContent, ToolResultContent,
     UserMessage, AssistantMessage, ToolMessage, Usage, Role,
 )
-from program.resource.types import ResourceLoader, ResourceExtensionPaths, ContextFile
+from program.resource.types import BaseResourceLoader, ResourceExtensionPaths, ContextFile
 from program.session.manager import SessionManager
 from program.session.types import MessageEntry, CompactionEntry
 from program.skill.types import SourceInfo
@@ -92,7 +92,7 @@ def summary_seq(text: str) -> list[LLMEvent]:
 
 # ── Fake resource loader ──────────────────────────────────────────────────────
 
-class FakeResourceLoader(ResourceLoader):
+class FakeResourceLoader(BaseResourceLoader):
     def __init__(self, system_prompt: str | None = None):
         self._system_prompt = system_prompt
 

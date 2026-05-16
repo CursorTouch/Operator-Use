@@ -32,7 +32,7 @@ class ResourceExtensionPaths(BaseModel):
 # Resource loader interface
 # ============================================================================
 
-class ResourceLoader(ABC):
+class BaseResourceLoader(ABC):
     @abstractmethod
     def get_extensions(self) -> 'LoadExtensionsResult': ...
 

@@ -23,7 +23,7 @@ from program.prompts.types import BuildSystemPromptOptions
 if TYPE_CHECKING:
     from program.engine.loop import AgentLoop
     from program.session.manager import SessionManager
-    from program.resource.types import ResourceLoader
+    from program.resource.types import BaseResourceLoader
     from program.extension.runtime import ExtensionRuntime
     from program.compaction.compact import Compaction
     from program.engine.types import AgentEvent
@@ -43,7 +43,7 @@ class AgentSession(ExtensionContext):
         self,
         loop: AgentLoop,
         session_manager: SessionManager,
-        resource_loader: ResourceLoader,
+        resource_loader: BaseResourceLoader,
         extension_runtime: ExtensionRuntime,
         compaction: Compaction,
         config: AgentSessionConfig,

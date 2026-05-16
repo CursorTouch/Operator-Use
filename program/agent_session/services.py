@@ -16,7 +16,7 @@ from program.extension.loader import discover_and_load_extensions
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult
 from program.inference.api.llm.service import LLM
-from program.resource.loader import DefaultResourceLoader
+from program.resource.loader import ResourceLoader
 from program.resource.types import ResourceLoaderOptions
 from program.session.manager import SessionManager
 from program.settings.manager import SettingsManager
@@ -84,7 +84,7 @@ class AgentSessionServices:
         llm: LLM,
         loop: AgentLoop,
         session_manager: SessionManager,
-        resource_loader: DefaultResourceLoader,
+        resource_loader: ResourceLoader,
         extension_runtime: ExtensionRuntime,
         compaction: Compaction,
         settings_manager: SettingsManager | None,
@@ -126,7 +126,7 @@ class AgentSessionServices:
             system_prompt=config.system_prompt,
             append_system_prompt=config.append_system_prompt,
         )
-        resource_loader = DefaultResourceLoader(loader_opts)
+        resource_loader = ResourceLoader(loader_opts)
         await resource_loader.reload()
 
         # ── Extension runtime ─────────────────────────────────────────────────
