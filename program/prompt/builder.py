@@ -9,38 +9,9 @@ if TYPE_CHECKING:
     from program.skill.types import Skill
     from program.tool.types import Tool
 
-_BASE_GUIDELINES = [
-    "Be concise in your responses",
-    "Show file paths clearly when working with files",
-]
 
-
-def _build_guidelines(tools: list[Tool], extra: list[str]) -> str:
-    names = {t.name for t in tools}
-    seen: set[str] = set()
-    lines: list[str] = []
-
-    def add(g: str) -> None:
-        if g not in seen:
-            seen.add(g)
-            lines.append(f"- {g}")
-
-    has_bash = bool(names & {"bash", "terminal"})
-    has_file_tools = bool(names & {"grep", "glob", "ls"})
-
-    if has_bash and not has_file_tools:
-        add("Use bash for file operations like ls, grep, find")
-    elif has_bash and has_file_tools:
-        add("Prefer grep/glob/ls tools over bash for file exploration (faster, respects .gitignore)")
-
-    for guideline in extra:
-        normalized = guideline.strip()
-        if normalized:
-            add(normalized)
-
-    for g in _BASE_GUIDELINES:
-        add(g)
-
+def _build_guidelines(extra: list[str]) -> str:
+    lines = [f"- {g.strip()}" for g in extra if g.strip()]
     return "\n".join(lines)
 
 
@@ -111,17 +82,11 @@ def build_system_prompt(options: SystemPromptOptions) -> str:
         return options.custom_prompt + append_section + context_section + skills_section + footer
 
     tools_list = _build_tools_list(options.tools)
-    guidelines = _build_guidelines(options.tools, options.prompt_guidelines)
+    guidelines = _build_guidelines(options.prompt_guidelines)
 
-    prompt = f"""You are an expert coding assistant operating inside a coding agent harness. \
-You help users by reading files, executing commands, editing code, and writing new files.
+    prompt = f"You are a helpful assistant.\n\nAvailable tools:\n{tools_list}"
 
-Available tools:
-{tools_list}
-
-In addition to the tools above, you may have access to other custom tools depending on the project.
-
-Guidelines:
-{guidelines}"""
+    if guidelines:
+        prompt += f"\n\nGuidelines:\n{guidelines}"
 
     return prompt + append_section + context_section + skills_section + footer
