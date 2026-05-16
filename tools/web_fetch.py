@@ -95,13 +95,13 @@ class WebFetchTool(Tool):
                 if len(text) > MAX_TOOL_OUTPUT_LENGTH:
                     text = text[:MAX_TOOL_OUTPUT_LENGTH] + "..."
 
-                content=(
+                content = (
                     f"URL: {url}\n"
-                    F"Status: {response.status_code}\n"
-                    F"Content-Type: {response.headers.get('Content-Type', 'Unknown')}\n"
-                    f"{UNTRUSTED_BANNER}",
+                    f"Status: {response.status_code}\n"
+                    f"Content-Type: {response.headers.get('Content-Type', 'Unknown')}\n"
+                    f"{UNTRUSTED_BANNER}\n"
                     f"{text}"
-                )             
+                )
                     
                 return ToolResult.ok(id=invocation.id, content=content)
         except Exception as e:

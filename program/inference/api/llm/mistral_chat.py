@@ -2,10 +2,10 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from typing import Any
-from mistralai.client import Mistral
-from mistralai.client.models.thinkchunk import ThinkChunk
-from mistralai.client.models.textchunk import TextChunk
-from mistralai.client.types import UNSET
+from mistralai import Mistral
+from mistralai.models.thinkchunk import ThinkChunk
+from mistralai.models.textchunk import TextChunk
+from mistralai.types import UNSET
 from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
@@ -106,13 +106,25 @@ def _messages_to_mistral(messages: list[BaseMessage]) -> list[dict[str, Any]]:
 class MistralChatAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
-        self._client = Mistral(
-            api_key=options.api_key,
-            server_url=options.base_url,
-            timeout_ms=int(options.timeout.total_seconds() * 1000),
+        self._client_key = options.api_key
+        self._client = self._build_client()
+
+    def _build_client(self) -> Mistral:
+        return Mistral(
+            api_key=self.options.api_key,
+            server_url=self.options.base_url,
+            timeout_ms=int(self.options.timeout.total_seconds() * 1000),
         )
 
+    def _sync_client(self) -> None:
+        # The api_key is resolved and assigned to options *after* __init__,
+        # so rebuild the client whenever it changes.
+        if self.options.api_key != self._client_key:
+            self._client_key = self.options.api_key
+            self._client = self._build_client()
+
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+        self._sync_client()
         mistral_messages = _messages_to_mistral(context.messages)
         if context.system_prompt:
             mistral_messages = [{"role": "system", "content": context.system_prompt}] + mistral_messages
