@@ -115,7 +115,7 @@ class RPCServer:
                 d['type'] = raw_type.value if hasattr(raw_type, 'value') else raw_type
             await self._write(d)
 
-        # Single subscription covers both engine events (via Loop → Hooks)
+        # Single subscription covers both engine events (via Engine → Hooks)
         # and extension/session events (via ExtensionRuntime → Hooks).
         self._unsub_hooks = session.hooks.subscribe(_on_event)
 

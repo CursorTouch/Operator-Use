@@ -11,7 +11,7 @@ from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings
 from program.commands.registry import CommandRegistry
 from program.commands.types import SlashCommandInfo
-from program.engine.loop import Loop
+from program.engine.engine import Engine
 from program.engine.types import Options
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult, Extension, SessionStartEvent, SessionShutdownEvent
@@ -73,7 +73,7 @@ class FakeResourceLoader(BaseResourceLoader):
 
 def make_runtime(llm: FakeLLM, extensions: list[Extension] | None = None) -> Runtime:
     sm = SessionManager.in_memory()
-    loop = Loop(llm=llm, tools=[], options=Options())
+    engine = Engine(llm=llm, tools=[], options=Options())
     compaction = Compaction(llm=llm, settings=CompactionSettings(enabled=False))
     resource_loader = FakeResourceLoader()
     config = AgentConfig(
@@ -85,7 +85,7 @@ def make_runtime(llm: FakeLLM, extensions: list[Extension] | None = None) -> Run
         pass
 
     agent = Agent(
-        loop=loop, session_manager=sm, resource_loader=resource_loader,
+        engine=engine, session_manager=sm, resource_loader=resource_loader,
         extension_runtime=ExtensionRuntime(load_result, _NullCtx()),  # type: ignore
         compaction=compaction, config=config,
     )
@@ -100,7 +100,7 @@ def make_runtime(llm: FakeLLM, extensions: list[Extension] | None = None) -> Run
     _FakeServices.agent = agent
 
     rt = Runtime.__new__(Runtime)
-    rt._services = _FakeServices()
+    rt._context = _FakeServices()
     rt._config = None
     rt.commands = CommandRegistry(runtime=rt)
     rt.commands.register_from_extensions(real_runtime.get_commands())
@@ -230,7 +230,7 @@ class TestLifecycleEvents:
         llm = FakeLLM(text_seq("ok"))
         rt = make_runtime(llm, extensions=[ext])
         # Manually fire session_start (normally done by Runtime.create)
-        await rt._services.extension_runtime.emit(
+        await rt._context.extension_runtime.emit(
             'session_start', SessionStartEvent(reason='startup')
         )
         assert 'startup' in events
@@ -244,7 +244,7 @@ class TestLifecycleEvents:
 
         llm = FakeLLM(text_seq("ok"))
         rt = make_runtime(llm, extensions=[ext])
-        await rt._services.extension_runtime.emit(
+        await rt._context.extension_runtime.emit(
             'session_shutdown', SessionShutdownEvent(reason='quit')
         )
         assert 'quit' in shutdown_events
@@ -272,7 +272,7 @@ class TestMultiTurnContext:
 
         llm = CapturingLLM()
         sm = SessionManager.in_memory()
-        loop = Loop(llm=llm, tools=[], options=Options())
+        engine = Engine(llm=llm, tools=[], options=Options())
         compaction = Compaction(llm=llm, settings=CompactionSettings(enabled=False))
 
         config = AgentConfig(
@@ -284,7 +284,7 @@ class TestMultiTurnContext:
             pass
 
         session = Agent(
-            loop=loop, session_manager=sm, resource_loader=FakeResourceLoader(),
+            engine=engine, session_manager=sm, resource_loader=FakeResourceLoader(),
             extension_runtime=ExtensionRuntime(load_result, _NullCtx()),  # type: ignore
             compaction=compaction, config=config,
         )

@@ -21,20 +21,20 @@ class Runtime:
 
     Usage:
         runtime = await Runtime.create(config)
-        await runtime.handle_input("/compact shrink the history")
-        await runtime.handle_input("explain this code")
+        await runtime.user_input("/compact shrink the history")
+        await runtime.user_input("explain this code")
     """
 
     def __init__(
         self,
-        services: RuntimeContext,
+        context: RuntimeContext,
         config: RuntimeConfig,
     ) -> None:
-        self._services = services
+        self._context = context
         self._config = config
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
-            self._services.extension_runtime.get_commands()
+            self._context.extension_runtime.get_commands()
         )
 
     # -------------------------------------------------------------------------
@@ -46,8 +46,8 @@ class Runtime:
         cls,
         config: RuntimeConfig,
     ) -> Runtime:
-        services = await RuntimeContext.create(config)
-        runtime = cls(services=services, config=config)
+        context = await RuntimeContext.create(config)
+        runtime = cls(context=context, config=config)
         await runtime._emit_session_start('startup')
         return runtime
 
@@ -57,17 +57,17 @@ class Runtime:
 
     @property
     def current_session(self) -> Agent | None:
-        return self._services.agent
+        return self._context.agent
 
     @property
     def session_manager(self):
-        return self._services.session_manager
+        return self._context.session_manager
 
     # -------------------------------------------------------------------------
     # Core input entry point
     # -------------------------------------------------------------------------
 
-    async def handle_input(self, text: str, options: PromptOptions | None = None) -> None:
+    async def user_input(self, text: str, options: PromptOptions | None = None) -> None:
         """
         Route user input. Slash commands go to CommandRegistry;
         everything else is forwarded to the active Agent.
@@ -76,13 +76,13 @@ class Runtime:
         if parsed is not None:
             await self.commands.dispatch(parsed)
         else:
-            await self.prompt(text, options)
+            await self.invoke(text, options)
 
-    async def prompt(self, user_input: str, options: PromptOptions | None = None) -> None:
+    async def invoke(self, user_input: str, options: PromptOptions | None = None) -> None:
         """Forward a plain prompt to the current session."""
-        if self._services.agent is None:
-            raise RuntimeError("No active session.")
-        await self._services.agent.prompt(user_input, options)
+        if self._context.agent is None:
+            raise RuntimeError("No active session available.")
+        await self._context.agent.invoke(user_input, options)
 
     # -------------------------------------------------------------------------
     # Session lifecycle
@@ -92,16 +92,16 @@ class Runtime:
         """Shut down the current session and start a fresh one."""
         await self._emit_session_shutdown('new')
         self._config = self._config.model_copy(update={'session_file': None})
-        self._services = await RuntimeContext.create(self._config)
+        self._context = await RuntimeContext.create(self._config)
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
-            self._services.extension_runtime.get_commands()
+            self._context.extension_runtime.get_commands()
         )
         await self._emit_session_start('new')
 
     async def resume_session(self, session_file: Path) -> None:
         """Shut down the current session and resume an existing one from a file."""
-        before_results = await self._services.extension_runtime.emit(
+        before_results = await self._context.extension_runtime.emit(
             'session_before_switch',
             SessionBeforeSwitchEvent(reason='resume', target_session_file=str(session_file)),
         )
@@ -111,20 +111,20 @@ class Runtime:
 
         await self._emit_session_shutdown('resume')
         self._config = self._config.model_copy(update={'session_file': session_file})
-        self._services = await RuntimeContext.create(self._config)
+        self._context = await RuntimeContext.create(self._config)
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
-            self._services.extension_runtime.get_commands()
+            self._context.extension_runtime.get_commands()
         )
         await self._emit_session_start('resume')
 
     async def fork_session(self, from_entry_id: str) -> None:
         """Branch the session tree at the given entry and start a new leaf."""
-        sm = self._services.session_manager
+        sm = self._context.session_manager
         if from_entry_id not in sm.by_id:
             raise KeyError(f"Entry '{from_entry_id}' not found in session.")
 
-        before_results = await self._services.extension_runtime.emit(
+        before_results = await self._context.extension_runtime.emit(
             'session_before_fork',
             SessionBeforeForkEvent(entry_id=from_entry_id),
         )
@@ -140,13 +140,13 @@ class Runtime:
     # -------------------------------------------------------------------------
 
     async def _emit_session_start(self, reason: str) -> None:
-        await self._services.extension_runtime.emit(
+        await self._context.extension_runtime.emit(
             'session_start',
             SessionStartEvent(reason=reason),  # type: ignore[arg-type]
         )
 
     async def _emit_session_shutdown(self, reason: str) -> None:
-        await self._services.extension_runtime.emit(
+        await self._context.extension_runtime.emit(
             'session_shutdown',
             SessionShutdownEvent(reason=reason),  # type: ignore[arg-type]
         )

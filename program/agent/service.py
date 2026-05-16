@@ -21,7 +21,7 @@ from program.prompt.builder import build_system_prompt
 from program.prompt.types import SystemPromptOptions
 
 if TYPE_CHECKING:
-    from program.engine.loop import Loop
+    from program.engine.engine import Engine
     from program.session.manager import SessionManager
     from program.resource.types import BaseResourceLoader
     from program.extension.runtime import ExtensionRuntime
@@ -30,24 +30,24 @@ if TYPE_CHECKING:
 
 class Agent(ExtensionContext):
     """
-    High-level agent session tying together Loop, SessionManager,
+    High-level agent session tying together Engine, SessionManager,
     ExtensionRuntime, ResourceLoader, and Compaction.
 
-    Call `prompt()` to run a user turn. The session persists each message,
+    Call `invoke()` to run a user turn. The session persists each message,
     tracks token usage, retries on transient errors, and triggers compaction
     when the context budget is exceeded.
     """
 
     def __init__(
         self,
-        loop: Loop,
+        engine: Engine,
         session_manager: SessionManager,
         resource_loader: BaseResourceLoader,
         extension_runtime: ExtensionRuntime,
         compaction: Compaction,
         config: AgentConfig,
     ) -> None:
-        self._loop = loop
+        self._engine = engine
         self._session_manager = session_manager
         self._resources = resource_loader
         self._extensions = extension_runtime
@@ -60,8 +60,8 @@ class Agent(ExtensionContext):
         self._compact_options: CompactOptions | None = None
 
         self._phase: str = "idle"
-        self._loop.options.before_tool_call = self._before_tool_call
-        self._loop.options.after_tool_call = self._after_tool_call
+        self._engine.options.before_tool_call = self._before_tool_call
+        self._engine.options.after_tool_call = self._after_tool_call
 
     # -------------------------------------------------------------------------
     # Hooks
@@ -88,16 +88,16 @@ class Agent(ExtensionContext):
         return self._config.model
 
     def is_idle(self) -> bool:
-        return self._loop.is_idle
+        return self._engine.is_idle
 
     def has_pending_messages(self) -> bool:
-        return self._loop.has_pending_messages()
+        return self._engine.has_pending_messages()
 
     def abort(self) -> None:
-        self._loop.abort()
+        self._engine.abort()
 
     def shutdown(self) -> None:
-        self._loop.abort()
+        self._engine.abort()
 
     def get_context_usage(self) -> ContextUsage | None:
         if not self._context_tokens:
@@ -187,7 +187,7 @@ class Agent(ExtensionContext):
         options = SystemPromptOptions(
             cwd=str(self._config.cwd),
             custom_prompt=custom_prompt,
-            tools=self._loop.state.tools,
+            tools=self._engine.state.tools,
             prompt_guidelines=self._config.prompt_guidelines,
             append_system_prompt=append_system_prompt,
             context_files=context_files,
@@ -233,7 +233,7 @@ class Agent(ExtensionContext):
     # Core turn entry point
     # -------------------------------------------------------------------------
 
-    async def prompt(self, user_input: str, options: PromptOptions | None = None) -> None:
+    async def invoke(self, user_input: str, options: PromptOptions | None = None) -> None:
         """Run one user turn with retry on transient errors."""
         if self._phase != "idle":
             raise RuntimeError(f"Agent is busy (phase={self._phase!r}). Wait for the current operation to finish.")
@@ -274,7 +274,7 @@ class Agent(ExtensionContext):
         ctx = AgentContext(
             system_prompt=self._system_prompt,
             messages=base_messages + [user_message],
-            tools=self._loop.tools,
+            tools=self._engine.tools,
         )
 
         self._phase = "turn"
@@ -289,7 +289,7 @@ class Agent(ExtensionContext):
         # Notify extensions the turn ended
         await self._extensions.emit(
             'agent_end',
-            ExtAgentEndEvent(messages=self._loop.state.messages),
+            ExtAgentEndEvent(messages=self._engine.state.messages),
         )
 
         # Trigger compaction if requested or context budget exceeded
@@ -299,7 +299,7 @@ class Agent(ExtensionContext):
             await self._run_compaction(opts.compaction_custom_instructions)
 
         # Agent is done with no more queued turns
-        if not self._loop.has_pending_messages():
+        if not self._engine.has_pending_messages():
             await self._extensions.emit('settled', SettledEvent())
 
     async def _run_with_retry(self, ctx: AgentContext, user_entry_id: str) -> None:
@@ -320,11 +320,11 @@ class Agent(ExtensionContext):
             persisted_ids.clear()
             unsubscribe = self._register_message_handler(persisted_ids)
             try:
-                await self._loop.run(ctx)
+                await self._engine.run(ctx)
             finally:
                 unsubscribe()
 
-            error = self._loop.state.error_message
+            error = self._engine.state.error_message
             if error is None:
                 # Success
                 if attempt > 0:
@@ -336,7 +336,7 @@ class Agent(ExtensionContext):
 
             # Failed attempt — rewind session entries from this attempt
             self._rewind_session(persisted_ids)
-            self._loop.reset()
+            self._engine.reset()
 
             if attempt < max_retries:
                 await self._extensions.emit(

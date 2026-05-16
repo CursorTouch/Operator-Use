@@ -1,9 +1,9 @@
-"""Advanced Loop tests: steering, multi-tool, thinking content, error recovery."""
+"""Advanced Engine tests: steering, multi-tool, thinking content, error recovery."""
 import pytest
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.engine.loop import Loop
+from program.engine.engine import Engine
 from program.engine.types import (
     AgentEndEvent, AgentErrorEvent, AgentStartEvent,
     MessageEndEvent, MessageUpdateEvent,
@@ -83,7 +83,7 @@ def tool_call_seq(tool_id: str, name: str, args: dict = {}) -> list[LLMEvent]:
 
 
 async def run_loop(llm, tools=None, options=None, messages=None):
-    loop = Loop(llm=llm, tools=tools or [], options=options or Options())
+    loop = Engine(llm=llm, tools=tools or [], options=options or Options())
     events: list[AgentEvent] = []
     await loop.subscribe(lambda e: events.append(e))
     await loop.run(messages or [UserMessage.text("go")])
@@ -167,7 +167,7 @@ class TestMultipleToolCalls:
                 self._idx += 1
 
         llm = CapturingLLM()
-        loop = Loop(llm=llm, tools=[make_tool("my_tool", "the_result")])
+        loop = Engine(llm=llm, tools=[make_tool("my_tool", "the_result")])
         await loop.run([UserMessage.text("go")])
 
         # Second context should contain a ToolMessage with the result
@@ -194,7 +194,7 @@ class TestSteeringMessages:
         opts = Options(get_steering_messages=get_steering)
         events, _ = await run_loop(llm, tools=[make_tool("my_tool")], options=opts)
         assert len(steering_injected) >= 1
-        # Loop should complete with a final text response
+        # Engine should complete with a final text response
         msg_ends = [e for e in events if isinstance(e, MessageEndEvent)
                     and e.message and e.message.role == Role.ASSISTANT]
         assert len(msg_ends) == 2  # tool-call turn + steered text turn
@@ -210,7 +210,7 @@ class TestLoopReset:
             [StartEvent(), ErrorEvent(reason=StopReason.Error, error="first attempt fails")],
             text_seq("second attempt ok"),
         )
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         events1: list = []
         await loop.subscribe(lambda e: events1.append(e))
         await loop.run([UserMessage.text("go")])
@@ -262,7 +262,7 @@ class TestTransformContext:
         def transform(messages, signal):
             return [messages[-1]]  # only keep last
 
-        loop = Loop(llm=llm, tools=[], options=Options(transform_context=transform))
+        loop = Engine(llm=llm, tools=[], options=Options(transform_context=transform))
         await loop.run(msgs)
         assert len(llm.captured) == 1
         assert llm.captured[0].contents[0].content == "keep"
@@ -274,7 +274,7 @@ class TestPendingToolCalls:
     @pytest.mark.asyncio
     async def test_pending_cleared_after_tool_completes(self):
         llm = FakeLLM(tool_call_seq("t1", "my_tool"), text_seq("done"))
-        loop = Loop(llm=llm, tools=[make_tool("my_tool")])
+        loop = Engine(llm=llm, tools=[make_tool("my_tool")])
         await loop.run([UserMessage.text("go")])
         assert len(loop.state.pending_tool_calls) == 0
 
@@ -294,7 +294,7 @@ class TestPendingToolCalls:
             return await original_execute(invocation, **kwargs)
 
         llm = FakeLLM(tool_call_seq("t1", "tracker"), text_seq("done"))
-        loop = Loop(llm=llm, tools=[real_tool])
+        loop = Engine(llm=llm, tools=[real_tool])
 
         events = []
         async def capture(event):

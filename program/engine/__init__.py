@@ -20,7 +20,7 @@ from program.engine.types import (
     SteeringQueue,
 )
 from program.tool.types import ToolExecutionMode
-from program.engine.loop import Loop as Agent
+from program.engine.engine import Engine as Agent
 
 __all__ = [
     "Agent",

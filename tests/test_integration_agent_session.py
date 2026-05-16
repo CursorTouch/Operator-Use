@@ -11,7 +11,7 @@ from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings, CompactionPreparation
 from program.message.types import AgentMessage as _AgentMessage
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": _AgentMessage})
-from program.engine.loop import Loop
+from program.engine.engine import Engine
 from program.engine.types import Options
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import (
@@ -147,7 +147,7 @@ def make_session(
     context_window: int = 200_000,
 ) -> tuple[Agent, SessionManager]:
     sm = SessionManager.in_memory()
-    loop = Loop(llm=llm, tools=tools or [], options=Options())
+    engine = Engine(llm=llm, tools=tools or [], options=Options())
     comp_settings = compaction_settings or CompactionSettings(enabled=False)
     compaction = Compaction(llm=llm, settings=comp_settings)
     resource_loader = FakeResourceLoader(system_prompt=system_prompt)
@@ -167,7 +167,7 @@ def make_session(
     ext_runtime = ExtensionRuntime(ext_result, _NullCtx())  # type: ignore[arg-type]
 
     session = Agent(
-        loop=loop,
+        engine=engine,
         session_manager=sm,
         resource_loader=resource_loader,
         extension_runtime=ext_runtime,
@@ -331,7 +331,7 @@ class TestCompactionIntegration:
 class TestExtensionHooks:
     def _make_session_with_ext(self, llm, ext: Extension):
         sm = SessionManager.in_memory()
-        loop = Loop(llm=llm, tools=[], options=Options())
+        engine = Engine(llm=llm, tools=[], options=Options())
         compaction = Compaction(llm=llm, settings=CompactionSettings(enabled=False))
         resource_loader = FakeResourceLoader()
         config = AgentConfig(
@@ -342,7 +342,7 @@ class TestExtensionHooks:
         class _NullCtx:
             pass
         session = Agent(
-            loop=loop, session_manager=sm, resource_loader=resource_loader,
+            engine=engine, session_manager=sm, resource_loader=resource_loader,
             extension_runtime=ExtensionRuntime(load_result, _NullCtx()),  # type: ignore[arg-type]
             compaction=compaction, config=config,
         )

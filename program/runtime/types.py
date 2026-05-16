@@ -10,7 +10,7 @@ from program.agent.service import Agent
 from program.agent.types import AgentConfig
 from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings
-from program.engine.loop import Loop
+from program.engine.engine import Engine
 from program.engine.types import Options
 from program.extension.loader import discover_and_load_extensions
 from program.extension.runtime import ExtensionRuntime
@@ -70,7 +70,7 @@ class RuntimeContext:
         self,
         agent: Agent,
         llm: LLM,
-        loop: Loop,
+        engine: Engine,
         session_manager: SessionManager,
         resource_loader: ResourceLoader,
         extension_runtime: ExtensionRuntime,
@@ -80,7 +80,7 @@ class RuntimeContext:
     ) -> None:
         self.agent = agent
         self.llm = llm
-        self.loop = loop
+        self.engine = loop
         self.session_manager = session_manager
         self.resource_loader = resource_loader
         self.extension_runtime = extension_runtime
@@ -144,7 +144,7 @@ class RuntimeContext:
         )
 
         # ── Agent loop ────────────────────────────────────────────────────────
-        loop = Loop(
+        engine = Engine(
             llm=llm,
             tools=config.tools,
             options=Options(),
@@ -164,7 +164,7 @@ class RuntimeContext:
 
         # ── Wire everything together ──────────────────────────────────────────
         agent = Agent(
-            loop=loop,
+            engine=engine,
             session_manager=session_manager,
             resource_loader=resource_loader,
             extension_runtime=extension_runtime,  # type: ignore[arg-type]
@@ -178,7 +178,7 @@ class RuntimeContext:
         return cls(
             agent=agent,
             llm=llm,
-            loop=loop,
+            engine=engine,
             session_manager=session_manager,
             resource_loader=resource_loader,
             extension_runtime=real_runtime,

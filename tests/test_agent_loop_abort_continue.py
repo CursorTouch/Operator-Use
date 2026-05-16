@@ -1,9 +1,9 @@
-"""Advanced Loop tests: abort, run_continue, follow-up queue, should_stop_after_turn."""
+"""Advanced Engine tests: abort, run_continue, follow-up queue, should_stop_after_turn."""
 import asyncio
 import pytest
 from pydantic import BaseModel
 
-from program.engine.loop import Loop
+from program.engine.engine import Engine
 from program.engine.types import (
     AgentEndEvent, AgentErrorEvent, AgentStartEvent,
     MessageEndEvent, TurnEndEvent, Options,
@@ -67,7 +67,7 @@ def make_tool(name: str, result: str = "ok") -> Tool:
 
 
 async def run_loop(llm, tools=None, options=None, messages=None):
-    loop = Loop(llm=llm, tools=tools or [], options=options or Options())
+    loop = Engine(llm=llm, tools=tools or [], options=options or Options())
     events = []
     await loop.subscribe(lambda e: events.append(e))
     await loop.run(messages or [UserMessage.text("go")])
@@ -80,15 +80,15 @@ class TestAbort:
     @pytest.mark.asyncio
     async def test_abort_before_run_has_no_effect(self):
         llm = FakeLLM(text_seq("hello"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         loop.abort()  # set before run — should be reset when run() creates a new signal
         events, _ = await run_loop(llm, messages=[UserMessage.text("go")])
-        # Loop completed normally
+        # Engine completed normally
         assert any(isinstance(e, AgentEndEvent) for e in events)
 
     @pytest.mark.asyncio
     async def test_abort_during_tool_call_stops_loop(self):
-        loop_ref: list[Loop] = []
+        loop_ref: list[Engine] = []
 
         class AbortingTool(Tool):
             async def execute(self, invocation, tool_execution_update_callback=None, signal=None, **kwargs):
@@ -97,12 +97,12 @@ class TestAbort:
 
         tool = AbortingTool(name="aborter", description="t", schema=AnyParams, kind=ToolKind.Read)
         llm = FakeLLM(tool_call_seq("t1", "aborter"), text_seq("should not reach"))
-        loop = Loop(llm=llm, tools=[tool])
+        loop = Engine(llm=llm, tools=[tool])
         loop_ref.append(loop)
         events = []
         await loop.subscribe(lambda e: events.append(e))
         await loop.run([UserMessage.text("go")])
-        # Loop ends after tool, does NOT make a second LLM call for text
+        # Engine ends after tool, does NOT make a second LLM call for text
         end_events = [e for e in events if isinstance(e, AgentEndEvent)]
         assert len(end_events) == 1
         # LLM was only called once (for the tool call turn)
@@ -123,7 +123,7 @@ class TestAbort:
                 for e in text_seq("ok"):
                     yield e
 
-        loop = Loop(llm=TrackingLLM(), tools=[])
+        loop = Engine(llm=TrackingLLM(), tools=[])
 
         original_loop = loop._loop
 
@@ -165,7 +165,7 @@ class TestReset:
             [StartEvent(), ErrorEvent(reason=StopReason.Error, error="fail")],
             text_seq("recovered"),
         )
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         events1 = []
         await loop.subscribe(lambda e: events1.append(e))
         await loop.run([UserMessage.text("first")])
@@ -187,7 +187,7 @@ class TestRunContinue:
     @pytest.mark.asyncio
     async def test_continue_from_tool_result(self):
         llm = FakeLLM(tool_call_seq("t1", "my_tool"), text_seq("continued"))
-        loop = Loop(llm=llm, tools=[make_tool("my_tool")])
+        loop = Engine(llm=llm, tools=[make_tool("my_tool")])
         await loop.run([UserMessage.text("go")])
         # After tool call + response, messages should include user + assistant(tool) + tool + assistant(text)
         roles = [m.role for m in loop.state.messages]
@@ -197,7 +197,7 @@ class TestRunContinue:
     @pytest.mark.asyncio
     async def test_run_continue_raises_if_last_is_assistant(self):
         llm = FakeLLM(text_seq("done"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         await loop.run([UserMessage.text("hi")])
         # Last message is assistant, no steering/followup queued
         with pytest.raises(RuntimeError, match="Cannot continue"):
@@ -206,14 +206,14 @@ class TestRunContinue:
     @pytest.mark.asyncio
     async def test_run_continue_raises_if_no_messages(self):
         llm = FakeLLM(text_seq("done"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         with pytest.raises(RuntimeError, match="No messages"):
             await loop.run_continue()
 
     @pytest.mark.asyncio
     async def test_run_continue_with_steering_queue(self):
         llm = FakeLLM(text_seq("first"), text_seq("steered"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         await loop.run([UserMessage.text("go")])
         # Queue a steering message then continue
         await loop.steer(UserMessage.text("steer me"))
@@ -227,7 +227,7 @@ class TestRunContinue:
     @pytest.mark.asyncio
     async def test_run_continue_with_follow_up_queue(self):
         llm = FakeLLM(text_seq("first"), text_seq("follow_up_response"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         await loop.run([UserMessage.text("go")])
         await loop.follow_up(UserMessage.text("follow up"))
         events = []
@@ -286,7 +286,7 @@ class TestQueueManagement:
     @pytest.mark.asyncio
     async def test_clear_steering_empties_queue(self):
         llm = FakeLLM(text_seq("hi"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         await loop.steer(UserMessage.text("steer"))
         assert loop.has_pending_messages() is True
         loop.clear_steering()
@@ -295,7 +295,7 @@ class TestQueueManagement:
     @pytest.mark.asyncio
     async def test_clear_follow_up_empties_queue(self):
         llm = FakeLLM(text_seq("hi"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         await loop.follow_up(UserMessage.text("follow"))
         assert loop.has_pending_messages() is True
         loop.clear_follow_up()
@@ -304,7 +304,7 @@ class TestQueueManagement:
     @pytest.mark.asyncio
     async def test_clear_all_queues_empties_both(self):
         llm = FakeLLM(text_seq("hi"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         await loop.steer(UserMessage.text("s"))
         await loop.follow_up(UserMessage.text("f"))
         loop.clear_all_queues()
@@ -312,7 +312,7 @@ class TestQueueManagement:
 
     def test_no_pending_messages_initially(self):
         llm = FakeLLM(text_seq("hi"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         assert loop.has_pending_messages() is False
 
 
@@ -354,7 +354,7 @@ class TestSubscriber:
     @pytest.mark.asyncio
     async def test_unsubscribe_stops_receiving_events(self):
         llm = FakeLLM(text_seq("hi"), text_seq("second"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         received: list = []
         unsub = await loop.subscribe(lambda e: received.append(e))
         await loop.run([UserMessage.text("first")])
@@ -366,7 +366,7 @@ class TestSubscriber:
     @pytest.mark.asyncio
     async def test_multiple_subscribers_all_receive(self):
         llm = FakeLLM(text_seq("hi"))
-        loop = Loop(llm=llm, tools=[])
+        loop = Engine(llm=llm, tools=[])
         a, b = [], []
         await loop.subscribe(lambda e: a.append(e))
         await loop.subscribe(lambda e: b.append(e))

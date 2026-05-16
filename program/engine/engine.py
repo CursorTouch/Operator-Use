@@ -33,7 +33,7 @@ from program.engine.types import (
 from program.message.types import BaseMessage, ToolMessage
 
 
-class Loop:
+class Engine:
     def __init__(
         self,
         llm: LLM,
