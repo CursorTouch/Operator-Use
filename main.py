@@ -10,6 +10,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from program.runtime import Runtime, RuntimeConfig
+from tools import (
+    LsTool, ReadTool, WriteTool, EditTool,
+    GrepTool, GlobTool, TerminalTool,
+    WebFetchTool, WebSearchTool,
+)
 from program.hooks.types import (
     MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent,
@@ -83,11 +88,19 @@ def _render_event(event) -> None:
 
 # ── REPL ──────────────────────────────────────────────────────────────────────
 
+_TOOLS = [
+    LsTool(), ReadTool(), WriteTool(), EditTool(),
+    GrepTool(), GlobTool(), TerminalTool(),
+    WebFetchTool(), WebSearchTool(),
+]
+
+
 async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
+        tools=_TOOLS,
     )
 
     print(f"Agent starting in {cwd}  (model: {config.model_id})")
