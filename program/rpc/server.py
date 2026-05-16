@@ -9,8 +9,8 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from program.agent_session.runtime import AgentSessionRuntime
-from program.agent_session.types import PromptOptions
+from program.runtime.runtime import AgentSessionRuntime
+from program.runtime.types import PromptOptions
 from program.engine.types import AgentEventType
 
 

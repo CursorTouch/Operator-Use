@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from program.agent_session.types import AgentSessionConfig, PromptOptions, RetryStartEvent, RetryEndEvent
+from program.runtime.types import SessionConfig, PromptOptions, RetryStartEvent, RetryEndEvent
 from program.extension.types import (
     ExtensionContext, ContextUsage, CompactOptions,
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
@@ -45,7 +45,7 @@ class AgentSession(ExtensionContext):
         resource_loader: BaseResourceLoader,
         extension_runtime: ExtensionRuntime,
         compaction: Compaction,
-        config: AgentSessionConfig,
+        config: SessionConfig,
     ) -> None:
         self._loop = loop
         self._session = session_manager

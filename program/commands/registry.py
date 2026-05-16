@@ -7,7 +7,7 @@ from program.commands.builtins import BUILTIN_COMMANDS
 from program.commands.types import SlashCommandInfo, CommandParseResult
 
 if TYPE_CHECKING:
-    from program.agent_session.runtime import AgentSessionRuntime
+    from program.runtime.runtime import AgentSessionRuntime
 
 
 class CommandRegistry:

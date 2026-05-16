@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
-
-from pydantic import BaseModel, Field
 from typing import TYPE_CHECKING
 
-from program.agent_session.session import AgentSession
-from program.agent_session.types import AgentSessionConfig
+from program.runtime.session import AgentSession
+from program.runtime.types import AgentSessionConfig, SessionConfig
 from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings
 from program.engine.loop import AgentLoop
@@ -24,58 +20,16 @@ from program.settings.manager import SettingsManager
 from program.settings.paths import get_config_dir
 
 if TYPE_CHECKING:
-    from program.tool.types import Tool
+    pass
 
 
-
-# ============================================================================
-# Configuration for service creation
-# ============================================================================
-
-class AgentSessionServicesConfig(BaseModel):
-    model_config = {'arbitrary_types_allowed': True}
-
-    cwd: Path
-    config_dir: Path | None = None
-
-    # LLM
-    model_id: str = 'claude-sonnet-4-6'
-    provider: str | None = None
-
-    # Session
-    session_file: Path | None = None
-    persist_session: bool = True
-
-    # Tools & prompt
-    tools: list['Tool'] = Field(default_factory=list)
-    selected_tools: list[str] | None = None
-    tool_snippets: dict[str, str] = Field(default_factory=dict)
-    prompt_guidelines: list[str] = Field(default_factory=list)
-
-    # Resource loader
-    no_extensions: bool = False
-    no_skills: bool = False
-    no_context_files: bool = False
-    system_prompt: str | None = None
-    append_system_prompt: list[str] = Field(default_factory=list)
-
-    # Compaction
-    compaction_enabled: bool = True
-    compaction_reserve_tokens: int = 16384
-    compaction_keep_recent_tokens: int = 20000
-
-
-# ============================================================================
-# Service bundle
-# ============================================================================
-
-class AgentSessionServices:
+class AgentSessionLoader:
     """
     Constructs and owns all dependencies for one AgentSession.
 
     Usage:
-        services = await AgentSessionServices.create(config)
-        session = services.session
+        loader = await AgentSessionLoader.create(config)
+        session = loader.session
         await session.prompt("hello")
     """
 
@@ -104,9 +58,9 @@ class AgentSessionServices:
     @classmethod
     async def create(
         cls,
-        config: AgentSessionServicesConfig,
+        config: AgentSessionConfig,
         settings_manager: SettingsManager | None = None,
-    ) -> AgentSessionServices:
+    ) -> AgentSessionLoader:
         cwd = config.cwd.resolve()
         config_dir = (config.config_dir or get_config_dir()).resolve()
 
@@ -165,8 +119,8 @@ class AgentSessionServices:
             hooks=hooks,
         )
 
-        # ── Agent session config ──────────────────────────────────────────────
-        session_config = AgentSessionConfig(
+        # ── Session config ────────────────────────────────────────────────────
+        session_config = SessionConfig(
             cwd=cwd,
             model=llm.model,
             context_window=llm.model.context_window or 200_000,
@@ -179,7 +133,6 @@ class AgentSessionServices:
         )
 
         # ── Wire everything together ──────────────────────────────────────────
-        # Build a real ExtensionRuntime now that we have the session as context
         agent_session = AgentSession(
             loop=loop,
             session_manager=session_manager,
@@ -189,7 +142,7 @@ class AgentSessionServices:
             config=session_config,
         )
 
-        # Now replace with a real runtime pointing at the session as context
+        # Replace placeholder with real runtime pointing at the session as context
         real_runtime = ExtensionRuntime(load_result, agent_session, hooks=hooks)
         agent_session._extensions = real_runtime
 
@@ -214,7 +167,6 @@ class _DeferredExtensionRuntime(ExtensionRuntime):
     """No-op runtime used before the real context (AgentSession) is available."""
 
     def __init__(self, load_result: LoadExtensionsResult) -> None:
-        # Pass a minimal stub context; replaced immediately after construction
         class _NullCtx:
             pass
         super().__init__(load_result, _NullCtx())  # type: ignore[arg-type]

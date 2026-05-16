@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from program.agent_session.services import AgentSessionServices, AgentSessionServicesConfig
-from program.agent_session.session import AgentSession
-from program.agent_session.types import PromptOptions
+from program.runtime.loader import AgentSessionLoader
+from program.runtime.types import AgentSessionConfig
+from program.runtime.session import AgentSession
+from program.runtime.types import PromptOptions
 from program.commands.registry import CommandRegistry
 from program.commands.types import parse_command
 from program.extension.types import (
@@ -17,7 +18,7 @@ from program.extension.types import (
 class AgentSessionRuntime:
     """
     Orchestrates the full session lifecycle: creation, switching, forking,
-    and slash-command dispatch on top of AgentSession / AgentSessionServices.
+    and slash-command dispatch on top of AgentSession / AgentSessionLoader.
 
     Usage:
         runtime = await AgentSessionRuntime.create(config)
@@ -27,8 +28,8 @@ class AgentSessionRuntime:
 
     def __init__(
         self,
-        services: AgentSessionServices,
-        config: AgentSessionServicesConfig,
+        services: AgentSessionLoader,
+        config: AgentSessionConfig,
     ) -> None:
         self._services = services
         self._config = config
@@ -44,9 +45,9 @@ class AgentSessionRuntime:
     @classmethod
     async def create(
         cls,
-        config: AgentSessionServicesConfig,
+        config: AgentSessionConfig,
     ) -> AgentSessionRuntime:
-        services = await AgentSessionServices.create(config)
+        services = await AgentSessionLoader.create(config)
         runtime = cls(services=services, config=config)
         await runtime._emit_session_start('startup')
         return runtime
@@ -92,7 +93,7 @@ class AgentSessionRuntime:
         """Shut down the current session and start a fresh one."""
         await self._emit_session_shutdown('new')
         self._config = self._config.model_copy(update={'session_file': None})
-        self._services = await AgentSessionServices.create(self._config)
+        self._services = await AgentSessionLoader.create(self._config)
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
             self._services.extension_runtime.get_commands()
@@ -111,7 +112,7 @@ class AgentSessionRuntime:
 
         await self._emit_session_shutdown('resume')
         self._config = self._config.model_copy(update={'session_file': session_file})
-        self._services = await AgentSessionServices.create(self._config)
+        self._services = await AgentSessionLoader.create(self._config)
         self.commands = CommandRegistry(runtime=self)
         self.commands.register_from_extensions(
             self._services.extension_runtime.get_commands()
