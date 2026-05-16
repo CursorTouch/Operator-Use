@@ -5,9 +5,10 @@ from typing import Any, TYPE_CHECKING
 from pydantic import BaseModel, Field, ConfigDict
 
 if TYPE_CHECKING:
-    from program.message.types import AgentMessage
     from program.inference.api.llm.service import LLM
     from program.session.types import SessionEntry
+
+from program.message.types import AgentMessage
 
 
 class FileOperations(BaseModel):
@@ -51,8 +52,8 @@ class CompactionPreparation(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     retained_from_id: str
-    messages_to_summarize: list["AgentMessage"]
-    turn_prefix_messages: list["AgentMessage"]
+    messages_to_summarize: list[AgentMessage]
+    turn_prefix_messages: list[AgentMessage]
     is_split_turn: bool
     tokens_before: int
     previous_summary: str | None
@@ -80,7 +81,7 @@ class BranchSummaryResult(BaseModel):
 class BranchPreparation(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    messages: list["AgentMessage"]
+    messages: list[AgentMessage]
     file_ops: FileOperations
     total_tokens: int
 

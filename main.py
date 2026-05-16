@@ -18,7 +18,7 @@ from tools import (
 from program.hooks.types import (
     MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent,
-    AgentStartEvent,
+    AgentStartEvent, SessionBeforeCompactEvent, SessionCompactEvent,
 )
 from program.message.types import Role
 
@@ -81,6 +81,12 @@ def _render_event(event) -> None:
             if len(content) > 500:
                 content = content[:500] + _grey(' … [truncated]')
             print(f"{_green('[Result]')} {content}")
+
+        case SessionBeforeCompactEvent():
+            print(f"\n{_grey('[Compact]')} Compacting conversation history...")
+
+        case SessionCompactEvent():
+            print(f"{_grey('[Compact]')} Done.")
 
         case AgentErrorEvent(error=err):
             print(f"{_red('[Error]')} {err}", file=sys.stderr)
