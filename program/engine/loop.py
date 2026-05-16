@@ -47,7 +47,6 @@ class AgentLoop:
         self.options = options or Options()
         self._hooks = hooks
         self._tools: dict[str, Tool] = {t.name: t for t in (tools or [])}
-        self.listeners: list[Callable[[AgentEvent], None]] = []
         self.state = AgentState(
             llm=llm,
             tools=tools,
@@ -94,10 +93,6 @@ class AgentLoop:
         while self.state.is_streaming:
             await asyncio.sleep(0.05)
 
-    async def subscribe(self, listener: Callable[[AgentEvent], None]) -> Callable[[], None]:
-        self.listeners.append(listener)
-        return lambda: self.listeners.remove(listener)
-
     async def process_events(self, event: AgentEvent) -> None:
         match event:
             case MessageStartEvent(message=message):
@@ -113,10 +108,6 @@ class AgentLoop:
                 self.state.pending_tool_calls.discard(tool_result.id)
             case AgentErrorEvent(error=error):
                 self.state.error_message = error
-        for listener in self.listeners:
-            result = listener(event)
-            if asyncio.iscoroutine(result):
-                await result
         if self._hooks is not None:
             await self._hooks.emit(event)
 

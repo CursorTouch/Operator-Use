@@ -12,7 +12,7 @@ from program.extension.types import (
     AgentEndEvent as ExtAgentEndEvent,
     ToolCallEvent, ToolCallEventResult, ToolResultEvent, ToolResultEventResult,
     ContextEvent, ContextEventResult,
-    SavePointEvent, SettledEvent,
+    SavePointEvent, SettledEvent, MessageEndEvent,
 )
 from program.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent
 from program.tool.types import ToolInvocation, ToolResult
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from program.resource.types import BaseResourceLoader
     from program.extension.runtime import ExtensionRuntime
     from program.compaction.compact import Compaction
-    from program.engine.types import AgentEvent
 
 
 class AgentSession(ExtensionContext):
@@ -197,24 +196,24 @@ class AgentSession(ExtensionContext):
         )
         return build_system_prompt(options)
 
-    def _make_event_handler(self, persisted_ids: list[str]):
-        """Return a loop event listener that persists messages and tracks token usage."""
-        async def _on_event(event: AgentEvent) -> None:
-            from program.engine.types import MessageEndEvent as EngineMessageEndEvent
-            match event:
-                case EngineMessageEndEvent(message=message):
-                    if message.role == Role.ASSISTANT:
-                        assert isinstance(message, AssistantMessage)
-                        # Update live context token count from the model's reported usage
-                        total = message.usage.input_tokens + message.usage.output_tokens
-                        if total:
-                            self._context_tokens = total
-                        entry_id = self._session.append_message(message)
-                        persisted_ids.append(entry_id)
-                    elif message.role == Role.TOOL:
-                        entry_id = self._session.append_message(message)
-                        persisted_ids.append(entry_id)
-        return _on_event
+    def _register_message_handler(self, persisted_ids: list[str]) -> callable:
+        """Register a message_end hook that persists messages and tracks token usage."""
+        async def _on_message_end(event: MessageEndEvent) -> None:
+            message = event.message
+            if message is None:
+                return
+            if message.role == Role.ASSISTANT:
+                assert isinstance(message, AssistantMessage)
+                total = message.usage.input_tokens + message.usage.output_tokens
+                if total:
+                    self._context_tokens = total
+                entry_id = self._session.append_message(message)
+                persisted_ids.append(entry_id)
+            elif message.role == Role.TOOL:
+                entry_id = self._session.append_message(message)
+                persisted_ids.append(entry_id)
+
+        return self.hooks.register('message_end', _on_message_end)
 
     def _rewind_session(self, persisted_ids: list[str]) -> None:
         """Remove session entries appended during a failed attempt."""
@@ -315,8 +314,7 @@ class AgentSession(ExtensionContext):
                 await asyncio.sleep(delay)
 
             persisted_ids.clear()
-            handler = self._make_event_handler(persisted_ids)
-            unsubscribe = await self._loop.subscribe(handler)
+            unsubscribe = self._register_message_handler(persisted_ids)
             try:
                 await self._loop.run(messages)
             finally:
