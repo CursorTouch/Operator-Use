@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from program.agent_session import AgentSessionRuntime, AgentSessionServicesConfig
-from program.engine.types import (
+from program.runtime import AgentSessionRuntime, AgentSessionConfig
+from program.hooks.types import (
     MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent,
     AgentStartEvent,
@@ -84,7 +84,7 @@ def _render_event(event) -> None:
 # ── REPL ──────────────────────────────────────────────────────────────────────
 
 async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
-    config = AgentSessionServicesConfig(
+    config = AgentSessionConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
@@ -94,9 +94,7 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
     print("Type /help for commands, Ctrl-C or /quit to exit.\n")
 
     runtime = await AgentSessionRuntime.create(config)
-
-    # Wire the event renderer into the agent loop
-    await runtime.current_session._loop.subscribe(_render_event)
+    runtime.current_session.hooks.subscribe(_render_event)
 
     while True:
         try:
