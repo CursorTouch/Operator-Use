@@ -270,17 +270,15 @@ class Agent(ExtensionContext):
 
     def _rewind_session(self, persisted_ids: list[str]) -> None:
         """Remove session entries appended during a failed attempt."""
+        if not persisted_ids:
+            return
+        first_entry = self._session_manager.by_id.get(persisted_ids[0])
+        parent_of_first = first_entry.parent_id if first_entry else None
         for entry_id in persisted_ids:
             entry = self._session_manager.by_id.pop(entry_id, None)
             if entry and entry in self._session_manager.entries:
                 self._session_manager.entries.remove(entry)
-            # Restore leaf to the entry before the first one we added
-        if persisted_ids:
-            parent_of_first = None
-            first = self._session_manager.by_id.get(persisted_ids[0])
-            if first:
-                parent_of_first = first.parent_id
-            self._session_manager.leaf_id = parent_of_first
+        self._session_manager.leaf_id = parent_of_first
         persisted_ids.clear()
 
     # -------------------------------------------------------------------------
