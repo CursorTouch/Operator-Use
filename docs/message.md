@@ -10,6 +10,7 @@ Content is the unit carried inside a message. Each content type is a dataclass w
 |---|---|---|
 | `"text"` | `TextContent` | Plain text |
 | `"image"` | `ImageContent` | One or more images (PIL, bytes, base64 string, or URL) |
+| `"audio"` | `AudioContent` | One or more audio clips (bytes, base64 string, or `file:` path) |
 | `"thinking"` | `ThinkingContent` | Extended thinking block (Anthropic) |
 | `"tool_call"` | `ToolCallContent` | A tool the LLM wants to invoke |
 | `"tool_result"` | `ToolResultContent` | The result of a tool invocation |
@@ -18,7 +19,7 @@ Per-role constraints (for reference — the types themselves do not enforce this
 
 ```
 SystemContent    = TextContent
-UserContent      = TextContent | ImageContent | ToolResultContent
+UserContent      = TextContent | ImageContent | AudioContent | ToolResultContent
 AssistantContent = TextContent | ThinkingContent | ToolCallContent
 ToolContent      = ToolResultContent
 ```
@@ -56,6 +57,45 @@ Factory methods:
 ```python
 ImageContent.from_file(path)   # reads bytes from disk
 ImageContent.from_url(url)     # wraps a URL string
+```
+
+## AudioContent
+
+```python
+@dataclass
+class AudioContent:
+    type: Literal["audio"] = "audio"
+    audio: list[bytes | str] = []
+```
+
+Accepts three audio forms:
+
+- **`bytes`** — raw audio data. MIME type is detected from magic bytes (`MP3`, `OGG`, `FLAC`, `WAV`). Defaults to `audio/mpeg` if unrecognized.
+- **`str` (base64)** — a base64-encoded audio string. MIME type is auto-detected from the decoded prefix.
+- **`str` (`file:` prefix)** — a file path prefixed with `"file:"`. The file is read and treated as raw bytes.
+
+`to_base64()` returns `list[tuple[base64_data, mime_type]]` for each audio item, normalizing all three forms to base64 strings for provider API calls.
+
+Factory methods:
+
+```python
+AudioContent.from_file(path)          # reads bytes from disk
+AudioContent.from_base64(data)        # wraps a pre-encoded base64 string
+```
+
+Detected MIME types:
+
+| Magic bytes | MIME |
+|---|---|
+| `ID3`, `\xff\xfb/\xf3/\xf2` | `audio/mpeg` (MP3) |
+| `OggS` | `audio/ogg` |
+| `fLaC` | `audio/flac` |
+| `RIFF...WAVE` | `audio/wav` |
+
+`UserMessage.with_audio(text, audio_list)` is the factory method for a user message that combines text and audio:
+
+```python
+msg = UserMessage.with_audio("Transcribe this", [Path("clip.mp3").read_bytes()])
 ```
 
 ## ThinkingContent

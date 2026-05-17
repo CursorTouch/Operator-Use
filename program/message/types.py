@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import io
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -9,32 +7,12 @@ from pathlib import Path
 from typing import Literal, TYPE_CHECKING, Any, Optional
 from enum import Enum
 from PIL import Image
-
 from program.inference.types import StopReason
 from program.tool.types import ToolKind
+from program.message.utils import image_to_base64, audio_to_base64
 
 if TYPE_CHECKING:
     from program.session.types import CustomMessageEntry, BranchEntry, CompactionEntry
-
-
-_PIL_MIME: dict[str, str] = {
-    "JPEG": "image/jpeg",
-    "PNG": "image/png",
-    "GIF": "image/gif",
-    "WEBP": "image/webp",
-}
-
-
-def _detect_mime(data: bytes) -> str:
-    if data[:3] == b"\xff\xd8\xff":
-        return "image/jpeg"
-    if data[:8] == b"\x89PNG\r\n\x1a\n":
-        return "image/png"
-    if data[:6] in (b"GIF87a", b"GIF89a"):
-        return "image/gif"
-    if data[:4] == b"RIFF" and len(data) >= 12 and data[8:12] == b"WEBP":
-        return "image/webp"
-    return "image/png"
 
 
 @dataclass
@@ -50,27 +28,7 @@ class ImageContent:
 
     def to_base64(self) -> list[tuple[str, str]]:
         """Returns (base64_data, mime_type) pairs. URL strings are passed through as-is."""
-        result: list[tuple[str, str]] = []
-        for img in self.images:
-            if isinstance(img, str):
-                if img.startswith("http"):
-                    result.append((img, ""))
-                else:
-                    try:
-                        mime = _detect_mime(base64.b64decode(img[:16] + "=="))
-                    except Exception:
-                        mime = "image/png"
-                    result.append((img, mime))
-            elif isinstance(img, Image.Image):
-                fmt = (img.format or "PNG").upper()
-                buf = io.BytesIO()
-                img.save(buf, format=fmt)
-                mime = _PIL_MIME.get(fmt, "image/png")
-                result.append((base64.b64encode(buf.getvalue()).decode(), mime))
-            else:
-                mime = _detect_mime(img)
-                result.append((base64.b64encode(img).decode(), mime))
-        return result
+        return [image_to_base64(img) for img in self.images]
 
     @classmethod
     def from_file(cls, path: str | Path) -> ImageContent:
@@ -79,6 +37,25 @@ class ImageContent:
     @classmethod
     def from_url(cls, url: str) -> ImageContent:
         return cls(images=[url])
+
+
+@dataclass
+class AudioContent:
+    type: Literal["audio"] = field(default="audio", init=False)
+    # Each item is raw bytes, a base64 string, or a file path string prefixed with "file:".
+    audio: list[bytes | str] = field(default_factory=list)
+
+    def to_base64(self) -> list[tuple[str, str]]:
+        """Returns (base64_data, mime_type) pairs for each audio item."""
+        return [audio_to_base64(item) for item in self.audio]
+
+    @classmethod
+    def from_file(cls, path: str | Path) -> AudioContent:
+        return cls(audio=[Path(path).read_bytes()])
+
+    @classmethod
+    def from_base64(cls, data: str, mime_type: str | None = None) -> AudioContent:
+        return cls(audio=[data])
 
 
 @dataclass
@@ -107,11 +84,11 @@ class ToolResultContent:
     terminate: bool = False
 
 
-Content = TextContent | ImageContent | ThinkingContent | ToolCallContent | ToolResultContent
+Content = TextContent | ImageContent | AudioContent | ThinkingContent | ToolCallContent | ToolResultContent
 
 # Per-role content constraints (for type hints and documentation).
 SystemContent = TextContent
-UserContent = TextContent | ImageContent | ToolResultContent
+UserContent = TextContent | ImageContent | AudioContent | ToolResultContent
 AssistantContent = TextContent | ThinkingContent | ToolCallContent
 ToolContent = ToolResultContent
 
@@ -172,6 +149,10 @@ class UserMessage(BaseMessage):
     @classmethod
     def with_images(cls, content: str, images: list[str | Image.Image | bytes]) -> UserMessage:
         return cls(contents=[TextContent(content=content), ImageContent(images=images)])
+
+    @classmethod
+    def with_audio(cls, content: str, audio: list[bytes | str]) -> UserMessage:
+        return cls(contents=[TextContent(content=content), AudioContent(audio=audio)])
 
 
 @dataclass
