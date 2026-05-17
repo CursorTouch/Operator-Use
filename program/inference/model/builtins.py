@@ -92,6 +92,27 @@ AUDIO_MODELS: list[Model] = [
     Model(id="whisper-large-v3-turbo", name="Whisper Large v3 Turbo", provider="groq", cost=Cost(input=0.04),  input=_AUDIO, output=_TEXT, api="openai-audio"),
 ]
 
+_VIDEO = [Modality.Video]
+
+VIDEO_MODELS: list[Model] = [
+    # Google Veo 3 via fal.ai
+    Model(id="fal-ai/veo3",                                     name="Veo 3",                  provider="fal", cost=Cost(), input=_TEXT,       output=_VIDEO, api="fal-video"),
+    Model(id="fal-ai/veo3-fast",                                name="Veo 3 Fast",             provider="fal", cost=Cost(), input=_TEXT,       output=_VIDEO, api="fal-video"),
+    # Kling via fal.ai
+    Model(id="fal-ai/kling-video/v2.1/standard/text-to-video", name="Kling v2.1 Standard",    provider="fal", cost=Cost(), input=_TEXT,       output=_VIDEO, api="fal-video"),
+    Model(id="fal-ai/kling-video/v2.1/pro/text-to-video",      name="Kling v2.1 Pro",         provider="fal", cost=Cost(), input=_TEXT,       output=_VIDEO, api="fal-video"),
+    Model(id="fal-ai/kling-video/v2.1/standard/image-to-video",name="Kling v2.1 Standard I2V", provider="fal", cost=Cost(), input=_IMAGE,      output=_VIDEO, api="fal-video"),
+    Model(id="fal-ai/kling-video/v2.1/pro/image-to-video",     name="Kling v2.1 Pro I2V",     provider="fal", cost=Cost(), input=_IMAGE,      output=_VIDEO, api="fal-video"),
+    # Runway Gen4 via fal.ai
+    Model(id="fal-ai/runway-gen4/turbo/text-to-video",         name="Runway Gen4 Turbo",      provider="fal", cost=Cost(), input=_TEXT,       output=_VIDEO, api="fal-video"),
+    # Hailuo AI via fal.ai
+    Model(id="fal-ai/hailuo-ai/video-01",                      name="Hailuo Video 01",        provider="fal", cost=Cost(), input=_TEXT,       output=_VIDEO, api="fal-video"),
+    Model(id="fal-ai/hailuo-ai/video-01/image-to-video",       name="Hailuo Video 01 I2V",    provider="fal", cost=Cost(), input=_IMAGE,      output=_VIDEO, api="fal-video"),
+    # Seedance via fal.ai
+    Model(id="fal-ai/seedance-v1/lite/text-to-video",          name="Seedance v1 Lite",       provider="fal", cost=Cost(), input=_TEXT,       output=_VIDEO, api="fal-video"),
+    Model(id="fal-ai/seedance-v1/pro/text-to-video",           name="Seedance v1 Pro",        provider="fal", cost=Cost(), input=_TEXT,       output=_VIDEO, api="fal-video"),
+]
+
 IMAGE_MODELS: list[Model] = [
     # OpenAI DALL-E (native /v1/images/generations)
     Model(id="dall-e-3", name="DALL-E 3", provider="openai", cost=Cost(input=40.0), input=_TEXT, output=_IMAGE, api="openai-image"),
@@ -109,7 +130,10 @@ IMAGE_MODELS: list[Model] = [
     Model(id="black-forest-labs/flux-2-klein", name="FLUX.2 Klein 4B",   provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
     Model(id="black-forest-labs/flux-2-max",   name="FLUX.2 Max",        provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
     Model(id="black-forest-labs/flux-2-pro",   name="FLUX.2 Pro",        provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
-    # Google Gemini Image
+    # Google Imagen (native gemini-image API)
+    Model(id="imagen-3.0-generate-002",      name="Imagen 3",      provider="google", cost=Cost(input=0.04), input=_TEXT, output=_IMAGE, api="gemini-image"),
+    Model(id="imagen-3.0-fast-generate-001", name="Imagen 3 Fast", provider="google", cost=Cost(input=0.02), input=_TEXT, output=_IMAGE, api="gemini-image"),
+    # Google Gemini Image via OpenRouter
     Model(id="google/gemini-2.5-flash-image-generation",         name="Gemini 2.5 Flash Image",         provider="openrouter", cost=Cost(input=0.30,  output=2.50),  input=_TEXT_IMAGE, output=_TEXT_IMAGE_OUT),
     Model(id="google/gemini-3-pro-image-generation-preview",     name="Gemini 3 Pro Image Preview",     provider="openrouter", cost=Cost(input=2.00,  output=12.00), input=_TEXT_IMAGE, output=_TEXT_IMAGE_OUT),
     Model(id="google/gemini-3.1-flash-image-generation-preview", name="Gemini 3.1 Flash Image Preview", provider="openrouter", cost=Cost(input=0.50,  output=3.00),  input=_TEXT_IMAGE, output=_TEXT_IMAGE_OUT),

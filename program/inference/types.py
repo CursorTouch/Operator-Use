@@ -259,6 +259,57 @@ class GeneratedImage:
     timestamp: float = field(default_factory=time.time)
 
 
+# ── Video types ───────────────────────────────────────────────────────────────
+
+class VideoFormat(str, Enum):
+    MP4  = "mp4"
+    WEBM = "webm"
+    MOV  = "mov"
+    GIF  = "gif"
+
+
+class VideoStopReason(str, Enum):
+    Stop    = "stop"
+    Error   = "error"
+    Abort   = "abort"
+    Timeout = "timeout"
+
+
+@dataclass
+class VideoOptions:
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    headers: Optional[dict[str, str]] = None
+    timeout: timedelta = field(default_factory=lambda: timedelta(seconds=600))
+    poll_interval: float = 3.0
+    max_retries: int = 3
+    on_payload: Optional[PayloadCallback] = None
+    on_response: Optional[ResponseCallback] = None
+
+
+@dataclass
+class VideoContext:
+    prompt: str
+    image: Optional[bytes] = None
+    duration: Optional[float] = None
+    aspect_ratio: Optional[str] = None
+    resolution: Optional[str] = None
+
+
+@dataclass
+class GeneratedVideo:
+    model_id: str
+    provider: str
+    url: Optional[str] = None
+    video: Optional[bytes] = None
+    format: VideoFormat = VideoFormat.MP4
+    duration: Optional[float] = None
+    stop_reason: VideoStopReason = VideoStopReason.Stop
+    usage: Any = None
+    error: str = ""
+    timestamp: float = field(default_factory=time.time)
+
+
 # ── Audio types ───────────────────────────────────────────────────────────────
 
 class AudioFormat(str, Enum):

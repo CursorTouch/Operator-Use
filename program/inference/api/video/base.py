@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+from program.inference.model.types import Model
+from program.inference.types import GeneratedVideo, VideoContext, VideoOptions
+
+
+class BaseVideoAPI(ABC):
+    """
+    Base class for all video generation providers.
+
+    Video generation is inherently async at the provider level — jobs are
+    submitted and polled until completion. Implementations handle the full
+    submit → poll → return cycle inside generate(), keeping the caller
+    interface simple and uniform.
+    """
+
+    def __init__(self, options: VideoOptions) -> None:
+        self.options = options
+
+    @abstractmethod
+    async def generate(self, model: Model, context: VideoContext) -> GeneratedVideo: ...
+
+
+# Backward-compat alias
+BaseAPI = BaseVideoAPI

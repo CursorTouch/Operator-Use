@@ -4,9 +4,10 @@ from program.message.types import Usage, UsageCost
 
 
 class Modality(str, Enum):
-    Text = "text"
+    Text  = "text"
     Image = "image"
     Audio = "audio"
+    Video = "video"
 
 
 @dataclass
@@ -50,7 +51,8 @@ class Model:
         return usage.cost
 
 
-# Type aliases — LLM models use thinking/context_window; image/audio models typically don't.
-LLMModel = Model
+# Type aliases
+TextModel  = Model
 ImageModel = Model
 AudioModel = Model
+VideoModel = Model

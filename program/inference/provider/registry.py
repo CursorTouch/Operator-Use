@@ -1,5 +1,5 @@
 from __future__ import annotations
-from program.inference.provider.types import APIProvider, OAuthProvider, ImageProvider, AudioProvider, AuthType
+from program.inference.provider.types import APIProvider, OAuthProvider, ImageProvider, AudioProvider, VideoProvider, AuthType
 
 LLMProvider = APIProvider | OAuthProvider
 
@@ -103,5 +103,33 @@ class AudioProviderRegistry:
         from program.inference.provider.builtins import AUDIO_PROVIDERS
         instance = cls()
         for provider in AUDIO_PROVIDERS:
+            instance.register(provider)
+        return instance
+
+
+class VideoProviderRegistry:
+    def __init__(self) -> None:
+        self._providers: dict[str, VideoProvider] = {}
+
+    def register(self, provider: VideoProvider) -> None:
+        self._providers[provider.name] = provider
+
+    def unregister(self, name: str) -> None:
+        self._providers.pop(name, None)
+
+    def list(self) -> list[VideoProvider]:
+        return list(self._providers.values())
+
+    def get(self, name: str) -> VideoProvider | None:
+        return self._providers.get(name)
+
+    def reset(self) -> None:
+        self._providers.clear()
+
+    @classmethod
+    def from_builtins(cls) -> VideoProviderRegistry:
+        from program.inference.provider.builtins import VIDEO_PROVIDERS
+        instance = cls()
+        for provider in VIDEO_PROVIDERS:
             instance.register(provider)
         return instance

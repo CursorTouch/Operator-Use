@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from program.inference.api.text.base import BaseLLMAPI
     from program.inference.provider.oauth.types import OAuthCredential, OAuthLoginCallbacks, AbortSignal
 
-__all__ = ["AuthType", "APIProvider", "OAuthProvider", "ImageProvider", "AudioProvider"]
+__all__ = ["AuthType", "APIProvider", "OAuthProvider", "ImageProvider", "AudioProvider", "VideoProvider"]
 
 
 @dataclass
@@ -75,6 +75,14 @@ class ImageProvider:
 
 @dataclass
 class AudioProvider:
+    name: str
+    api: str
+    base_url: Optional[str] = None
+    auth_type: AuthType = AuthType.ApiKey
+
+
+@dataclass
+class VideoProvider:
     name: str
     api: str
     base_url: Optional[str] = None

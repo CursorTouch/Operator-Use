@@ -8,7 +8,7 @@ from program.inference.provider.oauth.openai_codex import OpenAICodexOAuthProvid
 from program.inference.provider.oauth.anthropic_claude_code import AnthropicClaudeCodeOAuthProvider
 from program.inference.provider.oauth.github_copilot import GitHubCopilotOAuthProvider
 from program.inference.provider.oauth.google_antigravity import GoogleAntigravityOAuthProvider
-from program.inference.provider.types import APIProvider, OAuthProvider, ImageProvider, AudioProvider
+from program.inference.provider.types import APIProvider, OAuthProvider, ImageProvider, AudioProvider, VideoProvider
 from program.inference.types import LLMOptions
 
 LLM_API_PROVIDERS: list[APIProvider] = [
@@ -35,6 +35,11 @@ IMAGE_PROVIDERS: list[ImageProvider] = [
     ImageProvider(name="openai",     api="openai-image",     base_url="https://api.openai.com/v1"),
     ImageProvider(name="together",   api="openai-image",     base_url="https://api.together.xyz/v1"),
     ImageProvider(name="fireworks",  api="openai-image",     base_url="https://api.fireworks.ai/inference/v1"),
+    ImageProvider(name="google",     api="gemini-image",     base_url="https://generativelanguage.googleapis.com"),
+]
+
+VIDEO_PROVIDERS: list[VideoProvider] = [
+    VideoProvider(name="fal", api="fal-video"),
 ]
 
 AUDIO_PROVIDERS: list[AudioProvider] = [
