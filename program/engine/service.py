@@ -120,6 +120,7 @@ class Engine:
                 self.state.pending_tool_calls.discard(tool_result.id)
             case AgentErrorEvent(error=error):
                 self.state.error_message = error
+                
         if self._hooks is not None:
             await self._hooks.emit(event)
         if self.options.on_event is not None:
