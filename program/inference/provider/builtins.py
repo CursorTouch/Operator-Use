@@ -31,7 +31,10 @@ LLM_OAUTH_PROVIDERS: list[OAuthProvider] = [
 LLM_PROVIDERS = LLM_API_PROVIDERS + LLM_OAUTH_PROVIDERS
 
 IMAGE_PROVIDERS: list[ImageProvider] = [
-    ImageProvider(name="openrouter", api="openrouter-images", base_url="https://openrouter.ai/api/v1"),
+    ImageProvider(name="openrouter", api="openrouter-image", base_url="https://openrouter.ai/api/v1"),
+    ImageProvider(name="openai",     api="openai-image",     base_url="https://api.openai.com/v1"),
+    ImageProvider(name="together",   api="openai-image",     base_url="https://api.together.xyz/v1"),
+    ImageProvider(name="fireworks",  api="openai-image",     base_url="https://api.fireworks.ai/inference/v1"),
 ]
 
 AUDIO_PROVIDERS: list[AudioProvider] = [

@@ -6,6 +6,9 @@ _IMAGE = [Modality.Image]
 _AUDIO = [Modality.Audio]
 _TEXT_IMAGE_OUT = [Modality.Text, Modality.Image]
 
+_OPENAI_VOICES  = ["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse"]
+_GROQ_VOICES    = ["autumn", "diana", "hannah", "austin", "daniel", "troy"]
+
 LLM_MODELS: list[Model] = [
     # OpenAI Codex (OAuth) — ChatGPT Plus/Pro Codex subscription
     Model(id="gpt-5.5",              name="GPT-5.5",              provider="openai-codex", cost=Cost(), thinking=True, context_window=400_000, input=_TEXT_IMAGE, output=_TEXT),
@@ -61,9 +64,9 @@ LLM_MODELS: list[Model] = [
 
 AUDIO_MODELS: list[Model] = [
     # OpenAI TTS — text in, audio out
-    Model(id="tts-1",           name="TTS-1",           provider="openai", cost=Cost(input=15.0),  input=_TEXT,  output=_AUDIO, api="openai-audio"),
-    Model(id="tts-1-hd",        name="TTS-1 HD",        provider="openai", cost=Cost(input=30.0),  input=_TEXT,  output=_AUDIO, api="openai-audio"),
-    Model(id="gpt-4o-mini-tts", name="GPT-4o Mini TTS", provider="openai", cost=Cost(input=0.60),  input=_TEXT,  output=_AUDIO, api="openai-audio"),
+    Model(id="tts-1",           name="TTS-1",           provider="openai", cost=Cost(input=15.0),  input=_TEXT,  output=_AUDIO, api="openai-audio", voices=_OPENAI_VOICES),
+    Model(id="tts-1-hd",        name="TTS-1 HD",        provider="openai", cost=Cost(input=30.0),  input=_TEXT,  output=_AUDIO, api="openai-audio", voices=_OPENAI_VOICES),
+    Model(id="gpt-4o-mini-tts", name="GPT-4o Mini TTS", provider="openai", cost=Cost(input=0.60),  input=_TEXT,  output=_AUDIO, api="openai-audio", voices=_OPENAI_VOICES),
     # OpenAI STT — audio in, text out
     Model(id="whisper-1",              name="Whisper 1",              provider="openai", cost=Cost(input=0.006), input=_AUDIO, output=_TEXT, api="openai-audio"),
     Model(id="gpt-4o-transcribe",      name="GPT-4o Transcribe",      provider="openai", cost=Cost(input=2.5),   input=_AUDIO, output=_TEXT, api="openai-audio"),
@@ -83,13 +86,24 @@ AUDIO_MODELS: list[Model] = [
     Model(id="scribe_v1",              name="Scribe v1",               provider="elevenlabs", cost=Cost(input=0.40), input=_AUDIO, output=_TEXT,  api="elevenlabs-audio"),
     Model(id="scribe_v2",              name="Scribe v2",               provider="elevenlabs", cost=Cost(input=0.40), input=_AUDIO, output=_TEXT,  api="elevenlabs-audio"),
     # Groq TTS — text in, audio out
-    Model(id="canopylabs/orpheus-v1-english", name="Orpheus v1 English", provider="groq", cost=Cost(),           input=_TEXT,  output=_AUDIO, api="openai-audio"),
+    Model(id="canopylabs/orpheus-v1-english", name="Orpheus v1 English", provider="groq", cost=Cost(), input=_TEXT, output=_AUDIO, api="openai-audio", voices=_GROQ_VOICES),
     # Groq STT — audio in, text out (Whisper on Groq)
     Model(id="whisper-large-v3",       name="Whisper Large v3",       provider="groq", cost=Cost(input=0.111), input=_AUDIO, output=_TEXT, api="openai-audio"),
     Model(id="whisper-large-v3-turbo", name="Whisper Large v3 Turbo", provider="groq", cost=Cost(input=0.04),  input=_AUDIO, output=_TEXT, api="openai-audio"),
 ]
 
 IMAGE_MODELS: list[Model] = [
+    # OpenAI DALL-E (native /v1/images/generations)
+    Model(id="dall-e-3", name="DALL-E 3", provider="openai", cost=Cost(input=40.0), input=_TEXT, output=_IMAGE, api="openai-image"),
+    Model(id="dall-e-2", name="DALL-E 2", provider="openai", cost=Cost(input=20.0), input=_TEXT, output=_IMAGE, api="openai-image"),
+    # Together AI — OpenAI-compatible image generation
+    Model(id="black-forest-labs/FLUX.1-schnell-Free", name="FLUX.1 Schnell Free", provider="together", cost=Cost(),             input=_TEXT, output=_IMAGE, api="openai-image"),
+    Model(id="black-forest-labs/FLUX.1-schnell",      name="FLUX.1 Schnell",      provider="together", cost=Cost(input=0.053),  input=_TEXT, output=_IMAGE, api="openai-image"),
+    Model(id="black-forest-labs/FLUX.1-dev",          name="FLUX.1 Dev",          provider="together", cost=Cost(input=0.35),   input=_TEXT, output=_IMAGE, api="openai-image"),
+    Model(id="black-forest-labs/FLUX.1.1-pro",        name="FLUX.1.1 Pro",        provider="together", cost=Cost(input=0.40),   input=_TEXT, output=_IMAGE, api="openai-image"),
+    # Fireworks AI — OpenAI-compatible image generation
+    Model(id="accounts/fireworks/models/flux-1-schnell-fp8", name="FLUX.1 Schnell FP8", provider="fireworks", cost=Cost(input=0.053), input=_TEXT, output=_IMAGE, api="openai-image"),
+    Model(id="accounts/fireworks/models/flux-1-dev-fp8",     name="FLUX.1 Dev FP8",     provider="fireworks", cost=Cost(input=0.35),  input=_TEXT, output=_IMAGE, api="openai-image"),
     # Black Forest Labs FLUX
     Model(id="black-forest-labs/flux-2-flex",  name="FLUX.2 Flex",       provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
     Model(id="black-forest-labs/flux-2-klein", name="FLUX.2 Klein 4B",   provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),

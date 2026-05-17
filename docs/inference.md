@@ -108,13 +108,47 @@ Passed through to API implementations that support extended thinking (Anthropic)
 `ImageLLM` handles image generation through `program/inference/api/image/`. The interface mirrors the text one but uses a single non-streaming `generate()` call:
 
 ```python
-svc = ImageLLM("black-forest-labs/flux-2-pro")
-result = await svc.generate(context)   # returns GeneratedImage
+from program.inference.types import ImageContext
+from program.message.types import TextContent
+
+svc = ImageLLM("dall-e-3")
+result = await svc.generate(ImageContext(
+    contents=[TextContent(content="A red fox in a snowy forest")],
+    size="1024x1024",
+    quality="hd",
+))
+# result.output → list[TextContent | ImageContent]
 ```
 
-`GeneratedImage` carries the output as a list of `TextContent | ImageContent`, the stop reason, and token usage.
+`GeneratedImage` carries the output as a list of `TextContent | ImageContent`, the stop reason, and token usage. `ImageContext` supports `size`, `quality`, and `n` (number of images).
 
-Currently a single API implementation is registered: `openrouter-images` (`OpenRouterImageAPI`), which serves all image models via the OpenRouter gateway.
+### Image API standards
+
+Two distinct API styles exist:
+
+**OpenAI-compatible** — `POST /v1/images/generations`. Returns `data[].b64_json` or `data[].url`. A single `OpenAIImageAPI` class serves all compatible providers:
+
+| Provider | `provider` name | `base_url` |
+|---|---|---|
+| OpenAI (DALL-E) | `openai` | `https://api.openai.com/v1` |
+| Together AI | `together` | `https://api.together.xyz/v1` |
+| Fireworks AI | `fireworks` | `https://api.fireworks.ai/inference/v1` |
+
+**OpenRouter** — `POST /v1/chat/completions` with `modalities: ["image", "text"]`. Images returned in `choices[0].message.images[]`. Handled by `OpenRouterImageAPI` (`openrouter-image`).
+
+### Built-in image models
+
+| Model ID | Provider | Notes |
+|---|---|---|
+| `dall-e-3` | openai | Supports `size`, `quality` (standard/hd) |
+| `dall-e-2` | openai | |
+| `black-forest-labs/FLUX.1-schnell-Free` | together | Free tier |
+| `black-forest-labs/FLUX.1-schnell` | together | |
+| `black-forest-labs/FLUX.1-dev` | together | |
+| `black-forest-labs/FLUX.1.1-pro` | together | |
+| `accounts/fireworks/models/flux-1-schnell-fp8` | fireworks | |
+| `accounts/fireworks/models/flux-1-dev-fp8` | fireworks | |
+| FLUX.2 / Gemini / GPT-Image variants | openrouter | Via chat completions |
 
 ---
 

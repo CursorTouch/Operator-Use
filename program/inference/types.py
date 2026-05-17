@@ -243,6 +243,9 @@ class ImageOptions:
 @dataclass
 class ImageContext:
     contents: list["TextContent | ImageContent"]
+    size: Optional[str] = None
+    quality: Optional[str] = None
+    n: int = 1
 
 
 @dataclass

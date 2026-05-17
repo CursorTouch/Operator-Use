@@ -30,6 +30,7 @@ class Model:
     output: list[Modality] = field(default_factory=list)
     api: str | None = None
     base_url: str | None = None
+    voices: list[str] = field(default_factory=list)
 
     def get_name(self) -> str:
         return self.name
