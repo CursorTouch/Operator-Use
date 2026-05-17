@@ -20,6 +20,10 @@ class FakeContext(ExtensionContext):
     def session_manager(self): return None
     @property
     def model(self): return None
+    @property
+    def model_registry(self): return None
+    @property
+    def signal(self): return None
     def is_idle(self): return True
     def has_pending_messages(self): return False
     def abort(self): pass
@@ -27,6 +31,11 @@ class FakeContext(ExtensionContext):
     def get_context_usage(self): return None
     def get_system_prompt(self): return ""
     def compact(self, options=None): pass
+    async def reload(self): pass
+    async def wait_for_idle(self): pass
+    async def new_session(self): pass
+    async def fork(self, entry_id): pass
+    async def switch_session(self, session_file): pass
 
 
 def make_ext(path: str = "test.py") -> Extension:

@@ -90,25 +90,19 @@ def _resolve_ws_url(base_url: str | None) -> str:
 
 # ── Message → input conversion ────────────────────────────────────────────────
 
-def _content_to_input(content_items: list) -> list[dict[str, Any]]:
+def _content_to_input(content_items: list, role: str) -> list[dict[str, Any]]:
+    # The Responses API requires assistant text parts to be "output_text"
+    # ("input_text" is only valid for user/input content).
+    text_type = "output_text" if role == "assistant" else "input_text"
     parts: list[dict[str, Any]] = []
     for item in content_items:
         match item:
             case TextContent():
-                parts.append({"type": "input_text", "text": item.content})
+                parts.append({"type": text_type, "text": item.content})
             case ImageContent():
                 for b64, mime in item.to_base64():
                     url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
                     parts.append({"type": "input_image", "image_url": url})
-            case ThinkingContent():
-                parts.append({"type": "thinking", "thinking": item.content, "signature": item.signature})
-            case ToolCallContent():
-                parts.append({
-                    "type": "function_call",
-                    "call_id": item.id,
-                    "name": item.name,
-                    "arguments": json.dumps(item.args),
-                })
     return parts
 
 
@@ -132,9 +126,20 @@ def _messages_to_input(messages: list[BaseMessage]) -> tuple[str, list[dict[str,
                         })
             case UserMessage() | AssistantMessage():
                 role = "user" if isinstance(msg, UserMessage) else "assistant"
-                parts = _content_to_input(msg.contents)
+                parts = _content_to_input(msg.contents, role)
                 if parts:
                     input_items.append({"role": role, "content": parts})
+                # function_call is a top-level input item in the Responses API,
+                # not nested inside a message's content array. It must precede
+                # its matching function_call_output (emitted by the ToolMessage).
+                for content in msg.contents:
+                    if isinstance(content, ToolCallContent):
+                        input_items.append({
+                            "type": "function_call",
+                            "call_id": content.id,
+                            "name": content.name,
+                            "arguments": json.dumps(content.args),
+                        })
 
     return instructions, input_items
 
@@ -261,7 +266,20 @@ def _is_retryable(status: int, body: str) -> bool:
 # ── Event processing ──────────────────────────────────────────────────────────
 
 async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
-    tool_names: dict[str, str] = {}
+    # The Responses API gives a function_call output item both an `id`
+    # (e.g. "fc_...") and a `call_id` (e.g. "call_..."). The subsequent
+    # function_call_arguments.delta/.done events reference the item by
+    # `item_id` (== item `id`), while the tool result must be paired by
+    # `call_id`. Map item id -> (call_id, name) to bridge the two.
+    call_id_by_item: dict[str, str] = {}
+    name_by_item: dict[str, str] = {}
+    # The Codex backend delivers a complete function_call as a single
+    # response.output_item.done (no streamed *.arguments.delta/.done events),
+    # while the standard streaming path emits them incrementally. Track which
+    # call_ids have already been started/ended so the two paths don't duplicate.
+    started_calls: set[str] = set()
+    ended_calls: set[str] = set()
+    saw_tool_call = False
     _input_tokens = 0
     _output_tokens = 0
 
@@ -276,9 +294,13 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
             elif itype == "reasoning":
                 yield ThinkingStartEvent(thinking=None)
             elif itype == "function_call":
+                item_id = item.get("id", "")
                 call_id = item.get("call_id", "")
                 name = item.get("name", "")
-                tool_names[call_id] = name
+                saw_tool_call = True
+                call_id_by_item[item_id] = call_id
+                name_by_item[item_id] = name
+                started_calls.add(call_id)
                 yield ToolCallStartEvent(tool_call=ToolCallContent(id=call_id, name=name)
                 )
 
@@ -296,7 +318,9 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
 
         elif etype == "response.function_call_arguments.delta":
             item_id = event.get("item_id", "")
-            yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=item_id)
+            yield ToolCallDeltaEvent(tool_call=ToolCallContent(
+                    id=call_id_by_item.get(item_id, item_id)
+                )
             )
 
         elif etype == "response.function_call_arguments.done":
@@ -307,12 +331,38 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
             except json.JSONDecodeError:
                 args = {}
 
+            call_id = call_id_by_item.get(item_id, item_id)
+            saw_tool_call = True
+            ended_calls.add(call_id)
             yield ToolCallEndEvent(tool_call=ToolCallContent(
-                    id=item_id,
-                    name=tool_names.get(item_id, ""),
+                    id=call_id,
+                    name=name_by_item.get(item_id, ""),
                     args=args
                 )
             )
+
+        elif etype == "response.output_item.done":
+            item = event.get("item") or {}
+            if item.get("type") == "function_call":
+                call_id = item.get("call_id", "")
+                name = item.get("name", "")
+                saw_tool_call = True
+                if call_id not in ended_calls:
+                    args_str = (item.get("arguments") or "").strip()
+                    try:
+                        args = json.loads(args_str) if args_str else {}
+                    except json.JSONDecodeError:
+                        args = {}
+                    if call_id not in started_calls:
+                        started_calls.add(call_id)
+                        yield ToolCallStartEvent(
+                            tool_call=ToolCallContent(id=call_id, name=name)
+                        )
+                    ended_calls.add(call_id)
+                    yield ToolCallEndEvent(tool_call=ToolCallContent(
+                            id=call_id, name=name, args=args
+                        )
+                    )
 
         elif etype == "response.completed":
             response = event.get("response") or {}
@@ -320,6 +370,8 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterato
             _input_tokens = usage.get("input_tokens", 0) or 0
             _output_tokens = usage.get("output_tokens", 0) or 0
             stop_reason = _STOP_REASON.get(response.get("stop_reason") or "", StopReason.Stop)
+            if saw_tool_call and stop_reason == StopReason.Stop:
+                stop_reason = StopReason.ToolCalls
             yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
 

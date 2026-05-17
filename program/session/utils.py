@@ -35,15 +35,17 @@ def generate_timestamp() -> float:
     now = datetime.now()
     return now.timestamp()
 
-def get_default_session_dir(cwd: str | Path) -> Path:
+def get_default_session_dir(cwd: str | Path, agent_dir: Path | None = None) -> Path:
     """
     Get the default session directory for a cwd.
     Encodes cwd into a safe directory name under ~/.program/agent/sessions/.
-    Creates the directory if it doesn't exist.
+    Creates the directory if it doesn't exist. Pass agent_dir to override the
+    base directory (used for test isolation).
     """
     cwd = Path(cwd).as_posix()
     safe_path = f"--{re.sub(r'^[/\\]', '', cwd).replace('/', '-').replace('\\', '-').replace(':', '-')}--"
-    session_dir = get_agent_dir() / "sessions" / safe_path
+    base = agent_dir if agent_dir is not None else get_agent_dir()
+    session_dir = base / "sessions" / safe_path
     session_dir.mkdir(parents=True, exist_ok=True)
     return session_dir
 

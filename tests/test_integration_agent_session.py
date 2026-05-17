@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.runtime.session import Agent
+from program.agent.service import Agent
 from program.runtime.types import RuntimeConfig
 from program.agent.types import AgentConfig, PromptOptions
 from program.compaction.compact import Compaction
@@ -146,8 +146,10 @@ def make_session(
     retry_max_retries: int = 0,
     context_window: int = 200_000,
 ) -> tuple[Agent, SessionManager]:
+    from program.hooks.service import Hooks
     sm = SessionManager.in_memory()
-    engine = Engine(llm=llm, tools=tools or [], options=Options())
+    hooks = Hooks()
+    engine = Engine(llm=llm, tools=tools or [], options=Options(), hooks=hooks)
     comp_settings = compaction_settings or CompactionSettings(enabled=False)
     compaction = Compaction(llm=llm, settings=comp_settings)
     resource_loader = FakeResourceLoader(system_prompt=system_prompt)
@@ -164,7 +166,7 @@ def make_session(
     # Build with a temporary null context then wire the real one
     class _NullCtx:
         pass
-    ext_runtime = ExtensionRuntime(ext_result, _NullCtx())  # type: ignore[arg-type]
+    ext_runtime = ExtensionRuntime(ext_result, _NullCtx(), hooks)  # type: ignore[arg-type]
 
     session = Agent(
         engine=engine,
@@ -175,7 +177,7 @@ def make_session(
         config=config,
     )
     # Replace with real context pointing at the session
-    real_runtime = ExtensionRuntime(ext_result, session)
+    real_runtime = ExtensionRuntime(ext_result, session, hooks)
     session._extensions = real_runtime
 
     return session, sm
@@ -187,7 +189,7 @@ class TestBasicPromptFlow:
     @pytest.mark.asyncio
     async def test_prompt_persists_user_message(self):
         session, sm = make_session(FakeLLM(text_seq("Hi back!")))
-        await session.prompt("Hello")
+        await session.invoke("Hello")
         roles = [sm.by_id[e.id].message.role for e in sm.get_entries()
                  if isinstance(sm.by_id.get(e.id), MessageEntry)]
         assert Role.USER in roles
@@ -195,7 +197,7 @@ class TestBasicPromptFlow:
     @pytest.mark.asyncio
     async def test_prompt_persists_assistant_message(self):
         session, sm = make_session(FakeLLM(text_seq("Hi back!")))
-        await session.prompt("Hello")
+        await session.invoke("Hello")
         roles = [sm.by_id[e.id].message.role for e in sm.get_entries()
                  if isinstance(sm.by_id.get(e.id), MessageEntry)]
         assert Role.ASSISTANT in roles
@@ -204,8 +206,8 @@ class TestBasicPromptFlow:
     async def test_second_prompt_builds_on_history(self):
         llm = FakeLLM(text_seq("first"), text_seq("second"))
         session, sm = make_session(llm)
-        await session.prompt("q1")
-        await session.prompt("q2")
+        await session.invoke("q1")
+        await session.invoke("q2")
         msgs = [e for e in sm.get_entries() if isinstance(sm.by_id.get(e.id), MessageEntry)]
         # user + assistant + user + assistant = 4
         assert len(msgs) == 4
@@ -220,13 +222,13 @@ class TestBasicPromptFlow:
                     yield e
 
         session, _ = make_session(CapturingLLM(), system_prompt="Be helpful")
-        await session.prompt("hi")
+        await session.invoke("hi")
         assert "Be helpful" in captured_contexts[0].system_prompt
 
     @pytest.mark.asyncio
     async def test_session_is_idle_after_prompt(self):
         session, _ = make_session(FakeLLM(text_seq("done")))
-        await session.prompt("go")
+        await session.invoke("go")
         assert session.is_idle()
 
 
@@ -237,7 +239,7 @@ class TestRetryBehavior:
     async def test_retry_succeeds_on_second_attempt(self):
         llm = FakeLLM(error_seq("transient"), text_seq("recovered"))
         session, sm = make_session(llm, retry_enabled=True, retry_max_retries=2)
-        await session.prompt("go")
+        await session.invoke("go")
         # Should have user + assistant in session after recovery
         entries = [e for e in sm.get_entries() if isinstance(sm.by_id.get(e.id), MessageEntry)]
         assert any(isinstance(sm.by_id[e.id].message, AssistantMessage) for e in entries)
@@ -246,7 +248,7 @@ class TestRetryBehavior:
     async def test_failed_attempt_rewound(self):
         llm = FakeLLM(error_seq("fail1"), text_seq("ok"))
         session, sm = make_session(llm, retry_enabled=True, retry_max_retries=2)
-        await session.prompt("go")
+        await session.invoke("go")
         entries = [e for e in sm.get_entries() if isinstance(sm.by_id.get(e.id), MessageEntry)]
         # Only one user + one assistant (failed attempt was rewound)
         assert len(entries) == 2
@@ -256,14 +258,14 @@ class TestRetryBehavior:
         llm = FakeLLM(error_seq("e1"), error_seq("e2"))
         session, _ = make_session(llm, retry_enabled=True, retry_max_retries=1)
         with pytest.raises(RuntimeError, match="attempt"):
-            await session.prompt("go")
+            await session.invoke("go")
 
     @pytest.mark.asyncio
     async def test_exhausted_retries_removes_user_message(self):
         llm = FakeLLM(error_seq("e1"), error_seq("e2"))
         session, sm = make_session(llm, retry_enabled=True, retry_max_retries=1)
         try:
-            await session.prompt("go")
+            await session.invoke("go")
         except RuntimeError:
             pass
         entries = [e for e in sm.get_entries() if isinstance(sm.by_id.get(e.id), MessageEntry)]
@@ -286,7 +288,7 @@ class TestCompactionIntegration:
             a.contents = [TextContent(content="reply")]
             sm.append_message(a)
 
-        await session.prompt("compact me")
+        await session.invoke("compact me")
 
         # Compaction entry should be in session
         entries = sm.get_entries()
@@ -305,7 +307,7 @@ class TestCompactionIntegration:
             a.contents = [TextContent(content="reply")]
             sm.append_message(a)
 
-        await session.prompt("go")
+        await session.invoke("go")
 
         comp_entries = [e for e in sm.get_entries()
                         if isinstance(sm.by_id.get(e.id), CompactionEntry)]
@@ -319,7 +321,7 @@ class TestCompactionIntegration:
         settings = CompactionSettings(enabled=False)
         session, sm = make_session(llm, compaction_settings=settings)
         # Do not request compaction — verify auto-compaction is suppressed by enabled=False
-        await session.prompt("hi")
+        await session.invoke("hi")
 
         # No compaction entries
         entries = sm.get_entries()
@@ -330,8 +332,10 @@ class TestCompactionIntegration:
 
 class TestExtensionHooks:
     def _make_session_with_ext(self, llm, ext: Extension):
+        from program.hooks.service import Hooks
         sm = SessionManager.in_memory()
-        engine = Engine(llm=llm, tools=[], options=Options())
+        hooks = Hooks()
+        engine = Engine(llm=llm, tools=[], options=Options(), hooks=hooks)
         compaction = Compaction(llm=llm, settings=CompactionSettings(enabled=False))
         resource_loader = FakeResourceLoader()
         config = AgentConfig(
@@ -343,10 +347,10 @@ class TestExtensionHooks:
             pass
         session = Agent(
             engine=engine, session_manager=sm, resource_loader=resource_loader,
-            extension_runtime=ExtensionRuntime(load_result, _NullCtx()),  # type: ignore[arg-type]
+            extension_runtime=ExtensionRuntime(load_result, _NullCtx(), hooks),  # type: ignore[arg-type]
             compaction=compaction, config=config,
         )
-        real_runtime = ExtensionRuntime(load_result, session)
+        real_runtime = ExtensionRuntime(load_result, session, hooks)
         session._extensions = real_runtime
         return session, sm
 
@@ -359,7 +363,7 @@ class TestExtensionHooks:
 
         llm = FakeLLM(text_seq("ok"))
         session, _ = self._make_session_with_ext(llm, ext)
-        await session.prompt("hello world")
+        await session.invoke("hello world")
         assert "hello world" in received
 
     @pytest.mark.asyncio
@@ -371,7 +375,7 @@ class TestExtensionHooks:
 
         llm = FakeLLM(text_seq("done"))
         session, _ = self._make_session_with_ext(llm, ext)
-        await session.prompt("go")
+        await session.invoke("go")
         assert fired
 
     @pytest.mark.asyncio
@@ -390,7 +394,7 @@ class TestExtensionHooks:
                     yield ev
 
         session, _ = self._make_session_with_ext(CapturingLLM(), ext)
-        await session.prompt("go")
+        await session.invoke("go")
         assert captured[0] == "OVERRIDDEN"
 
 
@@ -402,7 +406,7 @@ class TestToolIntegration:
         llm = FakeLLM(tool_call_seq("t1", "my_tool"), text_seq("done"))
         tool = make_tool("my_tool", "the_result")
         session, sm = make_session(llm, tools=[tool])
-        await session.prompt("use the tool")
+        await session.invoke("use the tool")
 
         # ToolMessage should be in session
         entries = sm.get_entries()
@@ -415,7 +419,7 @@ class TestToolIntegration:
         llm = FakeLLM(tool_call_seq("t1", "my_tool"), text_seq("done"))
         tool = make_tool("my_tool", "expected_output")
         session, sm = make_session(llm, tools=[tool])
-        await session.prompt("run tool")
+        await session.invoke("run tool")
 
         tool_msgs = [sm.by_id[e.id].message for e in sm.get_entries()
                      if isinstance(sm.by_id.get(e.id), MessageEntry)
@@ -440,7 +444,7 @@ class TestToolIntegration:
         llm = FakeLLM(two_tools, text_seq("all done"))
         tools = [make_tool("tool_a"), make_tool("tool_b")]
         session, sm = make_session(llm, tools=tools)
-        await session.prompt("use both tools")
+        await session.invoke("use both tools")
 
         entries = sm.get_entries()
         tool_msg_entries = [e for e in entries

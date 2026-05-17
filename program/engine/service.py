@@ -56,6 +56,17 @@ class Engine:
             steering_queue=SteeringQueue(mode=self.options.steering_mode),
         )
         self._signal: asyncio.Event = asyncio.Event()
+        self._subscribers: list = []
+
+    async def subscribe(self, handler):
+        """Register an event handler (sync or async). Returns an unsubscribe callable."""
+        self._subscribers.append(handler)
+
+        def unsubscribe() -> None:
+            if handler in self._subscribers:
+                self._subscribers.remove(handler)
+
+        return unsubscribe
 
     async def steer(self, message: BaseMessage) -> None:
         await self.state.steering_queue.enqueue(message)
@@ -113,6 +124,10 @@ class Engine:
             await self._hooks.emit(event)
         if self.options.on_event is not None:
             await self.options.on_event(event)
+        for handler in list(self._subscribers):
+            result = handler(event)
+            if asyncio.iscoroutine(result):
+                await result
 
     # -------------------------------------------------------------------------
     # Tool execution
@@ -356,6 +371,13 @@ class Engine:
         await emit(AgentEndEvent(messages=messages))
 
     async def run(self, ctx: AgentContext) -> None:
+        if isinstance(ctx, list):
+            from program.agent.types import AgentContext as _AgentContext
+            ctx = _AgentContext(
+                system_prompt=self.system_prompt or '',
+                messages=ctx,
+                tools=self.tools,
+            )
         self._signal = asyncio.Event()
         self.state.is_streaming = True
         self.state.system_prompt = ctx.system_prompt

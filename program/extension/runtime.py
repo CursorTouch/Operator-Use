@@ -60,8 +60,9 @@ class ExtensionRuntime:
                         stack=traceback.format_exc(),
                     ))
 
-        hook_results = await self._hooks.emit(event)
-        results.extend(r for r in hook_results if r is not None)
+        if hasattr(event, 'type'):
+            hook_results = await self._hooks.emit(event)
+            results.extend(r for r in hook_results if r is not None)
 
         return results
 
@@ -91,7 +92,8 @@ class ExtensionRuntime:
 
                 tasks.append(_run())
 
-        tasks.append(self._hooks.emit(event))
+        if hasattr(event, 'type'):
+            tasks.append(self._hooks.emit(event))
 
         all_results = await asyncio.gather(*tasks)
         results = []

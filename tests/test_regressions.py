@@ -117,8 +117,8 @@ class TestReg001ToolMessageContentsCleared:
             if isinstance(event, MessageEndEvent):
                 messages_seen.append(event.message)
 
-        await loop.subscribe(capture)
-        await loop.run([UserMessage.text("go")])
+        await engine.subscribe(capture)
+        await engine.run([UserMessage.text("go")])
 
         tool_messages = [m for m in messages_seen if m.role == Role.TOOL]
         assert len(tool_messages) == 1, "Expected exactly one ToolMessage"
@@ -135,7 +135,7 @@ class TestReg001ToolMessageContentsCleared:
         """
         from pathlib import Path
         from program.agent.service import Agent
-        from program.runtime.types import RuntimeConfig as AgentConfig
+        from program.agent.types import AgentConfig
         from program.compaction.compact import Compaction
         from program.compaction.types import CompactionSettings
         from program.extension.runtime import ExtensionRuntime
@@ -154,10 +154,13 @@ class TestReg001ToolMessageContentsCleared:
 
         class _NullCtx: pass
 
+        from program.hooks.service import Hooks
+
         llm = FakeLLM(tool_call_seq("t1", "my_tool"), text_seq("done"))
         tool = make_tool("my_tool", "session_output")
         sm = SessionManager.in_memory()
-        engine = Engine(llm=llm, tools=[tool])
+        hooks = Hooks()
+        engine = Engine(llm=llm, tools=[tool], hooks=hooks)
         load_result = LoadExtensionsResult()
         config = AgentConfig(
             cwd=Path("/tmp"), retry_enabled=False,
@@ -167,11 +170,11 @@ class TestReg001ToolMessageContentsCleared:
             engine=engine,
             session_manager=sm,
             resource_loader=FakeResourceLoader(),
-            extension_runtime=ExtensionRuntime(load_result, _NullCtx()),
+            extension_runtime=ExtensionRuntime(load_result, _NullCtx(), hooks),
             compaction=Compaction(llm=llm, settings=CompactionSettings(enabled=False)),
             config=config,
         )
-        session._extensions = ExtensionRuntime(load_result, session)
+        session._extensions = ExtensionRuntime(load_result, session, hooks)
 
         await session.invoke("run the tool")
 
