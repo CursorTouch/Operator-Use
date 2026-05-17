@@ -1,6 +1,6 @@
 # Inference
 
-The inference layer provides a unified interface to multiple providers across three modalities: **text** (LLM streaming), **image** (generation), and **audio** (TTS and STT). Each modality has its own registry stack — models, providers, API implementations — and a single entry-point service class that resolves all three at construction time.
+The inference layer provides a unified interface to multiple providers across four modalities: **text** (LLM streaming), **image** (generation), **audio** (TTS and STT), and **video** (generation). Each modality has its own registry stack — models, providers, API implementations — and a single entry-point service class that resolves all three at construction time.
 
 ---
 
@@ -124,7 +124,7 @@ result = await svc.generate(ImageContext(
 
 ### Image API standards
 
-Two distinct API styles exist:
+Three distinct API styles exist:
 
 **OpenAI-compatible** — `POST /v1/images/generations`. Returns `data[].b64_json` or `data[].url`. A single `OpenAIImageAPI` class serves all compatible providers:
 
@@ -133,6 +133,8 @@ Two distinct API styles exist:
 | OpenAI (DALL-E) | `openai` | `https://api.openai.com/v1` |
 | Together AI | `together` | `https://api.together.xyz/v1` |
 | Fireworks AI | `fireworks` | `https://api.fireworks.ai/inference/v1` |
+
+**Gemini** — Google Imagen via the `google-genai` SDK (`client.aio.models.generate_images`). Returns raw image bytes directly; no URL polling required. Handled by `GeminiImageAPI` (`gemini-image`). Provider name: `google`.
 
 **OpenRouter** — `POST /v1/chat/completions` with `modalities: ["image", "text"]`. Images returned in `choices[0].message.images[]`. Handled by `OpenRouterImageAPI` (`openrouter-image`).
 
@@ -148,7 +150,82 @@ Two distinct API styles exist:
 | `black-forest-labs/FLUX.1.1-pro` | together | |
 | `accounts/fireworks/models/flux-1-schnell-fp8` | fireworks | |
 | `accounts/fireworks/models/flux-1-dev-fp8` | fireworks | |
+| `imagen-3.0-generate-002` | google | Google Imagen 3 via `gemini-image` API |
+| `imagen-3.0-fast-generate-001` | google | Google Imagen 3 Fast via `gemini-image` API |
 | FLUX.2 / Gemini / GPT-Image variants | openrouter | Via chat completions |
+
+---
+
+## Video generation
+
+`VideoLLM` handles video generation through `program/inference/api/video/`. The interface mirrors the image one but adds async job polling, since all video providers are queue-based.
+
+```python
+from program.inference.api.video.service import VideoLLM
+from program.inference.types import VideoContext
+
+svc = VideoLLM("fal-ai/veo3")
+result = await svc.generate(VideoContext(
+    prompt="A timelapse of clouds over a mountain range",
+    duration=5.0,
+    aspect_ratio="16:9",
+))
+# result.video  → raw MP4 bytes
+# result.url    → source URL (if available)
+# result.format → VideoFormat.MP4
+```
+
+`VideoContext` fields:
+
+```python
+@dataclass
+class VideoContext:
+    prompt: str
+    image: bytes | None = None      # optional image for image-to-video models
+    duration: float | None = None
+    aspect_ratio: str | None = None
+    resolution: str | None = None
+```
+
+`GeneratedVideo` carries `url`, `video` (raw bytes), `format`, `duration`, `stop_reason`, and `error`.
+
+### Video API standards
+
+**fal.ai queue** — All jobs are submitted to `https://queue.fal.run/{model_id}`, then polled until `COMPLETED` or `FAILED`. On completion the video is downloaded and returned as bytes. Handled by `FalVideoAPI` (`fal-video`).
+
+`VideoOptions` key fields:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `timeout` | 600 s | Maximum wait before `VideoStopReason.Timeout` |
+| `poll_interval` | 3.0 s | Sleep between status polls |
+
+### VideoStopReason
+
+| Value | Meaning |
+|---|---|
+| `Stop` | Generation completed |
+| `Error` | Provider returned an error |
+| `Abort` | Cancelled by caller |
+| `Timeout` | Exceeded `VideoOptions.timeout` |
+
+### Built-in video models
+
+All video models route through the `fal-video` API (fal.ai).
+
+| Model ID | Name | Input |
+|---|---|---|
+| `fal-ai/veo3` | Veo 3 | text |
+| `fal-ai/veo3-fast` | Veo 3 Fast | text |
+| `fal-ai/kling-video/v2.1/standard/text-to-video` | Kling v2.1 Standard | text |
+| `fal-ai/kling-video/v2.1/pro/text-to-video` | Kling v2.1 Pro | text |
+| `fal-ai/kling-video/v2.1/standard/image-to-video` | Kling v2.1 Standard I2V | image |
+| `fal-ai/kling-video/v2.1/pro/image-to-video` | Kling v2.1 Pro I2V | image |
+| `fal-ai/runway-gen4/turbo/text-to-video` | Runway Gen4 Turbo | text |
+| `fal-ai/hailuo-ai/video-01` | Hailuo Video 01 | text |
+| `fal-ai/hailuo-ai/video-01/image-to-video` | Hailuo Video 01 I2V | image |
+| `fal-ai/seedance-v1/lite/text-to-video` | Seedance v1 Lite | text |
+| `fal-ai/seedance-v1/pro/text-to-video` | Seedance v1 Pro | text |
 
 ---
 
@@ -322,14 +399,17 @@ class Model:
     base_url: str | None = None
 ```
 
-`Modality` covers `Text`, `Image`, and `Audio`. Factory methods load the appropriate built-in list:
+`Modality` covers `Text`, `Image`, `Audio`, and `Video`. Factory methods load the appropriate built-in list:
 
 | Method | Loads |
 |---|---|
 | `ModelRegistry.from_llm_builtins()` | LLM text models |
 | `ModelRegistry.from_image_builtins()` | Image models |
 | `ModelRegistry.from_audio_builtins()` | Audio models |
-| `ModelRegistry.from_all_builtins()` | All three combined |
+| `ModelRegistry.from_video_builtins()` | Video models |
+| `ModelRegistry.from_all_builtins()` | All four combined |
+
+Type aliases: `TextModel`, `ImageModel`, `AudioModel`, `VideoModel` — all are `Model`.
 
 ---
 
@@ -361,6 +441,20 @@ class AudioProvider:
 
 Built-in audio providers: `openai` and `groq` — both resolved through `OpenAIAudioAPI`.
 
+### Video providers
+
+`VideoProviderRegistry` holds `VideoProvider` definitions:
+
+```python
+@dataclass
+class VideoProvider:
+    name: str
+    api: str            # key into VideoAPIRegistry
+    base_url: str | None = None
+```
+
+Built-in video provider: `fal` — resolved through `FalVideoAPI` (`fal-video`).
+
 ---
 
 ## Auth
@@ -370,7 +464,7 @@ Built-in audio providers: `openai` and `groq` — both resolved through `OpenAIA
 - `OAuthCredential` — access token, refresh token, expiry
 - `APICredential` — plain API key string
 
-All three service classes (`LLM`, `ImageLLM`, `AudioText`) share the same `AuthManager` backed by the same credential store. `AudioText._auth_store` is initialized with the LLM `ProviderRegistry` so that stored `openai` and `groq` credentials (saved via the LLM auth flow) are automatically available for audio calls too.
+All four service classes (`LLM`, `ImageLLM`, `AudioText`, `VideoLLM`) share the same `AuthManager` backed by the same credential store. `AudioText._auth_store` is initialized with the LLM `ProviderRegistry` so that stored `openai` and `groq` credentials (saved via the LLM auth flow) are automatically available for audio calls too.
 
 API key resolution order (for `AuthManager.get_api_key(provider)`):
 

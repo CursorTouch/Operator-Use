@@ -11,7 +11,7 @@ from program.extension.types import (
     ExtensionContext, ExtensionError, ExtensionTool, ContextUsage, CompactOptions,
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
     SessionBeforeCompactEvent, SessionBeforeCompactResult, SessionCompactEvent,
-    AgentEndEvent as ExtAgentEndEvent,
+    AgentEndEvent,
     ToolCallEvent, ToolCallEventResult, ToolResultEvent, ToolResultEventResult,
     ContextEvent, ContextEventResult,
     SavePointEvent, SettledEvent, MessageEndEvent,
@@ -372,7 +372,7 @@ class Agent(ExtensionContext):
         # Notify extensions the turn ended
         await self._extensions.emit(
             'agent_end',
-            ExtAgentEndEvent(messages=self._engine.state.messages),
+            AgentEndEvent(messages=self._engine.state.messages),
         )
 
         # Trigger compaction if requested or context budget exceeded
