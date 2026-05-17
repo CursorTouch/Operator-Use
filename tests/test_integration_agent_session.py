@@ -57,12 +57,19 @@ class FakeLLM:
 # ── Event sequence helpers ────────────────────────────────────────────────────
 
 def text_seq(text: str, usage: Usage | None = None) -> list[LLMEvent]:
+    usage = usage or Usage()
     msg_events = [
         StartEvent(),
         TextStartEvent(text=TextContent(content="")),
         TextDeltaEvent(text=TextContent(content=text)),
         TextEndEvent(text=TextContent(content=text)),
-        EndEvent(reason=StopReason.Stop),
+        EndEvent(
+            reason=StopReason.Stop,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cache_read_tokens=usage.cache_read_tokens,
+            cache_write_tokens=usage.cache_write_tokens,
+        ),
     ]
     return msg_events
 
@@ -471,3 +478,30 @@ class TestContextUsage:
         session, _ = make_session(FakeLLM(text_seq("hi")))
         # abort() before/after run should not crash
         session.abort()
+
+    @pytest.mark.asyncio
+    async def test_run_compaction_refreshes_context_usage(self):
+        llm = FakeLLM(
+            text_seq("answer", Usage(input_tokens=6000, output_tokens=260)),
+            summary_seq("Summarized history"),
+        )
+        settings = CompactionSettings(enabled=True, keep_recent_tokens=1)
+        session, sm = make_session(llm, compaction_settings=settings)
+
+        for _ in range(5):
+            sm.append_message(UserMessage.text("msg"))
+            a = AssistantMessage()
+            a.contents = [TextContent(content="reply")]
+            sm.append_message(a)
+
+        await session.invoke("compact me")
+        before = session.get_context_usage()
+        assert before is not None
+        assert before.tokens == 6260
+
+        performed = await session.run_compaction()
+        assert performed is True
+
+        after = session.get_context_usage()
+        assert after is not None
+        assert after.tokens < before.tokens

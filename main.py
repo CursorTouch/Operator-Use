@@ -164,6 +164,21 @@ _TOOLS = [
 ]
 
 
+def _bind_renderer(runtime: Runtime, current_session, unsubscribe):
+    next_session = runtime.current_session
+    if next_session is current_session:
+        return current_session, unsubscribe
+
+    if unsubscribe is not None:
+        unsubscribe()
+
+    next_unsubscribe = None
+    if next_session is not None:
+        next_unsubscribe = next_session.hooks.subscribe(_render_event)
+
+    return next_session, next_unsubscribe
+
+
 async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
     config = RuntimeConfig(
         cwd=cwd,
@@ -176,7 +191,7 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
     print("Type /help for commands, Ctrl-C or /quit to exit.\n")
 
     runtime = await Runtime.create(config)
-    runtime.current_session.hooks.subscribe(_render_event)
+    subscribed_session, unsubscribe_renderer = _bind_renderer(runtime, None, None)
 
     last_interrupt = False
 
@@ -218,11 +233,20 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
                 interrupted = await _run_with_esc_cancel(runtime.user_input(user_input))
                 if interrupted:
                     print(f"\n{_yellow('[Interrupted]')}")
+            subscribed_session, unsubscribe_renderer = _bind_renderer(
+                runtime, subscribed_session, unsubscribe_renderer
+            )
         except KeyboardInterrupt:
             pass
         except Exception as e:
             err_msg = str(e) or f"{type(e).__name__} (no message)"
             print(f"{_red('[Error]')} {err_msg}", file=sys.stderr)
+            subscribed_session, unsubscribe_renderer = _bind_renderer(
+                runtime, subscribed_session, unsubscribe_renderer
+            )
+
+    if unsubscribe_renderer is not None:
+        unsubscribe_renderer()
 
 
 def main() -> None:

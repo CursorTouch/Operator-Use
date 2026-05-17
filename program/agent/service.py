@@ -20,6 +20,7 @@ from program.message.types import AssistantMessage, UserMessage, TextContent, Ro
 from program.tool.types import ToolInvocation, ToolResult
 
 from program.prompt.builder import PromptTemplate
+from program.compaction.utils import estimate_context_tokens, estimate_tokens
 
 if TYPE_CHECKING:
     from program.engine.service import Engine
@@ -280,6 +281,16 @@ class Agent(ExtensionContext):
 
         return self.hooks.register('message_end', _on_message_end)
 
+    def _refresh_context_tokens_from_session(self) -> None:
+        """Re-estimate context size from persisted session state after compaction.
+
+        Do not trust historical assistant usage here: retained assistant messages
+        may still carry pre-compaction provider usage from the old, larger
+        prompt. Use the message-size heuristic for the rebuilt compacted context.
+        """
+        session_ctx = self._session_manager.build_session_context()
+        self._context_tokens = sum(estimate_tokens(message) for message in session_ctx.messages)
+
     def _rewind_session(self, persisted_ids: list[str]) -> None:
         """Remove session entries appended during a failed attempt."""
         if not persisted_ids:
@@ -469,6 +480,7 @@ class Agent(ExtensionContext):
                 tokens_before=compaction_result.tokens_before,
                 details=compaction_result.details,
             )
+            self._refresh_context_tokens_from_session()
 
             compact_entry = self._session_manager.get_leaf_entry()
             await self._extensions.emit(
