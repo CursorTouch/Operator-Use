@@ -31,9 +31,10 @@ class TestHandleCompact:
     @pytest.mark.asyncio
     async def test_calls_session_compact(self):
         session = MagicMock()
+        session.run_compaction = AsyncMock(return_value=True)
         reg = make_registry(session=session)
         await _handle_compact(reg, [])
-        session.compact.assert_called_once()
+        session.run_compaction.assert_awaited_once_with(None)
 
     @pytest.mark.asyncio
     async def test_no_session_is_noop(self):
@@ -52,23 +53,19 @@ class TestHandleCompact:
 
     @pytest.mark.asyncio
     async def test_args_become_custom_instructions(self):
-        from program.extension.types import CompactOptions
         session = MagicMock()
+        session.run_compaction = AsyncMock(return_value=True)
         reg = make_registry(session=session)
         await _handle_compact(reg, ["focus", "on", "errors"])
-        call_args = session.compact.call_args[0][0]
-        assert isinstance(call_args, CompactOptions)
-        assert call_args.custom_instructions == "focus on errors"
+        session.run_compaction.assert_awaited_once_with("focus on errors")
 
     @pytest.mark.asyncio
     async def test_no_args_passes_none_instructions(self):
-        from program.extension.types import CompactOptions
         session = MagicMock()
+        session.run_compaction = AsyncMock(return_value=True)
         reg = make_registry(session=session)
         await _handle_compact(reg, [])
-        call_args = session.compact.call_args[0][0]
-        assert isinstance(call_args, CompactOptions)
-        assert call_args.custom_instructions is None
+        session.run_compaction.assert_awaited_once_with(None)
 
 
 # ── _handle_new ───────────────────────────────────────────────────────────────
