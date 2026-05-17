@@ -129,6 +129,20 @@ class Agent(ExtensionContext):
         self._compact_requested = True
         self._compact_options = options
 
+    async def run_compaction(self, custom_instructions: str | None = None) -> bool:
+        """Run compaction immediately while the agent is idle."""
+        if self._phase != "idle":
+            raise RuntimeError(f"Agent is busy (phase={self._phase!r}). Wait for the current operation to finish.")
+
+        performed = await self._run_compaction(custom_instructions)
+        if not performed:
+            return False
+
+        await self._extensions.emit('save_point', SavePointEvent())
+        if not self._engine.has_pending_messages():
+            await self._extensions.emit('settled', SettledEvent())
+        return True
+
     async def reload(self) -> None:
         await self._resources.reload()
 
@@ -414,54 +428,56 @@ class Agent(ExtensionContext):
     # Compaction
     # -------------------------------------------------------------------------
 
-    async def _run_compaction(self, custom_instructions: str | None = None) -> None:
+    async def _run_compaction(self, custom_instructions: str | None = None) -> bool:
         self._compact_requested = False
         compact_opts = self._compact_options
         self._compact_options = None
         self._phase = "compaction"
+        try:
+            path_entries = self._session_manager.get_branch()
+            preparation = self._compaction.prepare(path_entries)
+            if preparation is None:
+                return False
 
-        path_entries = self._session_manager.get_branch()
-        preparation = self._compaction.prepare(path_entries)
-        if preparation is None:
-            return
+            before_results = await self._extensions.emit(
+                'session_before_compact',
+                SessionBeforeCompactEvent(
+                    preparation=preparation,
+                    branch_entries=path_entries,
+                    custom_instructions=custom_instructions,
+                ),
+            )
 
-        before_results = await self._extensions.emit(
-            'session_before_compact',
-            SessionBeforeCompactEvent(
-                preparation=preparation,
-                branch_entries=path_entries,
-                custom_instructions=custom_instructions,
-            ),
-        )
+            compaction_result = None
+            for r in before_results:
+                if isinstance(r, SessionBeforeCompactResult):
+                    if r.cancel:
+                        return False
+                    if r.compaction:
+                        compaction_result = r.compaction
 
-        compaction_result = None
-        for r in before_results:
-            if isinstance(r, SessionBeforeCompactResult):
-                if r.cancel:
-                    return
-                if r.compaction:
-                    compaction_result = r.compaction
+            ci = custom_instructions
+            if compact_opts and compact_opts.custom_instructions:
+                ci = compact_opts.custom_instructions
 
-        ci = custom_instructions
-        if compact_opts and compact_opts.custom_instructions:
-            ci = compact_opts.custom_instructions
+            if compaction_result is None:
+                compaction_result = await self._compaction.compact(preparation, ci)
 
-        if compaction_result is None:
-            compaction_result = await self._compaction.compact(preparation, ci)
+            self._session_manager.append_compaction(
+                summary=compaction_result.summary,
+                first_kept_entry_id=compaction_result.retained_from_id,
+                tokens_before=compaction_result.tokens_before,
+                details=compaction_result.details,
+            )
 
-        self._session_manager.append_compaction(
-            summary=compaction_result.summary,
-            first_kept_entry_id=compaction_result.retained_from_id,
-            tokens_before=compaction_result.tokens_before,
-            details=compaction_result.details,
-        )
+            compact_entry = self._session_manager.get_leaf_entry()
+            await self._extensions.emit(
+                'session_compact',
+                SessionCompactEvent(compaction_entry=compact_entry),
+            )
 
-        compact_entry = self._session_manager.get_leaf_entry()
-        self._phase = "idle"
-        await self._extensions.emit(
-            'session_compact',
-            SessionCompactEvent(compaction_entry=compact_entry),
-        )
-
-        if compact_opts and compact_opts.on_complete:
-            compact_opts.on_complete(compaction_result)
+            if compact_opts and compact_opts.on_complete:
+                compact_opts.on_complete(compaction_result)
+            return True
+        finally:
+            self._phase = "idle"

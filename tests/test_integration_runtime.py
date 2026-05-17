@@ -15,6 +15,7 @@ from program.engine.service import Engine
 from program.engine.types import Options
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult, Extension, SessionStartEvent, SessionShutdownEvent
+from program.hooks.types import SessionBeforeCompactEvent, SessionCompactEvent
 from program.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
@@ -23,7 +24,7 @@ from program.inference.types import (
 from program.message.types import TextContent, UserMessage, AssistantMessage, Role
 from program.resource.types import BaseResourceLoader, ResourceExtensionPaths
 from program.session.manager import SessionManager
-from program.session.types import MessageEntry
+from program.session.types import MessageEntry, CompactionEntry
 from program.skill.types import SourceInfo
 
 
@@ -170,6 +171,20 @@ class TestCurrentSession:
         sm = rt.session_manager
         entries = [e for e in sm.get_entries() if isinstance(sm.by_id.get(e.id), MessageEntry)]
         assert len(entries) >= 1
+
+    @pytest.mark.asyncio
+    async def test_compact_command_runs_immediately_and_emits_events(self):
+        llm = FakeLLM(text_seq("response"), text_seq("summary"))
+        rt = make_runtime(llm)
+        seen: list[str] = []
+        rt.current_session.hooks.subscribe(lambda e: seen.append(type(e).__name__))
+
+        await rt.invoke("direct prompt")
+        await rt.user_input("/compact")
+
+        assert "SessionBeforeCompactEvent" in seen
+        assert "SessionCompactEvent" in seen
+        assert any(isinstance(e, CompactionEntry) for e in rt.session_manager.get_entries())
 
 
 # ── Extension command registration ───────────────────────────────────────────

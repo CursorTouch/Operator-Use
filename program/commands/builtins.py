@@ -191,8 +191,9 @@ async def _handle_compact(registry: CommandRegistry, args: list[str]) -> None:
     runtime = registry.runtime
     if runtime is None or runtime.current_session is None:
         return
-    from program.extension.types import CompactOptions
-    runtime.current_session.compact(CompactOptions(custom_instructions=custom_instructions))
+    performed = await runtime.current_session.run_compaction(custom_instructions)
+    if not performed:
+        print("Nothing to compact.")
 
 
 async def _handle_new(registry: CommandRegistry, args: list[str]) -> None:
