@@ -16,6 +16,7 @@ LLM_API_PROVIDERS: list[APIProvider] = [
     APIProvider(id="anthropic",  name="Anthropic",  api=AnthropicMessagesAPI, options=LLMOptions()),
     APIProvider(id="google",     name="Google",     api=GeminiGenerateAPI,   options=LLMOptions()),
     APIProvider(id="nvidia",     name="NVIDIA",     api=OpenAICompletionsAPI, options=LLMOptions(base_url="https://integrate.api.nvidia.com/v1")),
+    APIProvider(id="groq",       name="Groq",       api=OpenAICompletionsAPI, options=LLMOptions(base_url="https://api.groq.com/openai/v1")),
     APIProvider(id="mistral",    name="Mistral",    api=MistralChatAPI,      options=LLMOptions()),
     APIProvider(id="ollama",     name="Ollama",     api=OllamaChatAPI,       options=LLMOptions(base_url="http://localhost:11434")),
 ]

@@ -65,14 +65,10 @@ async def _handle_login(registry: CommandRegistry, args: list[str]) -> None:
     def on_progress(msg: str) -> None:
         print(f"  {msg}")
 
-    async def on_manual_code_input() -> str:
-        return await _prompt("  Paste the redirect URL or authorization code: ")
-
     callbacks = OAuthLoginCallbacks(
         on_auth=on_auth,
         on_prompt=on_prompt,
         on_progress=on_progress,
-        on_manual_code_input=on_manual_code_input,
     )
 
     print(f"Logging in to {provider.name}...")

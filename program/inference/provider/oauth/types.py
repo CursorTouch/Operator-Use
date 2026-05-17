@@ -30,5 +30,5 @@ class OAuthLoginCallbacks:
     on_auth: Callable[[OAuthAuthInfo], None]
     on_prompt: Callable[[OAuthPrompt], Awaitable[str]]
     on_progress: Optional[Callable[[str], None]] = None
-    on_manual_code_input: Optional[Callable[[], Awaitable[str]]] = None
     signal: Optional[AbortSignal] = None
+    on_manual_code_input: Optional[Callable[[], Awaitable[str]]] = None

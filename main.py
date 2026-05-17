@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import select
+import signal
 import sys
 import termios
 import threading
@@ -180,6 +181,10 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
     last_interrupt = False
 
     while True:
+        # Restore the default SIGINT handler while input() is blocking so that
+        # the first Ctrl+C immediately raises KeyboardInterrupt here instead of
+        # being silently consumed by asyncio's internal task-cancel mechanism.
+        _asyncio_sigint = signal.signal(signal.SIGINT, signal.default_int_handler)
         try:
             user_input = input(_cyan('\n[You] ')).strip()
             last_interrupt = False
@@ -193,6 +198,8 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
             last_interrupt = True
             print(_grey('(Press Ctrl-C again to exit)'))
             continue
+        finally:
+            signal.signal(signal.SIGINT, _asyncio_sigint)
 
         if not user_input:
             continue
@@ -203,9 +210,14 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
         global _attempt
         _attempt = 0
         try:
-            interrupted = await _run_with_esc_cancel(runtime.user_input(user_input))
-            if interrupted:
-                print(f"\n{_yellow('[Interrupted]')}")
+            if user_input.startswith('/'):
+                # Slash commands may prompt for input themselves — don't run
+                # the Esc watcher (it competes for stdin in cbreak mode).
+                await runtime.user_input(user_input)
+            else:
+                interrupted = await _run_with_esc_cancel(runtime.user_input(user_input))
+                if interrupted:
+                    print(f"\n{_yellow('[Interrupted]')}")
         except KeyboardInterrupt:
             pass
         except Exception as e:
@@ -219,7 +231,10 @@ def main() -> None:
     parser.add_argument('--model', default=None, help='Model ID (e.g. claude-sonnet-4-6)')
     parser.add_argument('--provider', default=None, help='Provider override')
     args = parser.parse_args()
-    asyncio.run(run(cwd=args.cwd.resolve(), model_id=args.model, provider=args.provider))
+    try:
+        asyncio.run(run(cwd=args.cwd.resolve(), model_id=args.model, provider=args.provider))
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == '__main__':
