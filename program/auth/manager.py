@@ -76,15 +76,27 @@ class AuthManager:
             self._record_error(e)
             return {}
 
+    @staticmethod
+    def _serialize_credential(credential: AuthCredential) -> dict:
+        if isinstance(credential, OAuthCredential):
+            return {
+                "type": AuthType.OAuth,
+                "access": credential.access,
+                "refresh": credential.refresh,
+                "expires": credential.expires,
+                "account_id": credential.account_id,
+            }
+        return {"type": AuthType.ApiKey, "key": credential.key}
+
     def _persist_provider_change(self, provider: str, credential: AuthCredential | None) -> None:
         if self._load_error:
             return
 
         def update_fn(current: str | None) -> LockResult:
             current_data = self._parse_storage_data(current)
-            merged = {**current_data}
+            merged = {k: self._serialize_credential(v) for k, v in current_data.items()}
             if credential:
-                merged[provider] = credential
+                merged[provider] = self._serialize_credential(credential)
             else:
                 merged.pop(provider, None)
             return LockResult(result=None, next=json.dumps(merged, indent=2))
@@ -189,7 +201,8 @@ class AuthManager:
                 refreshed_credential = await oauth_provider.refresh_token(credential=credential)
                 current_data[provider] = refreshed_credential
                 self.data = current_data
-                return LockResult(result=refreshed_credential, next=json.dumps(current_data, indent=2))
+                serialized = {k: self._serialize_credential(v) for k, v in current_data.items()}
+                return LockResult(result=refreshed_credential, next=json.dumps(serialized, indent=2))
             except Exception as e:
                 self._record_error(e)
                 return LockResult(result=None)

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import select
 import sys
+import termios
+import threading
+import tty
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -92,6 +96,64 @@ def _render_event(event) -> None:
             print(f"{_red('[Error]')} {err}", file=sys.stderr)
 
 
+# ── Esc key watcher ───────────────────────────────────────────────────────────
+
+def _watch_for_esc(
+    stop: threading.Event,
+    loop: asyncio.AbstractEventLoop,
+    cancel: asyncio.Event,
+) -> None:
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        while not stop.is_set():
+            ready, _, _ = select.select([sys.stdin], [], [], 0.05)
+            if ready:
+                ch = sys.stdin.read(1)
+                if ch == '\x1b':
+                    loop.call_soon_threadsafe(cancel.set)
+                    return
+    except Exception:
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+async def _run_with_esc_cancel(coro) -> bool:
+    """Run coro; return True if cancelled via Esc, False if completed normally."""
+    loop = asyncio.get_running_loop()
+    cancel = asyncio.Event()
+    stop = threading.Event()
+
+    watcher = threading.Thread(
+        target=_watch_for_esc, args=(stop, loop, cancel), daemon=True
+    )
+    watcher.start()
+
+    agent_task = asyncio.ensure_future(coro)
+    cancel_task = asyncio.ensure_future(cancel.wait())
+
+    done, pending = await asyncio.wait(
+        [agent_task, cancel_task],
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    stop.set()
+
+    for task in pending:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    was_cancelled = cancel.is_set()
+    if not was_cancelled and agent_task.exception():
+        raise agent_task.exception()
+    return was_cancelled
+
+
 # ── REPL ──────────────────────────────────────────────────────────────────────
 
 _TOOLS = [
@@ -115,12 +177,22 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
     runtime = await Runtime.create(config)
     runtime.current_session.hooks.subscribe(_render_event)
 
+    last_interrupt = False
+
     while True:
         try:
             user_input = input(_cyan('\n[You] ')).strip()
-        except (EOFError, KeyboardInterrupt):
+            last_interrupt = False
+        except EOFError:
             print()
             break
+        except KeyboardInterrupt:
+            print()
+            if last_interrupt:
+                break
+            last_interrupt = True
+            print(_grey('(Press Ctrl-C again to exit)'))
+            continue
 
         if not user_input:
             continue
@@ -131,7 +203,11 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
         global _attempt
         _attempt = 0
         try:
-            await runtime.user_input(user_input)
+            interrupted = await _run_with_esc_cancel(runtime.user_input(user_input))
+            if interrupted:
+                print(f"\n{_yellow('[Interrupted]')}")
+        except KeyboardInterrupt:
+            pass
         except Exception as e:
             err_msg = str(e) or f"{type(e).__name__} (no message)"
             print(f"{_red('[Error]')} {err_msg}", file=sys.stderr)
