@@ -18,7 +18,7 @@ from program.tool.types import ToolExecutionMode, ToolInvocation, ToolResult
 from program.message.types import AssistantMessage, ToolCallContent, Role, Usage
 
 if TYPE_CHECKING:
-    from program.inference.api.llm.service import LLM
+    from program.inference.api.text.service import LLM
     from program.tool.types import Tool
     from program.agent.types import AgentContext
 

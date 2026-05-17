@@ -316,5 +316,5 @@ class GitHubCopilotOAuthProvider(OAuthProvider):
 
     @property
     def api(self):
-        from program.inference.api.llm.github_copilot_chat import GitHubCopilotChatAPI
+        from program.inference.api.text.github_copilot_chat import GitHubCopilotChatAPI
         return GitHubCopilotChatAPI

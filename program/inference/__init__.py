@@ -40,7 +40,7 @@ from program.inference.types import (
 
 
 def _get_llm_class():
-    from program.inference.api.llm.service import LLM
+    from program.inference.api.text.service import LLM
     return LLM
 
 

@@ -13,8 +13,8 @@ from typing import Any, Optional, TYPE_CHECKING
 
 import httpx
 
-from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
-from program.inference.api.llm.types import APIResponse
+from program.inference.api.text.base import BaseLLMAPI as BaseAPI
+from program.inference.api.text.types import APIResponse
 from program.inference.model.types import Model
 from program.inference.types import (
     LLMContext, LLMEvent, LLMOptions, StopReason,

@@ -8,10 +8,10 @@ from typing import Optional, Type, Union, TYPE_CHECKING
 from program.inference.types import AuthType, LLMOptions, Transport
 
 if TYPE_CHECKING:
-    from program.inference.api.llm.base import BaseLLMAPI
+    from program.inference.api.text.base import BaseLLMAPI
     from program.inference.provider.oauth.types import OAuthCredential, OAuthLoginCallbacks, AbortSignal
 
-__all__ = ["AuthType", "APIProvider", "OAuthProvider", "ImageProvider"]
+__all__ = ["AuthType", "APIProvider", "OAuthProvider", "ImageProvider", "AudioProvider"]
 
 
 @dataclass
@@ -70,4 +70,12 @@ class ImageProvider:
     name: str
     api: str
     base_url: str
+    auth_type: AuthType = AuthType.ApiKey
+
+
+@dataclass
+class AudioProvider:
+    name: str
+    api: str
+    base_url: Optional[str] = None
     auth_type: AuthType = AuthType.ApiKey

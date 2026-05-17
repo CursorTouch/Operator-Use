@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from program.inference.api.llm.openai_codex_responses import _process_events
+from program.inference.api.text.openai_codex_responses import _process_events
 from program.inference.types import EndEvent, StopReason, ToolCallEndEvent
 
 

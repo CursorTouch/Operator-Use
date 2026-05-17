@@ -50,10 +50,18 @@ class ModelRegistry:
         return instance
 
     @classmethod
-    def from_all_builtins(cls) -> ModelRegistry:
-        from program.inference.model.builtins import LLM_MODELS, IMAGE_MODELS
+    def from_audio_builtins(cls) -> ModelRegistry:
+        from program.inference.model.builtins import AUDIO_MODELS
         instance = cls()
-        for model in LLM_MODELS + IMAGE_MODELS:
+        for model in AUDIO_MODELS:
+            instance.register(model)
+        return instance
+
+    @classmethod
+    def from_all_builtins(cls) -> ModelRegistry:
+        from program.inference.model.builtins import LLM_MODELS, IMAGE_MODELS, AUDIO_MODELS
+        instance = cls()
+        for model in LLM_MODELS + IMAGE_MODELS + AUDIO_MODELS:
             instance.register(model)
         return instance
 

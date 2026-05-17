@@ -345,7 +345,7 @@ class OpenAICodexOAuthProvider(OAuthProvider):
 
     @property
     def api(self):
-        from program.inference.api.llm.openai_codex_responses import OpenAICodexResponsesAPI
+        from program.inference.api.text.openai_codex_responses import OpenAICodexResponsesAPI
         return OpenAICodexResponsesAPI
 
     async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:

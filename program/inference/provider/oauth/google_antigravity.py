@@ -280,7 +280,7 @@ async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
     if callbacks.on_progress:
         callbacks.on_progress("Setting up Cloud Code Assist access...")
 
-    from program.inference.api.llm.google_antigravity import fetch_project_id, onboard_user
+    from program.inference.api.text.google_antigravity import fetch_project_id, onboard_user
     project_id = await fetch_project_id(access)
     await onboard_user(access, project_id)
 
@@ -324,7 +324,7 @@ class GoogleAntigravityOAuthProvider(OAuthProvider):
 
     @property
     def api(self):
-        from program.inference.api.llm.google_antigravity import GoogleAntigravityAPI
+        from program.inference.api.text.google_antigravity import GoogleAntigravityAPI
         return GoogleAntigravityAPI
 
     async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:

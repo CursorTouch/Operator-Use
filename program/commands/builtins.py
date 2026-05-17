@@ -48,7 +48,7 @@ async def _read_line_cancelable(message: str = "") -> str:
 
 
 async def _handle_login(registry: CommandRegistry, args: list[str]) -> None:
-    from program.inference.api.llm.service import LLM
+    from program.inference.api.text.service import LLM
     from program.inference.provider.oauth.types import OAuthLoginCallbacks, OAuthAuthInfo, OAuthPrompt
 
     auth = LLM._auth_store
@@ -119,7 +119,7 @@ async def _handle_login(registry: CommandRegistry, args: list[str]) -> None:
 
 
 async def _handle_logout(registry: CommandRegistry, args: list[str]) -> None:
-    from program.inference.api.llm.service import LLM
+    from program.inference.api.text.service import LLM
 
     auth = LLM._auth_store
     reg = LLM._providers
@@ -159,7 +159,7 @@ async def _handle_logout(registry: CommandRegistry, args: list[str]) -> None:
 
 
 async def _handle_auth(registry: CommandRegistry, args: list[str]) -> None:
-    from program.inference.api.llm.service import LLM
+    from program.inference.api.text.service import LLM
 
     auth = LLM._auth_store
     reg = LLM._providers

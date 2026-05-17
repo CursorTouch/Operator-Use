@@ -3,7 +3,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 from openai import AsyncOpenAI
-from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
+from program.inference.api.text.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.provider.oauth.github_copilot import get_copilot_base_url
 from program.inference.types import (

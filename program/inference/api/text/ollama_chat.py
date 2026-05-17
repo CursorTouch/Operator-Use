@@ -3,7 +3,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 from ollama import AsyncClient
-from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
+from program.inference.api.text.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
     LLMContext, LLMEvent, LLMOptions, StopReason, ThinkingLevel,

@@ -5,7 +5,7 @@ from typing import Any, TYPE_CHECKING
 from pydantic import BaseModel, Field, ConfigDict
 
 if TYPE_CHECKING:
-    from program.inference.api.llm.service import LLM
+    from program.inference.api.text.service import LLM
     from program.session.types import SessionEntry
 
 from program.message.types import AgentMessage

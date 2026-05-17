@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 from google import genai
 from google.genai import types as genai_types
-from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
+from program.inference.api.text.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
     LLMContext, LLMEvent, LLMOptions, StopReason, ThinkingBudgets,

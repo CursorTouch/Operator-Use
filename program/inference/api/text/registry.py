@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Type
-from program.inference.api.llm.base import BaseLLMAPI
+from program.inference.api.text.base import BaseLLMAPI
 
 
 class LLMAPIRegistry:
@@ -24,7 +24,7 @@ class LLMAPIRegistry:
 
     @classmethod
     def from_builtins(cls) -> LLMAPIRegistry:
-        from program.inference.api.llm.builtins import LLM_APIS
+        from program.inference.api.text.builtins import LLM_APIS
         instance = cls()
         for name, api in LLM_APIS:
             instance.register(name, api)

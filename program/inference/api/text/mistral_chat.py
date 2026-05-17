@@ -6,7 +6,7 @@ from mistralai import Mistral
 from mistralai.models.thinkchunk import ThinkChunk
 from mistralai.models.textchunk import TextChunk
 from mistralai.types import UNSET
-from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
+from program.inference.api.text.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
     LLMContext, LLMEvent, LLMOptions, StopReason, ThinkingLevel,

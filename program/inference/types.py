@@ -254,3 +254,98 @@ class GeneratedImage:
     usage: Any = field(default_factory=lambda: __import__("program.message.types", fromlist=["Usage"]).Usage())
     error: str = ""
     timestamp: float = field(default_factory=time.time)
+
+
+# ── Audio types ───────────────────────────────────────────────────────────────
+
+class AudioFormat(str, Enum):
+    MP3 = "mp3"
+    WAV = "wav"
+    OPUS = "opus"
+    AAC = "aac"
+    FLAC = "flac"
+    PCM = "pcm"
+
+
+class AudioStopReason(str, Enum):
+    Stop = "stop"
+    Error = "error"
+    Abort = "abort"
+
+
+class TimestampGranularity(str, Enum):
+    Word = "word"
+    Segment = "segment"
+
+
+@dataclass
+class AudioOptions:
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    headers: Optional[dict[str, str]] = None
+    timeout: timedelta = field(default_factory=lambda: timedelta(seconds=120))
+    max_retries: int = 3
+    on_payload: Optional[PayloadCallback] = None
+    on_response: Optional[ResponseCallback] = None
+
+
+@dataclass
+class TTSContext:
+    input: str
+    voice: str
+    speed: float = 1.0
+    response_format: AudioFormat = AudioFormat.MP3
+    language: Optional[str] = None
+    instructions: Optional[str] = None
+
+
+@dataclass
+class WordTimestamp:
+    word: str
+    start: float
+    end: float
+
+
+@dataclass
+class SegmentTimestamp:
+    id: int
+    text: str
+    start: float
+    end: float
+
+
+@dataclass
+class STTContext:
+    audio: bytes
+    format: AudioFormat = AudioFormat.MP3
+    language: Optional[str] = None
+    temperature: float = 0.0
+    timestamp_granularities: list[TimestampGranularity] = field(default_factory=list)
+    prompt: Optional[str] = None
+
+
+@dataclass
+class SynthesizedAudio:
+    model_id: str
+    provider: str
+    audio: bytes
+    format: AudioFormat
+    stop_reason: AudioStopReason
+    usage: Any = None
+    error: str = ""
+    timestamp: float = field(default_factory=time.time)
+
+
+@dataclass
+class TranscribedAudio:
+    model_id: str
+    provider: str
+    text: str
+    language: Optional[str] = None
+    duration: Optional[float] = None
+    words: list[WordTimestamp] = field(default_factory=list)
+    segments: list[SegmentTimestamp] = field(default_factory=list)
+    stop_reason: AudioStopReason = AudioStopReason.Stop
+    usage: Any = None
+    error: str = ""
+    timestamp: float = field(default_factory=time.time)

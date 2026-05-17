@@ -1,8 +1,10 @@
 # Inference
 
-The inference layer provides a unified streaming interface to multiple LLM providers. It is organized as a set of registries: models, providers, and API implementations. `LLM` is the single entry point that resolves these at construction time.
+The inference layer provides a unified interface to multiple providers across three modalities: **text** (LLM streaming), **image** (generation), and **audio** (TTS and STT). Each modality has its own registry stack — models, providers, API implementations — and a single entry-point service class that resolves all three at construction time.
 
-## LLM
+---
+
+## Text (LLM)
 
 `LLM` resolves a model ID to a concrete API instance, handling auth for both API-key and OAuth providers:
 
@@ -31,41 +33,15 @@ Resolution order at construction:
 
 `LLM._apis`, `LLM._models`, `LLM._providers`, and `LLM._auth_store` are class-level registries, shared across all instances.
 
-## Model registry
+### API implementations
 
-`ModelRegistry` maps `(model_id, provider)` pairs to `Model` objects. Each `Model` carries:
-
-```python
-@dataclass
-class Model:
-    id: str
-    provider: str
-    api: str | type    # API class or name to look up in LLMAPIRegistry
-    max_tokens: int
-    context_window: int
-    base_url: str | None = None
-    # ... additional metadata
-```
-
-`ModelRegistry.from_llm_builtins()` loads all built-in model definitions. The registry supports `get(model_id, provider=None)` which returns the model if found, or `None`.
-
-## Provider registry
-
-`ProviderRegistry` holds `APIProvider` and `OAuthProvider` definitions.
-
-**APIProvider** — key-based auth. The provider's `LLMOptions` carries the API key, read from an environment variable or `auth.json`.
-
-**OAuthProvider** — OAuth token auth. At construction, `LLM` loads credentials from `AuthManager` and derives a temporary API key from the stored `OAuthCredential`. The derived key expires; re-login is needed when it does.
-
-## API implementations
-
-Each API is a class in `program/inference/api/llm/` that wraps one HTTP endpoint style:
+Each API is a class in `program/inference/api/text/` that wraps one HTTP endpoint style:
 
 | Module | Provider(s) |
 |---|---|
 | `anthropic_messages.py` | Anthropic Messages API |
 | `anthropic_claude_code.py` | Anthropic via Claude Code OAuth |
-| `openai_completions.py` | OpenAI Chat Completions (and compatible) |
+| `openai_completions.py` | OpenAI Chat Completions (and compatible: Groq, NVIDIA, Ollama, etc.) |
 | `openai_responses.py` | OpenAI Responses API |
 | `openai_codex_responses.py` | OpenAI Codex |
 | `gemini_generate.py` | Google Gemini |
@@ -74,13 +50,13 @@ Each API is a class in `program/inference/api/llm/` that wraps one HTTP endpoint
 | `mistral_chat.py` | Mistral |
 | `ollama_chat.py` | Ollama (local) |
 
-All implementations conform to the same interface:
+All implementations conform to `BaseLLMAPI`:
 
 ```python
 class BaseLLMAPI:
     def __init__(self, options: LLMOptions) -> None: ...
-
     async def stream(self, context: LLMContext) -> AsyncIterator[LLMEvent]: ...
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]: ...
 ```
 
 `LLMContext` carries:
@@ -93,9 +69,9 @@ class LLMContext:
     tools: list[Tool] | None = None
 ```
 
-## Event stream
+### Event stream
 
-All APIs emit a standardized event stream:
+All text APIs emit a standardized event stream:
 
 | Event | Meaning |
 |---|---|
@@ -111,45 +87,7 @@ All APIs emit a standardized event stream:
 
 Providers that do not stream natively still emit the same events in a single batch.
 
-## Auth
-
-`AuthManager` persists credentials to `auth.json` in the config directory. It supports:
-
-- `OAuthCredential` — access token, refresh token, expiry
-- `APIKeyCredential` — plain API key string
-
-`LLM._auth_store` is a class-level `AuthManager` shared across all `LLM` instances. This means a credential stored at login time is visible to any subsequently constructed `LLM`.
-
-OAuth flows are implemented per-provider in `program/inference/provider/oauth/`:
-
-| Module | Provider |
-|---|---|
-| `anthropic_claude_code.py` | Anthropic Claude Code |
-| `github_copilot.py` | GitHub Copilot |
-| `google_antigravity.py` | Google |
-| `openai_codex.py` | OpenAI Codex |
-| `pkce.py` | Generic PKCE helper |
-
-Each OAuth module implements the login flow (browser redirect + token exchange) and token refresh.
-
-## Image generation
-
-A parallel registry (`ImageAPIRegistry`, `ImageModelRegistry`) handles image generation providers in `program/inference/api/image/`. The interface mirrors the LLM one but the context and event types differ.
-
-## LLMOptions
-
-```python
-@dataclass
-class LLMOptions:
-    api_key: str | None = None
-    base_url: str | None = None
-    max_tokens: int | None = None
-    # Provider-specific extras...
-```
-
-Options from the provider and the caller are merged at `LLM.__init__()` — caller values override provider defaults. Provider-set fields that the caller leaves as `None` are preserved.
-
-## ThinkingLevel
+### ThinkingLevel
 
 ```python
 class ThinkingLevel(str, Enum):
@@ -163,8 +101,264 @@ class ThinkingLevel(str, Enum):
 
 Passed through to API implementations that support extended thinking (Anthropic). APIs that do not support it ignore it.
 
+---
+
+## Image generation
+
+`ImageLLM` handles image generation through `program/inference/api/image/`. The interface mirrors the text one but uses a single non-streaming `generate()` call:
+
+```python
+svc = ImageLLM("black-forest-labs/flux-2-pro")
+result = await svc.generate(context)   # returns GeneratedImage
+```
+
+`GeneratedImage` carries the output as a list of `TextContent | ImageContent`, the stop reason, and token usage.
+
+Currently a single API implementation is registered: `openrouter-images` (`OpenRouterImageAPI`), which serves all image models via the OpenRouter gateway.
+
+---
+
+## Audio (TTS / STT)
+
+`AudioText` handles text-to-speech and speech-to-text through `program/inference/api/audio/`. It uses the same registry/auth pattern as `LLM` and `ImageLLM`.
+
+```python
+from program.inference.api.audio.service import AudioText
+from program.inference.types import TTSContext, STTContext, AudioFormat
+
+# Text-to-speech
+svc = AudioText("tts-1")                         # reads OPENAI_API_KEY from env/auth
+result = await svc.synthesize(TTSContext(
+    input="Hello, world.",
+    voice="alloy",
+    response_format=AudioFormat.MP3,
+    speed=1.0,
+))
+# result.audio  → raw bytes
+# result.format → AudioFormat.MP3
+
+# Speech-to-text
+svc = AudioText("whisper-large-v3")              # reads GROQ_API_KEY from env/auth
+result = await svc.transcribe(STTContext(
+    audio=audio_bytes,
+    format=AudioFormat.MP3,
+    language="en",
+))
+# result.text     → transcript string
+# result.words    → list[WordTimestamp]
+# result.segments → list[SegmentTimestamp]
+```
+
+### Provider API standards
+
+There are two distinct audio API standards in use:
+
+**OpenAI-compatible** — `/v1/audio/speech` (TTS) and `/v1/audio/transcriptions` (STT). The de facto standard, the same way `/v1/chat/completions` is the standard for LLM text. Groq implements it identically — only `base_url` differs. A single `OpenAIAudioAPI` class serves both.
+
+**Gemini** — TTS via `generate_content` with `response_modalities=["AUDIO"]` and a `SpeechConfig`. Different SDK, different response shape, always outputs raw PCM (s16le, 24 kHz, mono). No STT endpoint available in the generative API.
+
+| Provider | `provider` name | API class | TTS | STT |
+|---|---|---|---|---|
+| OpenAI | `openai` | `OpenAIAudioAPI` | ✓ | ✓ |
+| Groq | `groq` | `OpenAIAudioAPI` | ✓ | ✓ |
+| Google Gemini | `google` | `GeminiAudioAPI` | ✓ | ✗ |
+| Sarvam AI | `sarvam` | `SarvamAudioAPI` | ✓ | ✓ |
+| ElevenLabs | `elevenlabs` | `ElevenLabsAudioAPI` | ✓ | ✓ |
+
+### Base class
+
+```python
+class BaseAudioAPI(ABC):
+    def __init__(self, options: AudioOptions) -> None: ...
+
+    @abstractmethod
+    async def synthesize(self, model: Model, context: TTSContext) -> SynthesizedAudio: ...
+
+    @abstractmethod
+    async def transcribe(self, model: Model, context: STTContext) -> TranscribedAudio: ...
+```
+
+### Context types
+
+```python
+@dataclass
+class TTSContext:
+    input: str
+    voice: str
+    speed: float = 1.0
+    response_format: AudioFormat = AudioFormat.MP3
+    instructions: str | None = None      # style/tone hint (OpenAI newer models)
+
+@dataclass
+class STTContext:
+    audio: bytes
+    format: AudioFormat = AudioFormat.MP3
+    language: str | None = None
+    temperature: float = 0.0
+    timestamp_granularities: list[TimestampGranularity] = []
+    prompt: str | None = None            # context hint for accuracy
+```
+
+### Result types
+
+```python
+@dataclass
+class SynthesizedAudio:
+    model_id: str
+    provider: str
+    audio: bytes
+    format: AudioFormat
+    stop_reason: AudioStopReason
+    usage: Any = None
+    error: str = ""
+
+@dataclass
+class TranscribedAudio:
+    model_id: str
+    provider: str
+    text: str
+    language: str | None = None
+    duration: float | None = None
+    words: list[WordTimestamp] = []
+    segments: list[SegmentTimestamp] = []
+    stop_reason: AudioStopReason = AudioStopReason.Stop
+    usage: Any = None
+    error: str = ""
+```
+
+### AudioFormat
+
+```python
+class AudioFormat(str, Enum):
+    MP3 = "mp3"
+    WAV = "wav"
+    OPUS = "opus"
+    AAC = "aac"
+    FLAC = "flac"
+    PCM = "pcm"
+```
+
+### Built-in audio models
+
+| Model ID | Provider | Direction | Notes |
+|---|---|---|---|
+| `tts-1` | openai | text → audio | Standard TTS |
+| `tts-1-hd` | openai | text → audio | High-quality TTS |
+| `gpt-4o-mini-tts` | openai | text → audio | Instructable TTS |
+| `whisper-1` | openai | audio → text | Whisper v2 |
+| `gpt-4o-transcribe` | openai | audio → text | GPT-4o transcription |
+| `gpt-4o-mini-transcribe` | openai | audio → text | GPT-4o Mini transcription |
+| `gemini-2.5-flash-preview-tts` | google | text → audio | PCM output, 30 voices |
+| `gemini-2.5-pro-preview-tts` | google | text → audio | PCM output, 30 voices |
+| `gemini-3.1-flash-tts-preview` | google | text → audio | PCM output, 30 voices |
+| `bulbul:v3` | sarvam | text → audio | 30+ voices, 11 Indian languages |
+| `saarika:v2.5` | sarvam | audio → text | 22 Indian languages |
+| `saaras:v3` | sarvam | audio → text | 22 languages, multi-mode (transcribe/translate/transliterate) |
+| `eleven_multilingual_v2` | elevenlabs | text → audio | 32 languages, 3000+ voices |
+| `eleven_flash_v2_5` | elevenlabs | text → audio | Low-latency, 32 languages |
+| `eleven_turbo_v2_5` | elevenlabs | text → audio | Balanced quality/speed |
+| `scribe_v1` | elevenlabs | audio → text | Diarization, audio event tagging |
+| `scribe_v2` | elevenlabs | audio → text | Latest Scribe model |
+| `canopylabs/orpheus-v1-english` | groq | text → audio | Expressive English TTS |
+| `whisper-large-v3` | groq | audio → text | Fast Whisper on Groq |
+| `whisper-large-v3-turbo` | groq | audio → text | Faster Whisper on Groq |
+
+> **Gemini:** Always returns raw PCM (s16le, 24 kHz, mono) regardless of `TTSContext.response_format`. `transcribe()` raises `NotImplementedError`.
+>
+> **Sarvam:** Auth uses `api-subscription-key` header. TTS response is JSON with base64-encoded WAV in `audios[]`. For `saaras:v3` STT, set `STTContext.prompt` to the desired mode: `transcribe` (default), `translate`, `verbatim`, `translit`, or `codemix`. Set `TTSContext.language` / `STTContext.language` to a BCP-47 code (e.g. `hi-IN`, `en-IN`).
+>
+> **ElevenLabs:** Auth uses `xi-api-key` header. `TTSContext.voice` maps to `voice_id` in the URL path — use an ElevenLabs voice ID string (e.g. `"21m00Tcm4TlvDq8ikWAM"`). `TTSContext.speed` maps to `voice_settings.speed`. TTS returns raw audio bytes. STT words list only includes `type="word"` entries (spacing and audio events are filtered out). Env var: `ELEVENLABS_API_KEY`.
+
+---
+
+## Model registry
+
+`ModelRegistry` maps `(model_id, provider)` pairs to `Model` objects. Each `Model` carries:
+
+```python
+@dataclass
+class Model:
+    id: str
+    provider: str
+    api: str | type    # API class or registry name
+    max_tokens: int
+    context_window: int
+    input: list[Modality]
+    output: list[Modality]
+    base_url: str | None = None
+```
+
+`Modality` covers `Text`, `Image`, and `Audio`. Factory methods load the appropriate built-in list:
+
+| Method | Loads |
+|---|---|
+| `ModelRegistry.from_llm_builtins()` | LLM text models |
+| `ModelRegistry.from_image_builtins()` | Image models |
+| `ModelRegistry.from_audio_builtins()` | Audio models |
+| `ModelRegistry.from_all_builtins()` | All three combined |
+
+---
+
+## Provider registry
+
+### Text providers
+
+`ProviderRegistry` holds `APIProvider` and `OAuthProvider` definitions used by `LLM`.
+
+**APIProvider** — key-based auth. The provider's `LLMOptions` carries the base URL; the API key is resolved at call time via `AuthManager`.
+
+**OAuthProvider** — OAuth token auth. At construction, `LLM` loads credentials from `AuthManager` and derives a temporary API key from the stored `OAuthCredential`.
+
+### Image providers
+
+`ImageProviderRegistry` holds `ImageProvider` definitions — a name, an API registry key, and a `base_url`.
+
+### Audio providers
+
+`AudioProviderRegistry` holds `AudioProvider` definitions:
+
+```python
+@dataclass
+class AudioProvider:
+    name: str
+    api: str            # key into AudioAPIRegistry
+    base_url: str | None = None
+```
+
+Built-in audio providers: `openai` and `groq` — both resolved through `OpenAIAudioAPI`.
+
+---
+
+## Auth
+
+`AuthManager` persists credentials to `auth.json` in the config directory. It supports:
+
+- `OAuthCredential` — access token, refresh token, expiry
+- `APICredential` — plain API key string
+
+All three service classes (`LLM`, `ImageLLM`, `AudioText`) share the same `AuthManager` backed by the same credential store. `AudioText._auth_store` is initialized with the LLM `ProviderRegistry` so that stored `openai` and `groq` credentials (saved via the LLM auth flow) are automatically available for audio calls too.
+
+API key resolution order (for `AuthManager.get_api_key(provider)`):
+
+1. Runtime override — `auth_store.set_runtime_api_key("openai", key)`
+2. Stored `APICredential` in `auth.json`
+3. Environment variable — `f"{provider.upper()}_API_KEY"` (e.g. `OPENAI_API_KEY`, `GROQ_API_KEY`)
+
+OAuth flows are implemented per-provider in `program/inference/provider/oauth/`:
+
+| Module | Provider |
+|---|---|
+| `anthropic_claude_code.py` | Anthropic Claude Code |
+| `github_copilot.py` | GitHub Copilot |
+| `google_antigravity.py` | Google |
+| `openai_codex.py` | OpenAI Codex |
+| `pkce.py` | Generic PKCE helper |
+
+---
+
 ## Related documents
 
 - [engine.md](./engine.md) — How Engine calls `llm.stream()` and processes events
 - [agent.md](./agent.md) — How the Agent's model and provider are resolved
+- [auth.md](./auth.md) — Credential storage and OAuth flows in detail
 - [extensions.md](./extensions.md) — How extensions can affect model selection

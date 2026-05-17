@@ -307,7 +307,7 @@ class AnthropicClaudeCodeOAuthProvider(OAuthProvider):
 
     @property
     def api(self):
-        from program.inference.api.llm.anthropic_claude_code import AnthropicClaudeCodeAPI
+        from program.inference.api.text.anthropic_claude_code import AnthropicClaudeCodeAPI
         return AnthropicClaudeCodeAPI
 
     async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:

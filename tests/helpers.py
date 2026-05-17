@@ -175,7 +175,7 @@ def make_mistral_llm(model_id: str = "mistral-small-latest"):
     from dotenv import load_dotenv
     load_dotenv()
     api_key = os.environ.get("MISTRAL_API_KEY", "")
-    from program.inference.api.llm.mistral_chat import MistralChatAPI
+    from program.inference.api.text.mistral_chat import MistralChatAPI
 
     class _Wrapper:
         def __init__(self):

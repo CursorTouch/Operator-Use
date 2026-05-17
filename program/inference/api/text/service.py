@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import fields
 from program.inference.model.registry import ModelRegistry
-from program.inference.api.llm.registry import LLMAPIRegistry
+from program.inference.api.text.registry import LLMAPIRegistry
 from program.inference.provider.registry import ProviderRegistry
 from program.inference.provider.types import APIProvider, OAuthProvider
 from program.auth.manager import AuthManager

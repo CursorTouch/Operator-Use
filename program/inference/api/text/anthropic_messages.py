@@ -3,10 +3,10 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 from anthropic import AsyncAnthropic
-from program.inference.api.llm.base import BaseLLMAPI as BaseAPI
+from program.inference.api.text.base import BaseLLMAPI as BaseAPI
 from program.inference.model.types import Model
 from program.inference.types import (
-    LLMContext, LLMEvent, LLMOptions, StopReason,
+    LLMContext, LLMEvent, LLMOptions, StopReason, ThinkingBudgets,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
@@ -39,7 +39,9 @@ def _messages_to_anthropic(
     for msg in messages:
         match msg:
             case SystemMessage():
-                system = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
+                system = "\n".join(
+                    c.content for c in msg.contents if isinstance(c, TextContent)
+                )
             case UserMessage():
                 parts: list[dict[str, Any]] = []
                 has_text = False
@@ -89,13 +91,11 @@ def _messages_to_anthropic(
     return system, result
 
 
-class AnthropicClaudeCodeAPI(BaseAPI):
-    """Anthropic Messages API using OAuth Bearer token auth (Claude Pro/Max)."""
-
+class AnthropicMessagesAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         self._client = AsyncAnthropic(
-            auth_token=options.api_key,
+            api_key=options.api_key,
             base_url=options.base_url,
             default_headers=options.headers,
             max_retries=options.max_retries,
@@ -117,8 +117,9 @@ class AnthropicClaudeCodeAPI(BaseAPI):
         }
         if system:
             params["system"] = system
-        if self.options.thinking_budget is not None:
-            params["thinking"] = {"type": "enabled", "budget_tokens": self.options.thinking_budget}
+        if self.options.thinking_level is not None:
+            budgets = self.options.thinking_budgets or ThinkingBudgets()
+            params["thinking"] = {"type": "enabled", "budget_tokens": budgets.get(self.options.thinking_level)}
         
         if tools:
             params["tools"] = [
@@ -129,6 +130,7 @@ class AnthropicClaudeCodeAPI(BaseAPI):
                 }
                 for tool in tools
             ]
+            
         return params
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
@@ -176,7 +178,8 @@ class AnthropicClaudeCodeAPI(BaseAPI):
                         tool_ids[idx] = block.id
                         tool_names[idx] = block.name
                         tool_bufs[idx] = ""
-                        yield ToolCallStartEvent(tool_call=ToolCallContent(id=block.id, name=block.name))
+                        yield ToolCallStartEvent(tool_call=ToolCallContent(id=block.id, name=block.name)
+                        )
 
                 elif etype == "content_block_delta":
                     idx = event.index
@@ -189,7 +192,8 @@ class AnthropicClaudeCodeAPI(BaseAPI):
                         yield ThinkingDeltaEvent(thinking=ThinkingContent(content=delta.thinking))
                     elif delta.type == "input_json_delta":
                         tool_bufs[idx] = tool_bufs.get(idx, "") + delta.partial_json
-                        yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=tool_ids.get(idx, "")))
+                        yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=tool_ids.get(idx, ""))
+                        )
 
                 elif etype == "content_block_stop":
                     idx = event.index
@@ -209,7 +213,8 @@ class AnthropicClaudeCodeAPI(BaseAPI):
                                 id=tool_ids.get(idx, ""),
                                 name=tool_names.get(idx, ""),
                                 args=args
-                            ))
+                            )
+                        )
 
                 elif etype == "message_start":
                     u = getattr(event.message, 'usage', None)
