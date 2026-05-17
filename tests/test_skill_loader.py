@@ -8,8 +8,8 @@ from program.skill.loader import (
     validate_description,
     load_skill_from_file,
     load_skills_from_dir,
-    format_skills_for_prompt,
 )
+from program.prompt.utils import format_skills_for_prompt
 from program.skill.types import LoadSkillsOptions, Skill
 
 

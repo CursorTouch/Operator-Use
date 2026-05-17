@@ -3,83 +3,62 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from program.prompt.types import SystemPromptOptions
+from program.prompt.types import ContextFile, SystemPromptOptions
+from program.prompt.utils import build_guidelines, context_files_section, format_skills_for_prompt
 
 if TYPE_CHECKING:
     from program.skill.types import Skill
+    from program.tool.types import Tool
 
 
-def _build_guidelines(extra: list[str]) -> str:
-    lines = [f"- {g.strip()}" for g in extra if g.strip()]
-    return "\n".join(lines)
+class PromptTemplate:
+    def __init__(
+        self,
+        cwd: str,
+        custom_prompt: str | None = None,
+        tools: list[Tool] | None = None,
+        prompt_guidelines: list[str] | None = None,
+        append_system_prompt: str | None = None,
+        context_files: list[ContextFile] | None = None,
+        skills: list[Skill] | None = None,
+    ) -> None:
+        self.cwd = cwd
+        self.custom_prompt = custom_prompt
+        self.tools: list[Tool] = tools or []
+        self.prompt_guidelines: list[str] = prompt_guidelines or []
+        self.append_system_prompt = append_system_prompt
+        self.context_files: list[ContextFile] = context_files or []
+        self.skills: list[Skill] = skills or []
 
+    def build(self) -> str:
+        today = date.today().isoformat()
+        cwd = self.cwd.replace("\\", "/")
+        footer = f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
 
+        has_read = any(t.name == "read" for t in self.tools)
 
-def _context_files_section(context_files: list) -> str:
-    if not context_files:
-        return ""
-    parts = ["\n\n# Project Context\n\nProject-specific instructions and guidelines:\n"]
-    for cf in context_files:
-        parts.append(f"## {cf.path}\n\n{cf.content}\n")
-    return "\n".join(parts)
+        append_section = f"\n\n{self.append_system_prompt}" if self.append_system_prompt else ""
+        context_section = context_files_section(self.context_files)
+        skills_section = format_skills_for_prompt(self.skills) if has_read and self.skills else ""
 
+        if self.custom_prompt:
+            return self.custom_prompt + append_section + context_section + skills_section + footer
 
-def _escape_xml(text: str) -> str:
-    return (
-        text.replace('&', '&amp;')
-            .replace('<', '&lt;')
-            .replace('>', '&gt;')
-            .replace('"', '&quot;')
-            .replace("'", '&apos;')
-    )
+        guidelines = build_guidelines(self.prompt_guidelines)
+        prompt = "You are a helpful assistant."
+        if guidelines:
+            prompt += f"\n\nGuidelines:\n{guidelines}"
 
-
-def format_skills_for_prompt(skills: list[Skill]) -> str:
-    visible = [s for s in skills if not s.disable_model_invocation]
-    if not visible:
-        return ''
-
-    lines = [
-        '',
-        '',
-        'The following skills provide specialized instructions for specific tasks.',
-        "Use the read tool to load a skill's file when the task matches its description.",
-        'When a skill file references a relative path, resolve it against the skill directory '
-        '(parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.',
-        '',
-        '<available_skills>',
-    ]
-
-    for skill in visible:
-        lines.append('  <skill>')
-        lines.append(f'    <name>{_escape_xml(skill.name)}</name>')
-        lines.append(f'    <description>{_escape_xml(skill.description)}</description>')
-        lines.append(f'    <location>{_escape_xml(str(skill.file_path))}</location>')
-        lines.append('  </skill>')
-
-    lines.append('</available_skills>')
-    return '\n'.join(lines)
+        return prompt + append_section + context_section + skills_section + footer
 
 
 def build_system_prompt(options: SystemPromptOptions) -> str:
-    today = date.today().isoformat()
-    cwd = options.cwd.replace("\\", "/")
-    footer = f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
-
-    has_read = any(t.name == "read" for t in options.tools)
-
-    append_section = f"\n\n{options.append_system_prompt}" if options.append_system_prompt else ""
-    context_section = _context_files_section(options.context_files)
-    skills_section = format_skills_for_prompt(options.skills) if has_read and options.skills else ""
-
-    if options.custom_prompt:
-        return options.custom_prompt + append_section + context_section + skills_section + footer
-
-    guidelines = _build_guidelines(options.prompt_guidelines)
-
-    prompt = "You are a helpful assistant."
-
-    if guidelines:
-        prompt += f"\n\nGuidelines:\n{guidelines}"
-
-    return prompt + append_section + context_section + skills_section + footer
+    return PromptTemplate(
+        cwd=options.cwd,
+        custom_prompt=options.custom_prompt,
+        tools=options.tools,
+        prompt_guidelines=options.prompt_guidelines,
+        append_system_prompt=options.append_system_prompt,
+        context_files=options.context_files,
+        skills=options.skills,
+    ).build()

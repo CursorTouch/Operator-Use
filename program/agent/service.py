@@ -19,8 +19,7 @@ from program.extension.types import (
 from program.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent
 from program.tool.types import ToolInvocation, ToolResult
 
-from program.prompt.builder import build_system_prompt
-from program.prompt.types import SystemPromptOptions
+from program.prompt.builder import PromptTemplate
 
 if TYPE_CHECKING:
     from program.engine.service import Engine
@@ -238,7 +237,7 @@ class Agent(ExtensionContext):
         append_parts = self._resources.get_append_system_prompt()
         append_system_prompt = "\n\n".join(append_parts) if append_parts else None
 
-        options = SystemPromptOptions(
+        return PromptTemplate(
             cwd=str(self._config.cwd),
             custom_prompt=custom_prompt,
             tools=self._engine.state.tools,
@@ -246,8 +245,7 @@ class Agent(ExtensionContext):
             append_system_prompt=append_system_prompt,
             context_files=context_files,
             skills=skills,
-        )
-        return build_system_prompt(options)
+        ).build()
 
     def _register_message_handler(self, persisted_ids: list[str]) -> callable:
         """Register a message_end hook that persists messages and tracks token usage."""

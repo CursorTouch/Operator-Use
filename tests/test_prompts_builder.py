@@ -1,163 +1,169 @@
-"""Tests for prompts/builder.py: system prompt construction."""
+"""Tests for prompt/builder.py and prompt/utils.py."""
 import pytest
-from program.prompt.builder import build_system_prompt, _build_guidelines, _build_tools_list
+from datetime import date
+from pathlib import Path
+from unittest.mock import MagicMock
+
+from program.prompt.builder import PromptTemplate, build_system_prompt
 from program.prompt.types import SystemPromptOptions, ContextFile
+from program.prompt.utils import build_guidelines, context_files_section, format_skills_for_prompt
+from program.skill.types import Skill, SourceInfo
 
 
-def opts(**kwargs) -> SystemPromptOptions:
-    defaults = dict(cwd="/project")
-    defaults.update(kwargs)
-    return SystemPromptOptions(**defaults)
+def make_tool(name: str):
+    tool = MagicMock()
+    tool.name = name
+    return tool
 
 
-# ── build_system_prompt: default (no custom_prompt) ──────────────────────────
+def make_skill(name: str, description: str = "Does things", disabled: bool = False) -> Skill:
+    return Skill(
+        name=name,
+        description=description,
+        file_path=Path(f"/skills/{name}/SKILL.md"),
+        base_dir=Path(f"/skills/{name}"),
+        source_info=SourceInfo(path=f"/skills/{name}/SKILL.md", source="user"),
+        disable_model_invocation=disabled,
+    )
 
-class TestBuildSystemPromptDefault:
+
+# ── PromptTemplate ────────────────────────────────────────────────────────────
+
+class TestPromptTemplateDefault:
     def test_contains_cwd(self):
-        out = build_system_prompt(opts(cwd="/my/project"))
+        out = PromptTemplate(cwd="/my/project").build()
         assert "/my/project" in out
 
     def test_contains_today_date(self):
-        from datetime import date
-        out = build_system_prompt(opts())
+        out = PromptTemplate(cwd="/project").build()
         assert date.today().isoformat() in out
 
-    def test_default_tools_used_when_none_specified(self):
-        out = build_system_prompt(opts(tool_snippets={"read": "Read a file"}))
-        assert "read" in out
+    def test_default_base_text(self):
+        out = PromptTemplate(cwd="/project").build()
+        assert "You are a helpful assistant." in out
 
-    def test_selected_tools_override_defaults(self):
-        out = build_system_prompt(opts(
-            selected_tools=["bash"],
-            tool_snippets={"bash": "Run a shell command"},
-        ))
-        assert "bash" in out
+    def test_windows_path_normalized(self):
+        out = PromptTemplate(cwd=r"C:\Users\joe\project").build()
+        assert "\\" not in out
 
-    def test_no_read_tool_means_no_skills_section(self):
-        from program.skill.types import Skill, SourceInfo
-        from pathlib import Path
-        skill = Skill(
-            name="my-skill",
-            description="Does things",
-            file_path=Path("/skills/my-skill/SKILL.md"),
-            base_dir=Path("/skills/my-skill"),
-            source_info=SourceInfo(path="/skills/my-skill/SKILL.md", source="user"),
-        )
-        out = build_system_prompt(opts(
-            selected_tools=["bash"],
-            skills=[skill],
-        ))
-        assert "my-skill" not in out
-
-    def test_read_tool_includes_skills(self):
-        from program.skill.types import Skill, SourceInfo
-        from pathlib import Path
-        skill = Skill(
-            name="my-skill",
-            description="Does things",
-            file_path=Path("/skills/my-skill/SKILL.md"),
-            base_dir=Path("/skills/my-skill"),
-            source_info=SourceInfo(path="/skills/my-skill/SKILL.md", source="user"),
-        )
-        out = build_system_prompt(opts(
-            selected_tools=["read"],
-            skills=[skill],
-        ))
-        assert "my-skill" in out
+    def test_guidelines_included(self):
+        out = PromptTemplate(cwd="/project", prompt_guidelines=["Always explain your reasoning"]).build()
+        assert "Always explain your reasoning" in out
 
     def test_append_system_prompt_included(self):
-        out = build_system_prompt(opts(append_system_prompt="EXTRA INSTRUCTIONS"))
+        out = PromptTemplate(cwd="/project", append_system_prompt="EXTRA INSTRUCTIONS").build()
         assert "EXTRA INSTRUCTIONS" in out
 
     def test_context_files_included(self):
         cf = ContextFile(path="RULES.md", content="Never use global state.")
-        out = build_system_prompt(opts(context_files=[cf]))
+        out = PromptTemplate(cwd="/project", context_files=[cf]).build()
         assert "Never use global state." in out
         assert "RULES.md" in out
 
-    def test_windows_path_normalized(self):
-        out = build_system_prompt(opts(cwd=r"C:\Users\joe\project"))
-        assert "\\" not in out
+    def test_no_read_tool_excludes_skills(self):
+        skill = make_skill("my-skill")
+        out = PromptTemplate(cwd="/project", tools=[make_tool("bash")], skills=[skill]).build()
+        assert "my-skill" not in out
 
-    def test_guidelines_in_output(self):
-        out = build_system_prompt(opts(
-            selected_tools=["bash"],
-            prompt_guidelines=["Always explain your reasoning"],
-        ))
-        assert "Always explain your reasoning" in out
+    def test_read_tool_includes_skills(self):
+        skill = make_skill("my-skill")
+        out = PromptTemplate(cwd="/project", tools=[make_tool("read")], skills=[skill]).build()
+        assert "my-skill" in out
 
 
-# ── build_system_prompt: custom_prompt ───────────────────────────────────────
-
-class TestBuildSystemPromptCustom:
+class TestPromptTemplateCustomPrompt:
     def test_uses_custom_prompt_as_base(self):
-        out = build_system_prompt(opts(custom_prompt="MY CUSTOM PROMPT"))
+        out = PromptTemplate(cwd="/project", custom_prompt="MY CUSTOM PROMPT").build()
         assert "MY CUSTOM PROMPT" in out
-        assert "coding assistant" not in out
+        assert "You are a helpful assistant." not in out
 
     def test_custom_prompt_still_gets_footer(self):
-        from datetime import date
-        out = build_system_prompt(opts(custom_prompt="CUSTOM"))
+        out = PromptTemplate(cwd="/project", custom_prompt="CUSTOM").build()
         assert date.today().isoformat() in out
 
     def test_custom_prompt_with_append(self):
-        out = build_system_prompt(opts(
-            custom_prompt="BASE",
-            append_system_prompt="APPENDED",
-        ))
+        out = PromptTemplate(cwd="/project", custom_prompt="BASE", append_system_prompt="APPENDED").build()
         assert "BASE" in out
         assert "APPENDED" in out
 
     def test_custom_prompt_with_context_files(self):
         cf = ContextFile(path="ctx.md", content="ctx content")
-        out = build_system_prompt(opts(custom_prompt="BASE", context_files=[cf]))
+        out = PromptTemplate(cwd="/project", custom_prompt="BASE", context_files=[cf]).build()
         assert "ctx content" in out
 
 
-# ── _build_guidelines ─────────────────────────────────────────────────────────
+# ── build_system_prompt (backward compat wrapper) ─────────────────────────────
+
+class TestBuildSystemPrompt:
+    def test_delegates_to_prompt_template(self):
+        options = SystemPromptOptions(cwd="/project", prompt_guidelines=["Be concise"])
+        out = build_system_prompt(options)
+        assert "Be concise" in out
+        assert "/project" in out
+
+
+# ── build_guidelines ──────────────────────────────────────────────────────────
 
 class TestBuildGuidelines:
-    def test_bash_only_generic_guidance(self):
-        out = _build_guidelines(["bash"], [])
-        assert "bash" in out.lower()
+    def test_formats_as_bullet_points(self):
+        out = build_guidelines(["Be helpful", "Be concise"])
+        assert "- Be helpful" in out
+        assert "- Be concise" in out
 
-    def test_bash_with_grep_prefers_grep(self):
-        out = _build_guidelines(["bash", "grep"], [])
-        assert "grep" in out
+    def test_empty_list_returns_empty_string(self):
+        assert build_guidelines([]) == ""
 
-    def test_extra_guidelines_included(self):
-        out = _build_guidelines([], ["Be helpful"])
-        assert "Be helpful" in out
+    def test_strips_whitespace(self):
+        out = build_guidelines(["  trimmed  "])
+        assert "- trimmed" in out
 
-    def test_deduplicates_guidelines(self):
-        out = _build_guidelines([], ["Same thing", "Same thing"])
-        assert out.count("Same thing") == 1
-
-    def test_base_guidelines_always_present(self):
-        out = _build_guidelines([], [])
-        assert "concise" in out.lower()
-
-    def test_empty_extra_guidelines_stripped(self):
-        out = _build_guidelines([], ["", "  ", "real guideline"])
+    def test_skips_blank_entries(self):
+        out = build_guidelines(["", "  ", "real guideline"])
         assert "real guideline" in out
+        assert out.count("-") == 1
 
 
-# ── _build_tools_list ─────────────────────────────────────────────────────────
+# ── context_files_section ─────────────────────────────────────────────────────
 
-class TestBuildToolsList:
-    def test_shows_tools_with_snippets(self):
-        out = _build_tools_list(["read", "bash"], {"read": "Reads files", "bash": "Runs shell"})
-        assert "read: Reads files" in out
-        assert "bash: Runs shell" in out
+class TestContextFilesSection:
+    def test_empty_list_returns_empty_string(self):
+        assert context_files_section([]) == ""
 
-    def test_none_when_no_matching_snippets(self):
-        out = _build_tools_list(["read"], {})
-        assert out == "(none)"
+    def test_includes_path_and_content(self):
+        cf = ContextFile(path="RULES.md", content="no globals")
+        out = context_files_section([cf])
+        assert "RULES.md" in out
+        assert "no globals" in out
 
-    def test_tools_without_snippet_excluded(self):
-        out = _build_tools_list(["read", "bash"], {"read": "Reads files"})
-        assert "bash" not in out
+    def test_includes_project_context_header(self):
+        cf = ContextFile(path="x.md", content="y")
+        out = context_files_section([cf])
+        assert "Project Context" in out
 
-    def test_empty_tools_returns_none(self):
-        out = _build_tools_list([], {"read": "Reads files"})
-        assert out == "(none)"
+
+# ── format_skills_for_prompt ──────────────────────────────────────────────────
+
+class TestFormatSkillsForPrompt:
+    def test_empty_list_returns_empty_string(self):
+        assert format_skills_for_prompt([]) == ""
+
+    def test_disabled_skill_excluded(self):
+        skill = make_skill("hidden", disabled=True)
+        assert format_skills_for_prompt([skill]) == ""
+
+    def test_includes_skill_name_and_description(self):
+        skill = make_skill("my-skill", description="Does great things")
+        out = format_skills_for_prompt([skill])
+        assert "my-skill" in out
+        assert "Does great things" in out
+
+    def test_includes_skill_location(self):
+        skill = make_skill("my-skill")
+        out = format_skills_for_prompt([skill])
+        assert str(skill.file_path) in out
+
+    def test_xml_special_chars_escaped(self):
+        skill = make_skill("skill", description="Use <tags> & 'quotes'")
+        out = format_skills_for_prompt([skill])
+        assert "<tags>" not in out
+        assert "&lt;tags&gt;" in out
