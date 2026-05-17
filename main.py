@@ -15,11 +15,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from program.runtime import Runtime, RuntimeConfig
-from tools import (
-    LsTool, ReadTool, WriteTool, EditTool,
-    GrepTool, GlobTool, TerminalTool,
-    WebFetchTool, WebSearchTool,
-)
 from program.hooks.types import (
     MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent,
@@ -157,12 +152,6 @@ async def _run_with_esc_cancel(coro) -> bool:
 
 # ── REPL ──────────────────────────────────────────────────────────────────────
 
-_TOOLS = [
-    LsTool(), ReadTool(), WriteTool(), EditTool(),
-    GrepTool(), GlobTool(), TerminalTool(),
-    WebFetchTool(), WebSearchTool(),
-]
-
 
 def _bind_renderer(runtime: Runtime, current_session, unsubscribe):
     next_session = runtime.current_session
@@ -184,7 +173,7 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
-        tools=_TOOLS,
+
     )
 
     print(f"Agent starting in {cwd}  (model: {config.model_id})")

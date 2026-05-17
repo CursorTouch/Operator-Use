@@ -190,6 +190,34 @@ hooks.clear('tool_call')           # remove all handlers for one type
 hooks.clear()                      # remove all handlers for all types
 ```
 
+## File-based hook loading
+
+Hooks can be registered without writing an extension. `ResourceLoader` discovers hook files from these directories on `reload()`:
+
+| Directory | Purpose |
+|---|---|
+| `program/builtins/hooks/` | Shipped built-in hooks |
+| `<project>/.program/agent/hooks/` | Project-level hooks |
+| `~/.program/agent/hooks/` | Global user hooks |
+
+A hook file must export `hooks` — a list of `(event_type, handler)` tuples:
+
+```python
+# .program/agent/hooks/logging.py
+async def on_agent_end(event):
+    print(f"Done: {len(event.messages)} messages")
+
+async def on_tool_execution_end(event):
+    print(f"Tool '{event.tool_result.name}' finished")
+
+hooks = [
+    ('agent_end', on_agent_end),
+    ('tool_execution_end', on_tool_execution_end),
+]
+```
+
+All discovered `(event_type, handler)` pairs are registered against the `Hooks` instance in `RuntimeContext.create()` before any session starts. The handler signature is `(event) -> Any` — unlike extension handlers, there is no `ctx` argument. Use extensions when you need access to the `Agent` context.
+
 ## Related documents
 
 - [agent.md](./agent.md) — Which events Agent emits and when

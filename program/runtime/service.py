@@ -32,7 +32,10 @@ class Runtime:
     ) -> None:
         self._context = context
         self._config = config
-        self.commands = CommandRegistry(runtime=self)
+        self.commands = CommandRegistry(
+            runtime=self,
+            discovered=self._context.resource_loader.get_commands(),
+        )
         self.commands.register_from_extensions(
             self._context.extension_runtime.get_commands()
         )
@@ -96,7 +99,10 @@ class Runtime:
         await self._emit_session_shutdown('new')
         self._config = self._config.model_copy(update={'session_file': None})
         self._context = await RuntimeContext.create(self._config)
-        self.commands = CommandRegistry(runtime=self)
+        self.commands = CommandRegistry(
+            runtime=self,
+            discovered=self._context.resource_loader.get_commands(),
+        )
         self.commands.register_from_extensions(
             self._context.extension_runtime.get_commands()
         )
@@ -117,7 +123,10 @@ class Runtime:
         await self._emit_session_shutdown('resume')
         self._config = self._config.model_copy(update={'session_file': session_file})
         self._context = await RuntimeContext.create(self._config)
-        self.commands = CommandRegistry(runtime=self)
+        self.commands = CommandRegistry(
+            runtime=self,
+            discovered=self._context.resource_loader.get_commands(),
+        )
         self.commands.register_from_extensions(
             self._context.extension_runtime.get_commands()
         )

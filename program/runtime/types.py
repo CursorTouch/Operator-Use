@@ -121,6 +121,8 @@ class RuntimeContext:
 
         # ── Hooks ─────────────────────────────────────────────────────────────
         hooks = Hooks()
+        for event_type, handler in resource_loader.get_hooks():
+            hooks.register(event_type, handler)
 
         # ── Extension runtime ─────────────────────────────────────────────────
         load_result = resource_loader.get_extensions()
@@ -158,7 +160,7 @@ class RuntimeContext:
         # ── Agent loop ────────────────────────────────────────────────────────
         engine = Engine(
             llm=llm,
-            tools=config.tools,
+            tools=resource_loader.get_tools() + config.tools,
             options=Options(),
             hooks=hooks,
         )

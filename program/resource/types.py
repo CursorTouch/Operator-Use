@@ -42,6 +42,15 @@ class BaseResourceLoader(ABC):
     def get_skills(self) -> tuple[list['Skill'], list['ResourceDiagnostic']]: ...
 
     @abstractmethod
+    def get_tools(self) -> list: ...
+
+    @abstractmethod
+    def get_commands(self) -> list: ...
+
+    @abstractmethod
+    def get_hooks(self) -> list: ...
+
+    @abstractmethod
     def get_context_files(self) -> list[ContextFile]: ...
 
     @abstractmethod
@@ -73,6 +82,7 @@ class ResourceLoaderOptions(BaseModel):
     config_dir: Path
     additional_extension_dirs: list[Path] = Field(default_factory=list)
     additional_skill_paths: list[str] = Field(default_factory=list)
+    additional_tool_dirs: list[Path] = Field(default_factory=list)
     no_extensions: bool = False
     no_skills: bool = False
     no_context_files: bool = False

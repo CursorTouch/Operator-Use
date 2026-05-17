@@ -34,11 +34,12 @@ If `description` is missing or empty, the skill is not loaded (the file is silen
 
 ## Discovery order
 
-`load_skills(options)` scans three sources in priority order:
+`ResourceLoader` drives skill discovery. On `reload()` it scans four sources in priority order:
 
-1. **User skills** — `~/.config/program/skills/` (source: `"user"`)
-2. **Project skills** — `.program/skills/` relative to cwd (source: `"project"`)
-3. **Explicit paths** — entries in `options.skill_paths`, resolved relative to cwd (source: `"path"`)
+1. **Built-in skills** — `program/builtins/skills/` (source: `"builtin"`)
+2. **User skills** — `~/.program/agent/skills/` (source: `"user"`)
+3. **Project skills** — `<project>/.program/agent/skills/` (source: `"project"`)
+4. **Explicit paths** — entries in `ResourceLoaderOptions.additional_skill_paths`, resolved relative to cwd (source: `"path"`)
 
 Within each source, directories are scanned recursively. If a directory contains a `SKILL.md` at its root, it is treated as a single skill and subdirectories are not scanned further.
 

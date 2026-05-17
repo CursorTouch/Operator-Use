@@ -57,3 +57,5 @@ class WebSearchTool(Tool):
             return ToolResult.ok(id=invocation.id, content="\n".join(lines))
         except Exception as e:
             return ToolResult.error(id=invocation.id, content=f"Failed to search the web: {e}")
+
+tool = WebSearchTool()

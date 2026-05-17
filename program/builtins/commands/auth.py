@@ -4,12 +4,13 @@ import asyncio
 import os
 import sys
 import webbrowser
-from typing import TYPE_CHECKING
 
 from program.commands.types import SlashCommandInfo
 
-if TYPE_CHECKING:
+if TYPE_CHECKING := False:
     from program.commands.registry import CommandRegistry
+
+from typing import TYPE_CHECKING
 
 
 async def _prompt(message: str) -> str:
@@ -17,14 +18,6 @@ async def _prompt(message: str) -> str:
 
 
 async def _read_line_cancelable(message: str = "") -> str:
-    """Read one line from stdin via the event loop.
-
-    Unlike asyncio.to_thread(input), this is genuinely cancelable: on
-    cancellation the loop's stdin reader is torn down and the fd released,
-    so no orphaned thread keeps consuming stdin after the caller moves on.
-    A duplicated fd is used so closing the transport never closes the real
-    stdin (fd 0), which the REPL still needs afterwards.
-    """
     if message:
         sys.stdout.write(message)
         sys.stdout.flush()
@@ -185,35 +178,7 @@ async def _handle_auth(registry: CommandRegistry, args: list[str]) -> None:
                 print(f"  {provider.name:<35} no api key")
 
 
-async def _handle_compact(registry: CommandRegistry, args: list[str]) -> None:
-    """Trigger compaction on the current session immediately."""
-    custom_instructions = ' '.join(args) if args else None
-    runtime = registry.runtime
-    if runtime is None or runtime.current_session is None:
-        return
-    performed = await runtime.current_session.run_compaction(custom_instructions)
-    if not performed:
-        print("Nothing to compact.")
-
-
-async def _handle_new(registry: CommandRegistry, args: list[str]) -> None:
-    """Start a new session."""
-    runtime = registry.runtime
-    if runtime is None:
-        return
-    await runtime.new_session()
-
-
-async def _handle_help(registry: CommandRegistry, args: list[str]) -> None:
-    """List all available commands."""
-    lines = ['Available commands:']
-    for cmd in registry.list():
-        aliases = f"  (aliases: /{', /'.join(cmd.aliases)})" if cmd.aliases else ""
-        lines.append(f"  /{cmd.name} — {cmd.description}{aliases}")
-    print('\n'.join(lines))
-
-
-BUILTIN_COMMANDS: list[SlashCommandInfo] = [
+commands = [
     SlashCommandInfo(
         name='login',
         description='Log in to an OAuth provider (Claude Pro/Max, GitHub Copilot, ChatGPT Plus, Google). Optionally pass the provider id.',
@@ -228,22 +193,5 @@ BUILTIN_COMMANDS: list[SlashCommandInfo] = [
         name='auth',
         description='Show authentication status for all providers.',
         handler=_handle_auth,
-    ),
-    SlashCommandInfo(
-        name='compact',
-        description='Summarise and compact the conversation history. Optionally pass custom instructions.',
-        handler=_handle_compact,
-    ),
-    SlashCommandInfo(
-        name='new',
-        description='Start a new session (clears history).',
-        handler=_handle_new,
-        aliases=['clear'],
-    ),
-    SlashCommandInfo(
-        name='help',
-        description='Show available slash commands.',
-        handler=_handle_help,
-        aliases=['?'],
     ),
 ]

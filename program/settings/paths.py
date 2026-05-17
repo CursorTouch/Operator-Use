@@ -62,3 +62,11 @@ def get_tools_dir(cwd: Path | None = None) -> Path:
 
 def get_skills_dir(cwd: Path | None = None) -> Path:
     return get_agent_dir(cwd) / "skills"
+
+
+def get_commands_dir(cwd: Path | None = None) -> Path:
+    return get_agent_dir(cwd) / "commands"
+
+
+def get_hooks_dir(cwd: Path | None = None) -> Path:
+    return get_agent_dir(cwd) / "hooks"

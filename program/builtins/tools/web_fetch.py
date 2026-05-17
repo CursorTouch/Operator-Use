@@ -106,3 +106,5 @@ class WebFetchTool(Tool):
                 return ToolResult.ok(id=invocation.id, content=content)
         except Exception as e:
             return ToolResult.error(id=invocation.id, content=f"Failed to fetch {url}: {e}")
+
+tool = WebFetchTool()

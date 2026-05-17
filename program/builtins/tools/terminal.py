@@ -141,3 +141,4 @@ class TerminalTool(Tool):
 
         except Exception as e:
             return ToolResult.error(id=invocation.id, content=f"Failed to execute command: {e}")
+tool = TerminalTool()

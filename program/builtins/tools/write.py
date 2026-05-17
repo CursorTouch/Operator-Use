@@ -51,3 +51,5 @@ class WriteTool(Tool):
             return ToolResult.error(id=invocation.id, content=f"Failed to write file: {resolved_path}. {e}")
             
         return ToolResult.ok(id=invocation.id, content=f"{'Overwrote' if file_exists else 'Created'} file: {resolved_path}")
+
+tool = WriteTool()

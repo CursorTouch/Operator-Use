@@ -30,11 +30,12 @@ class Extension:
 
 ## Loading
 
-`discover_and_load_extensions()` scans for extension files in:
+`ResourceLoader` drives extension discovery. On `reload()` it scans for extension files in this order:
 
-1. The global extensions directory (`~/.config/program/extensions/`)
-2. The project-level extensions directory (`.program/extensions/` relative to cwd)
-3. Any additional directories passed via `ResourceLoaderOptions.additional_extension_dirs`
+1. `program/builtins/extensions/` — shipped built-in extensions
+2. `<project>/.program/agent/extensions/` — project-level extensions
+3. `~/.program/agent/extensions/` — global user extensions
+4. Any additional directories passed via `ResourceLoaderOptions.additional_extension_dirs`
 
 Each file is executed in a sandboxed module. The extension receives an `api` object through which it registers handlers and tools.
 

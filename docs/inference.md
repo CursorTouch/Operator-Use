@@ -401,13 +401,15 @@ class Model:
 
 `Modality` covers `Text`, `Image`, `Audio`, and `Video`. Factory methods load the appropriate built-in list:
 
-| Method | Loads |
+| Method | Source file |
 |---|---|
-| `ModelRegistry.from_llm_builtins()` | LLM text models |
-| `ModelRegistry.from_image_builtins()` | Image models |
-| `ModelRegistry.from_audio_builtins()` | Audio models |
-| `ModelRegistry.from_video_builtins()` | Video models |
+| `ModelRegistry.from_llm_builtins()` | `program/builtins/models/text.py` |
+| `ModelRegistry.from_image_builtins()` | `program/builtins/models/image.py` |
+| `ModelRegistry.from_audio_builtins()` | `program/builtins/models/audio.py` |
+| `ModelRegistry.from_video_builtins()` | `program/builtins/models/video.py` |
 | `ModelRegistry.from_all_builtins()` | All four combined |
+
+Each file exports a `models` list. To add a model, append to the appropriate file.
 
 Type aliases: `TextModel`, `ImageModel`, `AudioModel`, `VideoModel` — all are `Model`.
 
@@ -439,7 +441,7 @@ class AudioProvider:
     base_url: str | None = None
 ```
 
-Built-in audio providers: `openai` and `groq` — both resolved through `OpenAIAudioAPI`.
+Built-in audio providers live in `program/builtins/providers/audio.py`.
 
 ### Video providers
 
@@ -453,7 +455,18 @@ class VideoProvider:
     base_url: str | None = None
 ```
 
-Built-in video provider: `fal` — resolved through `FalVideoAPI` (`fal-video`).
+Built-in video providers live in `program/builtins/providers/video.py`.
+
+### Provider source files
+
+| Registry | Source file |
+|---|---|
+| `ProviderRegistry` (LLM) | `program/builtins/providers/text.py` |
+| `ImageProviderRegistry` | `program/builtins/providers/image.py` |
+| `AudioProviderRegistry` | `program/builtins/providers/audio.py` |
+| `VideoProviderRegistry` | `program/builtins/providers/video.py` |
+
+Each file exports a `providers` list (and for LLM: `api_providers`, `oauth_providers` separately). To add a provider, append to the appropriate file.
 
 ---
 

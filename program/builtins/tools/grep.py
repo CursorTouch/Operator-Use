@@ -137,3 +137,5 @@ class GrepTool(Tool):
             content = content[:MAX_TOOL_OUTPUT_LENGTH] + "\n... [Output Truncated]"
 
         return ToolResult.ok(id=invocation.id, content=content)
+
+tool = GrepTool()

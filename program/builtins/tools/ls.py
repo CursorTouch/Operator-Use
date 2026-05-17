@@ -65,3 +65,5 @@ class LsTool(Tool):
 
         header = f"total {_human_size(total_bytes)}"
         return ToolResult.ok(id=invocation.id, content=header + "\n" + "\n".join(lines))
+
+tool = LsTool()

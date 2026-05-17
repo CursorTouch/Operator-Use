@@ -44,9 +44,9 @@ class ProviderRegistry:
 
     @classmethod
     def from_builtins(cls) -> ProviderRegistry:
-        from program.inference.provider.builtins import LLM_PROVIDERS
+        from program.builtins.providers.text import providers
         instance = cls()
-        for provider in LLM_PROVIDERS:
+        for provider in providers:
             instance.register(provider)
         return instance
 
@@ -72,9 +72,9 @@ class ImageProviderRegistry:
 
     @classmethod
     def from_builtins(cls) -> ImageProviderRegistry:
-        from program.inference.provider.builtins import IMAGE_PROVIDERS
+        from program.builtins.providers.image import providers
         instance = cls()
-        for provider in IMAGE_PROVIDERS:
+        for provider in providers:
             instance.register(provider)
         return instance
 
@@ -100,9 +100,9 @@ class AudioProviderRegistry:
 
     @classmethod
     def from_builtins(cls) -> AudioProviderRegistry:
-        from program.inference.provider.builtins import AUDIO_PROVIDERS
+        from program.builtins.providers.audio import providers
         instance = cls()
-        for provider in AUDIO_PROVIDERS:
+        for provider in providers:
             instance.register(provider)
         return instance
 
@@ -128,8 +128,8 @@ class VideoProviderRegistry:
 
     @classmethod
     def from_builtins(cls) -> VideoProviderRegistry:
-        from program.inference.provider.builtins import VIDEO_PROVIDERS
+        from program.builtins.providers.video import providers
         instance = cls()
-        for provider in VIDEO_PROVIDERS:
+        for provider in providers:
             instance.register(provider)
         return instance

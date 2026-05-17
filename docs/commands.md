@@ -33,6 +33,34 @@ Aliases are registered as additional keys pointing to the same `SlashCommandInfo
 
 Handlers are called with `(registry, args)`. If the handler returns a coroutine, it is awaited.
 
+## Command discovery
+
+`ResourceLoader` drives all command discovery. On `reload()` it loads commands from these directories in order (first-found wins on name collision):
+
+| Directory | Purpose |
+|---|---|
+| `program/builtins/commands/` | Shipped built-in commands |
+| `<project>/.program/agent/commands/` | Project-level custom commands |
+| `~/.program/agent/commands/` | Global user commands |
+
+A command file must export either `command = SlashCommandInfo(...)` or `commands = [SlashCommandInfo(...), ...]`.
+
+```python
+# .program/agent/commands/deploy.py
+from program.commands.types import SlashCommandInfo
+
+async def _handle_deploy(registry, args):
+    ...
+
+command = SlashCommandInfo(
+    name='deploy',
+    description='Deploy the current branch.',
+    handler=_handle_deploy,
+)
+```
+
+The `CommandRegistry` is created with the discovered commands passed as `discovered=`. Extension commands are then merged in via `register_from_extensions()` after that.
+
 ## SlashCommandInfo
 
 ```python

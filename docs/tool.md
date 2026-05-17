@@ -184,6 +184,19 @@ tool = MyTool()   # or: tools = [MyTool(), AnotherTool()]
 
 Load errors are non-fatal: `LoadToolsResult.errors` accumulates `ToolError` objects for files that raised on import or exported nothing valid.
 
+## Tool discovery
+
+`ResourceLoader` drives all tool discovery. On `reload()` it loads tools from these directories in order (first-found wins on name collision):
+
+| Directory | Purpose |
+|---|---|
+| `program/builtins/tools/` | Shipped built-in tools |
+| `<project>/.program/agent/tools/` | Project-level custom tools |
+| `~/.program/agent/tools/` | Global user tools |
+| `ResourceLoaderOptions.additional_tool_dirs` | Programmatically injected extras |
+
+Drop a `.py` file exporting `tool = MyTool()` into any of those directories and it is picked up automatically on the next reload. The built-in tools (`read`, `write`, `edit`, `grep`, `glob`, `ls`, `terminal`, `web_fetch`, `web_search`) live in `program/builtins/tools/`.
+
 ## Extension tools
 
 Extensions register tools through the extension API. Agent merges them with base tools at turn start, with base tool names taking priority over extension tool names.

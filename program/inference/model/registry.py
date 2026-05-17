@@ -35,41 +35,44 @@ class ModelRegistry:
 
     @classmethod
     def from_llm_builtins(cls) -> ModelRegistry:
-        from program.inference.model.builtins import LLM_MODELS
+        from program.builtins.models.text import models
         instance = cls()
-        for model in LLM_MODELS:
+        for model in models:
             instance.register(model)
         return instance
 
     @classmethod
     def from_image_builtins(cls) -> ModelRegistry:
-        from program.inference.model.builtins import IMAGE_MODELS
+        from program.builtins.models.image import models
         instance = cls()
-        for model in IMAGE_MODELS:
+        for model in models:
             instance.register(model)
         return instance
 
     @classmethod
     def from_audio_builtins(cls) -> ModelRegistry:
-        from program.inference.model.builtins import AUDIO_MODELS
+        from program.builtins.models.audio import models
         instance = cls()
-        for model in AUDIO_MODELS:
+        for model in models:
             instance.register(model)
         return instance
 
     @classmethod
     def from_video_builtins(cls) -> ModelRegistry:
-        from program.inference.model.builtins import VIDEO_MODELS
+        from program.builtins.models.video import models
         instance = cls()
-        for model in VIDEO_MODELS:
+        for model in models:
             instance.register(model)
         return instance
 
     @classmethod
     def from_all_builtins(cls) -> ModelRegistry:
-        from program.inference.model.builtins import LLM_MODELS, IMAGE_MODELS, AUDIO_MODELS, VIDEO_MODELS
+        from program.builtins.models.text import models as llm
+        from program.builtins.models.image import models as image
+        from program.builtins.models.audio import models as audio
+        from program.builtins.models.video import models as video
         instance = cls()
-        for model in LLM_MODELS + IMAGE_MODELS + AUDIO_MODELS + VIDEO_MODELS:
+        for model in llm + image + audio + video:
             instance.register(model)
         return instance
 

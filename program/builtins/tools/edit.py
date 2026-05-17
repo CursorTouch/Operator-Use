@@ -78,3 +78,5 @@ class EditTool(Tool):
             return ToolResult.error(id=invocation.id, content=f"Failed to write file: {resolved_path}. {e}")
 
         return ToolResult.ok(id=invocation.id, content=f"Applied {len(edits_raw)} edit(s) to {resolved_path}.")
+
+tool = EditTool()

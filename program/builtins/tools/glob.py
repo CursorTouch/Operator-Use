@@ -57,3 +57,5 @@ class GlobTool(Tool):
         content = "\n".join(result_lines)
 
         return ToolResult.ok(id=invocation.id, content=content)
+
+tool = GlobTool()

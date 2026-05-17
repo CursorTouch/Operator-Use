@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from program.commands.builtins import BUILTIN_COMMANDS
 from program.commands.types import SlashCommandInfo, CommandParseResult
 
 if TYPE_CHECKING:
@@ -16,23 +15,18 @@ class CommandRegistry:
     Attach to Runtime via `runtime` so handlers can call back.
     """
 
-    def __init__(self, runtime: Runtime | None = None) -> None:
+    def __init__(self, runtime: Runtime | None = None, discovered: list[SlashCommandInfo] | None = None) -> None:
         self.runtime = runtime
         self._commands: dict[str, SlashCommandInfo] = {}
-        self._register_builtins()
-
-    def _register_builtins(self) -> None:
-        for cmd in BUILTIN_COMMANDS:
+        for cmd in (discovered or []):
             self.register(cmd)
 
     def register(self, command: SlashCommandInfo) -> None:
-        """Register a command and all its aliases."""
         self._commands[command.name] = command
         for alias in command.aliases:
             self._commands[alias] = command
 
     def register_from_extensions(self, ext_commands: dict[str, Any]) -> None:
-        """Register commands discovered from loaded extensions."""
         for name, registered in ext_commands.items():
             cmd = SlashCommandInfo(
                 name=name,
@@ -45,7 +39,6 @@ class CommandRegistry:
         return self._commands.get(name)
 
     def list(self) -> list[SlashCommandInfo]:
-        """Return unique commands (aliases deduplicated)."""
         seen: set[str] = set()
         result: list[SlashCommandInfo] = []
         for cmd in self._commands.values():
@@ -55,10 +48,6 @@ class CommandRegistry:
         return result
 
     async def dispatch(self, parsed: CommandParseResult) -> bool:
-        """
-        Dispatch a parsed command. Returns True if the command was found,
-        False if unknown.
-        """
         cmd = self._commands.get(parsed.name)
         if cmd is None:
             print(f"Unknown command: /{parsed.name}. Type /help for a list of commands.")
