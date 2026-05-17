@@ -127,12 +127,24 @@ class RuntimeContext:
         extension_runtime = _DeferredExtensionRuntime(load_result)
 
         # ── Compaction ────────────────────────────────────────────────────────
-        compaction_settings = CompactionSettings(
-            enabled=config.compaction_enabled,
-            reserve_tokens=config.compaction_reserve_tokens,
-            keep_recent_tokens=config.compaction_keep_recent_tokens,
+        # Resolve compaction settings live from the SettingsManager so that
+        # changes to settings.json (e.g. {"compaction": {"enabled": false}})
+        # take effect on the next check instead of being frozen at startup.
+        # The RuntimeConfig values act as overrides: an explicit False/non-default
+        # there still wins over the persisted setting.
+        def _resolve_compaction_settings() -> CompactionSettings:
+            persisted = settings_manager.get_compaction_settings()
+            return CompactionSettings(
+                enabled=config.compaction_enabled and persisted["enabled"],
+                reserve_tokens=persisted["reserve_tokens"],
+                keep_recent_tokens=persisted["keep_recent_tokens"],
+            )
+
+        compaction = Compaction(
+            llm=llm,
+            settings=_resolve_compaction_settings(),
+            settings_provider=_resolve_compaction_settings,
         )
-        compaction = Compaction(llm=llm, settings=compaction_settings)
 
         # ── Session manager ───────────────────────────────────────────────────
         session_dir = settings_manager.get_session_dir()

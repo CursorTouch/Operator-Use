@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from program.inference.types import LLMContext, ThinkingLevel
 from program.message.types import AgentMessage, UserMessage, TextContent
@@ -27,14 +27,29 @@ if TYPE_CHECKING:
 
 
 class Compaction:
-    def __init__(self, llm: LLM, settings: CompactionSettings | None = None):
+    def __init__(
+        self,
+        llm: LLM,
+        settings: CompactionSettings | None = None,
+        settings_provider: Callable[[], CompactionSettings] | None = None,
+    ):
         self.llm = llm
         self.settings = settings or CompactionSettings()
+        self._settings_provider = settings_provider
+
+    @property
+    def _settings(self) -> CompactionSettings:
+        """Resolve compaction settings live so changes (e.g. settings.json) take
+        effect on the next check rather than being frozen at construction."""
+        if self._settings_provider is not None:
+            return self._settings_provider()
+        return self.settings
 
     def should_compact(self, context_tokens: int, context_window: int) -> bool:
-        if not self.settings.enabled:
+        settings = self._settings
+        if not settings.enabled:
             return False
-        return context_tokens > context_window - self.settings.reserve_tokens
+        return context_tokens > context_window - settings.reserve_tokens
 
     def prepare(self, path_entries: list[SessionEntry]) -> CompactionPreparation | None:
         """
@@ -42,6 +57,8 @@ class Compaction:
         needed to call compact(). Returns None if the last entry is already a
         compaction or no valid cut point exists.
         """
+        settings = self._settings
+
         if path_entries and isinstance(path_entries[-1], CompactionEntry):
             return None
 
@@ -54,7 +71,7 @@ class Compaction:
             collect_messages_in_range(path_entries, 0, boundary_end)
         ).tokens
 
-        cut = find_cut_point(path_entries, boundary_start, boundary_end, self.settings.keep_recent_tokens)
+        cut = find_cut_point(path_entries, boundary_start, boundary_end, settings.keep_recent_tokens)
         if cut.first_kept_entry_index >= boundary_end:
             return None
         first_kept_entry = path_entries[cut.first_kept_entry_index]
@@ -85,7 +102,7 @@ class Compaction:
             tokens_before=tokens_before,
             previous_summary=previous_summary,
             file_ops=file_ops,
-            settings=self.settings,
+            settings=settings,
         )
 
     async def compact(
