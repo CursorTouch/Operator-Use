@@ -78,30 +78,6 @@ def _get_account_id(access_token: str) -> str | None:
     return account_id if isinstance(account_id, str) and account_id else None
 
 
-def _decode_jwt(token: str) -> dict | None:
-    try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            return None
-        payload = parts[1]
-        padding = (4 - len(payload) % 4) % 4
-        decoded = base64.urlsafe_b64decode(payload + "=" * padding)
-        return json.loads(decoded)
-    except Exception:
-        return None
-
-
-def _get_account_id(access_token: str) -> str | None:
-    payload = _decode_jwt(access_token)
-    if not isinstance(payload, dict):
-        return None
-    auth = payload.get(JWT_CLAIM_PATH)
-    if not isinstance(auth, dict):
-        return None
-    account_id = auth.get("chatgpt_account_id")
-    return account_id if isinstance(account_id, str) and account_id else None
-
-
 def _parse_authorization_input(value: str) -> tuple[Optional[str], Optional[str]]:
     """Parse code and state from a redirect URL, raw query string, or bare code."""
     value = value.strip()
@@ -277,16 +253,38 @@ async def login_openai_codex(
         instructions="A browser window should open. Complete login to finish.",
     ))
 
-    # Wait for the browser callback only. We must NOT race an
-    # asyncio.to_thread(input) task here: that thread cannot be cancelled and
-    # would keep reading stdin after this returns, stealing input from the
-    # REPL. Manual paste is handled sequentially below if the server times out.
+    # Race the browser callback against optional manual paste. The manual
+    # task MUST be cancelable (see _read_line_cancelable) — cancelling it
+    # tears down the stdin reader so nothing keeps consuming stdin after we
+    # return. We await the cancelled tasks so that teardown completes before
+    # control returns to the REPL.
     code: Optional[str] = None
     try:
-        try:
-            code = await asyncio.wait_for(asyncio.shield(code_future), timeout=300)
-        except asyncio.TimeoutError:
-            pass
+        if callbacks.on_manual_code_input:
+            browser_task = asyncio.ensure_future(code_future)
+            manual_task = asyncio.ensure_future(callbacks.on_manual_code_input())
+            done, pending = await asyncio.wait(
+                [browser_task, manual_task],
+                timeout=300,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+            if browser_task in done and not browser_task.cancelled() and browser_task.exception() is None:
+                code = browser_task.result()
+            elif manual_task in done and not manual_task.cancelled() and manual_task.exception() is None:
+                raw = manual_task.result()
+                parsed_code, parsed_state = _parse_authorization_input(raw)
+                if parsed_state and parsed_state != state:
+                    raise ValueError("State mismatch")
+                code = parsed_code
+        else:
+            try:
+                code = await asyncio.wait_for(asyncio.shield(code_future), timeout=300)
+            except asyncio.TimeoutError:
+                pass
     finally:
         server.close()
         await server.wait_closed()

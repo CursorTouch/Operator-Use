@@ -159,9 +159,10 @@ def _build_body(
         "include": ["reasoning.encrypted_content"],
         "reasoning": {"effort": effort, "summary": "auto"},
     }
-    if options.max_tokens is not None:
-        body["max_output_tokens"] = options.max_tokens
-    
+    # NOTE: the ChatGPT Codex backend rejects `max_output_tokens`
+    # ("Unsupported parameter") — unlike the standard OpenAI Responses API.
+    # Output length is governed by the subscription, so we never send it.
+
     if tools:
         body["tools"] = [
             {

@@ -215,18 +215,42 @@ async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
         ),
     ))
 
-    # Wait for the browser callback only. We must NOT race an
-    # asyncio.to_thread(input) task here: that thread cannot be cancelled and
-    # would keep reading stdin after this returns, stealing input from the
-    # REPL. Manual paste is handled sequentially below if the server times out.
+    # Race the browser callback against optional manual paste. The manual
+    # task MUST be cancelable (see _read_line_cancelable) — cancelling it
+    # tears down the stdin reader so nothing keeps consuming stdin after we
+    # return. We await the cancelled tasks so that teardown completes before
+    # control returns to the REPL.
     code: Optional[str] = None
     recv_state: Optional[str] = None
     try:
-        try:
-            code = await asyncio.wait_for(asyncio.shield(code_future), timeout=300)
-            recv_state = state
-        except asyncio.TimeoutError:
-            pass
+        if callbacks.on_manual_code_input:
+            browser_task = asyncio.ensure_future(code_future)
+            manual_task = asyncio.ensure_future(callbacks.on_manual_code_input())
+            done, pending = await asyncio.wait(
+                [browser_task, manual_task],
+                timeout=300,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+            if browser_task in done and not browser_task.cancelled() and browser_task.exception() is None:
+                code = browser_task.result()
+                recv_state = state
+            elif manual_task in done and not manual_task.cancelled() and manual_task.exception() is None:
+                raw = manual_task.result()
+                parsed_code, parsed_state = _parse_authorization_input(raw)
+                if parsed_state and parsed_state != state:
+                    raise ValueError("OAuth state mismatch")
+                code = parsed_code
+                recv_state = parsed_state or state
+        else:
+            try:
+                code = await asyncio.wait_for(asyncio.shield(code_future), timeout=300)
+                recv_state = state
+            except asyncio.TimeoutError:
+                pass
     finally:
         server.close()
         await server.wait_closed()

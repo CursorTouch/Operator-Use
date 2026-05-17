@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import sys
 import webbrowser
 from typing import TYPE_CHECKING
 
@@ -12,6 +14,37 @@ if TYPE_CHECKING:
 
 async def _prompt(message: str) -> str:
     return await asyncio.to_thread(input, message)
+
+
+async def _read_line_cancelable(message: str = "") -> str:
+    """Read one line from stdin via the event loop.
+
+    Unlike asyncio.to_thread(input), this is genuinely cancelable: on
+    cancellation the loop's stdin reader is torn down and the fd released,
+    so no orphaned thread keeps consuming stdin after the caller moves on.
+    A duplicated fd is used so closing the transport never closes the real
+    stdin (fd 0), which the REPL still needs afterwards.
+    """
+    if message:
+        sys.stdout.write(message)
+        sys.stdout.flush()
+
+    loop = asyncio.get_running_loop()
+    dup_fd = os.dup(sys.stdin.fileno())
+    pipe = os.fdopen(dup_fd, "r")
+    reader = asyncio.StreamReader()
+    transport, _ = await loop.connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader), pipe
+    )
+    try:
+        data = await reader.readline()
+        return data.decode(errors="replace").strip()
+    finally:
+        transport.close()
+        try:
+            pipe.close()
+        except Exception:
+            pass
 
 
 async def _handle_login(registry: CommandRegistry, args: list[str]) -> None:
@@ -65,10 +98,16 @@ async def _handle_login(registry: CommandRegistry, args: list[str]) -> None:
     def on_progress(msg: str) -> None:
         print(f"  {msg}")
 
+    async def on_manual_code_input() -> str:
+        return await _read_line_cancelable(
+            "  Paste the redirect URL or authorization code: "
+        )
+
     callbacks = OAuthLoginCallbacks(
         on_auth=on_auth,
         on_prompt=on_prompt,
         on_progress=on_progress,
+        on_manual_code_input=on_manual_code_input,
     )
 
     print(f"Logging in to {provider.name}...")

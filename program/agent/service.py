@@ -148,7 +148,7 @@ class Agent(ExtensionContext):
             await self._runtime.resume_session(session_file)
 
     # -------------------------------------------------------------------------
-    # Engine event fan-out (pi-style: agent is the single funnel)
+    # Engine event fan-out (agent is the single funnel)
     # -------------------------------------------------------------------------
 
     async def _on_engine_event(self, event: Any) -> None:

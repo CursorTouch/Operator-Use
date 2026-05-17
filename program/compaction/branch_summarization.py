@@ -108,7 +108,7 @@ def prepare_branch_entries(
     total_tokens = 0
 
     # First pass: collect file ops from all branch_summary entries (even outside budget)
-    # Only from pi-generated summaries (from_hook != True)
+    # Only from agent-generated summaries (from_hook != True)
     for entry in entries:
         if isinstance(entry, BranchEntry) and not entry.from_hook and entry.details:
             details = entry.details
