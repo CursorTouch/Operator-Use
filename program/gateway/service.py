@@ -133,9 +133,22 @@ class Gateway:
         session_key = f"{msg.channel}:{msg.chat_id}"
         entry = self._get_or_create_session(session_key)
 
-        # Cancel any currently running task for this session
+        # Cancel any currently running task for this session and wait for it
+        # to fully stop before reusing the agent — task.cancel() only schedules
+        # cancellation; without await the old and new invocations would race.
         if entry.task is not None and not entry.task.done():
             entry.task.cancel()
+            try:
+                await entry.task
+            except (asyncio.CancelledError, Exception):
+                pass
+            # Flush the channel's buffer by sending an END so the channel
+            # doesn't hold stale accumulated text from the interrupted stream.
+            await self._bus.publish_outgoing(OutgoingMessage(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                stream_phase=StreamPhase.END,
+            ))
 
         entry.task = asyncio.create_task(
             self._run_session(session_key, msg.channel, msg.chat_id, entry.agent, text),
