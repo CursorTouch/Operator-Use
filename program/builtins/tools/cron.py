@@ -58,6 +58,18 @@ class CronSchema(BaseModel):
         default=False,
         description='If true, the job is automatically removed after its first successful run.',
     )
+    channel_id: str | None = Field(
+        default=None,
+        description=(
+            'Channel to send the response to when the job fires '
+            '(e.g. "telegram", "discord", "slack"). '
+            'If omitted the response goes to the active agent session.'
+        ),
+    )
+    chat_id: str | None = Field(
+        default=None,
+        description='Specific chat or user ID within the channel (required when channel_id is set).',
+    )
 
 
 def _format_job(job: CronJob) -> dict:
@@ -154,7 +166,11 @@ class CronTool(Tool):
                 job = cron.add_job(
                     name=name,
                     schedule=schedule,
-                    payload=CronPayload(message=message),
+                    payload=CronPayload(
+                        message=message,
+                        channel_id=params.get('channel_id'),
+                        chat_id=params.get('chat_id'),
+                    ),
                     delete_after_run=params.get('delete_after_run', False),
                 )
                 return ToolResult.ok(
@@ -187,7 +203,11 @@ class CronTool(Tool):
                     schedule = CronSchedule(mode='cron', expr=expr, tz=params.get('tz') or 'UTC')
 
                 message = params.get('message')
-                payload = CronPayload(message=message) if message else None
+                payload = CronPayload(
+                    message=message,
+                    channel_id=params.get('channel_id'),
+                    chat_id=params.get('chat_id'),
+                ) if message else None
 
                 updated = cron.update_job(
                     job_id,

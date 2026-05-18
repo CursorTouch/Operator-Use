@@ -15,6 +15,8 @@ class CronSchedule:
 @dataclass
 class CronPayload:
     message: str = ''                # prompt injected into the agent
+    channel_id: str | None = None    # route response to this channel (e.g. 'telegram')
+    chat_id: str | None = None       # specific chat/user within the channel
 
 
 @dataclass

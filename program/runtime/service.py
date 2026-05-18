@@ -267,11 +267,27 @@ class Runtime:
     # -------------------------------------------------------------------------
 
     async def _handle_cron_job(self, job: CronJob) -> None:
-        """Inject a cron job's message into the agent as a prompt."""
+        """Inject a cron job's message into the agent and route the response."""
         import logging
         logger = logging.getLogger(__name__)
         logger.info('Cron job invoking agent | id=%s name=%s', job.id, job.name)
-        await self.invoke(job.payload.message, PromptOptions(source='cron'))
+
+        channel_id = job.payload.channel_id
+        chat_id = job.payload.chat_id
+
+        if channel_id and chat_id:
+            # Run a dedicated session agent and stream its response to the channel
+            from program.bus.types import IncomingMessage, TextPart
+            bus = self.gateway_manager._bus
+            msg = IncomingMessage(
+                channel=channel_id,
+                chat_id=chat_id,
+                parts=[TextPart(content=job.payload.message)],
+            )
+            await bus.publish_incoming(msg)
+        else:
+            # No channel target — inject directly into the active agent session
+            await self.invoke(job.payload.message, PromptOptions(source='cron'))
 
     # -------------------------------------------------------------------------
     # Extension event helpers

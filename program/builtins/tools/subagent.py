@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from program.subagent.manager import SubagentManager
 
 
-class SpawnAgentSchema(BaseModel):
+class SubAgentSchema(BaseModel):
     action: Literal['create', 'list', 'status', 'cancel'] = Field(
         description=(
             'Action to perform:\n'
@@ -65,7 +65,7 @@ class SubagentTool(Tool):
                 'After calling create, END YOUR TURN — the result is injected back automatically '
                 'when the subagent finishes. Do not poll with list or status after create.'
             ),
-            schema=SpawnAgentSchema,
+            schema=SubAgentSchema,
             kind=ToolKind.Execute,
             execution_mode=ToolExecutionMode.Sequential,
         )
