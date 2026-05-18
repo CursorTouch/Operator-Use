@@ -21,3 +21,7 @@ class Bus:
 
     async def consume_outgoing(self) -> OutgoingMessage:
         return await self._outgoing.get()
+
+
+# Backward-compat alias used by extension and resource modules.
+EventBus = Bus
