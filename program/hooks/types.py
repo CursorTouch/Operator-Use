@@ -415,6 +415,14 @@ class GatewayStopEvent:
 
 
 @dataclass
+class MessageCancelEvent:
+    """Fired when an in-progress session is hard-cancelled."""
+    type: Literal['message:cancel'] = field(default='message:cancel', init=False)
+    channel_id: str = ''
+    chat_id: str = ''
+
+
+@dataclass
 class GatewayErrorEvent:
     """Fired when an error occurs while processing a message."""
     type: Literal['gateway:error'] = field(default='gateway:error', init=False)

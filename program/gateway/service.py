@@ -14,11 +14,10 @@ from program.hooks.types import (
     ToolExecutionEndEvent, ToolExecutionStartEvent,
     ChannelConnectEvent, ChannelDisconnectEvent,
     MessageReceiveEvent, MessageReceiveResult,
-    MessageSendEvent,
+    MessageSendEvent, MessageCancelEvent,
     GatewayErrorEvent,
 )
-from program.message.types import Role
-
+from program.message.types import UserMessage, Role
 if TYPE_CHECKING:
     from program.runtime.service import Runtime
     from program.agent.service import Agent
@@ -105,8 +104,6 @@ class Gateway:
 
     async def _handle_incoming(self, msg: IncomingMessage) -> None:
         """Handle one incoming message: hook → get/create session → run."""
-        from program.message.types import Role
-
         # ── message:receive hook — allow reject or transform before agent sees it
         text = "\n".join(p.content for p in msg.parts if isinstance(p, TextPart))
         results = await self.hooks.emit(
@@ -138,22 +135,12 @@ class Gateway:
         session_key = f"{msg.channel}:{msg.chat_id}"
         entry = self._get_or_create_session(session_key)
 
-        # Cancel any currently running task for this session and wait for it
-        # to fully stop before reusing the agent — task.cancel() only schedules
-        # cancellation; without await the old and new invocations would race.
         if entry.task is not None and not entry.task.done():
-            entry.task.cancel()
-            try:
-                await entry.task
-            except (asyncio.CancelledError, Exception):
-                pass
-            # Flush the channel's buffer by sending an END so the channel
-            # doesn't hold stale accumulated text from the interrupted stream.
-            await self._bus.publish_outgoing(OutgoingMessage(
-                channel=msg.channel,
-                chat_id=msg.chat_id,
-                stream_phase=StreamPhase.END,
-            ))
+            # Agent is mid-run — steer it instead of cancelling. The steering
+            # message is injected into the engine's queue and picked up at the
+            # next tool boundary, keeping state clean.
+            await entry.agent._engine.steer(UserMessage.text(text))
+            return
 
         entry.task = asyncio.create_task(
             self._run_session(session_key, msg.channel, msg.chat_id, entry.agent, text),
@@ -167,6 +154,25 @@ class Gateway:
             agent = self._runtime.create_session_agent()
             self._sessions[session_key] = _SessionEntry(agent=agent)
         return self._sessions[session_key]
+
+    async def cancel_session(self, channel_id: str, chat_id: str) -> None:
+        """Hard-cancel an in-progress session and fire MessageCancelEvent."""
+        session_key = f"{channel_id}:{chat_id}"
+        entry = self._sessions.get(session_key)
+        if entry is None or entry.task is None or entry.task.done():
+            return
+        entry.task.cancel()
+        try:
+            await entry.task
+        except (asyncio.CancelledError, Exception):
+            pass
+        # Flush the channel buffer so the partial stream is cleared.
+        await self._bus.publish_outgoing(OutgoingMessage(
+            channel=channel_id,
+            chat_id=chat_id,
+            stream_phase=StreamPhase.END,
+        ))
+        await self.hooks.emit(MessageCancelEvent(channel_id=channel_id, chat_id=chat_id))
 
     # ── Session runner ────────────────────────────────────────────────────────
 
