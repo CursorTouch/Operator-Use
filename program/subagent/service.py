@@ -68,8 +68,8 @@ class Subagent:
             except asyncio.CancelledError:
                 logger.info('[%s] subagent "%s" cancelled', record.task_id, record.label)
                 record.status = 'cancelled'
-                record.finished_at = datetime.now()
-                return
+                result = '(cancelled)'
+                break
 
             except asyncio.TimeoutError:
                 logger.warning('[%s] subagent "%s" timed out after %.0fs', record.task_id, record.label, timeout)
