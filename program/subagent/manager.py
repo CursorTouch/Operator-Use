@@ -20,6 +20,7 @@ from program.subagent.types import SubagentRecord, SubagentSettings
 if TYPE_CHECKING:
     from program.agent.service import Agent
     from program.agent.types import PromptOptions
+    from program.gateway.service import Gateway
     from program.inference.api.text.service import LLM
     from program.runtime.service import Runtime
     from program.tool.types import Tool
@@ -36,6 +37,7 @@ class SubagentManager:
         llm: LLM,
         tools: list[Tool],
         settings: SubagentSettings | None = None,
+        gateway: Gateway | None = None,
     ) -> None:
         self._runtime = runtime
         self._settings = settings or SubagentSettings()
@@ -43,6 +45,7 @@ class SubagentManager:
         self._pool = TaskPool(max_concurrent=self._settings.max_concurrent)
         self._records: dict[str, SubagentRecord] = {}
         self._tasks: dict[str, asyncio.Task] = {}
+        self._gateway: Gateway | None = gateway
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -53,11 +56,13 @@ class SubagentManager:
         depends_on: list[str] | None = None,
     ) -> str:
         """Spawn a background subagent. Returns task_id immediately."""
-        # Capture the calling agent now — result must go back to this specific agent,
-        # not whatever session happens to be active when the subagent finishes.
+        # Capture both the calling agent and the active channel now — the result
+        # must route back to the exact agent+channel that triggered this call.
         calling_agent = self._runtime.current_session
         if calling_agent is None:
             raise RuntimeError('No active agent session to receive the subagent result.')
+
+        channel_id = self._gateway.active_channel_id if self._gateway else None
 
         task_id = f'sub_{uuid.uuid4().hex[:8]}'
         display_label = label or task[:50]
@@ -72,6 +77,7 @@ class SubagentManager:
             task=task,
             status='running',
             started_at=datetime.now(),
+            channel_id=channel_id,
             depends_on=depends_on,
         )
         self._records[task_id] = record
@@ -113,7 +119,7 @@ class SubagentManager:
         await self._announce(record, agent)
 
     async def _announce(self, record: SubagentRecord, agent: Agent) -> None:
-        """Inject the result directly into the agent that spawned this subagent."""
+        """Route the result back to the agent+channel that spawned this subagent."""
         from program.agent.types import PromptOptions
 
         status_line = 'completed' if record.status == 'completed' else record.status
@@ -125,14 +131,25 @@ class SubagentManager:
             f'Do not mention technical terms like "subagent" or task IDs.'
         )
 
-        # Wait until the specific calling agent is idle before injecting.
-        for _ in range(600):  # up to 60 seconds
+        if record.channel_id and self._gateway:
+            # Gateway handles lock acquisition, hook routing, and channel delivery.
+            # Waits until the agent is idle then runs a full LLM turn on the correct channel.
+            for _ in range(600):  # up to 60 seconds
+                try:
+                    await self._gateway.inject(record.channel_id, msg)
+                    return
+                except RuntimeError:
+                    await asyncio.sleep(0.1)
+            logger.warning('[%s] could not inject result — agent stayed busy', record.task_id)
+            return
+
+        # Fallback: no gateway/channel (e.g. CLI mode) — inject directly into the agent.
+        for _ in range(600):
             try:
                 await agent.invoke(msg, PromptOptions(source='subagent'))
                 return
             except RuntimeError:
                 await asyncio.sleep(0.1)
-
         logger.warning('[%s] could not inject result — agent stayed busy', record.task_id)
 
     def _check_for_cycles(self, new_id: str, depends_on: list[str]) -> None:

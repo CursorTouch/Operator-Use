@@ -31,6 +31,7 @@ class WebSocketChannel(BaseChannel):
         {"type": "tool_end",   "name": "...", "result": "...", "is_error": false}
         {"type": "error",      "message": "..."}
         {"type": "done"}
+        {"type": "message",    "text": "..."}   ← out-of-band send()
 
     Client → server JSON protocol:
         {"type": "message", "text": "..."}
@@ -47,15 +48,8 @@ class WebSocketChannel(BaseChannel):
     def channel_id(self) -> str:
         return self._id
 
-    async def on_event(self, event: GatewayEvent) -> None:
-        payload = {'type': event.type, **event.data}
-        try:
-            await self._conn.send(json.dumps(payload))
-        except Exception:
-            logger.warning("WebSocketChannel %r: send failed for event %r", self._id, event.type)
-
-    async def serve(self) -> None:
-        """Process incoming messages until the connection closes."""
+    async def start(self) -> None:
+        """Register with the gateway and process incoming messages until the connection closes."""
         self._gateway.register(self)
         try:
             async for raw in self._conn:
@@ -74,27 +68,47 @@ class WebSocketChannel(BaseChannel):
         finally:
             self._gateway.unregister(self._id)
 
+    async def on_event(self, event: GatewayEvent) -> None:
+        payload = {'type': event.type, **event.data}
+        try:
+            await self._conn.send(json.dumps(payload))
+        except Exception:
+            logger.warning("WebSocketChannel %r: send failed for event %r", self._id, event.type)
 
-async def serve_websocket(
-    gateway: Gateway,
-    host: str = '127.0.0.1',
-    port: int = 8765,
-) -> None:
+    async def send(self, text: str) -> None:
+        try:
+            await self._conn.send(json.dumps({'type': 'message', 'text': text}))
+        except Exception:
+            logger.warning("WebSocketChannel %r: send failed", self._id)
+
+
+class WebSocketServer:
     """
-    Start a WebSocket server.  Each connection becomes a WebSocketChannel.
-
-    Runs until the task is cancelled.
+    Listens for WebSocket connections and spawns a WebSocketChannel per client.
 
     Usage:
-        asyncio.create_task(serve_websocket(gateway, port=8765))
+        server = WebSocketServer(gateway, host='127.0.0.1', port=8765)
+        await server.start()   # run as a background task or directly
     """
-    if not _WS_AVAILABLE:
-        raise ImportError("websockets package is required for WebSocket support.")
 
-    async def _handler(connection: ServerConnection) -> None:
-        channel = WebSocketChannel(connection, gateway)
-        await channel.serve()
+    def __init__(
+        self,
+        gateway: Gateway,
+        host: str = '127.0.0.1',
+        port: int = 8765,
+    ) -> None:
+        if not _WS_AVAILABLE:
+            raise ImportError("websockets package is required for WebSocket support.")
+        self._gateway = gateway
+        self._host = host
+        self._port = port
 
-    async with ws_serve(_handler, host, port):
-        logger.info("WebSocket gateway listening on ws://%s:%d", host, port)
-        await asyncio.Future()  # run until cancelled
+    async def start(self) -> None:
+        """Accept connections until the asyncio task is cancelled."""
+        async def _handler(connection: ServerConnection) -> None:
+            channel = WebSocketChannel(connection, self._gateway)
+            await channel.start()
+
+        async with ws_serve(_handler, self._host, self._port):
+            logger.info("WebSocket gateway listening on ws://%s:%d", self._host, self._port)
+            await asyncio.Future()  # run until cancelled

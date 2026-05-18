@@ -94,28 +94,30 @@ class GatewayManager:
         logger.info('Gateway channel started: %s', name)
 
     async def _run_websocket(self, cfg) -> None:
-        from program.gateway.channels.websocket import serve_websocket
-        await serve_websocket(self.gateway, host=cfg.host, port=cfg.port)
+        from program.gateway.channels.websocket import WebSocketServer
+        await WebSocketServer(self.gateway, host=cfg.host, port=cfg.port).start()
 
     async def _run_telegram(self, bot_token: str) -> None:
         from program.gateway.channels.telegram import TelegramBot
-        await TelegramBot(self.gateway, token=bot_token).run()
+        await TelegramBot(self.gateway, token=bot_token).start()
 
     async def _run_discord(self, bot_token: str) -> None:
         from program.gateway.channels.discord import DiscordBot
-        await DiscordBot(self.gateway, token=bot_token).run()
+        await DiscordBot(self.gateway, token=bot_token).start()
 
     async def _run_slack(self, bot_token: str, app_token: str) -> None:
         from program.gateway.channels.slack import SlackBot
-        await SlackBot(self.gateway, bot_token=bot_token, app_token=app_token).run()
+        await SlackBot(self.gateway, bot_token=bot_token, app_token=app_token).start()
 
     async def _run_twitch(self, cfg, token: str) -> None:
-        from program.gateway.channels.twitch import TwitchBot
-        await TwitchBot(
+        from program.gateway.channels.twitch import TwitchChannel
+        ch = TwitchChannel(
             self.gateway,
             token=token,
             nick=cfg.nick,
             channel_name=cfg.channel_name,
             prefix=cfg.prefix,
             allow_from=cfg.allow_from,
-        ).run()
+        )
+        self.gateway.register(ch)
+        await ch.start()

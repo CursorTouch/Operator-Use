@@ -43,21 +43,78 @@ def _split(text: str, limit: int = _TWITCH_MSG_LIMIT) -> list[str]:
 
 class TwitchChannel(BaseChannel):
     """
-    One channel for the entire Twitch chat room (Twitch has one global chat per channel).
+    One channel for the entire Twitch chat room.
 
+    start() connects to Twitch IRC and runs until cancelled.
     Accumulates text chunks and sends the full response when stream_end fires,
     splitting into ≤500 character messages as required by Twitch.
+
+    Requires: pip install "twitchio>=2.0"
+
+    Twitch developer setup:
+    - Create an app at dev.twitch.tv
+    - Generate an OAuth token with `chat:read` and `chat:edit` scopes
+    - Token format: "oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+    Usage:
+        ch = TwitchChannel(
+            gateway,
+            token="oauth:...",
+            nick="my_bot_name",
+            channel_name="my_channel",
+            allow_from=["trusted_user1"],
+        )
+        gateway.register(ch)
+        await ch.start()
     """
 
-    def __init__(self, twitch_channel_name: str) -> None:
-        self._twitch_channel_name = twitch_channel_name
-        self._id = f"twitch:{twitch_channel_name}"
+    def __init__(
+        self,
+        gateway: Gateway,
+        token: str,
+        nick: str,
+        channel_name: str,
+        prefix: str = "!",
+        allow_from: list[str] | None = None,
+    ) -> None:
+        if not _TWITCHIO_AVAILABLE:
+            raise ImportError('twitchio>=2.0 is required for TwitchChannel.')
+        self._gateway = gateway
+        self._token = token
+        self._nick = nick
+        self._twitch_channel_name = channel_name.lstrip('#')
+        self._prefix = prefix
+        self._allow_from = [u.lower() for u in (allow_from or [])]
+        self._id = f"twitch:{self._twitch_channel_name}"
         self._text_buffer = ""
         self._bot_ref: _TwitchBotImpl | None = None
 
     @property
     def channel_id(self) -> str:
         return self._id
+
+    async def start(self) -> None:
+        """Connect to Twitch IRC and serve. Runs until the asyncio task is cancelled."""
+        bot = _TwitchBotImpl(
+            channel=self,
+            gateway=self._gateway,
+            token=self._token,
+            nick=self._nick,
+            channel_name=self._twitch_channel_name,
+            prefix=self._prefix,
+            allow_from=self._allow_from,
+        )
+        self._bot_ref = bot
+        try:
+            await bot.start()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._gateway.unregister(self._id)
+            try:
+                await bot.close()
+            except Exception:
+                pass
 
     async def on_event(self, event: GatewayEvent) -> None:
         match event.type:
@@ -70,18 +127,18 @@ class TwitchChannel(BaseChannel):
 
             case 'stream_end':
                 if self._text_buffer.strip():
-                    await self._send(self._text_buffer)
+                    await self.send(self._text_buffer)
                     self._text_buffer = ""
 
             case 'tool_start':
                 name = event.data.get('name', '')
-                await self._send(f"⚙️ {name}…")
+                await self.send(f"⚙️ {name}…")
 
             case 'error':
                 msg = event.data.get('message', 'Unknown error')
-                await self._send(f"❌ {msg}")
+                await self.send(f"❌ {msg}")
 
-    async def _send(self, text: str) -> None:
+    async def send(self, text: str) -> None:
         if not self._bot_ref:
             return
         twitch_ch = self._bot_ref.get_channel(self._twitch_channel_name)
@@ -134,80 +191,3 @@ class _TwitchBotImpl(twitch_commands.Bot if _TWITCHIO_AVAILABLE else object):
 
     async def event_error(self, error: Exception, data: str = "") -> None:
         logger.error("Twitch bot error: %s", error, exc_info=True)
-
-
-class TwitchBot:
-    """
-    Manages a Twitch bot that routes chat messages through the Gateway.
-
-    Twitch chat has one shared room per channel, so all messages go through
-    a single TwitchChannel regardless of who sends them.
-
-    The `allow_from` list restricts which usernames the bot responds to.
-    Leave it empty to respond to everyone (not recommended for public channels).
-
-    Requires: pip install "twitchio>=2.0"
-
-    Twitch developer setup:
-    - Create an app at dev.twitch.tv
-    - Generate an OAuth token with `chat:read` and `chat:edit` scopes
-    - Token format: "oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-    Usage:
-        bot = TwitchBot(
-            gateway,
-            token="oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-            nick="my_bot_name",
-            channel_name="my_channel",
-            allow_from=["trusted_user1", "trusted_user2"],
-        )
-        await bot.run()   # run as a background task or directly
-    """
-
-    def __init__(
-        self,
-        gateway: Gateway,
-        token: str,
-        nick: str,
-        channel_name: str,
-        prefix: str = "!",
-        allow_from: list[str] | None = None,
-    ) -> None:
-        if not _TWITCHIO_AVAILABLE:
-            raise ImportError('twitchio>=2.0 is required for TwitchBot.')
-        self._gateway = gateway
-        self._token = token
-        self._nick = nick
-        self._channel_name = channel_name.lstrip('#')
-        self._prefix = prefix
-        self._allow_from = [u.lower() for u in (allow_from or [])]
-        self._channel: TwitchChannel | None = None
-
-    async def run(self) -> None:
-        """Connect to Twitch IRC and serve. Runs until the asyncio task is cancelled."""
-        channel = TwitchChannel(self._channel_name)
-        self._channel = channel
-        self._gateway.register(channel)
-
-        bot = _TwitchBotImpl(
-            channel=channel,
-            gateway=self._gateway,
-            token=self._token,
-            nick=self._nick,
-            channel_name=self._channel_name,
-            prefix=self._prefix,
-            allow_from=self._allow_from,
-        )
-        channel._bot_ref = bot
-
-        try:
-            await bot.start()
-        except asyncio.CancelledError:
-            pass
-        finally:
-            if self._channel:
-                self._gateway.unregister(self._channel.channel_id)
-            try:
-                await bot.close()
-            except Exception:
-                pass

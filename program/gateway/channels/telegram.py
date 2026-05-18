@@ -51,7 +51,7 @@ class TelegramChannel(BaseChannel):
 
             case 'stream_end':
                 if self._text_buffer.strip():
-                    await self._send(self._text_buffer)
+                    await self.send(self._text_buffer)
                     self._text_buffer = ""
 
             case 'tool_start':
@@ -64,9 +64,9 @@ class TelegramChannel(BaseChannel):
                     await self._bot.send_message(self._chat_id, f"⚠️ {result}")
 
             case 'error':
-                await self._send(f"❌ {event.data.get('message', 'Unknown error')}")
+                await self.send(f"❌ {event.data.get('message', 'Unknown error')}")
 
-    async def _send(self, text: str) -> None:
+    async def send(self, text: str) -> None:
         for i in range(0, len(text), _TELEGRAM_MSG_LIMIT):
             await self._bot.send_message(self._chat_id, text[i:i + _TELEGRAM_MSG_LIMIT])
 
@@ -99,7 +99,7 @@ class TelegramBot:
             self._gateway.register(ch)
         return self._channels[chat_id]
 
-    async def run(self) -> None:
+    async def start(self) -> None:
         """Start polling. Runs until the asyncio task is cancelled."""
         app = Application.builder().token(self._token).build()
 

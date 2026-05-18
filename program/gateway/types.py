@@ -17,8 +17,13 @@ class BaseChannel(ABC):
     Abstract base for all Gateway channels.
 
     A channel represents one connected client or transport (e.g. a WebSocket
-    connection, a stdio session). The Gateway calls on_event() to deliver
-    events; channel implementations call gateway.send() to submit user input.
+    connection, a stdio session).
+
+    Lifecycle:
+        - start() is called once to begin the receive loop (no-op by default).
+        - The Gateway calls on_event() to stream agent events back to the channel.
+        - on_event(stream_end) calls self.send() with the accumulated response.
+        - The Gateway calls send() directly for out-of-band messages (e.g. subagent results).
     """
 
     @property
@@ -27,7 +32,16 @@ class BaseChannel(ABC):
         """Unique identifier for this channel instance."""
         ...
 
+    async def start(self) -> None:
+        """Start the channel's receive loop. Override in channels that self-manage polling."""
+        ...
+
     @abstractmethod
     async def on_event(self, event: GatewayEvent) -> None:
         """Receive an agent lifecycle event and handle it."""
+        ...
+
+    @abstractmethod
+    async def send(self, text: str) -> None:
+        """Send a plain text message to the user on this channel."""
         ...

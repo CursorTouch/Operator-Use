@@ -59,22 +59,22 @@ class SlackChannel(BaseChannel):
 
             case 'stream_end':
                 if self._text_buffer.strip():
-                    await self._post(self._text_buffer)
+                    await self.send(self._text_buffer)
                     self._text_buffer = ""
 
             case 'tool_start':
                 name = event.data.get('name', '')
-                await self._post(f"⚙️ `{name}`…")
+                await self.send(f"⚙️ `{name}`…")
 
             case 'tool_end':
                 if event.data.get('is_error'):
                     result = str(event.data.get('result', ''))[:500]
-                    await self._post(f"⚠️ `{result}`")
+                    await self.send(f"⚠️ `{result}`")
 
             case 'error':
-                await self._post(f"❌ {event.data.get('message', 'Unknown error')}")
+                await self.send(f"❌ {event.data.get('message', 'Unknown error')}")
 
-    async def _post(self, text: str) -> None:
+    async def send(self, text: str) -> None:
         try:
             await self._client.chat_postMessage(
                 channel=self._slack_channel_id,
@@ -135,7 +135,7 @@ class SlackBot:
             self._gateway.register(ch)
         return self._channels[key]
 
-    async def run(self) -> None:
+    async def start(self) -> None:
         """Start Socket Mode. Runs until the asyncio task is cancelled."""
         app = AsyncApp(token=self._bot_token)
 

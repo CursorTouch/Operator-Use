@@ -357,3 +357,76 @@ class SessionBeforeTreeResult:
 class InputEventResult:
     action: Literal['continue', 'transform', 'handled'] = 'continue'
     text: str | None = None
+
+
+# ============================================================================
+# Gateway events (transport layer — channel and message lifecycle)
+# ============================================================================
+
+@dataclass
+class ChannelConnectEvent:
+    """Fired when a channel is registered with the gateway."""
+    type: Literal['channel:connect'] = field(default='channel:connect', init=False)
+    channel_id: str = ''
+
+
+@dataclass
+class ChannelDisconnectEvent:
+    """Fired when a channel is unregistered from the gateway."""
+    type: Literal['channel:disconnect'] = field(default='channel:disconnect', init=False)
+    channel_id: str = ''
+
+
+@dataclass
+class MessageReceiveEvent:
+    """
+    Fired when a message arrives from a channel, before the agent processes it.
+    Handlers can return MessageReceiveResult to reject or transform the message.
+    """
+    type: Literal['message:receive'] = field(default='message:receive', init=False)
+    channel_id: str = ''
+    text: str = ''
+
+
+@dataclass
+class MessageSendEvent:
+    """Fired after a response has been delivered to a channel."""
+    type: Literal['message:send'] = field(default='message:send', init=False)
+    channel_id: str = ''
+    text: str = ''
+
+
+@dataclass
+class GatewayErrorEvent:
+    """Fired when an error occurs while processing a message."""
+    type: Literal['gateway:error'] = field(default='gateway:error', init=False)
+    channel_id: str = ''
+    error: str = ''
+
+
+# ============================================================================
+# Gateway result types
+# ============================================================================
+
+@dataclass
+class MessageReceiveResult:
+    """
+    Returned by message:receive handlers to control what happens next.
+
+    action='continue'  — pass the message through unchanged (default).
+    action='transform' — replace the message text with `text`.
+    action='reject'    — drop the message (optional `reason` sent to the channel).
+    """
+    action: Literal['continue', 'transform', 'reject'] = 'continue'
+    text: str | None = None
+    reason: str | None = None
+
+
+@dataclass
+class ChannelConnectResult:
+    """
+    Returned by channel:connect handlers.
+    allow=False causes the channel to be unregistered immediately.
+    """
+    allow: bool = True
+    reason: str | None = None

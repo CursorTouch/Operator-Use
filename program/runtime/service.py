@@ -56,12 +56,13 @@ class Runtime:
         self.gateway_manager = GatewayManager(self, context.settings_manager, context.auth_manager)
         self.gateway_manager.start()
 
-        # Wire SubagentManager and connect it to the spawn_agent tool
+        # Wire SubagentManager and connect it to the subagent tool
         self.subagent_manager = SubagentManager(
             runtime=self,
             llm=context.llm,
             tools=context.engine.tools,
             settings=context.subagent_settings,
+            gateway=self.gateway_manager.gateway,
         )
         subagent_tool._manager = self.subagent_manager
 
