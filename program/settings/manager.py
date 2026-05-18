@@ -13,6 +13,11 @@ from program.settings.types import (
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
     ImageSettings,
 )
+from program.gateway.channels.types import (
+    ChannelsSettings,
+    WebSocketChannelConfig, TelegramChannelConfig, DiscordChannelConfig,
+    SlackChannelConfig, TwitchChannelConfig,
+)
 from program.engine.types import SteeringMode, FollowupMode
 from program.inference.types import Transport, ThinkingLevel
 
@@ -21,6 +26,11 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
     'branch_summary': BranchSummarySettings,
     'thinking_budgets': ThinkingBudgetsSettings,
     'image': ImageSettings,
+}
+
+# Pydantic BaseModel fields — use model_validate() instead of **kwargs
+_PYDANTIC_FIELD_TYPES: dict[str, type] = {
+    'channels': ChannelsSettings,
 }
 
 
@@ -83,7 +93,9 @@ class SettingsManager:
         for key, value in data.items():
             if key not in valid_settings:
                 continue
-            if key in _NESTED_FIELD_TYPES and isinstance(value, dict):
+            if key in _PYDANTIC_FIELD_TYPES and isinstance(value, dict):
+                kwargs[key] = _PYDANTIC_FIELD_TYPES[key].model_validate(value)
+            elif key in _NESTED_FIELD_TYPES and isinstance(value, dict):
                 nested_cls = _NESTED_FIELD_TYPES[key]
                 valid_nested = {f.name for f in dc.fields(nested_cls)}
                 kwargs[key] = nested_cls(**{k: v for k, v in value.items() if k in valid_nested})
@@ -183,6 +195,26 @@ class SettingsManager:
 
         self._write_queue = asyncio.create_task(chained())
 
+    @staticmethod
+    def _to_json_dict(settings: Settings) -> dict:
+        """Convert a Settings dataclass to a JSON-serializable dict.
+
+        Handles nested dataclasses via dataclasses.asdict and Pydantic BaseModel
+        fields via model_dump(), so mixed-type settings serialize correctly.
+        """
+        result = {}
+        for f in dc.fields(settings):
+            val = getattr(settings, f.name)
+            if val is None:
+                result[f.name] = None
+            elif dc.is_dataclass(val):
+                result[f.name] = dc.asdict(val)
+            elif hasattr(val, 'model_dump'):
+                result[f.name] = val.model_dump()
+            else:
+                result[f.name] = val
+        return result
+
     def _persist_scoped_settings(
         self,
         scope: SCOPE,
@@ -193,7 +225,7 @@ class SettingsManager:
         """Write only the modified fields back to storage, merging at the key level to preserve concurrent changes."""
         def persist_fn(current):
             current_dict = json.loads(current) if current else {}
-            snapshot_dict = asdict(snapshot_settings)
+            snapshot_dict = SettingsManager._to_json_dict(snapshot_settings)
             merged = dict(current_dict)
             for field_name in modified_fields:
                 value = snapshot_dict.get(field_name)
@@ -593,4 +625,62 @@ class SettingsManager:
         """Set the shell command prefix and persist to global settings."""
         self.global_settings.shell_command_prefix = prefix
         self._mark_modified("shell_command_prefix")
+        self._save()
+
+    # ── Channels ──────────────────────────────────────────────────────────────
+
+    def get_channels_settings(self) -> ChannelsSettings:
+        """Return the resolved channels settings. Missing keys use per-channel defaults."""
+        if self.settings.channels is None:
+            return ChannelsSettings()
+        return self.settings.channels
+
+    def get_websocket_channel_config(self) -> WebSocketChannelConfig:
+        return self.get_channels_settings().websocket
+
+    def get_telegram_channel_config(self) -> TelegramChannelConfig:
+        return self.get_channels_settings().telegram
+
+    def get_discord_channel_config(self) -> DiscordChannelConfig:
+        return self.get_channels_settings().discord
+
+    def get_slack_channel_config(self) -> SlackChannelConfig:
+        return self.get_channels_settings().slack
+
+    def get_twitch_channel_config(self) -> TwitchChannelConfig:
+        return self.get_channels_settings().twitch
+
+    def _get_or_init_channels(self) -> ChannelsSettings:
+        if self.global_settings.channels is None:
+            self.global_settings.channels = ChannelsSettings()
+        return self.global_settings.channels
+
+    def set_websocket_channel_config(self, **kwargs) -> None:
+        ch = self._get_or_init_channels()
+        ch.websocket = WebSocketChannelConfig(**{**ch.websocket.model_dump(), **kwargs})
+        self._mark_modified('channels')
+        self._save()
+
+    def set_telegram_channel_config(self, **kwargs) -> None:
+        ch = self._get_or_init_channels()
+        ch.telegram = TelegramChannelConfig(**{**ch.telegram.model_dump(), **kwargs})
+        self._mark_modified('channels')
+        self._save()
+
+    def set_discord_channel_config(self, **kwargs) -> None:
+        ch = self._get_or_init_channels()
+        ch.discord = DiscordChannelConfig(**{**ch.discord.model_dump(), **kwargs})
+        self._mark_modified('channels')
+        self._save()
+
+    def set_slack_channel_config(self, **kwargs) -> None:
+        ch = self._get_or_init_channels()
+        ch.slack = SlackChannelConfig(**{**ch.slack.model_dump(), **kwargs})
+        self._mark_modified('channels')
+        self._save()
+
+    def set_twitch_channel_config(self, **kwargs) -> None:
+        ch = self._get_or_init_channels()
+        ch.twitch = TwitchChannelConfig(**{**ch.twitch.model_dump(), **kwargs})
+        self._mark_modified('channels')
         self._save()

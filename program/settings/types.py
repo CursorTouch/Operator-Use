@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Optional, Literal, Any
 from program.engine.types import SteeringMode, FollowupMode
 from program.inference.types import Transport, ThinkingLevel
+from program.gateway.channels.types import ChannelsSettings
 
 
 class SCOPE(str, Enum):
@@ -103,3 +104,6 @@ class Settings:
     # Feature flags
     enable_skill_commands: Optional[bool] = None
     cron_enabled: Optional[bool] = None
+
+    # Channels
+    channels: Optional[ChannelsSettings] = None

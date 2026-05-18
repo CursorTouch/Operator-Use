@@ -22,7 +22,8 @@ from program.resource.types import ResourceLoaderOptions
 from program.session.manager import SessionManager
 from program.settings.manager import SettingsManager
 from program.cron.service import Cron
-from program.settings.paths import get_config_dir, get_crons_path
+from program.auth.channels import ChannelAuthManager
+from program.settings.paths import get_config_dir, get_crons_path, get_channels_auth_path
 
 
 class RuntimeConfig(BaseModel):
@@ -79,6 +80,7 @@ class RuntimeContext:
         settings_manager: SettingsManager | None,
         cron: Cron | None = None,
         hooks: Hooks | None = None,
+        auth_manager: ChannelAuthManager | None = None,
     ) -> None:
         self.agent = agent
         self.llm = llm
@@ -90,6 +92,7 @@ class RuntimeContext:
         self.settings_manager = settings_manager
         self.cron = cron
         self.hooks: Hooks = hooks or extension_runtime._hooks
+        self.auth_manager = auth_manager
 
     @classmethod
     async def create(
@@ -160,6 +163,9 @@ class RuntimeContext:
             persist=config.persist_session,
         )
 
+        # ── Auth ─────────────────────────────────────────────────────────────
+        auth_manager = ChannelAuthManager(get_channels_auth_path())
+
         # ── Cron ─────────────────────────────────────────────────────────────
         cron: Cron | None = None
         all_tools = resource_loader.get_tools() + config.tools
@@ -215,6 +221,7 @@ class RuntimeContext:
             settings_manager=settings_manager,
             cron=cron,
             hooks=hooks,
+            auth_manager=auth_manager,
         )
 
 

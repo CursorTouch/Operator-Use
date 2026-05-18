@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from program.gateway.types import BaseChannel, GatewayEvent
 from program.hooks.types import (
@@ -11,7 +11,9 @@ from program.hooks.types import (
     ToolExecutionEndEvent, ToolExecutionStartEvent,
 )
 from program.message.types import Role
-from program.runtime.service import Runtime
+
+if TYPE_CHECKING:
+    from program.runtime.service import Runtime
 
 logger = logging.getLogger(__name__)
 

@@ -8,6 +8,7 @@ from program.agent.service import Agent
 from program.agent.types import PromptOptions
 from program.cron.types import CronJob
 from program.commands.registry import CommandRegistry
+from program.gateway.manager import GatewayManager
 from program.commands.types import parse_command
 from program.extension.types import (
     SessionStartEvent, SessionShutdownEvent, SessionBeforeSwitchEvent,
@@ -48,6 +49,10 @@ class Runtime:
         if context.cron is not None:
             context.cron.on_job = self._handle_cron_job
             context.cron.start()
+
+        # Start gateway channels (if any are enabled in settings)
+        self.gateway_manager = GatewayManager(self, context.settings_manager, context.auth_manager)
+        self.gateway_manager.start()
 
     # -------------------------------------------------------------------------
     # Factory
@@ -194,9 +199,10 @@ class Runtime:
         await self._emit_session_start('fork')
 
     def shutdown(self) -> None:
-        """Stop background services (cron). Call when exiting the REPL."""
+        """Stop background services (cron, gateway channels). Call when exiting the REPL."""
         if self._context.cron is not None:
             self._context.cron.stop()
+        self.gateway_manager.stop()
 
     # -------------------------------------------------------------------------
     # Cron

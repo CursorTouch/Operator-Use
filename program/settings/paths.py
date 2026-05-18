@@ -27,6 +27,10 @@ def get_auth_path() -> Path:
     return get_config_dir() / "auth.json"
 
 
+def get_channels_auth_path() -> Path:
+    return get_config_dir() / "channels_auth.json"
+
+
 def get_system_prompt_path(cwd: Path | None = None) -> Path:
     return get_config_dir(cwd) / "SYSTEM.md"
 
