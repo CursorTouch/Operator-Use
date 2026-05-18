@@ -383,22 +383,37 @@ class MessageReceiveEvent:
     """
     Fired when a message arrives from a channel, before the agent processes it.
     Handlers can return MessageReceiveResult to reject or transform the message.
+
+    `parts` carries the raw ContentPart list from the IncomingMessage (may include
+    AudioPart for voice messages). STT hooks should detect AudioPart here, transcribe,
+    and return MessageReceiveResult(parts=[TextPart(transcribed)]) to replace them.
+    `text` is the pre-extracted text (TextParts only) for handlers that only care
+    about text and don't need to touch audio.
     """
     type: Literal['message:receive'] = field(default='message:receive', init=False)
     channel_id: str = ''
     chat_id: str = ''
     user_id: str = ''
     text: str = ''
+    parts: list = field(default_factory=list)  # list[ContentPart]
 
 
 @dataclass
 class MessageSendEvent:
-    """Fired after a full response has been delivered to a channel."""
+    """
+    Fired after the agent finishes, before the DONE frame is published.
+    Handlers can return MessageSendResult to inject an audio (or any) part —
+    used by TTS hooks to synthesize speech and send it alongside the text response.
+
+    `is_voice` is True when the original incoming message contained an AudioPart,
+    so TTS hooks can gate synthesis on whether the user spoke rather than typed.
+    """
     type: Literal['message:send'] = field(default='message:send', init=False)
     channel_id: str = ''
     chat_id: str = ''
     input_text: str = ''
     response_text: str = ''
+    is_voice: bool = False
 
 
 @dataclass
@@ -441,12 +456,27 @@ class MessageReceiveResult:
     Returned by message:receive handlers to control what happens next.
 
     action='continue'  — pass the message through unchanged (default).
-    action='transform' — replace the message text with `text`.
+    action='transform' — replace parts and/or text (STT: AudioPart → TextPart).
     action='reject'    — drop the message (optional `reason` sent to the channel).
+
+    `parts` replaces the entire IncomingMessage.parts list when action='transform'.
+    `text`  replaces only the extracted text string (for text-only transformations).
     """
     action: Literal['continue', 'transform', 'reject'] = 'continue'
+    parts: list | None = None  # list[ContentPart] — replaces msg.parts when set
     text: str | None = None
     reason: str | None = None
+
+
+@dataclass
+class MessageSendResult:
+    """
+    Returned by message:send handlers to inject additional output parts.
+
+    TTS hooks return AudioPart here after synthesizing speech from response_text.
+    The gateway publishes these parts to the channel before the DONE frame.
+    """
+    parts: list | None = None  # list[ContentPart] — published to channel if set
 
 
 @dataclass

@@ -15,7 +15,7 @@ from program.hooks.types import (
     ToolExecutionEndEvent, ToolExecutionStartEvent,
     ChannelConnectEvent, ChannelDisconnectEvent,
     MessageReceiveEvent, MessageReceiveResult,
-    MessageSendEvent, MessageCancelEvent,
+    MessageSendEvent, MessageSendResult, MessageCancelEvent,
     GatewayErrorEvent,
 )
 from program.message.types import UserMessage, Role
@@ -105,14 +105,19 @@ class Gateway:
 
     async def _handle_incoming(self, msg: IncomingMessage) -> None:
         """Handle one incoming message: hook → get/create session → run."""
-        # ── message:receive hook — allow reject or transform before agent sees it
-        text = "\n".join(p.content for p in msg.parts if isinstance(p, TextPart))
+        from program.bus.types import AudioPart
+        parts = list(msg.parts)
+
+        # ── message:receive hook — STT hooks detect AudioPart here and return
+        # transformed parts (AudioPart → TextPart). Reject/transform text also handled.
+        text = "\n".join(p.content for p in parts if isinstance(p, TextPart))
         results = await self.hooks.emit(
             MessageReceiveEvent(
                 channel_id=msg.channel,
                 chat_id=msg.chat_id,
                 user_id=msg.user_id,
                 text=text,
+                parts=parts,
             )
         )
         for r in results:
@@ -130,21 +135,27 @@ class Gateway:
                         await ch.send(reject_msg)
                 logger.info("Gateway: message from %r rejected by hook", msg.channel)
                 return
-            if r.action == 'transform' and r.text is not None:
-                text = r.text
+            if r.action == 'transform':
+                if r.parts is not None:
+                    parts = r.parts
+                if r.text is not None:
+                    text = r.text
+
+        # Re-extract text from parts in case STT hook replaced AudioPart with TextPart
+        if any(r for r in results if isinstance(r, MessageReceiveResult) and r.action == 'transform' and r.parts is not None):
+            text = "\n".join(p.content for p in parts if isinstance(p, TextPart))
+
+        is_voice = any(isinstance(p, AudioPart) for p in msg.parts)
 
         session_key = f"{msg.channel}:{msg.chat_id}"
         entry = self._get_or_create_session(session_key)
 
         if entry.task is not None and not entry.task.done():
-            # Agent is mid-run — steer it instead of cancelling. The steering
-            # message is injected into the engine's queue and picked up at the
-            # next tool boundary, keeping state clean.
             await entry.agent._engine.steer(UserMessage.text(text))
             return
 
         entry.task = asyncio.create_task(
-            self._run_session(session_key, msg.channel, msg.chat_id, entry.agent, text),
+            self._run_session(session_key, msg.channel, msg.chat_id, entry.agent, text, is_voice=is_voice),
             name=f'gateway:session:{session_key}',
         )
 
@@ -184,6 +195,7 @@ class Gateway:
         chat_id: str,
         agent: Agent,
         text: str,
+        is_voice: bool = False,
     ) -> None:
         """Invoke the agent and publish OutgoingMessage events to the bus."""
         from program.agent.types import PromptOptions
@@ -275,19 +287,33 @@ class Gateway:
         finally:
             unsub()
 
+        # ── message:send hook — fired before DONE so TTS hooks can inject audio.
+        # is_voice=True when the original message had an AudioPart, letting TTS hooks
+        # gate synthesis on voice-originated messages only.
+        response_text = "".join(response_parts)
+        send_results = await self.hooks.emit(MessageSendEvent(
+            channel_id=channel_id,
+            chat_id=chat_id,
+            input_text=text,
+            response_text=response_text,
+            is_voice=is_voice,
+        ))
+        for r in send_results:
+            if isinstance(r, MessageSendResult) and r.parts:
+                channel = self._channels.get(channel_id)
+                if channel is not None:
+                    audio_out = OutgoingMessage(
+                        channel=channel_id,
+                        chat_id=chat_id,
+                        parts=r.parts,
+                    )
+                    await channel.send(audio_out)
+
         # Publish DONE
         await self._bus.publish_outgoing(OutgoingMessage(
             channel=channel_id,
             chat_id=chat_id,
             stream_phase=StreamPhase.DONE,
-        ))
-
-        # ── message:send hook — fired after full response delivered
-        await self.hooks.emit(MessageSendEvent(
-            channel_id=channel_id,
-            chat_id=chat_id,
-            input_text=text,
-            response_text="".join(response_parts),
         ))
 
     # ── Outgoing message loop ─────────────────────────────────────────────────
