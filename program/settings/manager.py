@@ -480,6 +480,16 @@ class SettingsManager:
         self._mark_modified("follow_up_mode")
         self._save()
 
+    def get_cron_enabled(self) -> bool:
+        """Return whether the cron scheduler is enabled (default: True)."""
+        return self.settings.cron_enabled if self.settings.cron_enabled is not None else True
+
+    def set_cron_enabled(self, enabled: bool):
+        """Enable or disable the cron scheduler and persist to global settings."""
+        self.global_settings.cron_enabled = enabled
+        self._mark_modified("cron_enabled")
+        self._save()
+
     def get_enable_skill_commands(self) -> bool:
         """Return whether skill slash commands are enabled (default: True)."""
         return self.settings.enable_skill_commands if self.settings.enable_skill_commands is not None else True

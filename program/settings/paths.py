@@ -99,3 +99,8 @@ def get_builtins_extensions_dir() -> Path:
 
 def get_builtins_hooks_dir() -> Path:
     return _BUILTINS_ROOT / 'hooks'
+
+
+def get_crons_path(cwd: Path | None = None) -> Path:
+    """Path to crons.json. Project-level if cwd given, else global (~/.program/)."""
+    return get_config_dir(cwd) / 'crons.json'

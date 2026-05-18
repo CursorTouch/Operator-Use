@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "anthropic>=0.100.0",
+    "croniter>=3.0.0",
     "ddgs>=9.14.2",
     "filelock>=3.29.0",
     "google-genai>=1.75.0",
@@ -18,6 +19,18 @@ dependencies = [
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
     "websockets>=16.0",
+]
+
+[project.optional-dependencies]
+telegram = ["python-telegram-bot>=20.0"]
+discord  = ["discord.py>=2.0"]
+slack    = ["slack-bolt>=1.0"]
+twitch   = ["twitchio>=2.0"]
+channels = [
+    "python-telegram-bot>=20.0",
+    "discord.py>=2.0",
+    "slack-bolt>=1.0",
+    "twitchio>=2.0",
 ]
 
 [dependency-groups]

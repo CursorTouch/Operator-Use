@@ -33,7 +33,7 @@ class AgentConfig(BaseModel):
 
 
 class PromptOptions(BaseModel):
-    source: Literal['interactive', 'rpc', 'extension'] = 'interactive'
+    source: Literal['interactive', 'rpc', 'extension', 'cron'] = 'interactive'
     compaction_custom_instructions: str | None = None
 
 

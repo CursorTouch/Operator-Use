@@ -6,6 +6,7 @@ from typing import Any
 from program.runtime.types import RuntimeConfig, RuntimeContext
 from program.agent.service import Agent
 from program.agent.types import PromptOptions
+from program.cron.types import CronJob
 from program.commands.registry import CommandRegistry
 from program.commands.types import parse_command
 from program.extension.types import (
@@ -42,6 +43,11 @@ class Runtime:
         # Give the agent a back-reference so ctx.new_session() / fork() / switch_session() work
         if context.agent is not None:
             context.agent._runtime = self
+
+        # Wire cron callback and start the scheduler
+        if context.cron is not None:
+            context.cron.on_job = self._handle_cron_job
+            context.cron.start()
 
     # -------------------------------------------------------------------------
     # Factory
@@ -186,6 +192,22 @@ class Runtime:
 
         sm.branch(from_entry_id)
         await self._emit_session_start('fork')
+
+    def shutdown(self) -> None:
+        """Stop background services (cron). Call when exiting the REPL."""
+        if self._context.cron is not None:
+            self._context.cron.stop()
+
+    # -------------------------------------------------------------------------
+    # Cron
+    # -------------------------------------------------------------------------
+
+    async def _handle_cron_job(self, job: CronJob) -> None:
+        """Inject a cron job's message into the agent as a prompt."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info('Cron job invoking agent | id=%s name=%s', job.id, job.name)
+        await self.invoke(job.payload.message, PromptOptions(source='cron'))
 
     # -------------------------------------------------------------------------
     # Extension event helpers

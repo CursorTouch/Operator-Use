@@ -236,6 +236,7 @@ async def run(cwd: Path, model_id: str | None, provider: str | None) -> None:
 
     if unsubscribe_renderer is not None:
         unsubscribe_renderer()
+    runtime.shutdown()
 
 
 def main() -> None:

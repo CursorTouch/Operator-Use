@@ -102,3 +102,4 @@ class Settings:
 
     # Feature flags
     enable_skill_commands: Optional[bool] = None
+    cron_enabled: Optional[bool] = None

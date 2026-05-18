@@ -21,7 +21,8 @@ from program.resource.loader import ResourceLoader
 from program.resource.types import ResourceLoaderOptions
 from program.session.manager import SessionManager
 from program.settings.manager import SettingsManager
-from program.settings.paths import get_config_dir
+from program.cron.service import Cron
+from program.settings.paths import get_config_dir, get_crons_path
 
 
 class RuntimeConfig(BaseModel):
@@ -76,6 +77,7 @@ class RuntimeContext:
         extension_runtime: ExtensionRuntime,
         compaction: Compaction,
         settings_manager: SettingsManager | None,
+        cron: Cron | None = None,
         hooks: Hooks | None = None,
     ) -> None:
         self.agent = agent
@@ -86,6 +88,7 @@ class RuntimeContext:
         self.extension_runtime = extension_runtime
         self.compaction = compaction
         self.settings_manager = settings_manager
+        self.cron = cron
         self.hooks: Hooks = hooks or extension_runtime._hooks
 
     @classmethod
@@ -157,10 +160,22 @@ class RuntimeContext:
             persist=config.persist_session,
         )
 
+        # ── Cron ─────────────────────────────────────────────────────────────
+        cron: Cron | None = None
+        all_tools = resource_loader.get_tools() + config.tools
+        if settings_manager.get_cron_enabled():
+            cron = Cron(store_path=get_crons_path(config_dir))
+            for t in all_tools:
+                if t.name == 'cron':
+                    t._cron = cron
+                    break
+        else:
+            all_tools = [t for t in all_tools if t.name != 'cron']
+
         # ── Agent loop ────────────────────────────────────────────────────────
         engine = Engine(
             llm=llm,
-            tools=resource_loader.get_tools() + config.tools,
+            tools=all_tools,
             options=Options(),
             hooks=hooks,
         )
@@ -198,6 +213,7 @@ class RuntimeContext:
             extension_runtime=real_runtime,
             compaction=compaction,
             settings_manager=settings_manager,
+            cron=cron,
             hooks=hooks,
         )
 
