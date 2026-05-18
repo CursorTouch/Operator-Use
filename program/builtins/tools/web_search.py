@@ -1,4 +1,3 @@
-from __future__ import annotations
 import asyncio
 from pydantic import BaseModel, Field
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult

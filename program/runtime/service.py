@@ -94,6 +94,42 @@ class Runtime:
     # Session lifecycle
     # -------------------------------------------------------------------------
 
+    async def reload(self) -> None:
+        """
+        Reload all resources (tools, skills, commands, extensions, hooks)
+        without touching the active session. The conversation history is
+        preserved; only the runtime environment is refreshed.
+        """
+        resource_loader = self._context.resource_loader
+        await resource_loader.reload()
+
+        # Re-register file-based hooks (clear old registrations first).
+        hooks = self._context.hooks
+        hooks.clear()
+        for event_type, handler in resource_loader.get_hooks():
+            hooks.register(event_type, handler)
+
+        # Rebuild the ExtensionRuntime with newly discovered extensions.
+        from program.extension.runtime import ExtensionRuntime
+        load_result = resource_loader.get_extensions()
+        new_ext = ExtensionRuntime(load_result, self._context.agent, hooks=hooks)
+        self._context.extension_runtime = new_ext
+        if self._context.agent is not None:
+            self._context.agent._extensions = new_ext
+
+        # Swap the engine's tool list to pick up added/removed builtin tools.
+        engine = self._context.engine
+        new_tools = resource_loader.get_tools() + self._config.tools
+        engine.tools = new_tools
+        engine._tools = {t.name: t for t in new_tools}
+
+        # Rebuild the command registry with the reloaded commands.
+        self.commands = CommandRegistry(
+            runtime=self,
+            discovered=resource_loader.get_commands(),
+        )
+        self.commands.register_from_extensions(new_ext.get_commands())
+
     async def new_session(self) -> None:
         """Shut down the current session and start a fresh one."""
         await self._emit_session_shutdown('new')

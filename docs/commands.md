@@ -92,6 +92,7 @@ The `handler` receives the `CommandRegistry` (which carries a `registry.runtime`
 | `/auth` | — | Show authentication status for all providers (OAuth and API-key). |
 | `/compact [instructions]` | — | Run compaction immediately. Optional custom instructions override the default summarization prompt. |
 | `/new` | `/clear` | Start a new session (discards the current session history). |
+| `/reload` | — | Reload all resources (tools, skills, commands, extensions) while keeping the active session history intact. |
 | `/help` | `/?` | List all available commands with descriptions and aliases. |
 
 ### /login
@@ -115,6 +116,19 @@ Calls `runtime.current_session.run_compaction(custom_instructions)`. Requires th
 ### /new (/clear)
 
 Calls `runtime.new_session()`. This triggers `session_shutdown` and `session_start` events, creates a fresh JSONL file, and resets the Agent's state.
+
+### /reload
+
+Calls `runtime.reload()`, which re-runs resource discovery for tools, skills, commands, hooks, and extensions **without** touching the active session. The conversation history is preserved exactly as it was.
+
+What gets refreshed:
+- `ResourceLoader.reload()` — re-scans all resource directories for file changes
+- `Hooks` — cleared and re-registered from the reloaded hook files
+- `ExtensionRuntime` — rebuilt with the newly discovered extensions
+- `Engine.tools` — swapped to the reloaded tool list
+- `CommandRegistry` — rebuilt with reloaded commands and re-registered extension commands
+
+Use `/reload` when you have edited a tool, skill, hook, or extension file and want the running agent to pick up the changes without losing the current conversation.
 
 ## Extension commands
 
