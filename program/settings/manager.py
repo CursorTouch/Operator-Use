@@ -512,6 +512,25 @@ class SettingsManager:
         self._mark_modified("follow_up_mode")
         self._save()
 
+    def get_mcp_servers(self) -> list:
+        """Return list of MCPServerConfig objects parsed from settings, or empty list."""
+        from program.mcp.types import MCPServerConfig
+        raw = self.settings.mcp_servers or []
+        result = []
+        for entry in raw:
+            if not isinstance(entry, dict) or 'name' not in entry:
+                continue
+            result.append(MCPServerConfig(
+                name=entry['name'],
+                transport=entry.get('transport', 'stdio'),
+                command=entry.get('command'),
+                args=entry.get('args', []),
+                url=entry.get('url'),
+                env=entry.get('env', {}),
+                auth_token=entry.get('auth_token'),
+            ))
+        return result
+
     def get_cron_enabled(self) -> bool:
         """Return whether the cron scheduler is enabled (default: True)."""
         return self.settings.cron_enabled if self.settings.cron_enabled is not None else True

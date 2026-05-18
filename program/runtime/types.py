@@ -25,6 +25,7 @@ from program.cron.scheduler import CronScheduler as Cron
 from program.auth.channels import ChannelAuthManager
 from program.subagent.manager import SubagentManager
 from program.subagent.types import SubagentSettings
+from program.mcp.manager import MCPManager
 from program.settings.paths import get_config_dir, get_crons_path, get_channels_auth_path
 
 
@@ -87,6 +88,7 @@ class RuntimeContext:
         hooks: Hooks | None = None,
         auth_manager: ChannelAuthManager | None = None,
         subagent_settings: SubagentSettings | None = None,
+        mcp_manager: MCPManager | None = None,
     ) -> None:
         self.agent = agent
         self.llm = llm
@@ -100,6 +102,7 @@ class RuntimeContext:
         self.hooks: Hooks = hooks or extension_runtime._hooks
         self.auth_manager = auth_manager
         self.subagent_settings = subagent_settings or SubagentSettings()
+        self.mcp_manager: MCPManager | None = mcp_manager
 
     @classmethod
     async def create(
@@ -192,6 +195,10 @@ class RuntimeContext:
         else:
             all_tools = [t for t in all_tools if t.name != 'cron']
 
+        # ── MCP ───────────────────────────────────────────────────────────────
+        mcp_configs = settings_manager.get_mcp_servers()
+        mcp_manager: MCPManager | None = MCPManager(mcp_configs) if mcp_configs else None
+
         # ── Agent loop ────────────────────────────────────────────────────────
         engine = Engine(
             llm=llm,
@@ -199,6 +206,15 @@ class RuntimeContext:
             options=Options(),
             hooks=hooks,
         )
+
+        # ── MCP builtin tool (per-engine, so the agent can manage connections) ─
+        if mcp_manager is not None:
+            from program.builtins.tools.mcp import MCPBuiltinTool
+            engine.add_tool(MCPBuiltinTool(
+                manager=mcp_manager,
+                engine=engine,
+                agent_id=str(id(engine)),
+            ))
 
         # ── Agent config ──────────────────────────────────────────────────────
         agent_config = AgentConfig(
@@ -237,6 +253,7 @@ class RuntimeContext:
             hooks=hooks,
             auth_manager=auth_manager,
             subagent_settings=SubagentSettings(),
+            mcp_manager=mcp_manager,
         )
 
 

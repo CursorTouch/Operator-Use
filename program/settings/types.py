@@ -107,3 +107,6 @@ class Settings:
 
     # Channels
     channels: Optional[ChannelsSettings] = None
+
+    # MCP servers — list of dicts, each matching MCPServerConfig fields
+    mcp_servers: Optional[list[dict]] = None

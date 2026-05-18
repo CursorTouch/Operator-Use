@@ -94,6 +94,16 @@ class Engine:
         self.state.pending_tool_calls.clear()
         self.state.is_streaming = False
 
+    def add_tool(self, tool: Tool) -> None:
+        """Dynamically register a tool (e.g. from a connected MCP server)."""
+        self.tools.append(tool)
+        self._tools[tool.name] = tool
+
+    def remove_tool(self, name: str) -> None:
+        """Dynamically unregister a tool by name."""
+        self.tools = [t for t in self.tools if t.name != name]
+        self._tools.pop(name, None)
+
     def abort(self) -> None:
         self._signal.set()
 

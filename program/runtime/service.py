@@ -68,6 +68,9 @@ class Runtime:
         )
         subagent_tool._manager = self.subagent_manager
 
+        # Expose MCPManager for use in create_session_agent() and shutdown.
+        self.mcp_manager = context.mcp_manager
+
     # -------------------------------------------------------------------------
     # Factory
     # -------------------------------------------------------------------------
@@ -243,6 +246,16 @@ class Runtime:
         load_result = self._context.resource_loader.get_extensions()
         deferred = _DeferredExtensionRuntime(load_result)
 
+        # Add a per-session MCP tool so each gateway session can independently
+        # connect/disconnect servers without affecting other sessions.
+        if self.mcp_manager is not None:
+            from program.builtins.tools.mcp import MCPBuiltinTool
+            engine.add_tool(MCPBuiltinTool(
+                manager=self.mcp_manager,
+                engine=engine,
+                agent_id=str(id(engine)),
+            ))
+
         agent = Agent(
             engine=engine,
             session_manager=session_manager,
@@ -259,10 +272,13 @@ class Runtime:
         return agent
 
     def shutdown(self) -> None:
-        """Stop background services (cron, gateway channels). Call when exiting the REPL."""
+        """Stop background services (cron, gateway channels, MCP). Call when exiting the REPL."""
         if self._context.cron is not None:
             self._context.cron.stop()
         self.gateway_manager.stop()
+        if self.mcp_manager is not None:
+            import asyncio
+            asyncio.get_event_loop().create_task(self.mcp_manager.disconnect_all())
 
     # -------------------------------------------------------------------------
     # Cron
