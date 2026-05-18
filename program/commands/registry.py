@@ -18,8 +18,14 @@ class CommandRegistry:
     def __init__(self, runtime: Runtime | None = None, discovered: list[SlashCommandInfo] | None = None) -> None:
         self.runtime = runtime
         self._commands: dict[str, SlashCommandInfo] = {}
-        for cmd in (discovered or []):
+        for cmd in (discovered if discovered is not None else self.from_builtins()):
             self.register(cmd)
+
+    @staticmethod
+    def from_builtins() -> list[SlashCommandInfo]:
+        from program.commands.loader import load_commands_from_dir
+        from program.settings.paths import get_builtins_commands_dir
+        return load_commands_from_dir(get_builtins_commands_dir()).commands
 
     def register(self, command: SlashCommandInfo) -> None:
         self._commands[command.name] = command

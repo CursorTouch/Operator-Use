@@ -110,6 +110,15 @@ class FakeResourceLoader(BaseResourceLoader):
     def get_skills(self):
         return [], []
 
+    def get_tools(self):
+        return []
+
+    def get_commands(self):
+        return []
+
+    def get_hooks(self):
+        return []
+
     def get_context_files(self):
         return []
 

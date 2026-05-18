@@ -18,9 +18,9 @@ from program.hooks.loader import load_hooks, HookRegistration
 from program.settings.paths import (
     get_extensions_dir, get_skills_dir, get_tools_dir, get_commands_dir, get_hooks_dir,
     get_system_prompt_path, get_append_system_prompt_path,
+    get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
+    get_builtins_extensions_dir, get_builtins_hooks_dir,
 )
-
-_BUILTINS_DIR = Path(__file__).parent.parent / 'builtins'
 from program.skill.loader import load_skills
 from program.skill.types import Skill, LoadSkillsOptions
 
@@ -141,7 +141,7 @@ class ResourceLoader(BaseResourceLoader):
             self._extensions_result = LoadExtensionsResult()
             return
 
-        dirs: list[Path] = [_BUILTINS_DIR / 'extensions']
+        dirs: list[Path] = [get_builtins_extensions_dir()]
         project_ext = get_extensions_dir(self._cwd)
         global_ext = get_extensions_dir()
         if project_ext.is_dir():
@@ -158,7 +158,7 @@ class ResourceLoader(BaseResourceLoader):
             self._skill_diagnostics = []
             return
 
-        all_skill_paths = [str(_BUILTINS_DIR / 'skills')] + list(self._additional_skill_paths) + list(self._extension_skill_paths)
+        all_skill_paths = [str(get_builtins_skills_dir())] + list(self._additional_skill_paths) + list(self._extension_skill_paths)
         result = load_skills(LoadSkillsOptions(
             cwd=self._cwd,
             skill_paths=all_skill_paths,
@@ -168,7 +168,7 @@ class ResourceLoader(BaseResourceLoader):
         self._skill_diagnostics = result.diagnostics
 
     def _reload_tools(self) -> None:
-        dirs = [_BUILTINS_DIR / 'tools']
+        dirs = [get_builtins_tools_dir()]
         project_tools = get_tools_dir(self._cwd)
         global_tools = get_tools_dir()
         if project_tools.is_dir():
@@ -179,7 +179,7 @@ class ResourceLoader(BaseResourceLoader):
         self._tools = load_tools(dirs).tools
 
     def _reload_commands(self) -> None:
-        dirs = [_BUILTINS_DIR / 'commands']
+        dirs = [get_builtins_commands_dir()]
         project_cmds = get_commands_dir(self._cwd)
         global_cmds = get_commands_dir()
         if project_cmds.is_dir():
@@ -189,7 +189,7 @@ class ResourceLoader(BaseResourceLoader):
         self._commands = load_commands(dirs).commands
 
     def _reload_hooks(self) -> None:
-        dirs = [_BUILTINS_DIR / 'hooks']
+        dirs = [get_builtins_hooks_dir()]
         project_hooks = get_hooks_dir(self._cwd)
         global_hooks = get_hooks_dir()
         if project_hooks.is_dir():

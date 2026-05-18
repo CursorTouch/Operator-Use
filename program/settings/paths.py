@@ -70,3 +70,32 @@ def get_commands_dir(cwd: Path | None = None) -> Path:
 
 def get_hooks_dir(cwd: Path | None = None) -> Path:
     return get_agent_dir(cwd) / "hooks"
+
+
+# ── Builtin resource dirs (shipped with the package) ─────────────────────────
+
+_BUILTINS_ROOT = Path(__file__).parent.parent / 'builtins'
+
+
+def get_builtins_dir() -> Path:
+    return _BUILTINS_ROOT
+
+
+def get_builtins_commands_dir() -> Path:
+    return _BUILTINS_ROOT / 'commands'
+
+
+def get_builtins_tools_dir() -> Path:
+    return _BUILTINS_ROOT / 'tools'
+
+
+def get_builtins_skills_dir() -> Path:
+    return _BUILTINS_ROOT / 'skills'
+
+
+def get_builtins_extensions_dir() -> Path:
+    return _BUILTINS_ROOT / 'extensions'
+
+
+def get_builtins_hooks_dir() -> Path:
+    return _BUILTINS_ROOT / 'hooks'

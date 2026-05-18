@@ -35,6 +35,9 @@ def _make_agent_with_ext(llm, ext, tools=None):
     class FakeLoader(BaseResourceLoader):
         def get_extensions(self): return LoadExtensionsResult()
         def get_skills(self): return [], []
+        def get_tools(self): return []
+        def get_commands(self): return []
+        def get_hooks(self): return []
         def get_context_files(self): return []
         def get_system_prompt(self): return None
         def get_append_system_prompt(self): return []

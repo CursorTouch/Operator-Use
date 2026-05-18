@@ -1,10 +1,19 @@
-"""Tests for commands/builtins.py: _handle_compact, _handle_new, _handle_help."""
+"""Tests for builtin commands: _handle_compact, _handle_new, _handle_help."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from program.commands.builtins import _handle_compact, _handle_new, _handle_help, BUILTIN_COMMANDS
+from program.builtins.commands.compact import _handle_compact, command as compact_command
+from program.builtins.commands.session import _handle_new, command as new_command
+from program.builtins.commands.help import _handle_help, command as help_command
+from program.builtins.commands.auth import commands as auth_commands
+from program.commands.loader import load_commands_from_dir
 from program.commands.registry import CommandRegistry
 from program.commands.types import SlashCommandInfo
+from pathlib import Path
+
+_BUILTINS_DIR = Path(__file__).parent.parent / 'program' / 'builtins' / 'commands'
+
+BUILTIN_COMMANDS = load_commands_from_dir(_BUILTINS_DIR).commands
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -17,11 +26,10 @@ def make_registry(session=None, runtime=None):
     reg = CommandRegistry.__new__(CommandRegistry)
     reg.runtime = rt
     reg._commands = {}
-    reg._aliases = {}
     for cmd in BUILTIN_COMMANDS:
         reg._commands[cmd.name] = cmd
         for alias in cmd.aliases:
-            reg._aliases[alias] = cmd.name
+            reg._commands[alias] = cmd
     return reg
 
 
@@ -48,7 +56,6 @@ class TestHandleCompact:
         reg = CommandRegistry.__new__(CommandRegistry)
         reg.runtime = None
         reg._commands = {}
-        reg._aliases = {}
         await _handle_compact(reg, [])  # should not raise
 
     @pytest.mark.asyncio
@@ -84,7 +91,6 @@ class TestHandleNew:
         reg = CommandRegistry.__new__(CommandRegistry)
         reg.runtime = None
         reg._commands = {}
-        reg._aliases = {}
         await _handle_new(reg, [])  # should not raise
 
     @pytest.mark.asyncio
@@ -139,7 +145,6 @@ class TestHandleHelp:
         reg = CommandRegistry.__new__(CommandRegistry)
         reg.runtime = None
         reg._commands = {}
-        reg._aliases = {}
         await _handle_help(reg, [])
         out = capsys.readouterr().out
         assert "available" in out.lower() or "commands" in out.lower()

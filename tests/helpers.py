@@ -139,6 +139,9 @@ def make_agent(llm, tools=None, hooks=None, compaction_settings=None):
     class _FakeLoader(BaseResourceLoader):
         def get_extensions(self): return LoadExtensionsResult()
         def get_skills(self): return [], []
+        def get_tools(self): return []
+        def get_commands(self): return []
+        def get_hooks(self): return []
         def get_context_files(self): return []
         def get_system_prompt(self): return None
         def get_append_system_prompt(self): return []
@@ -176,16 +179,20 @@ def make_mistral_llm(model_id: str = "mistral-small-latest"):
     load_dotenv()
     api_key = os.environ.get("MISTRAL_API_KEY", "")
     from program.inference.api.text.mistral_chat import MistralChatAPI
+    from program.inference.types import LLMOptions
+
+    from program.inference.model.types import Model
 
     class _Wrapper:
         def __init__(self):
-            self._api = MistralChatAPI(api_key=api_key, model=model_id)
+            self._api = MistralChatAPI(options=LLMOptions(api_key=api_key))
+            self._model = Model(id=model_id, name=model_id, provider="mistral")
 
         async def stream(self, context: LLMContext) -> AsyncIterator[LLMEvent]:
-            async for ev in self._api.stream(context):
+            async for ev in self._api.stream(context, self._model):
                 yield ev
 
         async def invoke(self, context: LLMContext, thinking_level=None):
-            return [ev async for ev in self._api.stream(context)]
+            return [ev async for ev in self._api.stream(context, self._model)]
 
     return _Wrapper()
