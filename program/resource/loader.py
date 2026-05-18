@@ -17,7 +17,7 @@ from program.commands.types import SlashCommandInfo
 from program.hooks.loader import load_hooks, HookRegistration
 from program.settings.paths import (
     get_extensions_dir, get_skills_dir, get_tools_dir, get_commands_dir, get_hooks_dir,
-    get_system_prompt_path, get_append_system_prompt_path,
+    get_system_prompt_path, get_append_system_prompt_path, get_knowledge_dir,
     get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
     get_builtins_extensions_dir, get_builtins_hooks_dir,
 )
@@ -217,3 +217,9 @@ class ResourceLoader(BaseResourceLoader):
             self._append_system_prompt = [discovered_append]
         else:
             self._append_system_prompt = []
+
+        # Append knowledge index if any docs exist (project-level takes precedence)
+        from program.knowledge.service import Knowledge
+        knowledge = Knowledge(get_knowledge_dir(self._cwd), get_knowledge_dir())
+        if index := knowledge.build_knowledge_index():
+            self._append_system_prompt.append(index)

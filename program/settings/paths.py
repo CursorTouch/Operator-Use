@@ -113,3 +113,8 @@ def get_crons_path(cwd: Path | None = None) -> Path:
 def get_acp_sessions_dir() -> Path:
     """Per-agent ACP session files — always ~/.program/agent/acp/."""
     return get_agent_dir() / 'acp'
+
+
+def get_knowledge_dir(cwd: Path | None = None) -> Path:
+    """Knowledge reference docs — ~/.program/knowledge/ or <project>/.program/knowledge/."""
+    return get_config_dir(cwd) / 'knowledge'
