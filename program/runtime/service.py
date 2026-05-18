@@ -9,6 +9,8 @@ from program.agent.types import PromptOptions
 from program.cron.types import CronJob
 from program.commands.registry import CommandRegistry
 from program.gateway.manager import GatewayManager
+from program.subagent.manager import SubagentManager
+from program.builtins.tools.subagent import tool as subagent_tool
 from program.commands.types import parse_command
 from program.extension.types import (
     SessionStartEvent, SessionShutdownEvent, SessionBeforeSwitchEvent,
@@ -53,6 +55,15 @@ class Runtime:
         # Start gateway channels (if any are enabled in settings)
         self.gateway_manager = GatewayManager(self, context.settings_manager, context.auth_manager)
         self.gateway_manager.start()
+
+        # Wire SubagentManager and connect it to the spawn_agent tool
+        self.subagent_manager = SubagentManager(
+            runtime=self,
+            llm=context.llm,
+            tools=context.engine.tools,
+            settings=context.subagent_settings,
+        )
+        subagent_tool._manager = self.subagent_manager
 
     # -------------------------------------------------------------------------
     # Factory

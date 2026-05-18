@@ -23,6 +23,8 @@ from program.session.manager import SessionManager
 from program.settings.manager import SettingsManager
 from program.cron.service import Cron
 from program.auth.channels import ChannelAuthManager
+from program.subagent.manager import SubagentManager
+from program.subagent.types import SubagentSettings
 from program.settings.paths import get_config_dir, get_crons_path, get_channels_auth_path
 
 
@@ -81,6 +83,7 @@ class RuntimeContext:
         cron: Cron | None = None,
         hooks: Hooks | None = None,
         auth_manager: ChannelAuthManager | None = None,
+        subagent_settings: SubagentSettings | None = None,
     ) -> None:
         self.agent = agent
         self.llm = llm
@@ -93,6 +96,7 @@ class RuntimeContext:
         self.cron = cron
         self.hooks: Hooks = hooks or extension_runtime._hooks
         self.auth_manager = auth_manager
+        self.subagent_settings = subagent_settings or SubagentSettings()
 
     @classmethod
     async def create(
@@ -167,14 +171,12 @@ class RuntimeContext:
         auth_manager = ChannelAuthManager(get_channels_auth_path())
 
         # ── Cron ─────────────────────────────────────────────────────────────
+        from program.builtins.tools.cron import tool as cron_tool
         cron: Cron | None = None
         all_tools = resource_loader.get_tools() + config.tools
         if settings_manager.get_cron_enabled():
             cron = Cron(store_path=get_crons_path(config_dir))
-            for t in all_tools:
-                if t.name == 'cron':
-                    t._cron = cron
-                    break
+            cron_tool._cron = cron
         else:
             all_tools = [t for t in all_tools if t.name != 'cron']
 
@@ -222,6 +224,7 @@ class RuntimeContext:
             cron=cron,
             hooks=hooks,
             auth_manager=auth_manager,
+            subagent_settings=SubagentSettings(),
         )
 
 
