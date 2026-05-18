@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from program.bus.service import Bus
 from program.gateway.service import Gateway
+from program.hooks.types import GatewayStartupEvent, GatewayStopEvent
 
 if TYPE_CHECKING:
     from program.runtime.service import Runtime
@@ -87,8 +88,19 @@ class GatewayManager:
             else:
                 self._start_task('twitch', self._run_twitch(cfg.twitch, auth.twitch.token))
 
+        asyncio.get_event_loop().create_task(
+            self.gateway.hooks.emit(GatewayStartupEvent(
+                channel_ids=list(self.gateway._channels.keys()),
+            ))
+        )
+
     def stop(self) -> None:
         """Cancel all running channel tasks and stop the gateway."""
+        asyncio.get_event_loop().create_task(
+            self.gateway.hooks.emit(GatewayStopEvent(
+                channel_ids=list(self.gateway._channels.keys()),
+            ))
+        )
         asyncio.get_event_loop().create_task(self.gateway.stop())
         for task in self._tasks:
             task.cancel()

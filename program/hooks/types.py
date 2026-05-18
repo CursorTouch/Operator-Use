@@ -385,15 +385,33 @@ class MessageReceiveEvent:
     """
     type: Literal['message:receive'] = field(default='message:receive', init=False)
     channel_id: str = ''
+    chat_id: str = ''
+    user_id: str = ''
     text: str = ''
 
 
 @dataclass
 class MessageSendEvent:
-    """Fired after a response has been delivered to a channel."""
+    """Fired after a full response has been delivered to a channel."""
     type: Literal['message:send'] = field(default='message:send', init=False)
     channel_id: str = ''
-    text: str = ''
+    chat_id: str = ''
+    input_text: str = ''
+    response_text: str = ''
+
+
+@dataclass
+class GatewayStartupEvent:
+    """Fired after all enabled channels have been registered and started."""
+    type: Literal['gateway:startup'] = field(default='gateway:startup', init=False)
+    channel_ids: list[str] = field(default_factory=list)
+
+
+@dataclass
+class GatewayStopEvent:
+    """Fired when the gateway is shutting down, before channel tasks are cancelled."""
+    type: Literal['gateway:stop'] = field(default='gateway:stop', init=False)
+    channel_ids: list[str] = field(default_factory=list)
 
 
 @dataclass

@@ -26,10 +26,12 @@ class ImagePart:
 @dataclass
 class AudioPart:
     audio: str  # file path or transcribed text
+    mime_type: str | None = None
 
 @dataclass
 class FilePart:
     path: str
+    mime_type: str | None = None
 
 ContentPart = TextPart | ImagePart | AudioPart | FilePart
 

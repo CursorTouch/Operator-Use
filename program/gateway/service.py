@@ -110,7 +110,12 @@ class Gateway:
         # ── message:receive hook — allow reject or transform before agent sees it
         text = "\n".join(p.content for p in msg.parts if isinstance(p, TextPart))
         results = await self.hooks.emit(
-            MessageReceiveEvent(channel_id=msg.channel, text=text)
+            MessageReceiveEvent(
+                channel_id=msg.channel,
+                chat_id=msg.chat_id,
+                user_id=msg.user_id,
+                text=text,
+            )
         )
         for r in results:
             if not isinstance(r, MessageReceiveResult):
@@ -176,6 +181,8 @@ class Gateway:
         """Invoke the agent and publish OutgoingMessage events to the bus."""
         from program.agent.types import PromptOptions
 
+        response_parts: list[str] = []
+
         async def _on_event(event) -> None:
             match event:
                 case MessageUpdateEvent(message=m) if m.role == Role.ASSISTANT:
@@ -183,6 +190,8 @@ class Gateway:
                         chunk_text = getattr(content, 'content', '')
                         kind = getattr(content, 'type', '')
                         if chunk_text and kind in ('text', 'thinking'):
+                            if kind == 'text':
+                                response_parts.append(chunk_text)
                             out = OutgoingMessage(
                                 channel=channel_id,
                                 chat_id=chat_id,
@@ -262,7 +271,12 @@ class Gateway:
         ))
 
         # ── message:send hook — fired after full response delivered
-        await self.hooks.emit(MessageSendEvent(channel_id=channel_id, text=text))
+        await self.hooks.emit(MessageSendEvent(
+            channel_id=channel_id,
+            chat_id=chat_id,
+            input_text=text,
+            response_text="".join(response_parts),
+        ))
 
     # ── Outgoing message loop ─────────────────────────────────────────────────
 
