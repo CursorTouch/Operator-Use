@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, model_validator
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
-    from program.acp.manager import ACPManager
+    from program.acp.manager import ACPSessionManager
     from program.auth.acp import ACPAuthManager
     from program.bus.service import Bus
     from program.agent.service import Agent
@@ -58,7 +58,7 @@ class ACPAgentTool(Tool):
     def __init__(
         self,
         registry: list[ACPAgentConfig],
-        session_store: ACPManager,
+        session_store: ACPSessionManager,
         auth_manager: ACPAuthManager,
         bus: Bus | None,
         agent: Agent | None,

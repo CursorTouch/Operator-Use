@@ -27,7 +27,7 @@ from program.auth.acp import ACPAuthManager
 from program.subagent.manager import SubagentManager
 from program.subagent.types import SubagentSettings
 from program.mcp.manager import MCPManager
-from program.acp.manager import ACPManager
+from program.acp.manager import ACPSessionManager
 from program.settings.paths import get_config_dir, get_crons_path, get_channels_auth_path, get_auth_path, get_acp_sessions_dir
 
 
@@ -92,7 +92,7 @@ class RuntimeContext:
         subagent_settings: SubagentSettings | None = None,
         mcp_manager: MCPManager | None = None,
         acp_auth: ACPAuthManager | None = None,
-        acp_manager: ACPManager | None = None,
+        acp_manager: ACPSessionManager | None = None,
     ) -> None:
         self.agent = agent
         self.llm = llm
@@ -108,7 +108,7 @@ class RuntimeContext:
         self.subagent_settings = subagent_settings or SubagentSettings()
         self.mcp_manager: MCPManager | None = mcp_manager
         self.acp_auth: ACPAuthManager | None = acp_auth
-        self.acp_manager: ACPManager | None = acp_manager
+        self.acp_manager: ACPSessionManager | None = acp_manager
 
     @classmethod
     async def create(
@@ -191,7 +191,7 @@ class RuntimeContext:
         # ── Auth ─────────────────────────────────────────────────────────────
         auth_manager = ChannelAuthManager(get_channels_auth_path())
         acp_auth = ACPAuthManager(get_auth_path())
-        acp_manager = ACPManager(get_acp_sessions_dir())
+        acp_manager = ACPSessionManager(get_acp_sessions_dir())
 
         # ── Cron ─────────────────────────────────────────────────────────────
         from program.builtins.tools.cron import tool as cron_tool
