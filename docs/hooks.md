@@ -194,11 +194,13 @@ hooks.clear()                      # remove all handlers for all types
 
 Hooks can be registered without writing an extension. `ResourceLoader` discovers hook files from these directories on `reload()`:
 
-| Directory | Purpose |
-|---|---|
-| `program/builtins/hooks/` | Shipped built-in hooks |
-| `<project>/.program/agent/hooks/` | Project-level hooks |
-| `~/.program/agent/hooks/` | Global user hooks |
+| Directory | Path function | Purpose |
+|---|---|---|
+| `program/builtins/hooks/` | `get_builtins_hooks_dir()` | Shipped built-in hooks |
+| `<project>/.program/agent/hooks/` | `get_hooks_dir(cwd)` | Project-level hooks |
+| `~/.program/agent/hooks/` | `get_hooks_dir()` | Global user hooks |
+
+All path functions are defined in `program/settings/paths.py`.
 
 A hook file must export `hooks` — a list of `(event_type, handler)` tuples:
 

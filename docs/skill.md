@@ -36,10 +36,14 @@ If `description` is missing or empty, the skill is not loaded (the file is silen
 
 `ResourceLoader` drives skill discovery. On `reload()` it scans four sources in priority order:
 
-1. **Built-in skills** — `program/builtins/skills/` (source: `"builtin"`)
-2. **User skills** — `~/.program/agent/skills/` (source: `"user"`)
-3. **Project skills** — `<project>/.program/agent/skills/` (source: `"project"`)
-4. **Explicit paths** — entries in `ResourceLoaderOptions.additional_skill_paths`, resolved relative to cwd (source: `"path"`)
+| Source | Directory | Path function |
+|---|---|---|
+| Built-in (`"builtin"`) | `program/builtins/skills/` | `get_builtins_skills_dir()` |
+| User (`"user"`) | `~/.program/agent/skills/` | `get_skills_dir()` |
+| Project (`"project"`) | `<project>/.program/agent/skills/` | `get_skills_dir(cwd)` |
+| Explicit (`"path"`) | `ResourceLoaderOptions.additional_skill_paths` | — |
+
+All path functions are defined in `program/settings/paths.py`.
 
 Within each source, directories are scanned recursively. If a directory contains a `SKILL.md` at its root, it is treated as a single skill and subdirectories are not scanned further.
 

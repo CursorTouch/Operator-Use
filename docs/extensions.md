@@ -32,10 +32,14 @@ class Extension:
 
 `ResourceLoader` drives extension discovery. On `reload()` it scans for extension files in this order:
 
-1. `program/builtins/extensions/` — shipped built-in extensions
-2. `<project>/.program/agent/extensions/` — project-level extensions
-3. `~/.program/agent/extensions/` — global user extensions
-4. Any additional directories passed via `ResourceLoaderOptions.additional_extension_dirs`
+| Directory | Path function | Purpose |
+|---|---|---|
+| `program/builtins/extensions/` | `get_builtins_extensions_dir()` | Shipped built-in extensions |
+| `<project>/.program/agent/extensions/` | `get_extensions_dir(cwd)` | Project-level extensions |
+| `~/.program/agent/extensions/` | `get_extensions_dir()` | Global user extensions |
+| `ResourceLoaderOptions.additional_extension_dirs` | — | Programmatically injected extras |
+
+All path functions are defined in `program/settings/paths.py`.
 
 Each file is executed in a sandboxed module. The extension receives an `api` object through which it registers handlers and tools.
 

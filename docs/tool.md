@@ -188,12 +188,14 @@ Load errors are non-fatal: `LoadToolsResult.errors` accumulates `ToolError` obje
 
 `ResourceLoader` drives all tool discovery. On `reload()` it loads tools from these directories in order (first-found wins on name collision):
 
-| Directory | Purpose |
-|---|---|
-| `program/builtins/tools/` | Shipped built-in tools |
-| `<project>/.program/agent/tools/` | Project-level custom tools |
-| `~/.program/agent/tools/` | Global user tools |
-| `ResourceLoaderOptions.additional_tool_dirs` | Programmatically injected extras |
+| Directory | Path function | Purpose |
+|---|---|---|
+| `program/builtins/tools/` | `get_builtins_tools_dir()` | Shipped built-in tools |
+| `<project>/.program/agent/tools/` | `get_tools_dir(cwd)` | Project-level custom tools |
+| `~/.program/agent/tools/` | `get_tools_dir()` | Global user tools |
+| `ResourceLoaderOptions.additional_tool_dirs` | — | Programmatically injected extras |
+
+All path functions are defined in `program/settings/paths.py`.
 
 Drop a `.py` file exporting `tool = MyTool()` into any of those directories and it is picked up automatically on the next reload. The built-in tools (`read`, `write`, `edit`, `grep`, `glob`, `ls`, `terminal`, `web_fetch`, `web_search`) live in `program/builtins/tools/`.
 

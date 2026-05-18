@@ -22,12 +22,19 @@ Non-command text returns `None` and is forwarded to the Agent.
 `CommandRegistry` holds all registered commands and dispatches parsed input:
 
 ```python
+registry = CommandRegistry()                      # auto-loads builtins via from_builtins()
+registry = CommandRegistry(discovered=cmds)       # use an explicit list (skips auto-load)
+CommandRegistry.from_builtins()                   # returns the builtin SlashCommandInfo list
 registry.register(SlashCommandInfo(...))          # register one command
 registry.register_from_extensions(ext_commands)   # bulk-register from extensions
 registry.get("compact")                           # lookup by name or alias
 registry.list()                                   # unique commands (aliases deduplicated)
 await registry.dispatch(parsed)                   # run a command, returns True if found
 ```
+
+When `discovered` is omitted (or `None`), the constructor calls `from_builtins()` to seed the registry with the six built-in commands. Pass an explicit `discovered` list to override this — the `Runtime` always does so, passing the full list already loaded by `ResourceLoader` (which includes builtins plus any user-defined commands).
+
+`from_builtins()` reads from `get_builtins_commands_dir()` (defined in `program/settings/paths.py`) and returns the result as a plain list, making it easy to inspect or extend the builtin set without constructing a registry.
 
 Aliases are registered as additional keys pointing to the same `SlashCommandInfo`. `dispatch()` prints an "Unknown command" message and returns `False` for unrecognized commands.
 
@@ -37,11 +44,13 @@ Handlers are called with `(registry, args)`. If the handler returns a coroutine,
 
 `ResourceLoader` drives all command discovery. On `reload()` it loads commands from these directories in order (first-found wins on name collision):
 
-| Directory | Purpose |
-|---|---|
-| `program/builtins/commands/` | Shipped built-in commands |
-| `<project>/.program/agent/commands/` | Project-level custom commands |
-| `~/.program/agent/commands/` | Global user commands |
+| Directory | Path function | Purpose |
+|---|---|---|
+| `program/builtins/commands/` | `get_builtins_commands_dir()` | Shipped built-in commands |
+| `<project>/.program/agent/commands/` | `get_commands_dir(cwd)` | Project-level custom commands |
+| `~/.program/agent/commands/` | `get_commands_dir()` | Global user commands |
+
+All path functions are defined in `program/settings/paths.py`.
 
 A command file must export either `command = SlashCommandInfo(...)` or `commands = [SlashCommandInfo(...), ...]`.
 
@@ -59,7 +68,7 @@ command = SlashCommandInfo(
 )
 ```
 
-The `CommandRegistry` is created with the discovered commands passed as `discovered=`. Extension commands are then merged in via `register_from_extensions()` after that.
+The `CommandRegistry` is created with the full discovered list passed as `discovered=` (builtins + user commands already merged). Extension commands are then added via `register_from_extensions()` after that.
 
 ## SlashCommandInfo
 
