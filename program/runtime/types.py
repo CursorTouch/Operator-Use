@@ -230,7 +230,7 @@ class RuntimeContext:
             from program.builtins.tools.acp_agent import ACPAgentTool
             engine.add_tool(ACPAgentTool(
                 registry=acp_agent_configs,
-                session_store=acp_manager,
+                session_manager=acp_manager,
                 auth_manager=acp_auth,
                 bus=None,   # bus not yet available; Runtime.create() re-wires after gateway starts
                 agent=None,

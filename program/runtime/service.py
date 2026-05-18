@@ -268,7 +268,7 @@ class Runtime:
             from program.builtins.tools.acp_agent import ACPAgentTool
             engine.add_tool(ACPAgentTool(
                 registry=list(main_acp._registry.values()),
-                session_store=main_acp._session_store,
+                session_manager=main_acp._session_manager,
                 auth_manager=main_acp._auth,
                 bus=self.gateway_manager._bus,
                 agent=None,

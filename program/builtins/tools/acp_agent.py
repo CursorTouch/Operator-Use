@@ -58,7 +58,7 @@ class ACPAgentTool(Tool):
     def __init__(
         self,
         registry: list[ACPAgentConfig],
-        session_store: ACPSessionManager,
+        session_manager: ACPSessionManager,
         auth_manager: ACPAuthManager,
         bus: Bus | None,
         agent: Agent | None,
@@ -78,7 +78,7 @@ class ACPAgentTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,
         )
         self._registry: dict[str, ACPAgentConfig] = {a.name: a for a in registry}
-        self._session_store = session_store
+        self._session_manager = session_manager
         self._auth = auth_manager
         self._bus = bus
         self._agent = agent
@@ -127,7 +127,7 @@ class ACPAgentTool(Tool):
         lines = ['Registered ACP agents:']
         for name, cfg in self._registry.items():
             has_token = self._auth.has_token(name)
-            session = self._session_store.get(name)
+            session = self._session_manager.get(name)
             token_status = 'authenticated' if has_token else 'no credentials'
             session_status = f"session {session['session_id'][:8]}..." if session else 'no session'
             transport = f"{cfg.transport}:{cfg.command or cfg.url or 'discover'}"
@@ -135,7 +135,7 @@ class ACPAgentTool(Tool):
         return '\n'.join(lines)
 
     def _list_sessions(self) -> str:
-        sessions = self._session_store.list()
+        sessions = self._session_manager.list()
         if not sessions:
             return 'No active ACP sessions.'
         lines = ['Active ACP sessions:']
@@ -173,7 +173,7 @@ class ACPAgentTool(Tool):
 
             async with client as c:
                 async with c.session() as session_id:
-                    self._session_store.save(config.name, session_id)
+                    self._session_manager.save(config.name, session_id)
                     result_text = await c.run(task, session_id)
 
             logger.info('ACP task done | agent=%s', config.name)
