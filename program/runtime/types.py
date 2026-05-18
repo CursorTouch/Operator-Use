@@ -23,10 +23,12 @@ from program.session.manager import SessionManager
 from program.settings.manager import SettingsManager
 from program.cron.scheduler import CronScheduler as Cron
 from program.auth.channels import ChannelAuthManager
+from program.auth.acp import ACPAuthManager
 from program.subagent.manager import SubagentManager
 from program.subagent.types import SubagentSettings
 from program.mcp.manager import MCPManager
-from program.settings.paths import get_config_dir, get_crons_path, get_channels_auth_path
+from program.acp.session_store import ACPSessionStore
+from program.settings.paths import get_config_dir, get_crons_path, get_channels_auth_path, get_auth_path, get_acp_sessions_dir
 
 
 class RuntimeConfig(BaseModel):
@@ -89,6 +91,8 @@ class RuntimeContext:
         auth_manager: ChannelAuthManager | None = None,
         subagent_settings: SubagentSettings | None = None,
         mcp_manager: MCPManager | None = None,
+        acp_auth: ACPAuthManager | None = None,
+        acp_sessions: ACPSessionStore | None = None,
     ) -> None:
         self.agent = agent
         self.llm = llm
@@ -103,6 +107,8 @@ class RuntimeContext:
         self.auth_manager = auth_manager
         self.subagent_settings = subagent_settings or SubagentSettings()
         self.mcp_manager: MCPManager | None = mcp_manager
+        self.acp_auth: ACPAuthManager | None = acp_auth
+        self.acp_sessions: ACPSessionStore | None = acp_sessions
 
     @classmethod
     async def create(
@@ -184,6 +190,8 @@ class RuntimeContext:
 
         # ── Auth ─────────────────────────────────────────────────────────────
         auth_manager = ChannelAuthManager(get_channels_auth_path())
+        acp_auth = ACPAuthManager(get_auth_path())
+        acp_sessions = ACPSessionStore(get_acp_sessions_dir())
 
         # ── Cron ─────────────────────────────────────────────────────────────
         from program.builtins.tools.cron import tool as cron_tool
@@ -214,6 +222,18 @@ class RuntimeContext:
                 manager=mcp_manager,
                 engine=engine,
                 agent_id=str(id(engine)),
+            ))
+
+        # ── ACP agent tool ─────────────────────────────────────────────────────
+        acp_agent_configs = settings_manager.get_acp_agents()
+        if acp_agent_configs:
+            from program.builtins.tools.acp_agent import ACPAgentTool
+            engine.add_tool(ACPAgentTool(
+                registry=acp_agent_configs,
+                session_store=acp_sessions,
+                auth_manager=acp_auth,
+                bus=None,   # bus not yet available; Runtime.create() re-wires after gateway starts
+                agent=None,
             ))
 
         # ── Agent config ──────────────────────────────────────────────────────
@@ -254,6 +274,8 @@ class RuntimeContext:
             auth_manager=auth_manager,
             subagent_settings=SubagentSettings(),
             mcp_manager=mcp_manager,
+            acp_auth=acp_auth,
+            acp_sessions=acp_sessions,
         )
 
 

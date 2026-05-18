@@ -108,3 +108,8 @@ def get_builtins_hooks_dir() -> Path:
 def get_crons_path(cwd: Path | None = None) -> Path:
     """Path to crons.json. Project-level if cwd given, else global (~/.program/)."""
     return get_config_dir(cwd) / 'crons.json'
+
+
+def get_acp_sessions_dir() -> Path:
+    """Per-agent ACP session files — always ~/.program/agent/acp/."""
+    return get_agent_dir() / 'acp'

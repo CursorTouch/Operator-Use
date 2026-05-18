@@ -71,6 +71,12 @@ class Runtime:
         # Expose MCPManager for use in create_session_agent() and shutdown.
         self.mcp_manager = context.mcp_manager
 
+        # Wire bus + agent into the ACP agent tool now that the gateway is up.
+        acp_tool = context.engine._tools.get('acp_agent')
+        if acp_tool is not None:
+            acp_tool._bus = self.gateway_manager._bus
+            acp_tool._agent = context.agent
+
     # -------------------------------------------------------------------------
     # Factory
     # -------------------------------------------------------------------------
@@ -254,6 +260,18 @@ class Runtime:
                 manager=self.mcp_manager,
                 engine=engine,
                 agent_id=str(id(engine)),
+            ))
+
+        # Add ACP agent tool if the main engine has one (shares registry/store/auth).
+        main_acp = self._context.engine._tools.get('acp_agent')
+        if main_acp is not None:
+            from program.builtins.tools.acp_agent import ACPAgentTool
+            engine.add_tool(ACPAgentTool(
+                registry=list(main_acp._registry.values()),
+                session_store=main_acp._session_store,
+                auth_manager=main_acp._auth,
+                bus=self.gateway_manager._bus,
+                agent=None,
             ))
 
         agent = Agent(

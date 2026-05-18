@@ -531,6 +531,23 @@ class SettingsManager:
             ))
         return result
 
+    def get_acp_agents(self) -> list:
+        """Return list of ACPAgentConfig objects parsed from settings, or empty list."""
+        from program.acp.types import ACPAgentConfig
+        raw = self.settings.acp_agents or []
+        result = []
+        for entry in raw:
+            if not isinstance(entry, dict) or 'name' not in entry:
+                continue
+            result.append(ACPAgentConfig(
+                name=entry['name'],
+                transport=entry.get('transport', 'stdio'),
+                command=entry.get('command'),
+                args=entry.get('args', []),
+                url=entry.get('url'),
+            ))
+        return result
+
     def get_cron_enabled(self) -> bool:
         """Return whether the cron scheduler is enabled (default: True)."""
         return self.settings.cron_enabled if self.settings.cron_enabled is not None else True

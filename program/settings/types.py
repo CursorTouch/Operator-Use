@@ -110,3 +110,6 @@ class Settings:
 
     # MCP servers — list of dicts, each matching MCPServerConfig fields
     mcp_servers: Optional[list[dict]] = None
+
+    # ACP agents — pre-approved registry of remote ACP agents
+    acp_agents: Optional[list[dict]] = None
