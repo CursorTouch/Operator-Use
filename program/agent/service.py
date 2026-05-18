@@ -203,13 +203,21 @@ class Agent(ExtensionContext):
             ),
         )
         for r in results:
-            if isinstance(r, ToolCallEventResult) and r.block:
-                return ToolResultContent(
-                    id=invocation.id,
-                    is_error=True,
-                    content=r.reason or 'Tool call blocked by extension.',
-                    metadata={},
-                )
+            if isinstance(r, ToolCallEventResult):
+                if r.block:
+                    return ToolResultContent(
+                        id=invocation.id,
+                        is_error=True,
+                        content=r.reason or 'Tool call blocked by extension.',
+                        metadata={},
+                    )
+                if r.params is not None:
+                    invocation = ToolInvocation(
+                        id=invocation.id,
+                        name=invocation.name,
+                        params=r.params,
+                        cwd=invocation.cwd,
+                    )
         return invocation
 
     async def _after_tool_call(

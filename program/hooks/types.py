@@ -309,6 +309,7 @@ class ContextEventResult:
 class ToolCallEventResult:
     block: bool = False
     reason: str | None = None
+    params: dict[str, Any] | None = None  # non-None → rewrite the invocation params
 
 
 @dataclass

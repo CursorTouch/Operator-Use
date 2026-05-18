@@ -23,7 +23,13 @@ def acp() -> None:
 @click.option('--cwd', default=None, type=click.Path(exists=True, file_okay=False), help='Working directory')
 @click.option('--model', default=None, help='Model ID (e.g. claude-sonnet-4-6)')
 @click.option('--provider', default=None, help='Provider override')
-def serve(cwd: str | None, model: str | None, provider: str | None) -> None:
+@click.option(
+    '--sandbox',
+    type=click.Choice(['off', 'warn', 'enforce', 'strict'], case_sensitive=False),
+    default='off', show_default=True,
+    help='Sandbox mode (strict/enforce/warn/off)',
+)
+def serve(cwd: str | None, model: str | None, provider: str | None, sandbox: str) -> None:
     """
     Run the Operator ACP server over stdio.
 
@@ -38,19 +44,21 @@ def serve(cwd: str | None, model: str | None, provider: str | None) -> None:
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
     try:
-        asyncio.run(_run_serve(cwd=cwd, model_id=model, provider=provider))
+        asyncio.run(_run_serve(cwd=cwd, model_id=model, provider=provider, sandbox=sandbox))
     except KeyboardInterrupt:
         pass
 
 
-async def _run_serve(cwd: str | None, model_id: str | None, provider: str | None) -> None:
+async def _run_serve(cwd: str | None, model_id: str | None, provider: str | None, sandbox: str = 'off') -> None:
     from program.runtime import Runtime, RuntimeConfig
     from program.acp.stdio import serve_stdio
 
+    cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
     config = RuntimeConfig(
-        cwd=Path(cwd).resolve() if cwd else Path.cwd(),
+        cwd=cwd_path,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
+        sandbox=sandbox if sandbox != 'off' else None,
     )
     runtime = await Runtime.create(config)
     await serve_stdio(runtime)

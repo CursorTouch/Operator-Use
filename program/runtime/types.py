@@ -54,6 +54,9 @@ class RuntimeConfig(BaseModel):
     system_prompt: str | None = None
     append_system_prompt: list[str] = Field(default_factory=list)
 
+    # Sandbox
+    sandbox: str | None = None  # 'strict' | 'enforce' | 'warn' | None (off)
+
     # Compaction
     compaction_enabled: bool = True
     compaction_reserve_tokens: int = 16384
@@ -133,6 +136,15 @@ class RuntimeContext:
         hooks = Hooks()
         for event_type, handler in resource_loader.get_hooks():
             hooks.register(event_type, handler)
+
+        # ── Sandbox ───────────────────────────────────────────────────────────
+        if config.sandbox and config.sandbox != 'off':
+            from program.sandbox import Sandbox, SandboxPolicy
+            policy = (
+                SandboxPolicy.strict(cwd) if config.sandbox == 'strict'
+                else SandboxPolicy(mode=config.sandbox)  # type: ignore[arg-type]
+            )
+            Sandbox(policy, cwd).register(hooks)
 
         # ── Extension runtime ─────────────────────────────────────────────────
         load_result = resource_loader.get_extensions()

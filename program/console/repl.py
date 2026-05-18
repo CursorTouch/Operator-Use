@@ -159,11 +159,12 @@ def _bind_renderer(runtime: Runtime, current_session, unsubscribe):
     return next_session, next_unsubscribe
 
 
-async def _run_repl(cwd: Path, model_id: str | None, provider: str | None) -> None:
+async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off') -> None:
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
+        sandbox=sandbox if sandbox != 'off' else None,
     )
 
     print(f"Agent starting in {cwd}  (model: {config.model_id})")
@@ -228,13 +229,19 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None) -> No
 @click.option('--cwd', default=None, type=click.Path(exists=True, file_okay=False), help='Working directory')
 @click.option('--model', default=None, help='Model ID (e.g. claude-sonnet-4-6)')
 @click.option('--provider', default=None, help='Provider override')
-def repl(cwd: str | None, model: str | None, provider: str | None) -> None:
+@click.option(
+    '--sandbox',
+    type=click.Choice(['off', 'warn', 'enforce', 'strict'], case_sensitive=False),
+    default='off', show_default=True,
+    help='Sandbox mode: strict=write-locked+OS sandbox; enforce=policy only; warn=log; off=disabled',
+)
+def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str) -> None:
     """Start the interactive agent REPL."""
     from dotenv import load_dotenv
     load_dotenv()
 
     cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
     try:
-        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider))
+        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox))
     except KeyboardInterrupt:
         pass
