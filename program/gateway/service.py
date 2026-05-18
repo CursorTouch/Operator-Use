@@ -9,6 +9,7 @@ from program.bus.service import Bus
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart
 from program.gateway.types import BaseChannel
 from program.hooks.service import Hooks
+from program.subagent.manager import _session_channel, _session_chat_id
 from program.hooks.types import (
     AgentErrorEvent, MessageEndEvent, MessageUpdateEvent,
     ToolExecutionEndEvent, ToolExecutionStartEvent,
@@ -252,6 +253,11 @@ class Gateway:
             chat_id=chat_id,
             stream_phase=StreamPhase.START,
         ))
+
+        # Expose channel + chat_id via contextvars so the subagent tool can
+        # capture them when spawning background tasks in this session.
+        _session_channel.set(channel_id)
+        _session_chat_id.set(chat_id)
 
         unsub = agent.hooks.subscribe(_on_event)
         try:

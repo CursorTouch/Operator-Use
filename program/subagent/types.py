@@ -15,7 +15,8 @@ class SubagentRecord:
     started_at: datetime
     finished_at: datetime | None = None
     result: str | None = None
-    channel_id: str | None = None
+    channel: str | None = None   # originating channel name (e.g. 'telegram', 'discord')
+    chat_id: str | None = None   # originating chat/conversation ID within that channel
     depends_on: list[str] = field(default_factory=list)
     dependents: list[str] = field(default_factory=list)
     retry_count: int = 0
