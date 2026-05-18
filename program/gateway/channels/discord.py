@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 
-from program.gateway.types import BaseChannel, GatewayEvent
-
-if TYPE_CHECKING:
-    from program.gateway.service import Gateway
+from program.gateway.types import BaseChannel
+from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
 
 logger = logging.getLogger(__name__)
 
@@ -22,92 +19,34 @@ _DISCORD_MSG_LIMIT = 2000
 
 class DiscordChannel(BaseChannel):
     """
-    One channel per Discord text channel or DM.
+    A single Discord bot that handles all channels/DMs.
 
-    Accumulates text chunks and sends a message when stream_end fires.
-    Tool events post brief status messages.
+    One instance = one bot = all chats. Discord channel objects are stored
+    per chat_id when messages arrive so we can reply later.
+
+    Requires: pip install "discord.py>=2.0"
+    Requires intents: message_content=True (enable in Discord Developer Portal).
     """
 
-    def __init__(self, channel: discord.abc.Messageable, channel_id: int) -> None:
-        self._channel = channel
-        self._discord_id = channel_id
-        self._id = f"discord:{channel_id}"
-        self._text_buffer = ""
+    def __init__(self, token: str) -> None:
+        super().__init__()
+        if not _DISCORD_AVAILABLE:
+            raise ImportError('discord.py>=2.0 is required for DiscordChannel.')
+        self._token = token
+        self._buffers: dict[str, str] = {}
+        self._client: discord.Client | None = None
+        self._discord_channels: dict[str, discord.abc.Messageable] = {}
 
     @property
     def channel_id(self) -> str:
-        return self._id
+        return "discord"
 
-    async def on_event(self, event: GatewayEvent) -> None:
-        match event.type:
-            case 'stream_start':
-                self._text_buffer = ""
-
-            case 'chunk':
-                if event.data.get('kind') == 'text':
-                    self._text_buffer += event.data.get('text', '')
-
-            case 'stream_end':
-                if self._text_buffer.strip():
-                    await self.send(self._text_buffer)
-                    self._text_buffer = ""
-
-            case 'tool_start':
-                name = event.data.get('name', '')
-                await self._channel.send(f"⚙️ `{name}`…")
-
-            case 'tool_end':
-                if event.data.get('is_error'):
-                    result = str(event.data.get('result', ''))[:300]
-                    await self._channel.send(f"⚠️ `{result}`")
-
-            case 'error':
-                await self.send(f"❌ {event.data.get('message', 'Unknown error')}")
-
-    async def send(self, text: str) -> None:
-        for i in range(0, len(text), _DISCORD_MSG_LIMIT):
-            await self._channel.send(text[i:i + _DISCORD_MSG_LIMIT])
-
-
-class DiscordBot:
-    """
-    A Discord bot that routes messages through the Gateway.
-
-    Responds to:
-    - DMs: every text message.
-    - Servers: only messages that @mention the bot.
-
-    Requires: pip install "discord.py>=2.0"
-    Requires intents: message_content=True  (enable in Discord Developer Portal).
-
-    Usage:
-        bot = DiscordBot(gateway, token=os.environ["DISCORD_BOT_TOKEN"])
-        await bot.run()   # run as a background task or directly
-    """
-
-    def __init__(self, gateway: Gateway, token: str) -> None:
-        if not _DISCORD_AVAILABLE:
-            raise ImportError('discord.py>=2.0 is required for DiscordBot.')
-        self._gateway = gateway
-        self._token = token
-        self._channels: dict[int, DiscordChannel] = {}
-
-    def _get_or_create(
-        self,
-        discord_channel: discord.abc.Messageable,
-        channel_id: int,
-    ) -> DiscordChannel:
-        if channel_id not in self._channels:
-            ch = DiscordChannel(discord_channel, channel_id)
-            self._channels[channel_id] = ch
-            self._gateway.register(ch)
-        return self._channels[channel_id]
-
-    async def start(self) -> None:
-        """Connect and serve. Runs until the asyncio task is cancelled."""
+    async def connect(self) -> None:
+        """Create Discord client, register events, connect. Runs until cancelled."""
         intents = discord.Intents.default()
         intents.message_content = True
-        client = discord.Client(intents=intents)
+        self._client = discord.Client(intents=intents)
+        client = self._client
 
         @client.event
         async def on_ready() -> None:
@@ -129,8 +68,93 @@ class DiscordBot:
             if not text:
                 return
 
-            channel = self._get_or_create(message.channel, message.channel.id)
-            async with message.channel.typing():
-                await self._gateway.send(channel.channel_id, text)
+            chat_id = str(message.channel.id)
+            # Store channel reference for later sends
+            self._discord_channels[chat_id] = message.channel
 
-        await client.start(self._token)
+            user_id = str(message.author.id)
+            incoming = IncomingMessage(
+                channel="discord",
+                chat_id=chat_id,
+                parts=[TextPart(text)],
+                user_id=user_id,
+            )
+            await self.receive(incoming)
+
+        try:
+            await client.start(self._token)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await self.disconnect()
+
+    async def disconnect(self) -> None:
+        """Close the Discord client."""
+        if self._client is not None:
+            try:
+                await self._client.close()
+            except Exception:
+                logger.exception("DiscordChannel: error during disconnect")
+            self._client = None
+
+    async def send(self, msg: OutgoingMessage) -> None:
+        """Deliver an outgoing message to the Discord channel."""
+        chat_id = msg.chat_id
+        phase = msg.stream_phase
+        metadata = msg.metadata
+        discord_ch = self._discord_channels.get(chat_id)
+
+        if phase == StreamPhase.START:
+            self._buffers[chat_id] = ""
+
+        elif phase == StreamPhase.CHUNK:
+            kind = metadata.get('kind')
+            if kind == 'tool_start':
+                name = metadata.get('name', '')
+                if discord_ch is not None:
+                    try:
+                        await discord_ch.send(f"⚙️ `{name}`…")
+                    except Exception:
+                        logger.exception("DiscordChannel: send failed (tool_start)")
+            elif kind == 'tool_end' and metadata.get('is_error'):
+                result = str(metadata.get('result', ''))
+                if discord_ch is not None:
+                    try:
+                        await discord_ch.send(f"⚠️ `{result}`")
+                    except Exception:
+                        logger.exception("DiscordChannel: send failed (tool_end)")
+            else:
+                # text or thinking chunk — accumulate
+                text = text_from_parts(msg.parts)
+                self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
+
+        elif phase == StreamPhase.END:
+            buffered = self._buffers.pop(chat_id, "")
+            if buffered.strip() and discord_ch is not None:
+                for i in range(0, len(buffered), _DISCORD_MSG_LIMIT):
+                    try:
+                        await discord_ch.send(buffered[i:i + _DISCORD_MSG_LIMIT])
+                    except Exception:
+                        logger.exception("DiscordChannel: send failed (end)")
+
+        elif phase == StreamPhase.ERROR:
+            text = text_from_parts(msg.parts) or "Unknown error"
+            if discord_ch is not None:
+                try:
+                    await discord_ch.send(f"❌ {text}")
+                except Exception:
+                    logger.exception("DiscordChannel: send failed (error)")
+
+        elif phase is None:
+            # Direct send (out-of-band)
+            text = text_from_parts(msg.parts)
+            if text and discord_ch is not None:
+                for i in range(0, len(text), _DISCORD_MSG_LIMIT):
+                    try:
+                        await discord_ch.send(text[i:i + _DISCORD_MSG_LIMIT])
+                    except Exception:
+                        logger.exception("DiscordChannel: send failed (direct)")
+
+
+# Backward compatibility alias
+DiscordBot = DiscordChannel

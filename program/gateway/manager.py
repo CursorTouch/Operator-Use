@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from program.bus.service import Bus
 from program.gateway.service import Gateway
 
 if TYPE_CHECKING:
@@ -16,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 class GatewayManager:
     """
-    Owns the Gateway and all channel lifecycles.
+    Owns the Gateway, Bus, and all channel lifecycles.
 
-    Created in Runtime.__init__() after the Runtime itself exists (since
-    Gateway wraps Runtime). start() spins up each enabled channel as an
-    asyncio Task; stop() cancels them all.
+    Created in Runtime.__init__() after the Runtime itself exists.
+    start() spins up the gateway processing loops and each enabled channel as
+    asyncio Tasks; stop() cancels them all.
 
     Channels that are disabled or missing required tokens are silently skipped
     with a log warning so a misconfigured channel never crashes the agent.
@@ -41,13 +42,19 @@ class GatewayManager:
         self._runtime = runtime
         self._settings = settings_manager
         self._auth = auth_manager
-        self.gateway = Gateway(runtime)
+        self._bus = Bus()
+        self.gateway = Gateway(self._bus, runtime)
         self._tasks: list[asyncio.Task] = []
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        """Start all enabled channels as background asyncio tasks."""
+        """Start gateway processing loops and all enabled channels as background asyncio tasks."""
+        # Start the gateway event loops
+        asyncio.get_event_loop().create_task(
+            self.gateway.start(), name='gateway:main'
+        )
+
         cfg = self._settings.get_channels_settings()
         auth = self._auth
 
@@ -81,7 +88,8 @@ class GatewayManager:
                 self._start_task('twitch', self._run_twitch(cfg.twitch, auth.twitch.token))
 
     def stop(self) -> None:
-        """Cancel all running channel tasks."""
+        """Cancel all running channel tasks and stop the gateway."""
+        asyncio.get_event_loop().create_task(self.gateway.stop())
         for task in self._tasks:
             task.cancel()
         self._tasks.clear()
@@ -98,21 +106,26 @@ class GatewayManager:
         await WebSocketServer(self.gateway, host=cfg.host, port=cfg.port).start()
 
     async def _run_telegram(self, bot_token: str) -> None:
-        from program.gateway.channels.telegram import TelegramBot
-        await TelegramBot(self.gateway, token=bot_token).start()
+        from program.gateway.channels.telegram import TelegramChannel
+        ch = TelegramChannel(token=bot_token)
+        self.gateway.register(ch)
+        await ch.connect()
 
     async def _run_discord(self, bot_token: str) -> None:
-        from program.gateway.channels.discord import DiscordBot
-        await DiscordBot(self.gateway, token=bot_token).start()
+        from program.gateway.channels.discord import DiscordChannel
+        ch = DiscordChannel(token=bot_token)
+        self.gateway.register(ch)
+        await ch.connect()
 
     async def _run_slack(self, bot_token: str, app_token: str) -> None:
-        from program.gateway.channels.slack import SlackBot
-        await SlackBot(self.gateway, bot_token=bot_token, app_token=app_token).start()
+        from program.gateway.channels.slack import SlackChannel
+        ch = SlackChannel(bot_token=bot_token, app_token=app_token)
+        self.gateway.register(ch)
+        await ch.connect()
 
     async def _run_twitch(self, cfg, token: str) -> None:
         from program.gateway.channels.twitch import TwitchChannel
         ch = TwitchChannel(
-            self.gateway,
             token=token,
             nick=cfg.nick,
             channel_name=cfg.channel_name,
@@ -120,4 +133,4 @@ class GatewayManager:
             allow_from=cfg.allow_from,
         )
         self.gateway.register(ch)
-        await ch.start()
+        await ch.connect()

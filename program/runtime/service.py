@@ -210,6 +210,52 @@ class Runtime:
         sm.branch(from_entry_id)
         await self._emit_session_start('fork')
 
+    def create_session_agent(self) -> Agent:
+        """
+        Create an isolated agent for a gateway session.
+
+        Shares LLM, tools, and resources with the main runtime context but
+        isolates conversation state (session manager, hooks, extension runtime).
+        """
+        from program.hooks.service import Hooks
+        from program.engine.service import Engine
+        from program.engine.types import Options
+        from program.session.manager import SessionManager
+        from program.extension.runtime import ExtensionRuntime
+        from program.runtime.types import _DeferredExtensionRuntime
+
+        hooks = Hooks()
+
+        engine = Engine(
+            llm=self._context.llm,
+            tools=list(self._context.engine.tools),
+            options=Options(),
+            hooks=hooks,
+        )
+
+        session_manager = SessionManager(
+            cwd=self._context.session_manager.cwd,
+            persist=False,
+        )
+
+        load_result = self._context.resource_loader.get_extensions()
+        deferred = _DeferredExtensionRuntime(load_result)
+
+        agent = Agent(
+            engine=engine,
+            session_manager=session_manager,
+            resource_loader=self._context.resource_loader,
+            extension_runtime=deferred,  # type: ignore[arg-type]
+            compaction=self._context.compaction,
+            config=self._context.agent._config,
+        )
+
+        real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
+        agent._extensions = real_ext
+        agent._runtime = self
+
+        return agent
+
     def shutdown(self) -> None:
         """Stop background services (cron, gateway channels). Call when exiting the REPL."""
         if self._context.cron is not None:

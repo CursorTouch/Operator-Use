@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
-    from program.cron.service import Cron
+    from program.cron.scheduler import Cron
     from program.cron.types import CronJob
 
 

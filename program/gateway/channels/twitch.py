@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 
-from program.gateway.types import BaseChannel, GatewayEvent
-
-if TYPE_CHECKING:
-    from program.gateway.service import Gateway
+from program.gateway.types import BaseChannel
+from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
 
 logger = logging.getLogger(__name__)
 
@@ -45,59 +42,44 @@ class TwitchChannel(BaseChannel):
     """
     One channel for the entire Twitch chat room.
 
-    start() connects to Twitch IRC and runs until cancelled.
-    Accumulates text chunks and sends the full response when stream_end fires,
+    connect() connects to Twitch IRC and runs until cancelled.
+    Accumulates text chunks and sends the full response when END fires,
     splitting into ≤500 character messages as required by Twitch.
 
     Requires: pip install "twitchio>=2.0"
 
-    Twitch developer setup:
-    - Create an app at dev.twitch.tv
-    - Generate an OAuth token with `chat:read` and `chat:edit` scopes
-    - Token format: "oauth:xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-    Usage:
-        ch = TwitchChannel(
-            gateway,
-            token="oauth:...",
-            nick="my_bot_name",
-            channel_name="my_channel",
-            allow_from=["trusted_user1"],
-        )
-        gateway.register(ch)
-        await ch.start()
+    channel_id = f"twitch:{channel_name}"
     """
 
     def __init__(
         self,
-        gateway: Gateway,
         token: str,
         nick: str,
         channel_name: str,
         prefix: str = "!",
         allow_from: list[str] | None = None,
+        # Legacy param kept for backward compat — ignored
+        gateway=None,
     ) -> None:
+        super().__init__()
         if not _TWITCHIO_AVAILABLE:
             raise ImportError('twitchio>=2.0 is required for TwitchChannel.')
-        self._gateway = gateway
         self._token = token
         self._nick = nick
         self._twitch_channel_name = channel_name.lstrip('#')
         self._prefix = prefix
         self._allow_from = [u.lower() for u in (allow_from or [])]
-        self._id = f"twitch:{self._twitch_channel_name}"
-        self._text_buffer = ""
+        self._buffer: str = ""
         self._bot_ref: _TwitchBotImpl | None = None
 
     @property
     def channel_id(self) -> str:
-        return self._id
+        return f"twitch:{self._twitch_channel_name}"
 
-    async def start(self) -> None:
+    async def connect(self) -> None:
         """Connect to Twitch IRC and serve. Runs until the asyncio task is cancelled."""
         bot = _TwitchBotImpl(
-            channel=self,
-            gateway=self._gateway,
+            operator_channel=self,
             token=self._token,
             nick=self._nick,
             channel_name=self._twitch_channel_name,
@@ -110,35 +92,58 @@ class TwitchChannel(BaseChannel):
         except asyncio.CancelledError:
             pass
         finally:
-            self._gateway.unregister(self._id)
+            if self.bus is not None:
+                pass  # unregister handled externally via GatewayManager / gateway
             try:
                 await bot.close()
             except Exception:
                 pass
 
-    async def on_event(self, event: GatewayEvent) -> None:
-        match event.type:
-            case 'stream_start':
-                self._text_buffer = ""
+    async def disconnect(self) -> None:
+        """Stop the Twitch bot connection."""
+        if self._bot_ref is not None:
+            try:
+                await self._bot_ref.close()
+            except Exception:
+                logger.exception("TwitchChannel: error during disconnect")
+            self._bot_ref = None
 
-            case 'chunk':
-                if event.data.get('kind') == 'text':
-                    self._text_buffer += event.data.get('text', '')
+    async def send(self, msg: OutgoingMessage) -> None:
+        """Deliver an outgoing message to the Twitch chat room."""
+        phase = msg.stream_phase
+        metadata = msg.metadata
 
-            case 'stream_end':
-                if self._text_buffer.strip():
-                    await self.send(self._text_buffer)
-                    self._text_buffer = ""
+        if phase == StreamPhase.START:
+            self._buffer = ""
 
-            case 'tool_start':
-                name = event.data.get('name', '')
-                await self.send(f"⚙️ {name}…")
+        elif phase == StreamPhase.CHUNK:
+            kind = metadata.get('kind')
+            if kind == 'tool_start':
+                name = metadata.get('name', '')
+                await self._send_raw(f"⚙️ {name}…")
+            elif kind == 'tool_end' and metadata.get('is_error'):
+                result = str(metadata.get('result', ''))
+                await self._send_raw(f"⚠️ {result}")
+            else:
+                text = text_from_parts(msg.parts)
+                self._buffer += text
 
-            case 'error':
-                msg = event.data.get('message', 'Unknown error')
-                await self.send(f"❌ {msg}")
+        elif phase == StreamPhase.END:
+            if self._buffer.strip():
+                await self._send_raw(self._buffer)
+            self._buffer = ""
 
-    async def send(self, text: str) -> None:
+        elif phase == StreamPhase.ERROR:
+            text = text_from_parts(msg.parts) or "Unknown error"
+            await self._send_raw(f"❌ {text}")
+            self._buffer = ""
+
+        elif phase is None:
+            text = text_from_parts(msg.parts)
+            if text:
+                await self._send_raw(text)
+
+    async def _send_raw(self, text: str) -> None:
         if not self._bot_ref:
             return
         twitch_ch = self._bot_ref.get_channel(self._twitch_channel_name)
@@ -157,8 +162,7 @@ class _TwitchBotImpl(twitch_commands.Bot if _TWITCHIO_AVAILABLE else object):
 
     def __init__(
         self,
-        channel: TwitchChannel,
-        gateway: Gateway,
+        operator_channel: TwitchChannel,
         token: str,
         nick: str,
         channel_name: str,
@@ -171,8 +175,7 @@ class _TwitchBotImpl(twitch_commands.Bot if _TWITCHIO_AVAILABLE else object):
             prefix=prefix,
             initial_channels=[channel_name],
         )
-        self._operator_channel = channel
-        self._gateway = gateway
+        self._operator_channel = operator_channel
         self._allow_from = allow_from
 
     async def event_ready(self) -> None:
@@ -187,7 +190,13 @@ class _TwitchBotImpl(twitch_commands.Bot if _TWITCHIO_AVAILABLE else object):
         text = (message.content or "").strip()
         if not text:
             return
-        await self._gateway.send(self._operator_channel.channel_id, text)
+        incoming = IncomingMessage(
+            channel=self._operator_channel.channel_id,
+            chat_id=self._operator_channel.channel_id,
+            parts=[TextPart(text)],
+            user_id=author,
+        )
+        asyncio.create_task(self._operator_channel.receive(incoming))
 
     async def event_error(self, error: Exception, data: str = "") -> None:
         logger.error("Twitch bot error: %s", error, exc_info=True)
