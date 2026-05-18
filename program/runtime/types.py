@@ -21,7 +21,7 @@ from program.resource.loader import ResourceLoader
 from program.resource.types import ResourceLoaderOptions
 from program.session.manager import SessionManager
 from program.settings.manager import SettingsManager
-from program.cron.service import Cron
+from program.cron.scheduler import CronScheduler as Cron
 from program.auth.channels import ChannelAuthManager
 from program.subagent.manager import SubagentManager
 from program.subagent.types import SubagentSettings
