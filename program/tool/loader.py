@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import traceback
 from pathlib import Path
 
@@ -25,7 +26,12 @@ def load_tool_from_file(path: Path) -> tuple[list[Tool], list[ToolError]]:
             return [], errors
 
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        sys.modules[spec.name] = module
+        try:
+            spec.loader.exec_module(module)  # type: ignore[union-attr]
+        except Exception:
+            sys.modules.pop(spec.name, None)
+            raise
 
         # Accept either a single `tool` export or a `tools` list
         loaded: list[Tool] = []
