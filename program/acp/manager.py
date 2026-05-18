@@ -8,7 +8,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-class ACPSessionStore:
+class ACPManager:
     """
     Per-agent ACP session persistence.
 
