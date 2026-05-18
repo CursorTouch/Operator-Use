@@ -1,246 +1,294 @@
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
+import os
 from collections.abc import AsyncIterator
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, TYPE_CHECKING
 
-from program.acp.types import (
-    AgentListResponse, AgentMetadata,
-    Run, RunCreateRequest, RunMode, RunOutputEvent,
-    MessagePart, TextMessagePart,
-    DeviceCodeResponse, TokenResponse,
+from acp import (
+    PROTOCOL_VERSION,
+    connect_to_agent,
+    spawn_agent_process,
 )
-from program.acp.utils import text_from_parts, parts_from_text
-from program.acp.provenance import ACPProvenance
+from acp.schema import (
+    RequestPermissionResponse,
+    ReadTextFileResponse,
+    WriteTextFileResponse,
+    CreateTerminalResponse,
+    TerminalOutputResponse,
+    ReleaseTerminalResponse,
+    WaitForTerminalExitResponse,
+    KillTerminalResponse,
+    PermissionOption,
+)
+
+from program.acp.utils import content_blocks_from_text
+
+if TYPE_CHECKING:
+    from acp.agent.connection import AgentSideConnection as _AgentConn
 
 logger = logging.getLogger(__name__)
 
-try:
-    import aiohttp
-    _AIOHTTP_AVAILABLE = True
-except ImportError:
-    _AIOHTTP_AVAILABLE = False
 
-try:
-    from websockets.asyncio.client import connect as ws_connect
-    _WS_AVAILABLE = True
-except ImportError:
-    _WS_AVAILABLE = False
+class OperatorACPClient:
+    """
+    Implements the ``acp.Client`` protocol — the server side of Zed ACP.
+
+    The SDK passes an AgentSideConnection via ``on_connect``; the agent then
+    calls methods on this object to push streaming updates and request
+    resources from the client environment.
+
+    One instance is created per ``ACPClient`` session.
+    """
+
+    def __init__(self) -> None:
+        self._chunks: asyncio.Queue[str | None] = asyncio.Queue()
+        self._conn: _AgentConn | None = None
+
+    # ── SDK lifecycle ─────────────────────────────────────────────────────────
+
+    def on_connect(self, conn: Any) -> None:
+        self._conn = conn
+
+    # ── Streaming helper ──────────────────────────────────────────────────────
+
+    async def drain(self) -> AsyncIterator[str]:
+        """Yield text chunks until the agent signals end-of-turn (None sentinel)."""
+        while True:
+            chunk = await self._chunks.get()
+            if chunk is None:
+                break
+            yield chunk
+
+    # ── acp.Client protocol ───────────────────────────────────────────────────
+
+    async def session_update(
+        self,
+        session_id: str,
+        update: Any,
+        **kwargs: Any,
+    ) -> None:
+        kind = getattr(update, 'type', '')
+        # AgentMessageChunk / AgentThoughtChunk carry delta text
+        text = getattr(update, 'text', None)
+        if text and kind in ('agent_message_chunk', 'agent_thought_chunk'):
+            await self._chunks.put(text)
+
+    async def request_permission(
+        self,
+        options: list[PermissionOption],
+        session_id: str,
+        tool_call: Any,
+        **kwargs: Any,
+    ) -> RequestPermissionResponse:
+        # Auto-allow all tool calls when acting as a programmatic client.
+        if options:
+            return RequestPermissionResponse(selected_option=options[0].id)
+        return RequestPermissionResponse(selected_option='')
+
+    async def write_text_file(
+        self,
+        content: str,
+        path: str,
+        session_id: str,
+        **kwargs: Any,
+    ) -> WriteTextFileResponse | None:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            return WriteTextFileResponse()
+        except Exception as exc:
+            logger.error('ACPClient: write_text_file failed: %s', exc)
+            return None
+
+    async def read_text_file(
+        self,
+        path: str,
+        session_id: str,
+        limit: int | None = None,
+        line: int | None = None,
+        **kwargs: Any,
+    ) -> ReadTextFileResponse:
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            if line is not None:
+                start = max(0, line - 1)
+                lines = lines[start:]
+            if limit is not None:
+                lines = lines[:limit]
+            return ReadTextFileResponse(content=''.join(lines))
+        except Exception as exc:
+            logger.error('ACPClient: read_text_file failed: %s', exc)
+            return ReadTextFileResponse(content='')
+
+    async def create_terminal(self, command: str, session_id: str, **kwargs: Any) -> CreateTerminalResponse:
+        return CreateTerminalResponse(terminal_id='')
+
+    async def terminal_output(self, session_id: str, terminal_id: str, **kwargs: Any) -> TerminalOutputResponse:
+        return TerminalOutputResponse(output='', done=True)
+
+    async def release_terminal(self, session_id: str, terminal_id: str, **kwargs: Any) -> ReleaseTerminalResponse | None:
+        return None
+
+    async def wait_for_terminal_exit(self, session_id: str, terminal_id: str, **kwargs: Any) -> WaitForTerminalExitResponse:
+        return WaitForTerminalExitResponse(exit_code=0)
+
+    async def kill_terminal(self, session_id: str, terminal_id: str, **kwargs: Any) -> KillTerminalResponse | None:
+        return None
+
+    async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    async def ext_notification(self, method: str, params: dict[str, Any]) -> None:
+        pass
 
 
 class ACPClient:
     """
-    Async client for calling remote ACP agents.
+    High-level Zed ACP client with transport auto-negotiation.
 
-    Supports three transports (auto-negotiated per call):
-        - WebSocket  — connect to /runs/{id}/ws for streaming
-        - SSE        — GET /runs/{id}/await for streaming (fallback)
-        - HTTP SYNC  — POST /runs with mode=sync for blocking calls
+    Factory methods:
+        ACPClient.stdio(command, *args)   — same-machine subprocess via stdio
+        ACPClient.http(url)               — remote agent over HTTP/SSE
+        ACPClient.discover(agent_id)      — auto-discover via ACPRegistry
 
-    Usage:
-        async with ACPClient(base_url='http://remote:8766', agent_id='operator') as client:
-            text = await client.run('summarise this file')
-            async for chunk in client.run_stream('refactor auth.py'):
-                print(chunk, end='', flush=True)
+    Usage (stdio)::
+
+        async with ACPClient.stdio('operator', 'acp') as client:
+            async with client.session() as session_id:
+                text = await client.run('summarise auth.py', session_id)
+
+    Usage (streaming)::
+
+        async with ACPClient.stdio('operator', 'acp') as client:
+            async with client.session() as session_id:
+                async for chunk in client.run_stream('refactor auth.py', session_id):
+                    print(chunk, end='', flush=True)
     """
+
+    # ── Factory methods ───────────────────────────────────────────────────────
+
+    @classmethod
+    def stdio(cls, command: str, *args: str) -> ACPClient:
+        """Create a client that connects via stdio subprocess."""
+        return cls(_transport='stdio', _command=command, _args=args)
+
+    @classmethod
+    def http(cls, url: str) -> ACPClient:
+        """Create a client that connects to a remote HTTP agent."""
+        return cls(_transport='http', _url=url)
+
+    @classmethod
+    def discover(cls, agent_id: str) -> ACPClient:
+        """Create a client that auto-discovers a local agent via ACPRegistry."""
+        return cls(_transport='discover', _agent_id=agent_id)
+
+    # ── Init (private; use factory methods) ───────────────────────────────────
 
     def __init__(
         self,
-        base_url: str,
-        agent_id: str,
         *,
-        auth_token: str | None = None,
-        provenance: ACPProvenance | None = None,
-        agent_url: str | None = None,
-        timeout: float = 120.0,
-        prefer_websocket: bool = True,
+        _transport: str = 'stdio',
+        _command: str = '',
+        _args: tuple[str, ...] = (),
+        _url: str = '',
+        _agent_id: str = '',
     ) -> None:
-        if not _AIOHTTP_AVAILABLE:
-            raise ImportError('aiohttp>=3.9 is required for ACPClient.')
-        self._base_url        = base_url.rstrip('/')
-        self._agent_id        = agent_id
-        self._auth_token      = auth_token
-        self._provenance      = provenance
-        self._agent_url       = agent_url
-        self._timeout         = aiohttp.ClientTimeout(total=timeout)
-        self._prefer_ws       = prefer_websocket
-        self._session: aiohttp.ClientSession | None = None
+        self._transport = _transport
+        self._command = _command
+        self._args = _args
+        self._url = _url
+        self._agent_id = _agent_id
+        self._conn: Any = None  # ClientSideConnection
+        self._process: Any = None
+        self._acp_client = OperatorACPClient()
+        self._session_id: str | None = None
+        self._ctx: Any = None
 
     # ── Context manager ───────────────────────────────────────────────────────
 
     async def __aenter__(self) -> ACPClient:
-        self._session = aiohttp.ClientSession(timeout=self._timeout)
+        if self._transport == 'stdio':
+            self._ctx = spawn_agent_process(self._acp_client, self._command, *self._args)
+            self._conn, self._process = await self._ctx.__aenter__()
+        elif self._transport == 'http':
+            raise NotImplementedError('HTTP transport not yet implemented')
+        elif self._transport == 'discover':
+            from program.acp.registry import ACPRegistry
+            reg = ACPRegistry()
+            entry = await reg.find(self._agent_id)
+            if entry is None:
+                raise RuntimeError(f'ACPClient.discover: agent {self._agent_id!r} not found in registry')
+            transport = entry.get('transport', 'stdio')
+            if transport == 'stdio':
+                command = entry['command']
+                args = entry.get('args', [])
+                self._ctx = spawn_agent_process(self._acp_client, command, *args)
+                self._conn, self._process = await self._ctx.__aenter__()
+            else:
+                raise NotImplementedError(f'Transport {transport!r} not supported via discover')
+        await self._conn.initialize(protocol_version=PROTOCOL_VERSION)
         return self
 
-    async def __aexit__(self, *_) -> None:
-        if self._session:
-            await self._session.close()
-            self._session = None
+    async def __aexit__(self, *exc_info: Any) -> None:
+        if self._session_id:
+            try:
+                await self._conn.close_session(session_id=self._session_id)
+            except Exception:
+                pass
+            self._session_id = None
+        if self._ctx is not None:
+            await self._ctx.__aexit__(*exc_info)
+            self._ctx = None
+
+    # ── Session management ────────────────────────────────────────────────────
+
+    @asynccontextmanager
+    async def session(self, cwd: str | None = None) -> AsyncIterator[str]:
+        """Async context manager that creates a session and yields the session_id."""
+        import os as _os
+        resp = await self._conn.new_session(cwd=cwd or _os.getcwd())
+        session_id = resp.session_id
+        self._session_id = session_id
+        try:
+            yield session_id
+        finally:
+            try:
+                await self._conn.close_session(session_id=session_id)
+            except Exception:
+                pass
+            if self._session_id == session_id:
+                self._session_id = None
 
     # ── High-level API ────────────────────────────────────────────────────────
 
-    async def run(
-        self,
-        text: str,
-        session_id: str | None = None,
-        extra_parts: list[MessagePart] | None = None,
-    ) -> str:
-        """Send a prompt and return the full response text (blocking)."""
-        req = RunCreateRequest(
-            agent_id=self._agent_id,
-            session_id=session_id,
-            mode=RunMode.SYNC,
-            input=parts_from_text(text) + (extra_parts or []),
-        )
-        run = await self._create_run(req)
-        return text_from_parts(run.output)
+    async def run(self, text: str, session_id: str) -> str:
+        """Send a prompt and return the full response text."""
+        chunks: list[str] = []
+        async for chunk in self.run_stream(text, session_id):
+            chunks.append(chunk)
+        return ''.join(chunks)
 
-    async def run_stream(
-        self,
-        text: str,
-        session_id: str | None = None,
-        extra_parts: list[MessagePart] | None = None,
-    ) -> AsyncIterator[str]:
-        """Send a prompt and yield response text chunks as they arrive."""
-        req = RunCreateRequest(
-            agent_id=self._agent_id,
-            session_id=session_id,
-            mode=RunMode.STREAM,
-            input=parts_from_text(text) + (extra_parts or []),
-        )
-        run = await self._create_run(req)
+    async def run_stream(self, text: str, session_id: str) -> AsyncIterator[str]:
+        """Send a prompt and yield text chunks as they arrive."""
+        self._acp_client._chunks = asyncio.Queue()
+        acp_client = self._acp_client
 
-        if self._prefer_ws and _WS_AVAILABLE:
-            async for chunk in self._stream_ws(run.id):
-                yield chunk
-        else:
-            async for chunk in self._stream_sse(run.id):
-                yield chunk
+        async def _run_prompt():
+            try:
+                await self._conn.prompt(
+                    prompt=content_blocks_from_text(text),
+                    session_id=session_id,
+                )
+            except Exception as exc:
+                logger.error('ACPClient: prompt failed: %s', exc)
+            finally:
+                await acp_client._chunks.put(None)
 
-    # ── Agent discovery ───────────────────────────────────────────────────────
-
-    async def list_agents(self) -> AgentListResponse:
-        async with self._get('/agents') as r:
-            return AgentListResponse.model_validate(await r.json())
-
-    async def get_agent(self, agent_id: str | None = None) -> AgentMetadata:
-        aid = agent_id or self._agent_id
-        async with self._get(f'/agents/{aid}') as r:
-            return AgentMetadata.model_validate(await r.json())
-
-    # ── Run management ────────────────────────────────────────────────────────
-
-    async def get_run(self, run_id: str) -> Run:
-        async with self._get(f'/runs/{run_id}') as r:
-            return Run.model_validate(await r.json())
-
-    async def cancel_run(self, run_id: str) -> None:
-        assert self._session
-        async with self._session.delete(
-            f'{self._base_url}/runs/{run_id}',
-            headers=self._auth_headers(),
-        ) as r:
-            r.raise_for_status()
-
-    # ── Device auth (RFC 8628) ────────────────────────────────────────────────
-
-    async def device_auth(self, poll_interval: float | None = None) -> str:
-        """Interactive device authorization flow. Returns the access token."""
-        async with self._post('/auth/device', {}) as r:
-            resp = DeviceCodeResponse.model_validate(await r.json())
-
-        interval = poll_interval or resp.interval
-        print(f'\nOpen this URL and enter the code: {resp.verification_uri}')
-        print(f'Code: {resp.user_code}\n')
-
-        import asyncio
-        while True:
-            await asyncio.sleep(interval)
-            async with self._post('/auth/token', {'device_code': resp.device_code}) as r:
-                if r.status == 200:
-                    token_resp = TokenResponse.model_validate(await r.json())
-                    self._auth_token = token_resp.access_token
-                    self._session = aiohttp.ClientSession(timeout=self._timeout)
-                    return token_resp.access_token
-                # 202 = pending, keep polling
-
-    # ── Internal: create run ──────────────────────────────────────────────────
-
-    async def _create_run(self, req: RunCreateRequest) -> Run:
-        body = req.model_dump_json().encode()
-        headers = {**self._auth_headers(), 'Content-Type': 'application/json'}
-        if self._provenance:
-            headers.update(self._provenance.auth_headers(self._agent_id, body, self._agent_url))
-        assert self._session
-        async with self._session.post(
-            f'{self._base_url}/runs',
-            data=body,
-            headers=headers,
-        ) as r:
-            r.raise_for_status()
-            return Run.model_validate(await r.json())
-
-    # ── Internal: SSE stream ──────────────────────────────────────────────────
-
-    async def _stream_sse(self, run_id: str) -> AsyncIterator[str]:
-        assert self._session
-        async with self._session.get(
-            f'{self._base_url}/runs/{run_id}/await',
-            headers=self._auth_headers(),
-        ) as r:
-            r.raise_for_status()
-            async for raw in r.content:
-                line = raw.strip()
-                if not line.startswith(b'data:'):
-                    continue
-                payload = line[5:].strip()
-                try:
-                    evt = RunOutputEvent.model_validate_json(payload)
-                except Exception:
-                    continue
-                if evt.type == 'output' and isinstance(evt.part, TextMessagePart):
-                    yield evt.part.text
-                elif evt.type in ('completed', 'error'):
-                    break
-
-    # ── Internal: WebSocket stream ────────────────────────────────────────────
-
-    async def _stream_ws(self, run_id: str) -> AsyncIterator[str]:
-        ws_url = self._base_url.replace('http://', 'ws://').replace('https://', 'wss://')
-        url = f'{ws_url}/runs/{run_id}/ws'
-        extra_headers = self._auth_headers()
-        try:
-            async with ws_connect(url, additional_headers=extra_headers) as ws:
-                async for raw in ws:
-                    try:
-                        evt = RunOutputEvent.model_validate_json(raw)
-                    except Exception:
-                        continue
-                    if evt.type == 'output' and isinstance(evt.part, TextMessagePart):
-                        yield evt.part.text
-                    elif evt.type in ('completed', 'error'):
-                        break
-        except Exception:
-            logger.debug('ACPClient: WebSocket failed, falling back to SSE for run %s', run_id)
-            async for chunk in self._stream_sse(run_id):
-                yield chunk
-
-    # ── Request helpers ───────────────────────────────────────────────────────
-
-    def _auth_headers(self) -> dict[str, str]:
-        if self._auth_token:
-            return {'Authorization': f'Bearer {self._auth_token}'}
-        return {}
-
-    def _get(self, path: str):
-        assert self._session
-        return self._session.get(f'{self._base_url}{path}', headers=self._auth_headers())
-
-    def _post(self, path: str, body: dict):
-        assert self._session
-        return self._session.post(
-            f'{self._base_url}{path}',
-            json=body,
-            headers=self._auth_headers(),
-        )
+        asyncio.create_task(_run_prompt())
+        async for chunk in self._acp_client.drain():
+            yield chunk

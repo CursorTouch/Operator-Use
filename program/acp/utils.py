@@ -1,13 +1,27 @@
 from __future__ import annotations
 
-from program.acp.types import MessagePart, TextMessagePart
+from acp.schema import (
+    AudioContentBlock,
+    EmbeddedResourceContentBlock,
+    ImageContentBlock,
+    ResourceContentBlock,
+    TextContentBlock,
+)
+
+ContentBlock = (
+    TextContentBlock
+    | ImageContentBlock
+    | AudioContentBlock
+    | ResourceContentBlock
+    | EmbeddedResourceContentBlock
+)
 
 
-def text_from_parts(parts: list[MessagePart]) -> str:
-    """Extract and concatenate all text from a list of message parts."""
-    return ''.join(p.text for p in parts if isinstance(p, TextMessagePart))
+def text_from_content_blocks(blocks: list) -> str:
+    """Extract and concatenate text from a list of ACP ContentBlocks."""
+    return ''.join(b.text for b in blocks if isinstance(b, TextContentBlock))
 
 
-def parts_from_text(text: str) -> list[MessagePart]:
-    """Wrap a plain string into a single TextMessagePart list."""
-    return [TextMessagePart(text=text)]
+def content_blocks_from_text(text: str) -> list[TextContentBlock]:
+    """Wrap plain text into a single TextContentBlock list."""
+    return [TextContentBlock(type='text', text=text)]
