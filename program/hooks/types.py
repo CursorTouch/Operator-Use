@@ -301,6 +301,36 @@ class GatewayStopEvent:
 
 
 # ============================================================================
+# Provider request / response lifecycle
+# ============================================================================
+
+@dataclass
+class BeforeProviderRequestEvent:
+    """Fired just before the LLM API call is made."""
+    type: Literal['before_provider_request'] = field(default='before_provider_request', init=False)
+    model: Any = None
+    messages: list[Any] = field(default_factory=list)
+    options: Any = None
+
+
+@dataclass
+class AfterProviderResponseEvent:
+    """Fired immediately after the LLM streaming response is fully collected."""
+    type: Literal['after_provider_response'] = field(default='after_provider_response', init=False)
+    model: Any = None
+    response: Any = None  # AssistantMessage produced by the turn
+
+
+@dataclass
+class QueueUpdateEvent:
+    """Fired when a follow-up or steering message enters the queue."""
+    type: Literal['queue_update'] = field(default='queue_update', init=False)
+    queue: Literal['steering', 'followup'] = 'steering'
+    message: Any = None
+    messages: list[Any] = field(default_factory=list)  # full queue snapshot after enqueue
+
+
+# ============================================================================
 # Union of all hook events
 # ============================================================================
 
@@ -340,6 +370,9 @@ HookEvent = (
     | SettledEvent
     | GatewayStartupEvent
     | GatewayStopEvent
+    | BeforeProviderRequestEvent
+    | AfterProviderResponseEvent
+    | QueueUpdateEvent
 )
 
 

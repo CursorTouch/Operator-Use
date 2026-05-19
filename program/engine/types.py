@@ -47,6 +47,7 @@ from program.hooks.types import (
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
     ToolExecutionFailureEvent,
+    BeforeProviderRequestEvent, AfterProviderResponseEvent, QueueUpdateEvent,
 )
 
 AgentEvent = (
@@ -114,9 +115,12 @@ class FollowupQueue:
 
     async def enqueue(self, message: BaseMessage):
         await self.queue.put(message)
-    
+
     def is_empty(self) -> bool:
         return self.queue.empty()
+
+    def snapshot(self) -> list[BaseMessage]:
+        return list(self.queue._queue)  # type: ignore[attr-defined]
 
     async def dequeue(self) -> list[BaseMessage]:
         messages = []
@@ -139,9 +143,12 @@ class SteeringQueue:
 
     async def enqueue(self, message: BaseMessage):
         await self.queue.put(message)
-    
+
     def is_empty(self) -> bool:
         return self.queue.empty()
+
+    def snapshot(self) -> list[BaseMessage]:
+        return list(self.queue._queue)  # type: ignore[attr-defined]
 
     async def dequeue(self) -> list[BaseMessage]:
         messages = []

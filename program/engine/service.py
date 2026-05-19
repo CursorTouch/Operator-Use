@@ -9,6 +9,7 @@ from program.engine.types import (
     ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
     ToolExecutionFailureEvent,
+    BeforeProviderRequestEvent, AfterProviderResponseEvent, QueueUpdateEvent,
 )
 from program.inference.types import (
     LLMContext,
@@ -71,9 +72,21 @@ class Engine:
 
     async def steer(self, message: BaseMessage) -> None:
         await self.state.steering_queue.enqueue(message)
+        if self._hooks:
+            await self._hooks.emit(QueueUpdateEvent(
+                queue='steering',
+                message=message,
+                messages=self.state.steering_queue.snapshot(),
+            ))
 
     async def follow_up(self, message: BaseMessage) -> None:
         await self.state.follow_up_queue.enqueue(message)
+        if self._hooks:
+            await self._hooks.emit(QueueUpdateEvent(
+                queue='followup',
+                message=message,
+                messages=self.state.follow_up_queue.snapshot(),
+            ))
 
     def clear_steering(self) -> None:
         self.state.steering_queue.clear()
@@ -291,6 +304,12 @@ class Engine:
                     break
 
                 await emit(MessageStartEvent(message=message))
+                if self._hooks:
+                    await self._hooks.emit(BeforeProviderRequestEvent(
+                        model=self.llm.model,
+                        messages=messages,
+                        options=self.llm.api.options,
+                    ))
                 async for event in self.llm.stream(LLMContext(
                     messages=messages,
                     tools=self.state.tools,
@@ -320,6 +339,11 @@ class Engine:
                                 cache_write_tokens=ev.cache_write_tokens,
                             )
 
+                if self._hooks:
+                    await self._hooks.emit(AfterProviderResponseEvent(
+                        model=self.llm.model,
+                        response=message,
+                    ))
                 await emit(MessageEndEvent(message=message))
                 messages.append(message)
 
