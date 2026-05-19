@@ -1,5 +1,6 @@
 import asyncio
 import os
+import signal
 import sys
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -60,6 +61,36 @@ class TerminalTool(Tool):
                 return blocked
         return None
 
+    async def _kill_process_group(self, process) -> None:
+        """Terminate the subprocess and every child it spawned.
+
+        The command runs via a shell wrapper (and often `uv run`), which does
+        not forward signals to its grandchildren. Killing only the wrapper
+        leaves orphaned servers running, so we signal the whole process group.
+        """
+        def _signal_group(sig: int) -> bool:
+            try:
+                if sys.platform == "win32":
+                    process.send_signal(sig)
+                else:
+                    os.killpg(os.getpgid(process.pid), sig)
+                return True
+            except (ProcessLookupError, PermissionError):
+                return False
+
+        if not _signal_group(signal.SIGTERM):
+            return
+        try:
+            await asyncio.wait_for(process.wait(), timeout=3.0)
+            return
+        except asyncio.TimeoutError:
+            pass
+        _signal_group(signal.SIGKILL)
+        try:
+            await asyncio.wait_for(process.wait(), timeout=3.0)
+        except asyncio.TimeoutError:
+            pass
+
     async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
         params = invocation.params
         cmd = params.get("cmd")
@@ -93,17 +124,14 @@ class TerminalTool(Tool):
                 cwd=cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=env
+                env=env,
+                start_new_session=True,
             )
 
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=float(timeout))
             except asyncio.TimeoutError:
-                try:
-                    process.terminate()
-                except ProcessLookupError:
-                    pass
-                await process.wait()
+                await self._kill_process_group(process)
                 return ToolResult.error(id=invocation.id, content=f"Command timed out after {timeout} seconds")
 
             stdout_str = stdout.decode("utf-8", errors="replace").strip()
