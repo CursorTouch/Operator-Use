@@ -131,7 +131,65 @@ Storage errors are non-fatal. `AuthManager._load()` catches exceptions from the 
 
 `drain_errors()` returns and clears the accumulated error list, allowing the caller to surface any storage failures.
 
+---
+
+## Channel credentials (`ChannelAuthManager`)
+
+Channel bot tokens are stored separately from LLM provider credentials. They are never mixed with `auth.json`.
+
+**Storage:** `~/.program/auth/channels.json`, mode `0600`.
+
+```json
+{
+  "telegram": { "bot_token": "..." },
+  "discord":  { "bot_token": "..." },
+  "slack":    { "bot_token": "xoxb-...", "app_token": "xapp-..." },
+  "twitch":   { "token": "..." },
+  "email":    { "username": "user@example.com", "password": "..." }
+}
+```
+
+### Credential resolution order
+
+For each field, `ChannelAuthManager` checks in order:
+
+1. `channels.json` — stored value (if non-empty).
+2. Environment variable — see table below.
+
+Environment variables take effect when the JSON field is blank:
+
+| Channel | Field | Env var |
+|---|---|---|
+| `telegram` | `bot_token` | `TELEGRAM_BOT_TOKEN` |
+| `discord` | `bot_token` | `DISCORD_BOT_TOKEN` |
+| `slack` | `bot_token` | `SLACK_BOT_TOKEN` |
+| `slack` | `app_token` | `SLACK_APP_TOKEN` |
+| `twitch` | `token` | `TWITCH_TOKEN` |
+| `email` | `username` | `EMAIL_USERNAME` |
+| `email` | `password` | `EMAIL_PASSWORD` |
+
+### Usage
+
+```python
+from program.auth.channels import ChannelAuthManager
+from program.settings.paths import get_channels_auth_path
+
+auth = ChannelAuthManager(get_channels_auth_path())
+
+# Read
+token = auth.telegram.bot_token
+bot_token, app_token = auth.slack.bot_token, auth.slack.app_token
+
+# Write (persists immediately to channels.json)
+auth.set_telegram(bot_token="...")
+auth.set_slack(bot_token="xoxb-...", app_token="xapp-...")
+auth.set_email(username="bot@example.com", password="...")
+```
+
+`ChannelAuthManager` is created by the Runtime alongside the `GatewayManager`. If `channels.json` cannot be parsed, it logs a warning and starts with empty credentials (channels that require tokens will log their own warning and be skipped at startup).
+
 ## Related documents
 
 - [inference.md](./inference.md) — How `LLM` uses `AuthManager` at construction time
 - [commands.md](./commands.md) — `/login`, `/logout`, `/auth` commands
+- [gateway.md](./gateway.md) — How channel credentials are used at channel startup
