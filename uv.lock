@@ -1341,6 +1341,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "agent-client-protocol" },
+    { name = "aiohttp" },
     { name = "anthropic" },
     { name = "croniter" },
     { name = "ddgs" },
@@ -1387,6 +1388,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agent-client-protocol", specifier = ">=0.10.0" },
+    { name = "aiohttp", specifier = ">=3.13.5" },
     { name = "anthropic", specifier = ">=0.100.0" },
     { name = "croniter", specifier = ">=3.0.0" },
     { name = "ddgs", specifier = ">=9.14.2" },

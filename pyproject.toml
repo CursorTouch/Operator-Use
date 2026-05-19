@@ -28,6 +28,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "websockets>=16.0",
     "fastmcp>=2.0.0",
+    "aiohttp>=3.13.5",
 ]
 
 [project.scripts]

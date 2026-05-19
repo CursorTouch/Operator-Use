@@ -1,153 +1,92 @@
-"""Tests for EventBus enhancements: once(), emit_async(), channels(), subscriber_count()."""
+"""Tests for Bus: queue size, concurrent producers/consumers, and message fields."""
 import asyncio
 import pytest
-from program.bus.service import EventBus
+from program.bus.service import Bus
+from program.bus.types import IncomingMessage, OutgoingMessage, TextPart, AudioPart, text_from_parts
 
 
-class TestOnce:
-    def test_handler_called_exactly_once(self):
-        bus = EventBus()
-        received = []
-        bus.once("ch", lambda d: received.append(d))
-        bus.emit("ch", 1)
-        bus.emit("ch", 2)
-        assert received == [1]
-
-    def test_once_does_not_affect_persistent_handlers(self):
-        bus = EventBus()
-        persistent, one_shot = [], []
-        bus.on("ch", lambda d: persistent.append(d))
-        bus.once("ch", lambda d: one_shot.append(d))
-        bus.emit("ch", "a")
-        bus.emit("ch", "b")
-        assert persistent == ["a", "b"]
-        assert one_shot == ["a"]
-
-    def test_once_unsubscribe_before_emit(self):
-        bus = EventBus()
-        received = []
-        unsub = bus.once("ch", lambda d: received.append(d))
-        unsub()
-        bus.emit("ch", "x")
-        assert received == []
-
-    def test_multiple_once_handlers_each_fire_once(self):
-        bus = EventBus()
-        a, b = [], []
-        bus.once("ch", lambda d: a.append(d))
-        bus.once("ch", lambda d: b.append(d))
-        bus.emit("ch", 1)
-        bus.emit("ch", 2)
-        assert a == [1]
-        assert b == [1]
+def make_incoming(text: str, channel: str = "stdio", chat_id: str = "1") -> IncomingMessage:
+    return IncomingMessage(channel=channel, chat_id=chat_id, parts=[TextPart(content=text)])
 
 
-class TestEmitAsync:
+def make_outgoing(text: str, channel: str = "stdio", chat_id: str = "1") -> OutgoingMessage:
+    return OutgoingMessage(channel=channel, chat_id=chat_id, parts=[TextPart(content=text)])
+
+
+class TestIncomingMessageFields:
+    def test_required_fields(self):
+        msg = make_incoming("hi", channel="slack", chat_id="C1")
+        assert msg.channel == "slack"
+        assert msg.chat_id == "C1"
+        assert text_from_parts(msg.parts) == "hi"
+
+    def test_optional_fields_have_defaults(self):
+        msg = make_incoming("")
+        assert msg.user_id == ""
+        assert msg.metadata == {}
+        assert msg.timestamp is not None
+
+    def test_audio_part(self):
+        msg = IncomingMessage(
+            channel="telegram", chat_id="42",
+            parts=[AudioPart(audio="/tmp/voice.ogg", mime_type="audio/ogg")]
+        )
+        assert msg.parts[0].mime_type == "audio/ogg"
+
+
+class TestOutgoingMessageFields:
+    def test_required_fields(self):
+        msg = make_outgoing("reply", channel="discord", chat_id="789")
+        assert msg.channel == "discord"
+        assert msg.chat_id == "789"
+        assert text_from_parts(msg.parts) == "reply"
+
+    def test_stream_phase_defaults_none(self):
+        msg = make_outgoing("x")
+        assert msg.stream_phase is None
+
+
+class TestConcurrentProducers:
     @pytest.mark.asyncio
-    async def test_async_handler_awaited(self):
-        bus = EventBus()
-        received = []
+    async def test_multiple_producers_all_messages_received(self):
+        bus = Bus()
+        count = 10
 
-        async def handler(data):
-            await asyncio.sleep(0)
-            received.append(data)
+        async def produce(i: int):
+            await bus.publish_incoming(make_incoming(str(i)))
 
-        bus.on("ch", handler)
-        await bus.emit_async("ch", 42)
-        assert received == [42]
+        await asyncio.gather(*[produce(i) for i in range(count)])
+
+        texts = set()
+        for _ in range(count):
+            m = await bus.consume_incoming()
+            texts.add(text_from_parts(m.parts))
+
+        assert texts == {str(i) for i in range(count)}
+
+
+class TestConcurrentConsumers:
+    @pytest.mark.asyncio
+    async def test_each_message_consumed_exactly_once(self):
+        bus = Bus()
+        n = 5
+        for i in range(n):
+            await bus.publish_incoming(make_incoming(str(i)))
+
+        results = await asyncio.gather(*[bus.consume_incoming() for _ in range(n)])
+        texts = {text_from_parts(m.parts) for m in results}
+        assert len(texts) == n
+
+
+class TestQueueEmptyBehavior:
+    @pytest.mark.asyncio
+    async def test_consume_blocks_on_empty_incoming(self):
+        bus = Bus()
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(bus.consume_incoming(), timeout=0.05)
 
     @pytest.mark.asyncio
-    async def test_sync_handler_works_in_emit_async(self):
-        bus = EventBus()
-        received = []
-        bus.on("ch", lambda d: received.append(d))
-        await bus.emit_async("ch", "hello")
-        assert received == ["hello"]
-
-    @pytest.mark.asyncio
-    async def test_handlers_called_sequentially(self):
-        bus = EventBus()
-        order = []
-
-        async def h1(d):
-            order.append("h1-start")
-            await asyncio.sleep(0)
-            order.append("h1-end")
-
-        async def h2(d):
-            order.append("h2-start")
-            await asyncio.sleep(0)
-            order.append("h2-end")
-
-        bus.on("ch", h1)
-        bus.on("ch", h2)
-        await bus.emit_async("ch", None)
-        assert order == ["h1-start", "h1-end", "h2-start", "h2-end"]
-
-    @pytest.mark.asyncio
-    async def test_error_in_async_handler_does_not_crash(self, capsys):
-        bus = EventBus()
-        received = []
-
-        async def bad(data):
-            raise RuntimeError("boom")
-
-        bus.on("ch", bad)
-        bus.on("ch", lambda d: received.append("ok"))
-        await bus.emit_async("ch", None)
-        assert "ok" in received
-
-
-class TestChannels:
-    def test_empty_bus_has_no_channels(self):
-        bus = EventBus()
-        assert bus.channels() == []
-
-    def test_subscribed_channel_appears(self):
-        bus = EventBus()
-        bus.on("alpha", lambda d: None)
-        assert "alpha" in bus.channels()
-
-    def test_unsubscribed_channel_disappears(self):
-        bus = EventBus()
-        unsub = bus.on("alpha", lambda d: None)
-        unsub()
-        assert "alpha" not in bus.channels()
-
-    def test_multiple_channels(self):
-        bus = EventBus()
-        bus.on("a", lambda d: None)
-        bus.on("b", lambda d: None)
-        assert set(bus.channels()) == {"a", "b"}
-
-    def test_clear_removes_all_channels(self):
-        bus = EventBus()
-        bus.on("x", lambda d: None)
-        bus.on("y", lambda d: None)
-        bus.clear()
-        assert bus.channels() == []
-
-
-class TestSubscriberCount:
-    def test_zero_for_unknown_channel(self):
-        bus = EventBus()
-        assert bus.subscriber_count("nope") == 0
-
-    def test_counts_correctly(self):
-        bus = EventBus()
-        bus.on("ch", lambda d: None)
-        bus.on("ch", lambda d: None)
-        assert bus.subscriber_count("ch") == 2
-
-    def test_decreases_after_unsub(self):
-        bus = EventBus()
-        unsub = bus.on("ch", lambda d: None)
-        bus.on("ch", lambda d: None)
-        unsub()
-        assert bus.subscriber_count("ch") == 1
-
-    def test_zero_after_clear(self):
-        bus = EventBus()
-        bus.on("ch", lambda d: None)
-        bus.clear()
-        assert bus.subscriber_count("ch") == 0
+    async def test_consume_blocks_on_empty_outgoing(self):
+        bus = Bus()
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(bus.consume_outgoing(), timeout=0.05)

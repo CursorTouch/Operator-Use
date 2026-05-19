@@ -1,138 +1,101 @@
-"""Tests for EventBus: subscribe, publish, unsubscribe, error isolation."""
+"""Tests for Bus: two-queue message bus for channel ↔ runtime communication."""
 import asyncio
 import pytest
-from program.bus.service import EventBus
+from program.bus.service import Bus, EventBus
+from program.bus.types import IncomingMessage, OutgoingMessage, TextPart
 
 
-# ── subscribe and emit ────────────────────────────────────────────────────────
-
-class TestEventBusBasic:
-    def test_handler_called_on_emit(self):
-        bus = EventBus()
-        received = []
-        bus.on("ch", lambda data: received.append(data))
-        bus.emit("ch", 42)
-        assert received == [42]
-
-    def test_multiple_handlers_on_same_channel(self):
-        bus = EventBus()
-        received = []
-        bus.on("ch", lambda d: received.append("a"))
-        bus.on("ch", lambda d: received.append("b"))
-        bus.emit("ch", None)
-        assert set(received) == {"a", "b"}
-
-    def test_emit_to_empty_channel_is_noop(self):
-        bus = EventBus()
-        bus.emit("nobody", "data")  # no error
-
-    def test_emit_no_data_defaults_to_none(self):
-        bus = EventBus()
-        received = []
-        bus.on("ch", lambda d: received.append(d))
-        bus.emit("ch")
-        assert received == [None]
-
-    def test_data_passed_correctly(self):
-        bus = EventBus()
-        received = []
-        bus.on("ch", lambda d: received.append(d))
-        bus.emit("ch", {"key": "value"})
-        assert received == [{"key": "value"}]
-
-    def test_multiple_channels_isolated(self):
-        bus = EventBus()
-        a, b = [], []
-        bus.on("a", lambda d: a.append(d))
-        bus.on("b", lambda d: b.append(d))
-        bus.emit("a", 1)
-        assert a == [1]
-        assert b == []
+def make_incoming(text: str = "hello", channel: str = "stdio", chat_id: str = "1") -> IncomingMessage:
+    return IncomingMessage(channel=channel, chat_id=chat_id, parts=[TextPart(content=text)])
 
 
-# ── unsubscribe ───────────────────────────────────────────────────────────────
-
-class TestUnsubscribe:
-    def test_unsubscribe_stops_handler(self):
-        bus = EventBus()
-        received = []
-        unsub = bus.on("ch", lambda d: received.append(d))
-        bus.emit("ch", 1)
-        unsub()
-        bus.emit("ch", 2)
-        assert received == [1]
-
-    def test_double_unsubscribe_is_safe(self):
-        bus = EventBus()
-        unsub = bus.on("ch", lambda d: None)
-        unsub()
-        unsub()  # should not raise
-
-    def test_other_handlers_unaffected_after_unsub(self):
-        bus = EventBus()
-        a, b = [], []
-        unsub_a = bus.on("ch", lambda d: a.append(d))
-        bus.on("ch", lambda d: b.append(d))
-        unsub_a()
-        bus.emit("ch", 99)
-        assert a == []
-        assert b == [99]
+def make_outgoing(text: str = "reply", channel: str = "stdio", chat_id: str = "1") -> OutgoingMessage:
+    return OutgoingMessage(channel=channel, chat_id=chat_id, parts=[TextPart(content=text)])
 
 
-# ── error isolation ───────────────────────────────────────────────────────────
+# ── alias ─────────────────────────────────────────────────────────────────────
 
-class TestErrorIsolation:
-    def test_handler_exception_does_not_crash_emit(self, capsys):
-        bus = EventBus()
-        received = []
-        bus.on("ch", lambda d: (_ for _ in ()).throw(ValueError("bad")))
-        bus.on("ch", lambda d: received.append("ok"))
-        bus.emit("ch", None)
-        assert "ok" in received
-
-    def test_error_printed_to_stdout(self, capsys):
-        bus = EventBus()
-        def bad(d): raise RuntimeError("test error")
-        bus.on("ch", bad)
-        bus.emit("ch", None)
-        out = capsys.readouterr().out
-        assert "EventBus" in out or "test error" in out
+class TestEventBusAlias:
+    def test_eventbus_is_bus(self):
+        assert EventBus is Bus
 
 
-# ── clear ─────────────────────────────────────────────────────────────────────
+# ── incoming queue ────────────────────────────────────────────────────────────
 
-class TestClear:
-    def test_clear_removes_all_subscriptions(self):
-        bus = EventBus()
-        received = []
-        bus.on("ch", lambda d: received.append(d))
-        bus.clear()
-        bus.emit("ch", 1)
-        assert received == []
-
-    def test_clear_affects_all_channels(self):
-        bus = EventBus()
-        a, b = [], []
-        bus.on("a", lambda d: a.append(d))
-        bus.on("b", lambda d: b.append(d))
-        bus.clear()
-        bus.emit("a", 1)
-        bus.emit("b", 2)
-        assert a == [] and b == []
-
-
-# ── async handler ─────────────────────────────────────────────────────────────
-
-class TestAsyncHandler:
+class TestIncomingQueue:
     @pytest.mark.asyncio
-    async def test_async_handler_scheduled(self):
-        bus = EventBus()
-        received = []
+    async def test_publish_and_consume_incoming(self):
+        bus = Bus()
+        msg = make_incoming("hello")
+        await bus.publish_incoming(msg)
+        result = await bus.consume_incoming()
+        assert result is msg
 
-        async def handler(data):
-            received.append(data)
+    @pytest.mark.asyncio
+    async def test_incoming_fifo_order(self):
+        bus = Bus()
+        msgs = [make_incoming(t) for t in ("first", "second", "third")]
+        for m in msgs:
+            await bus.publish_incoming(m)
+        for expected in msgs:
+            assert await bus.consume_incoming() is expected
 
-        bus.on("ch", handler)
-        bus.emit("ch", "ping")
-        await asyncio.sleep(0)  # allow event loop to run the coroutine
-        assert "ping" in received
+    @pytest.mark.asyncio
+    async def test_incoming_blocks_until_message(self):
+        bus = Bus()
+        msg = make_incoming("late")
+
+        async def producer():
+            await asyncio.sleep(0.01)
+            await bus.publish_incoming(msg)
+
+        asyncio.create_task(producer())
+        result = await asyncio.wait_for(bus.consume_incoming(), timeout=1.0)
+        assert result is msg
+
+
+# ── outgoing queue ────────────────────────────────────────────────────────────
+
+class TestOutgoingQueue:
+    @pytest.mark.asyncio
+    async def test_publish_and_consume_outgoing(self):
+        bus = Bus()
+        msg = make_outgoing("reply")
+        await bus.publish_outgoing(msg)
+        result = await bus.consume_outgoing()
+        assert result is msg
+
+    @pytest.mark.asyncio
+    async def test_outgoing_fifo_order(self):
+        bus = Bus()
+        msgs = [make_outgoing(t) for t in ("a", "b")]
+        for m in msgs:
+            await bus.publish_outgoing(m)
+        for expected in msgs:
+            assert await bus.consume_outgoing() is expected
+
+
+# ── queue independence ────────────────────────────────────────────────────────
+
+class TestQueueIndependence:
+    @pytest.mark.asyncio
+    async def test_incoming_and_outgoing_are_separate(self):
+        bus = Bus()
+        inc = make_incoming("in")
+        out = make_outgoing("out")
+
+        await bus.publish_incoming(inc)
+        await bus.publish_outgoing(out)
+
+        assert await bus.consume_incoming() is inc
+        assert await bus.consume_outgoing() is out
+
+    @pytest.mark.asyncio
+    async def test_separate_bus_instances_do_not_share_state(self):
+        bus_a = Bus()
+        bus_b = Bus()
+        msg = make_incoming("only-a")
+        await bus_a.publish_incoming(msg)
+
+        assert bus_b._incoming.empty()
+        assert await bus_a.consume_incoming() is msg

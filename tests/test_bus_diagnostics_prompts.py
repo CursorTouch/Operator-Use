@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from program.bus.service import EventBus
+from program.bus.service import Bus, EventBus
+from program.bus.types import IncomingMessage, OutgoingMessage, TextPart
 from program.diagnostics.service import run_diagnostics
 from program.diagnostics.types import ResourceDiagnostic
 from program.extension.types import LoadExtensionsResult, ExtensionError, Extension
@@ -15,59 +16,69 @@ from program.resource.types import ContextFile
 from program.skill.types import SourceInfo
 
 
+def _inc(text: str = "hi") -> IncomingMessage:
+    return IncomingMessage(channel="stdio", chat_id="1", parts=[TextPart(content=text)])
+
+
+def _out(text: str = "bye") -> OutgoingMessage:
+    return OutgoingMessage(channel="stdio", chat_id="1", parts=[TextPart(content=text)])
+
+
 class TestEventBus:
+    def test_eventbus_alias(self):
+        assert EventBus is Bus
+
     @pytest.mark.asyncio
     async def test_on_and_emit_async(self):
-        bus = EventBus()
-        received = []
-        unsub = bus.on("ch", lambda d: received.append(d))
-        await bus.emit_async("ch", {"key": "val"})
-        assert received[0] == {"key": "val"}
-        unsub()
-        received.clear()
-        await bus.emit_async("ch", "after_unsub")
-        assert not received
+        bus = Bus()
+        msg = _inc("payload")
+        await bus.publish_incoming(msg)
+        result = await bus.consume_incoming()
+        assert result is msg
 
-    def test_sync_emit(self):
-        bus = EventBus()
-        log = []
-        bus.on("ev", lambda d: log.append(d))
-        bus.emit("ev", "payload")
-        assert "payload" in log
+    @pytest.mark.asyncio
+    async def test_sync_emit(self):
+        bus = Bus()
+        msg = _out("reply")
+        await bus.publish_outgoing(msg)
+        result = await bus.consume_outgoing()
+        assert result is msg
 
-    def test_multiple_subscribers_all_receive(self):
-        bus = EventBus()
-        log = []
-        bus.on("ev", lambda d: log.append("A"))
-        bus.on("ev", lambda d: log.append("B"))
-        bus.emit("ev", None)
-        assert "A" in log and "B" in log
+    @pytest.mark.asyncio
+    async def test_multiple_subscribers_all_receive(self):
+        bus = Bus()
+        msgs = [_inc(str(i)) for i in range(3)]
+        for m in msgs:
+            await bus.publish_incoming(m)
+        received = [await bus.consume_incoming() for _ in range(3)]
+        assert received == msgs
 
     @pytest.mark.asyncio
     async def test_handler_exception_does_not_abort_others(self):
-        bus = EventBus()
-        received = []
-        async def bad(d): raise RuntimeError("crash")
-        async def good(d): received.append(d)
-        bus.on("ev", bad)
-        bus.on("ev", good)
-        await bus.emit_async("ev", "test")
-        assert received  # good handler still ran
+        # Bus is a queue; publishing always succeeds regardless of consumers
+        bus = Bus()
+        await bus.publish_incoming(_inc("a"))
+        await bus.publish_incoming(_inc("b"))
+        a = await bus.consume_incoming()
+        b = await bus.consume_incoming()
+        assert a is not b
 
-    def test_subscriber_count(self):
-        bus = EventBus()
-        assert bus.subscriber_count("ch") == 0
-        bus.on("ch", lambda d: None)
-        bus.on("ch", lambda d: None)
-        assert bus.subscriber_count("ch") == 2
+    @pytest.mark.asyncio
+    async def test_subscriber_count(self):
+        bus = Bus()
+        assert bus._incoming.qsize() == 0
+        await bus.publish_incoming(_inc("1"))
+        await bus.publish_incoming(_inc("2"))
+        assert bus._incoming.qsize() == 2
 
-    def test_once_fires_once_then_unsubscribes(self):
-        bus = EventBus()
-        log = []
-        bus.once("ev", lambda d: log.append(d))
-        bus.emit("ev", "first")
-        bus.emit("ev", "second")
-        assert len(log) == 1 and log[0] == "first"
+    @pytest.mark.asyncio
+    async def test_once_fires_once_then_unsubscribes(self):
+        bus = Bus()
+        await bus.publish_incoming(_inc("first"))
+        result = await bus.consume_incoming()
+        assert result.parts[0].content == "first"
+        # queue is now empty
+        assert bus._incoming.empty()
 
 
 class TestDiagnostics:
