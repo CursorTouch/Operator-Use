@@ -107,8 +107,8 @@ class SubagentTool(Tool):
                 msg = f"Subagent created (task_id={task_id}  label='{display}')\n"
                 if depends_on:
                     msg += f"Dependencies: {', '.join(depends_on)}\n"
-                msg += 'Running in background — result will be injected automatically when done.\nEND YOUR TURN NOW.'
-                return ToolResult.ok(id=invocation.id, content=msg)
+                msg += 'Running in background — result will be injected automatically when done.'
+                return ToolResult(id=invocation.id, content=msg, terminate=True)
 
             case 'list':
                 records = self._manager.list_all()

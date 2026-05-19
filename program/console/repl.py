@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import select
 import signal
 import sys
-import termios
-import threading
 from pathlib import Path
 
 import click
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
 
 from program.runtime import Runtime, RuntimeConfig
 from program.hooks.types import (
@@ -88,63 +87,6 @@ def _render_event(event) -> None:
             print(f"{_red('[Error]')} {err}", file=sys.stderr)
 
 
-# ── Esc key watcher ───────────────────────────────────────────────────────────
-
-def _watch_for_esc(
-    stop: threading.Event,
-    loop: asyncio.AbstractEventLoop,
-    cancel: asyncio.Event,
-) -> None:
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    try:
-        import tty
-        tty.setcbreak(fd)
-        while not stop.is_set():
-            ready, _, _ = select.select([sys.stdin], [], [], 0.05)
-            if ready:
-                ch = sys.stdin.read(1)
-                if ch == '\x1b':
-                    loop.call_soon_threadsafe(cancel.set)
-                    return
-    except Exception:
-        pass
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-
-
-async def _run_with_esc_cancel(coro) -> bool:
-    loop = asyncio.get_running_loop()
-    cancel = asyncio.Event()
-    stop = threading.Event()
-
-    watcher = threading.Thread(
-        target=_watch_for_esc, args=(stop, loop, cancel), daemon=True
-    )
-    watcher.start()
-
-    agent_task = asyncio.ensure_future(coro)
-    cancel_task = asyncio.ensure_future(cancel.wait())
-
-    done, pending = await asyncio.wait(
-        [agent_task, cancel_task],
-        return_when=asyncio.FIRST_COMPLETED,
-    )
-    stop.set()
-
-    for task in pending:
-        task.cancel()
-        try:
-            await task
-        except (asyncio.CancelledError, Exception):
-            pass
-
-    was_cancelled = cancel.is_set()
-    if not was_cancelled and agent_task.exception():
-        raise agent_task.exception()
-    return was_cancelled
-
-
 # ── Session ───────────────────────────────────────────────────────────────────
 
 def _bind_renderer(runtime: Runtime, current_session, unsubscribe):
@@ -172,51 +114,77 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
 
     runtime = await Runtime.create(config)
     subscribed_session, unsubscribe_renderer = _bind_renderer(runtime, None, None)
+
+    session: PromptSession = PromptSession()
     last_interrupt = False
 
-    while True:
-        _asyncio_sigint = signal.signal(signal.SIGINT, signal.default_int_handler)
-        try:
-            user_input = input(_cyan('\n[You] ')).strip()
-            last_interrupt = False
-        except EOFError:
-            print()
-            break
-        except KeyboardInterrupt:
-            print()
-            if last_interrupt:
+    # patch_stdout() keeps the event loop running during prompt_async() so
+    # background asyncio tasks (subagents) can print above the prompt line
+    # without corrupting it, and _announce() can call agent.invoke() while
+    # the user is idle.
+    with patch_stdout():
+        while True:
+            try:
+                user_input = (await session.prompt_async(_cyan('\n[You] '))).strip()
+                last_interrupt = False
+            except EOFError:
+                print()
                 break
-            last_interrupt = True
-            print(_grey('(Press Ctrl-C again to exit)'))
-            continue
-        finally:
-            signal.signal(signal.SIGINT, _asyncio_sigint)
+            except KeyboardInterrupt:
+                print()
+                if last_interrupt:
+                    break
+                last_interrupt = True
+                print(_grey('(Press Ctrl-C again to exit)'))
+                continue
 
-        if not user_input:
-            continue
-        if user_input in ('/quit', '/exit', '/q'):
-            break
+            if not user_input:
+                continue
+            if user_input in ('/quit', '/exit', '/q'):
+                break
 
-        global _attempt
-        _attempt = 0
-        try:
-            if user_input.startswith('/'):
-                await runtime.user_input(user_input)
-            else:
-                interrupted = await _run_with_esc_cancel(runtime.user_input(user_input))
-                if interrupted:
-                    print(f"\n{_yellow('[Interrupted]')}")
-            subscribed_session, unsubscribe_renderer = _bind_renderer(
-                runtime, subscribed_session, unsubscribe_renderer
-            )
-        except KeyboardInterrupt:
-            pass
-        except Exception as e:
-            err_msg = str(e) or f"{type(e).__name__} (no message)"
-            print(f"{_red('[Error]')} {err_msg}", file=sys.stderr)
-            subscribed_session, unsubscribe_renderer = _bind_renderer(
-                runtime, subscribed_session, unsubscribe_renderer
-            )
+            global _attempt
+            _attempt = 0
+            try:
+                cancel = asyncio.Event()
+
+                def _on_sigint(*_):
+                    cancel.set()
+
+                old_sigint = signal.signal(signal.SIGINT, _on_sigint)
+                try:
+                    agent_task = asyncio.ensure_future(runtime.user_input(user_input))
+                    cancel_task = asyncio.ensure_future(cancel.wait())
+                    done, pending = await asyncio.wait(
+                        [agent_task, cancel_task],
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for t in pending:
+                        t.cancel()
+                        try:
+                            await t
+                        except (asyncio.CancelledError, Exception):
+                            pass
+                    if cancel.is_set():
+                        print(f"\n{_yellow('[Interrupted]')}")
+                    else:
+                        exc = agent_task.exception()
+                        if exc is not None:
+                            raise exc
+                finally:
+                    signal.signal(signal.SIGINT, old_sigint)
+
+                subscribed_session, unsubscribe_renderer = _bind_renderer(
+                    runtime, subscribed_session, unsubscribe_renderer
+                )
+            except KeyboardInterrupt:
+                pass
+            except Exception as e:
+                err_msg = str(e) or f"{type(e).__name__} (no message)"
+                print(f"{_red('[Error]')} {err_msg}", file=sys.stderr)
+                subscribed_session, unsubscribe_renderer = _bind_renderer(
+                    runtime, subscribed_session, unsubscribe_renderer
+                )
 
     if unsubscribe_renderer is not None:
         unsubscribe_renderer()
