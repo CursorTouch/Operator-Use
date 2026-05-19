@@ -12,7 +12,7 @@ from program.gateway.channels.telegram.utils import _TELEGRAM_MSG_LIMIT, _MEDIA_
 logger = logging.getLogger(__name__)
 
 try:
-    from telegram import Bot, InputFile, Update
+    from telegram import Bot, BotCommand, InputFile, Update
     from telegram.constants import ChatAction
     from telegram.ext import Application, ContextTypes, MessageHandler, filters
     _PTB_AVAILABLE = True
@@ -30,11 +30,12 @@ class TelegramChannel(BaseChannel):
     Requires: pip install "python-telegram-bot>=20.0"
     """
 
-    def __init__(self, token: str) -> None:
+    def __init__(self, token: str, commands: list[tuple[str, str]] | None = None) -> None:
         super().__init__()
         if not _PTB_AVAILABLE:
             raise ImportError('python-telegram-bot>=20.0 is required for TelegramChannel.')
         self._token = token
+        self._commands = commands or []
         self._buffers: dict[str, str] = {}
         self._app: Application | None = None
         self._typing_tasks: dict[str, asyncio.Task] = {}
@@ -109,6 +110,19 @@ class TelegramChannel(BaseChannel):
         await self._app.start()
         await self._app.updater.start_polling()
         logger.info("Telegram bot started (polling)")
+
+        # Sync the bot's '/' command menu with the real command registry.
+        # An empty list wipes any stale commands left on Telegram's servers.
+        import re
+        valid = [
+            BotCommand(name, (desc or name)[:256])
+            for name, desc in self._commands
+            if re.fullmatch(r'[a-z0-9_]{1,32}', name)
+        ]
+        try:
+            await self._app.bot.set_my_commands(valid)
+        except Exception:
+            logger.exception("TelegramChannel: failed to sync bot commands")
 
         try:
             await asyncio.Future()  # run until cancelled

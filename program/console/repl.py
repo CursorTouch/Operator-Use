@@ -223,7 +223,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
 
     if unsubscribe_renderer is not None:
         unsubscribe_renderer()
-    runtime.shutdown()
+    await runtime.ashutdown()
 
 
 # ── Click command ─────────────────────────────────────────────────────────────

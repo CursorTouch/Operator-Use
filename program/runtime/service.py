@@ -356,6 +356,23 @@ class Runtime:
             import asyncio
             asyncio.get_event_loop().create_task(self.mcp_manager.disconnect_all())
 
+    async def ashutdown(self) -> None:
+        """Await full teardown so channel backends shut down cleanly.
+
+        Preferred over the sync ``shutdown()`` when called from a running event
+        loop (REPL, console): it awaits channel disconnects to completion so
+        library backends don't emit CancelledError tracebacks when the loop
+        closes immediately after.
+        """
+        if self._context.cron is not None:
+            self._context.cron.stop()
+        await self.gateway_manager.astop()
+        if self.mcp_manager is not None:
+            try:
+                await self.mcp_manager.disconnect_all()
+            except Exception:
+                pass
+
     # -------------------------------------------------------------------------
     # Cron
     # -------------------------------------------------------------------------

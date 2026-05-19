@@ -34,7 +34,7 @@ async def _run_gateway(cwd: Path, model_id: str, provider: str | None) -> None:
         loop.remove_signal_handler(signal.SIGINT)
         loop.remove_signal_handler(signal.SIGTERM)
     click.echo("\nShutting down...")
-    runtime.shutdown()
+    await runtime.ashutdown()
 
 
 @click.group(invoke_without_command=True)

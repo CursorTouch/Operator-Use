@@ -117,6 +117,31 @@ class GatewayManager:
             task.cancel()
         self._tasks.clear()
 
+    async def astop(self) -> None:
+        """Await full channel teardown before the event loop closes.
+
+        Cancels each channel task and then awaits it so the channel's
+        ``finally: await disconnect()`` runs to completion inside the still-live
+        loop. Library backends (python-telegram-bot, discord.py, …) log noisy
+        CancelledError tracebacks if the loop dies mid-teardown; awaiting here
+        lets them shut down gracefully under the channels' log-muting context.
+        """
+        try:
+            await self.gateway.hooks.emit(GatewayStopEvent(
+                channel_ids=list(self.gateway._channels.keys()),
+            ))
+        except Exception:
+            pass
+        for task in self._tasks:
+            task.cancel()
+        for task in self._tasks:
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        self._tasks.clear()
+        await self.gateway.stop()
+
     # ── Internal task helpers ─────────────────────────────────────────────────
 
     def _start_task(self, name: str, coro) -> None:
@@ -138,7 +163,8 @@ class GatewayManager:
 
     async def _run_telegram(self, bot_token: str) -> None:
         from program.gateway.channels.telegram import TelegramChannel
-        ch = TelegramChannel(token=bot_token)
+        cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
+        ch = TelegramChannel(token=bot_token, commands=cmds)
         self.gateway.register(ch)
         await ch.connect()
 
