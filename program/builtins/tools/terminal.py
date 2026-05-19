@@ -128,15 +128,58 @@ class TerminalTool(Tool):
                 start_new_session=True,
             )
 
-            try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=float(timeout))
-            except asyncio.TimeoutError:
-                await self._kill_process_group(process)
-                return ToolResult.error(id=invocation.id, content=f"Command timed out after {timeout} seconds")
+            out_buf = bytearray()
+            err_buf = bytearray()
 
-            stdout_str = stdout.decode("utf-8", errors="replace").strip()
-            stderr_str = stderr.decode("utf-8", errors="replace").strip()
+            async def _drain(stream, buf: bytearray) -> None:
+                if stream is None:
+                    return
+                while True:
+                    chunk = await stream.read(4096)
+                    if not chunk:
+                        break
+                    buf.extend(chunk)
+
+            readers = asyncio.gather(
+                _drain(process.stdout, out_buf),
+                _drain(process.stderr, err_buf),
+            )
+
+            timed_out = False
+            try:
+                await asyncio.wait_for(asyncio.shield(readers), timeout=float(timeout))
+            except asyncio.TimeoutError:
+                timed_out = True
+                await self._kill_process_group(process)
+                # The pipes break when the process dies; give the readers a brief
+                # window to flush whatever was already buffered before the kill.
+                try:
+                    await asyncio.wait_for(readers, timeout=2.0)
+                except (asyncio.TimeoutError, Exception):
+                    pass
+
+            await process.wait()
+
+            stdout_str = bytes(out_buf).decode("utf-8", errors="replace").strip()
+            stderr_str = bytes(err_buf).decode("utf-8", errors="replace").strip()
             exit_code = process.returncode
+
+            if timed_out:
+                lines = [f"Command timed out after {timeout} seconds (process killed)."]
+                if stdout_str:
+                    lines.append("-- PARTIAL STDOUT (before kill) --")
+                    lines.append(stdout_str)
+                if stderr_str:
+                    lines.append("-- PARTIAL STDERR (before kill) --")
+                    lines.append(stderr_str)
+                output = "\n".join(lines)
+                if len(output) > MAX_TOOL_OUTPUT_LENGTH:
+                    output = output[:MAX_TOOL_OUTPUT_LENGTH] + "..."
+                return ToolResult.error(
+                    id=invocation.id,
+                    content=output,
+                    metadata={"exit_code": exit_code, "stdout": stdout_str, "stderr": stderr_str, "timed_out": True},
+                )
 
             lines = []
             if stdout_str:
