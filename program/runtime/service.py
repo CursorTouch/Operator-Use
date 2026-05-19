@@ -63,16 +63,18 @@ class Runtime:
         )
         # Look up the tool instance from the engine (the resource loader registers it
         # under a different module name than the package import, so they are distinct objects).
+        from program.builtins.tools.subagent import SubagentTool
         _subagent_tool = context.engine._tools.get('subagent')
-        if _subagent_tool is not None:
+        if _subagent_tool is not None and isinstance(_subagent_tool, SubagentTool):
             _subagent_tool._manager = self.subagent_manager
 
         # Expose MCPManager for use in create_session_agent() and shutdown.
         self.mcp_manager = context.mcp_manager
 
         # Wire bus + agent into the ACP agent tool now that the gateway is up.
+        from program.builtins.tools.acp_agent import ACPAgentTool
         acp_tool = context.engine._tools.get('acp_agent')
-        if acp_tool is not None:
+        if acp_tool is not None and isinstance(acp_tool, ACPAgentTool):
             acp_tool._bus = self.gateway_manager._bus
             acp_tool._agent = context.agent
 
@@ -305,13 +307,13 @@ class Runtime:
             ))
 
         # Add ACP agent tool if the main engine has one (shares registry/store/auth).
+        from program.builtins.tools.acp_agent import ACPAgentTool
         main_acp = self._context.engine._tools.get('acp_agent')
-        if main_acp is not None:
-            from program.builtins.tools.acp_agent import ACPAgentTool
+        if main_acp is not None and isinstance(main_acp, ACPAgentTool):
             engine.add_tool(ACPAgentTool(
-                registry=list(main_acp._registry.values()),
-                session_manager=main_acp._session_manager,
-                auth_manager=main_acp._auth,
+                registry=list(main_acp._registry.values()),  # type: ignore[attr-defined]
+                session_manager=main_acp._session_manager,   # type: ignore[attr-defined]
+                auth_manager=main_acp._auth,                 # type: ignore[attr-defined]
                 bus=self.gateway_manager._bus,
                 agent=None,
             ))

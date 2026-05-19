@@ -37,8 +37,8 @@ class GatewayManager:
     def __init__(
         self,
         runtime: Runtime,
-        settings_manager: SettingsManager,
-        auth_manager: AuthManager,
+        settings_manager: SettingsManager | None,
+        auth_manager: AuthManager | None,
     ) -> None:
         self._runtime = runtime
         self._settings = settings_manager
@@ -55,6 +55,9 @@ class GatewayManager:
         asyncio.get_event_loop().create_task(
             self.gateway.start(), name='gateway:main'
         )
+
+        if self._settings is None or self._auth is None:
+            return
 
         cfg = self._settings.get_channels_settings()
         auth = self._auth

@@ -286,6 +286,20 @@ class SettledEvent:
     type: Literal['settled'] = field(default='settled', init=False)
 
 
+@dataclass
+class GatewayStartupEvent:
+    """Fired after all enabled channels have been registered and started."""
+    type: Literal['gateway:startup'] = field(default='gateway:startup', init=False)
+    channel_ids: list[str] = field(default_factory=list)
+
+
+@dataclass
+class GatewayStopEvent:
+    """Fired when the gateway is shutting down, before channel tasks are cancelled."""
+    type: Literal['gateway:stop'] = field(default='gateway:stop', init=False)
+    channel_ids: list[str] = field(default_factory=list)
+
+
 # ============================================================================
 # Union of all hook events
 # ============================================================================
@@ -324,6 +338,8 @@ HookEvent = (
     | ResourcesDiscoverEvent
     | SavePointEvent
     | SettledEvent
+    | GatewayStartupEvent
+    | GatewayStopEvent
 )
 
 
@@ -450,20 +466,6 @@ class MessageSendEvent:
     input_text: str = ''
     response_text: str = ''
     is_voice: bool = False
-
-
-@dataclass
-class GatewayStartupEvent:
-    """Fired after all enabled channels have been registered and started."""
-    type: Literal['gateway:startup'] = field(default='gateway:startup', init=False)
-    channel_ids: list[str] = field(default_factory=list)
-
-
-@dataclass
-class GatewayStopEvent:
-    """Fired when the gateway is shutting down, before channel tasks are cancelled."""
-    type: Literal['gateway:stop'] = field(default='gateway:stop', init=False)
-    channel_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
