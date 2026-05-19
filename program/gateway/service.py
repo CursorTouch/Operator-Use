@@ -157,7 +157,7 @@ class Gateway:
         is_voice = any(isinstance(p, AudioPart) for p in msg.parts)
 
         session_key = f"{msg.channel}:{msg.chat_id}"
-        entry = self._get_or_create_session(session_key)
+        entry = self._get_or_create_session(session_key, channel_id=msg.channel, chat_id=msg.chat_id)
 
         if entry.task is not None and not entry.task.done():
             await entry.agent._engine.steer(UserMessage.text(text))
@@ -196,9 +196,9 @@ class Gateway:
 
     # ── Session management ────────────────────────────────────────────────────
 
-    def _get_or_create_session(self, session_key: str) -> _SessionEntry:
+    def _get_or_create_session(self, session_key: str, channel_id: str | None = None, chat_id: str | None = None) -> _SessionEntry:
         if session_key not in self._sessions:
-            agent = self._runtime.create_session_agent()
+            agent = self._runtime.create_session_agent(channel_id=channel_id, chat_id=chat_id)
             self._sessions[session_key] = _SessionEntry(agent=agent)
         return self._sessions[session_key]
 

@@ -103,12 +103,13 @@ def _bind_renderer(runtime: Runtime, current_session, unsubscribe):
     return next_session, next_unsubscribe
 
 
-async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off') -> None:
+async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False) -> None:
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
         sandbox=sandbox if sandbox != 'off' else None,
+        persist_session=not ephemeral,
     )
 
     print(f"Agent starting in {cwd}  (model: {config.model_id})")
@@ -210,13 +211,14 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     default='off', show_default=True,
     help='Sandbox mode: strict=write-locked+OS sandbox; enforce=policy only; warn=log; off=disabled',
 )
-def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str) -> None:
+@click.option('--ephemeral', is_flag=True, default=False, help='Run in-memory only — session is not saved to disk.')
+def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, ephemeral: bool) -> None:
     """Start the interactive agent REPL."""
     from dotenv import load_dotenv
     load_dotenv()
 
     cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
     try:
-        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox))
+        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, ephemeral=ephemeral))
     except KeyboardInterrupt:
         pass

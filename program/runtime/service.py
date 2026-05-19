@@ -221,12 +221,16 @@ class Runtime:
         sm.branch(from_entry_id)
         await self._emit_session_start('fork')
 
-    def create_session_agent(self) -> Agent:
+    def create_session_agent(self, channel_id: str | None = None, chat_id: str | None = None) -> Agent:
         """
         Create an isolated agent for a gateway session.
 
         Shares LLM, tools, and resources with the main runtime context but
         isolates conversation state (session manager, hooks, extension runtime).
+
+        When channel_id and chat_id are provided the session is persisted to a
+        deterministic file so the conversation survives restarts (same behaviour
+        as the REPL). Pass neither to get a transient in-memory session.
         """
         from program.hooks.service import Hooks
         from program.engine.service import Engine
@@ -234,6 +238,8 @@ class Runtime:
         from program.session.manager import SessionManager
         from program.extension.runtime import ExtensionRuntime
         from program.runtime.types import _DeferredExtensionRuntime
+        from program.settings.paths import get_sessions_dir
+        import re
 
         hooks = Hooks()
 
@@ -244,10 +250,22 @@ class Runtime:
             hooks=hooks,
         )
 
-        session_manager = SessionManager(
-            cwd=self._context.session_manager.cwd,
-            persist=False,
-        )
+        # Derive a safe filename from channel:chat_id and persist the session so
+        # users retain conversation history across bot restarts.
+        if channel_id and chat_id:
+            safe = re.sub(r'[^\w\-:]', '_', f'{channel_id}:{chat_id}')
+            session_file = get_sessions_dir() / f'{safe}.json'
+            session_file.parent.mkdir(parents=True, exist_ok=True)
+            session_manager = SessionManager(
+                cwd=self._context.session_manager.cwd,
+                session_file=session_file,
+                persist=True,
+            )
+        else:
+            session_manager = SessionManager(
+                cwd=self._context.session_manager.cwd,
+                persist=False,
+            )
 
         load_result = self._context.resource_loader.get_extensions()
         deferred = _DeferredExtensionRuntime(load_result)
