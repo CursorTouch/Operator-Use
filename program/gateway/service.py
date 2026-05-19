@@ -104,7 +104,16 @@ class Gateway:
                 logger.exception("Gateway: error in incoming loop")
 
     async def _handle_incoming(self, msg: IncomingMessage) -> None:
-        """Handle one incoming message: hook → get/create session → run."""
+        """Handle one incoming message: hook → get/create session → run.
+
+        'stdio' messages (subagent results from the CLI) bypass gateway session
+        management and are delivered directly to runtime.current_session so the
+        REPL's own hook subscriber handles rendering — no double output.
+        """
+        if msg.channel == 'stdio':
+            await self._handle_stdio(msg)
+            return
+
         from program.bus.types import AudioPart
         parts = list(msg.parts)
 
@@ -158,6 +167,32 @@ class Gateway:
             self._run_session(session_key, msg.channel, msg.chat_id, entry.agent, text, is_voice=is_voice),
             name=f'gateway:session:{session_key}',
         )
+
+    # ── stdio fast path ───────────────────────────────────────────────────────
+
+    async def _handle_stdio(self, msg: IncomingMessage) -> None:
+        """Deliver a subagent result to the REPL's main agent.
+
+        Bypasses gateway session management entirely — always targets
+        runtime.current_session so the REPL's own hook subscriber renders
+        the output without double-printing via StdioChannel.
+        Retries if the agent is mid-turn (RuntimeError).
+        """
+        from program.bus.types import text_from_parts
+        from program.agent.types import PromptOptions
+        agent = self._runtime.current_session
+        if agent is None:
+            logger.warning('stdio message arrived but runtime has no active session — dropped')
+            return
+        content = text_from_parts(msg.parts)
+        opts = PromptOptions(source='subagent')
+        for _ in range(600):
+            try:
+                await agent.invoke(content, opts)
+                return
+            except RuntimeError:
+                await asyncio.sleep(0.1)
+        logger.warning('stdio: could not inject result — agent stayed busy')
 
     # ── Session management ────────────────────────────────────────────────────
 

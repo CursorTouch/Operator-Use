@@ -55,14 +55,10 @@ class Runtime:
         self.gateway_manager = GatewayManager(self, context.settings_manager, context.auth_manager)
         self.gateway_manager.start()
 
-        # Wire SubagentManager and connect it to the subagent tool.
-        # bus is used to deliver subagent results back as IncomingMessages (gateway mode).
-        # agent is the CLI-mode fallback when no gateway/bus is active.
         self.subagent_manager = SubagentManager(
             llm=context.llm,
             tools=context.engine.tools,
             bus=self.gateway_manager._bus,
-            agent=context.agent,
             settings=context.subagent_settings,
             hooks=context.hooks,
         )

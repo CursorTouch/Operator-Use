@@ -25,7 +25,6 @@ from program.subagent.service import Subagent
 from program.subagent.types import SubagentRecord, SubagentSettings, SubagentStatus
 
 if TYPE_CHECKING:
-    from program.agent.service import Agent
     from program.bus.service import Bus
     from program.hooks.service import Hooks
     from program.inference.api.text.service import LLM
@@ -51,7 +50,6 @@ class SubagentManager:
         llm: LLM,
         tools: list[Tool],
         bus: Bus | None = None,
-        agent: Agent | None = None,
         settings: SubagentSettings | None = None,
         hooks: Hooks | None = None,
     ) -> None:
@@ -61,7 +59,6 @@ class SubagentManager:
         self._records: dict[str, SubagentRecord] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._bus: Bus | None = bus
-        self._agent: Agent | None = agent  # fallback for CLI mode (no bus/gateway)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -139,53 +136,49 @@ class SubagentManager:
             logger.exception('[%s] failed to announce result to bus', record.task_id)
 
     async def _announce(self, record: SubagentRecord) -> None:
-        """Deliver the subagent result back to the originating session.
+        """Deliver the subagent result back to the originating session via the bus.
 
-        If channel + chat_id are set (gateway mode), publish an IncomingMessage
-        to the bus so the result flows through the normal message pipeline.
-        If not (CLI mode), fall back to invoking the agent directly.
+        Both CLI (stdio) and gateway channels use the same gateway bus.
+        Gateway._handle_incoming routes 'stdio' messages directly to
+        runtime.current_session so the REPL's own renderer handles output.
         """
-        status_label = record.status.value
-        result_text = record.result or f'(subagent {record.status})'
-        content = (
-            f'[Subagent result — task_id={record.task_id} label="{record.label}" status={status_label}]\n\n'
-            f'{result_text}\n\n'
-            f'Summarize this result for the user naturally in 1-2 sentences. '
-            f'Do not mention technical terms like "subagent" or task IDs.'
-        )
-
-        if record.channel and record.chat_id and self._bus is not None:
-            # Gateway mode: publish as IncomingMessage so the Gateway routes it
-            # to the correct session agent just like a normal user message.
-            from program.bus.types import IncomingMessage, TextPart
-            await self._bus.publish_incoming(
-                IncomingMessage(
-                    channel=record.channel,
-                    chat_id=record.chat_id,
-                    parts=[TextPart(content=content)],
-                    user_id='subagent',
-                    metadata={'_subagent_result': True, 'task_id': record.task_id},
-                )
+        if not record.channel or not record.chat_id:
+            logger.warning(
+                '[%s] no channel/chat_id — result dropped. Result:\n%s',
+                record.task_id, record.result,
             )
             return
 
-        # CLI / no-gateway fallback: invoke the agent directly.
-        if self._agent is not None:
-            from program.agent.types import PromptOptions
-            for _ in range(600):
-                try:
-                    await self._agent.invoke(content, PromptOptions(source='subagent'))
-                    return
-                except RuntimeError:
-                    await asyncio.sleep(0.1)
-            logger.warning(
-                '[%s] could not inject result — agent stayed busy. Result:\n%s',
-                record.task_id, content,
+        status_label = record.status.value
+        result_text = record.result or f'(no output)'
+        if record.status == SubagentStatus.completed:
+            content = (
+                f'[Subagent result — task_id={record.task_id} label="{record.label}" status={status_label}]\n\n'
+                f'{result_text}\n\n'
+                f'Tell the user: task {record.task_id} ("{record.label}") completed. '
+                f'Then summarize the result in 1-2 sentences.'
             )
         else:
+            content = (
+                f'[Subagent result — task_id={record.task_id} label="{record.label}" status={status_label}]\n\n'
+                f'{result_text}\n\n'
+                f'Tell the user: task {record.task_id} ("{record.label}") {status_label}. '
+                f'Briefly explain what went wrong based on the output above.'
+            )
+
+        if self._bus is not None:
+            from program.bus.types import IncomingMessage, TextPart
+            await self._bus.publish_incoming(IncomingMessage(
+                channel=record.channel,
+                chat_id=record.chat_id,
+                parts=[TextPart(content=content)],
+                user_id='subagent',
+                metadata={'_subagent_result': True, 'task_id': record.task_id},
+            ))
+        else:
             logger.warning(
-                '[%s] no delivery path available. Result:\n%s',
-                record.task_id, content,
+                '[%s] no bus available — result dropped. Result:\n%s',
+                record.task_id, record.result,
             )
 
     def _check_for_cycles(self, new_id: str, depends_on: list[str]) -> None:

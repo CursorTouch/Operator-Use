@@ -104,10 +104,10 @@ class SubagentTool(Tool):
                     return ToolResult.error(id=invocation.id, content=f'Cannot create subagent: {exc}')
 
                 display = label or task[:60]
-                msg = f"Subagent created (task_id={task_id}  label='{display}')\n"
+                msg = f"Subagent triggered — task_id={task_id}  label='{display}'"
                 if depends_on:
-                    msg += f"Dependencies: {', '.join(depends_on)}\n"
-                msg += 'Running in background — result will be injected automatically when done.'
+                    msg += f"\nWaiting on: {', '.join(depends_on)}"
+                msg += '\nRunning in background — result will be injected automatically when done.'
                 return ToolResult(id=invocation.id, content=msg, terminate=True)
 
             case 'list':

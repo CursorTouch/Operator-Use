@@ -7,9 +7,11 @@ from pathlib import Path
 
 import click
 from prompt_toolkit import PromptSession
+from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from program.runtime import Runtime, RuntimeConfig
+from program.subagent.manager import _session_channel, _session_chat_id
 from program.hooks.types import (
     MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent,
@@ -115,17 +117,22 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     runtime = await Runtime.create(config)
     subscribed_session, unsubscribe_renderer = _bind_renderer(runtime, None, None)
 
+    # Mark this task as the 'stdio' CLI session so subagents know to route
+    # their results back through the gateway's stdio fast path.
+    _session_channel.set('stdio')
+    _session_chat_id.set('cli')
+
     session: PromptSession = PromptSession()
     last_interrupt = False
 
     # patch_stdout() keeps the event loop running during prompt_async() so
     # background asyncio tasks (subagents) can print above the prompt line
-    # without corrupting it, and _announce() can call agent.invoke() while
+    # without corrupting it, and _handle_stdio() can call agent.invoke() while
     # the user is idle.
-    with patch_stdout():
+    with patch_stdout(raw=True):
         while True:
             try:
-                user_input = (await session.prompt_async(_cyan('\n[You] '))).strip()
+                user_input = (await session.prompt_async(ANSI(_cyan('\n[You] ')))).strip()
                 last_interrupt = False
             except EOFError:
                 print()
