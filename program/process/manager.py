@@ -75,6 +75,71 @@ class ProcessManager:
         logger.debug('Process %s started: %s', pid, command)
         return record
 
+    # ── Adopt ─────────────────────────────────────────────────────────────────
+
+    async def adopt(
+        self,
+        proc: asyncio.subprocess.Process,
+        command: str,
+        description: str,
+        cwd: str,
+        pre_captured: bytes = b'',
+    ) -> ProcessRecord:
+        """
+        Take ownership of an already-running subprocess (e.g. one that timed
+        out in the terminal tool) and continue capturing its output.
+        """
+        pid = f"p{uuid4().hex[:8]}"
+        now = time.time()
+
+        record = ProcessRecord(
+            id=pid,
+            command=command,
+            description=description,
+            status=ProcessStatus.RUNNING,
+            cwd=cwd,
+            created_at=now,
+            started_at=now,
+        )
+
+        self._records[pid] = record
+        self._subprocesses[pid] = proc
+        self._buffers[pid] = bytearray(pre_captured)
+        self._watchers[pid] = asyncio.create_task(
+            self._watch_adopted(pid, proc),
+            name=f'process:watch:{pid}',
+        )
+        logger.debug('Process %s adopted: %s', pid, command)
+        return record
+
+    async def _watch_adopted(self, pid: str, proc: asyncio.subprocess.Process) -> None:
+        """Drain both stdout and stderr from an adopted subprocess."""
+        buf = self._buffers[pid]
+
+        async def _drain(stream) -> None:
+            if stream is None:
+                return
+            while True:
+                chunk = await stream.read(4096)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                if len(buf) > _MAX_BUFFER_BYTES:
+                    del buf[:len(buf) - _MAX_BUFFER_BYTES]
+
+        await asyncio.gather(_drain(proc.stdout), _drain(proc.stderr))
+
+        return_code = await proc.wait()
+        record = self._records.get(pid)
+        if record is None:
+            return
+        record.ended_at = time.time()
+        record.return_code = return_code
+        if record.status == ProcessStatus.RUNNING:
+            record.status = ProcessStatus.COMPLETED if return_code == 0 else ProcessStatus.FAILED
+        self._subprocesses.pop(pid, None)
+        logger.debug('Process %s (adopted) exited with code %d', pid, return_code)
+
     # ── Watch ─────────────────────────────────────────────────────────────────
 
     async def _watch(self, pid: str, proc: asyncio.subprocess.Process) -> None:

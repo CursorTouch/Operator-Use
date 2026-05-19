@@ -3,12 +3,15 @@ import os
 import signal
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 from pydantic import BaseModel, Field
-from typing import Optional
 from program.tool.types import (
     Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult,
     ToolExecutionUpdateCallback, AbortSignal,
 )
+
+if TYPE_CHECKING:
+    from program.process.manager import ProcessManager
 
 STREAM_FLUSH_INTERVAL = 0.1  # seconds between streamed partial updates
 
@@ -48,16 +51,33 @@ class TerminalSchema(BaseModel):
         default=None,
         description="Working directory for the command. Absolute path or relative to current directory.",
     )
+    detached: bool = Field(
+        default=False,
+        description=(
+            "When True, start the command immediately as a background process and return "
+            "its process ID without waiting. Use for servers, watchers, or any command "
+            "that is meant to run indefinitely. The process tool can then be used to read "
+            "output or stop it."
+        ),
+    )
 
 class TerminalTool(Tool):
     def __init__(self):
         super().__init__(
             name="terminal",
-            description="Run a shell command and return stdout, stderr, and exit code. Use for git, package installs, running scripts, or any CLI task. Destructive commands are blocked.",
+            description=(
+                "Run a shell command and return stdout, stderr, and exit code. "
+                "Use for git, package installs, running scripts, or any CLI task. "
+                "Destructive commands are blocked. "
+                "If a command is still running when the timeout expires it is moved "
+                "to a background process instead of killed — use the process tool to "
+                "check its output or stop it."
+            ),
             schema=TerminalSchema,
             kind=ToolKind.Execute,
-            execution_mode=ToolExecutionMode.Parallel
+            execution_mode=ToolExecutionMode.Parallel,
         )
+        self._manager: 'ProcessManager | None' = None
 
     def _is_command_blocked(self, cmd: str) -> str | None:
         """Return blocked pattern if cmd matches, else None."""
@@ -108,7 +128,8 @@ class TerminalTool(Tool):
         cmd = params.get("cmd")
         timeout = params.get("timeout", 10)
         cwd_param = params.get("cwd")
-        
+        detached = params.get("detached", False)
+
         if not cmd:
              return ToolResult.error(id=invocation.id, content="Parameter 'cmd' is required.")
 
@@ -116,19 +137,30 @@ class TerminalTool(Tool):
         if blocked:
             return ToolResult.error(id=invocation.id, content=f"Command blocked: contains forbidden pattern '{blocked}'")
 
-        env = os.environ.copy()
-
-        if sys.platform == "win32":
-            shell_cmd = ["cmd", "/c", cmd]
-        else:
-            shell_cmd = ["/bin/bash", "-c", cmd]
-
         profile_root = kwargs.get("_profile") or "."
         if cwd_param:
             resolved = Path(cwd_param) if Path(cwd_param).is_absolute() else Path(profile_root) / cwd_param
             cwd = str(resolved)
         else:
             cwd = str(profile_root)
+
+        if detached:
+            if self._manager is None:
+                return ToolResult.error(id=invocation.id, content="detached=True requires the process manager (not available in this context).")
+            desc = (cmd[:80] + '...') if len(cmd) > 80 else cmd
+            record = await self._manager.create(command=cmd, description=desc, cwd=cwd)
+            return ToolResult.ok(
+                id=invocation.id,
+                content=f"Background process started as `{record.id}`.\nUse the process tool to read output or stop it.",
+                metadata={'process_id': record.id},
+            )
+
+        env = os.environ.copy()
+
+        if sys.platform == "win32":
+            shell_cmd = ["cmd", "/c", cmd]
+        else:
+            shell_cmd = ["/bin/bash", "-c", cmd]
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -193,13 +225,44 @@ class TerminalTool(Tool):
                 await asyncio.wait_for(asyncio.shield(readers), timeout=float(timeout))
             except asyncio.TimeoutError:
                 timed_out = True
-                await self._kill_process_group(process)
-                # The pipes break when the process dies; give the readers a brief
-                # window to flush whatever was already buffered before the kill.
-                try:
-                    await asyncio.wait_for(readers, timeout=2.0)
-                except (asyncio.TimeoutError, Exception):
-                    pass
+                if self._manager is not None:
+                    # Stop the terminal's own readers so they don't race with the
+                    # watcher that ProcessManager will start.
+                    readers.cancel()
+                    try:
+                        await asyncio.wait_for(readers, timeout=0.5)
+                    except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+                        pass
+                    await _flush_stream(force=True)
+                    pre_captured = bytes(out_buf) + bytes(err_buf)
+                    desc = (cmd[:80] + '...') if len(cmd) > 80 else cmd
+                    record = await self._manager.adopt(
+                        proc=process,
+                        command=cmd,
+                        description=desc,
+                        cwd=cwd,
+                        pre_captured=pre_captured,
+                    )
+                    partial = bytes(out_buf).decode('utf-8', errors='replace').strip()
+                    lines = [
+                        f"Command still running after {timeout}s — moved to background process `{record.id}`.",
+                        "Use the process tool (action='output') to read output, or action='stop' to kill it.",
+                    ]
+                    if partial:
+                        lines.append(f"-- PARTIAL OUTPUT --\n{partial}")
+                    return ToolResult.ok(
+                        id=invocation.id,
+                        content="\n".join(lines),
+                        metadata={'process_id': record.id, 'backgrounded': True},
+                    )
+                else:
+                    await self._kill_process_group(process)
+                    # The pipes break when the process dies; give the readers a brief
+                    # window to flush whatever was already buffered before the kill.
+                    try:
+                        await asyncio.wait_for(readers, timeout=2.0)
+                    except (asyncio.TimeoutError, Exception):
+                        pass
 
             await process.wait()
             await _flush_stream(force=True)
