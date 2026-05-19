@@ -15,7 +15,7 @@ from program.runtime import Runtime, RuntimeConfig
 from program.subagent.manager import _session_channel, _session_chat_id
 from program.hooks.types import (
     MessageUpdateEvent, MessageEndEvent,
-    ToolExecutionStartEvent, ToolExecutionEndEvent, AgentErrorEvent,
+    ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent, AgentErrorEvent,
     AgentStartEvent, SessionBeforeCompactEvent, SessionCompactEvent,
 )
 from program.message.types import Role
@@ -74,7 +74,20 @@ def _render_event(event) -> None:
             args_str = ', '.join(f'{k}={v!r}' for k, v in tc.args.items())
             print(f"\n{_yellow(f'[Tool] {tc.name}({args_str})')}")
 
+        case ToolExecutionUpdateEvent(partial_tool_result=part):
+            text = getattr(part, 'content', '') if part is not None else ''
+            if not text:
+                return
+            if _streaming_role != 'tool_stream':
+                print(f"{_grey('[Tool ⋯]')} ", end='', flush=True)
+                _streaming_role = 'tool_stream'
+            sys.stdout.write(text)
+            sys.stdout.flush()
+
         case ToolExecutionEndEvent(tool_result=res):
+            if _streaming_role == 'tool_stream':
+                print()
+                _streaming_role = None
             content = str(res.content)
             if len(content) > 500:
                 content = content[:500] + _grey(' … [truncated]')

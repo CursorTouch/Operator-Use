@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from program.gateway.types import BaseChannel
+from program.gateway.channels.shutdown import quiet_library_logging
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
 from program.gateway.channels.twitch.utils import split_message
 
@@ -78,10 +79,12 @@ class TwitchChannel(BaseChannel):
     async def disconnect(self) -> None:
         """Stop the Twitch bot connection."""
         if self._bot_ref is not None:
-            try:
-                await self._bot_ref.close()
-            except Exception:
-                logger.exception("TwitchChannel: error during disconnect")
+            with quiet_library_logging("twitchio", "aiohttp", "asyncio") as debug:
+                try:
+                    await self._bot_ref.close()
+                except Exception:
+                    if debug:
+                        logger.exception("TwitchChannel: error during disconnect")
             self._bot_ref = None
 
     async def send(self, msg: OutgoingMessage) -> None:

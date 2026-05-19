@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from program.gateway.types import BaseChannel
+from program.gateway.channels.shutdown import quiet_library_logging
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from program.gateway.channels.slack.utils import (
     _MEDIA_DIR, _MENTION_RE,
@@ -142,10 +143,12 @@ class SlackChannel(BaseChannel):
     async def disconnect(self) -> None:
         """Close the Socket Mode handler."""
         if self._handler is not None:
-            try:
-                await self._handler.close_async()
-            except Exception:
-                logger.exception("SlackChannel: error during disconnect")
+            with quiet_library_logging("slack_bolt", "slack_sdk", "aiohttp", "asyncio") as debug:
+                try:
+                    await self._handler.close_async()
+                except Exception:
+                    if debug:
+                        logger.exception("SlackChannel: error during disconnect")
             self._handler = None
 
     async def send(self, msg: OutgoingMessage) -> None:

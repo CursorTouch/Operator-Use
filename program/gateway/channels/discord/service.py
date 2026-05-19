@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from program.gateway.types import BaseChannel
+from program.gateway.channels.shutdown import quiet_library_logging
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from program.gateway.channels.discord.utils import _DISCORD_MSG_LIMIT, _MEDIA_DIR, is_audio_attachment
 
@@ -114,10 +115,12 @@ class DiscordChannel(BaseChannel):
     async def disconnect(self) -> None:
         """Close the Discord client."""
         if self._client is not None:
-            try:
-                await self._client.close()
-            except Exception:
-                logger.exception("DiscordChannel: error during disconnect")
+            with quiet_library_logging("discord", "aiohttp", "asyncio") as debug:
+                try:
+                    await self._client.close()
+                except Exception:
+                    if debug:
+                        logger.exception("DiscordChannel: error during disconnect")
             self._client = None
 
     def _start_typing(self, chat_id: str) -> None:

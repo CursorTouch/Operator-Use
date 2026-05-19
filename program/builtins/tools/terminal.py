@@ -4,7 +4,13 @@ import signal
 import sys
 from pathlib import Path
 from pydantic import BaseModel, Field
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from typing import Optional
+from program.tool.types import (
+    Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult,
+    ToolExecutionUpdateCallback, AbortSignal,
+)
+
+STREAM_FLUSH_INTERVAL = 0.1  # seconds between streamed partial updates
 
 MAX_TOOL_OUTPUT_LENGTH = 100000
 
@@ -91,7 +97,13 @@ class TerminalTool(Tool):
         except asyncio.TimeoutError:
             pass
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback: Optional[ToolExecutionUpdateCallback] = None,
+        signal: Optional[AbortSignal] = None,
+        **kwargs,
+    ) -> ToolResult:
         params = invocation.params
         cmd = params.get("cmd")
         timeout = params.get("timeout", 10)
@@ -131,6 +143,34 @@ class TerminalTool(Tool):
             out_buf = bytearray()
             err_buf = bytearray()
 
+            cb = tool_execution_update_callback
+            loop = asyncio.get_event_loop()
+            _pending: list[str] = []
+            _last_flush = 0.0
+            _flush_lock = asyncio.Lock()
+
+            async def _flush_stream(force: bool = False) -> None:
+                nonlocal _last_flush
+                if cb is None:
+                    return
+                async with _flush_lock:
+                    if not _pending:
+                        return
+                    now = loop.time()
+                    if not force and (now - _last_flush) < STREAM_FLUSH_INTERVAL:
+                        return
+                    delta = "".join(_pending)
+                    _pending.clear()
+                    _last_flush = now
+                    try:
+                        await cb(ToolResult(
+                            id=invocation.id,
+                            content=delta,
+                            metadata={"stream": True},
+                        ))
+                    except Exception:
+                        pass
+
             async def _drain(stream, buf: bytearray) -> None:
                 if stream is None:
                     return
@@ -139,6 +179,9 @@ class TerminalTool(Tool):
                     if not chunk:
                         break
                     buf.extend(chunk)
+                    if cb is not None:
+                        _pending.append(chunk.decode("utf-8", errors="replace"))
+                        await _flush_stream()
 
             readers = asyncio.gather(
                 _drain(process.stdout, out_buf),
@@ -159,6 +202,7 @@ class TerminalTool(Tool):
                     pass
 
             await process.wait()
+            await _flush_stream(force=True)
 
             stdout_str = bytes(out_buf).decode("utf-8", errors="replace").strip()
             stderr_str = bytes(err_buf).decode("utf-8", errors="replace").strip()

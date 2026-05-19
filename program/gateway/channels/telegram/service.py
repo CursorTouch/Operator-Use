@@ -4,6 +4,7 @@ import asyncio
 import logging
 from pathlib import Path
 
+from program.gateway.channels.shutdown import quiet_library_logging
 from program.gateway.types import BaseChannel
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from program.gateway.channels.telegram.utils import _TELEGRAM_MSG_LIMIT, _MEDIA_DIR, audio_mime_ext
@@ -119,12 +120,14 @@ class TelegramChannel(BaseChannel):
     async def disconnect(self) -> None:
         """Stop PTB app and release resources."""
         if self._app is not None:
-            try:
-                await self._app.updater.stop()
-                await self._app.stop()
-                await self._app.shutdown()
-            except Exception:
-                logger.exception("TelegramChannel: error during disconnect")
+            with quiet_library_logging("telegram", "httpx") as debug:
+                try:
+                    await self._app.updater.stop()
+                    await self._app.stop()
+                    await self._app.shutdown()
+                except Exception:
+                    if debug:
+                        logger.exception("TelegramChannel: error during disconnect")
             self._app = None
 
     def _start_typing(self, chat_id: str) -> None:
