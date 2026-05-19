@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
+from program.subagent.types import SubagentStatus
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
@@ -50,7 +51,12 @@ def _format_duration(started: datetime, finished: datetime | None) -> str:
     return f'{secs // 60}m {secs % 60}s' if secs >= 60 else f'{secs}s'
 
 
-_STATUS_ICON = {'running': '⏳', 'completed': '✅', 'failed': '❌', 'cancelled': '🚫'}
+_STATUS_ICON = {
+    SubagentStatus.running:   '⏳',
+    SubagentStatus.completed: '✅',
+    SubagentStatus.failed:    '❌',
+    SubagentStatus.cancelled: '🚫',
+}
 
 
 class SubagentTool(Tool):
@@ -114,14 +120,14 @@ class SubagentTool(Tool):
                     icon = _STATUS_ICON.get(r.status, '?')
                     duration = _format_duration(r.started_at, r.finished_at)
                     line = f"{icon} {r.task_id}  [{r.status}]  {duration}  label='{r.label}'"
-                    if r.status == 'running':
+                    if r.status == SubagentStatus.running:
                         line += f'\n   task: {r.task[:100]}'
                     elif r.result:
                         preview = r.result[:120].replace('\n', ' ')
                         line += f"\n   result: {preview}{'...' if len(r.result) > 120 else ''}"
                     lines.append(line)
 
-                running = sum(1 for r in records if r.status == 'running')
+                running = sum(1 for r in records if r.status == SubagentStatus.running)
                 header = f'Subagents — {len(records)} total, {running} running\n' + '─' * 60
                 return ToolResult.ok(id=invocation.id, content=header + '\n' + '\n\n'.join(lines))
 

@@ -2,8 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel
+
+
+class SubagentStatus(StrEnum):
+    running   = 'running'
+    completed = 'completed'
+    failed    = 'failed'
+    cancelled = 'cancelled'
 
 
 @dataclass
@@ -11,7 +19,7 @@ class SubagentRecord:
     task_id: str
     label: str
     task: str
-    status: str          # 'running' | 'completed' | 'failed' | 'cancelled'
+    status: SubagentStatus
     started_at: datetime
     finished_at: datetime | None = None
     result: str | None = None

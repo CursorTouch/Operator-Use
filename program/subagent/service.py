@@ -1,7 +1,8 @@
 """Subagent — ephemeral, anonymous worker that executes a single delegated task.
 
-A subagent has no session, no memory, no hooks, and no extensions.
+A subagent has no session, no memory, and no extensions.
 It is a blank Engine + LLM loop: task in → result out → discarded.
+Hooks receive SubagentStartEvent and SubagentEndEvent for lifecycle observability.
 """
 
 from __future__ import annotations
@@ -14,11 +15,12 @@ from typing import TYPE_CHECKING
 from program.agent.types import AgentContext
 from program.engine.service import Engine
 from program.engine.types import Options
-from program.hooks.types import AgentEndEvent, AgentErrorEvent, TurnEndEvent
+from program.hooks.types import AgentEndEvent, AgentErrorEvent, SubagentEndEvent, SubagentStartEvent, TurnEndEvent
 from program.message.types import AssistantMessage, TextContent, UserMessage
-from program.subagent.types import SubagentRecord, SubagentSettings
+from program.subagent.types import SubagentRecord, SubagentSettings, SubagentStatus
 
 if TYPE_CHECKING:
+    from program.hooks.service import Hooks
     from program.inference.api.text.service import LLM
     from program.tool.types import Tool
 
@@ -40,13 +42,22 @@ class Subagent:
         llm: LLM,
         tools: list[Tool],
         settings: SubagentSettings,
+        hooks: Hooks | None = None,
     ) -> None:
         self._llm = llm
         self._tools = tools
         self._settings = settings
+        self._hooks = hooks
 
     async def run(self, record: SubagentRecord) -> None:
         logger.info('[%s] subagent "%s" started', record.task_id, record.label)
+
+        if self._hooks:
+            await self._hooks.emit(SubagentStartEvent(
+                task_id=record.task_id,
+                label=record.label,
+                task=record.task,
+            ))
 
         allowed_tools = [t for t in self._tools if t.name != 'subagent']
 
@@ -62,19 +73,19 @@ class Subagent:
                     self._run_loop(record.task, system_prompt, allowed_tools, max_iterations),
                     timeout=timeout,
                 )
-                record.status = 'completed'
+                record.status = SubagentStatus.completed
                 break
 
             except asyncio.CancelledError:
                 logger.info('[%s] subagent "%s" cancelled', record.task_id, record.label)
-                record.status = 'cancelled'
+                record.status = SubagentStatus.cancelled
                 result = '(cancelled)'
                 break
 
             except asyncio.TimeoutError:
                 logger.warning('[%s] subagent "%s" timed out after %.0fs', record.task_id, record.label, timeout)
                 result = f'(timed out after {timeout:.0f}s)'
-                record.status = 'failed'
+                record.status = SubagentStatus.failed
                 break
 
             except Exception as exc:
@@ -91,12 +102,20 @@ class Subagent:
                     await asyncio.sleep(delay)
                 else:
                     result = f'(error: {type(exc).__name__}: {exc})'
-                    record.status = 'failed'
+                    record.status = SubagentStatus.failed
                     logger.error('[%s] subagent "%s" failed: %s', record.task_id, record.label, exc)
 
         record.result = result
         record.finished_at = datetime.now()
         logger.info('[%s] subagent "%s" done — status=%s', record.task_id, record.label, record.status)
+
+        if self._hooks:
+            await self._hooks.emit(SubagentEndEvent(
+                task_id=record.task_id,
+                label=record.label,
+                status=record.status,
+                result=record.result,
+            ))
 
     async def _run_loop(
         self,

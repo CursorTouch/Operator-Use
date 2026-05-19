@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal, TYPE_CHECKING
 
+from program.subagent.types import SubagentStatus
+
 if TYPE_CHECKING:
     from program.message.types import BaseMessage, ToolCallContent, ToolResultContent
 
@@ -113,6 +115,27 @@ class AgentEndEvent:
 class AgentErrorEvent:
     type: Literal['agent_error'] = field(default='agent_error', init=False)
     error: str = ''
+
+
+# ============================================================================
+# Subagent lifecycle
+# ============================================================================
+
+@dataclass
+class SubagentStartEvent:
+    type: Literal['subagent_start'] = field(default='subagent_start', init=False)
+    task_id: str = ''
+    label: str = ''
+    task: str = ''
+
+
+@dataclass
+class SubagentEndEvent:
+    type: Literal['subagent_end'] = field(default='subagent_end', init=False)
+    task_id: str = ''
+    label: str = ''
+    status: SubagentStatus = SubagentStatus.completed
+    result: str | None = None
 
 
 # ============================================================================
@@ -271,6 +294,8 @@ HookEvent = (
     | AgentStartEvent
     | AgentEndEvent
     | AgentErrorEvent
+    | SubagentStartEvent
+    | SubagentEndEvent
     | TurnStartEvent
     | TurnEndEvent
     | MessageStartEvent

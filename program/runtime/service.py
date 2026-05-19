@@ -65,6 +65,7 @@ class Runtime:
             bus=self.gateway_manager._bus,
             agent=context.agent,
             settings=context.subagent_settings,
+            hooks=context.hooks,
         )
         subagent_tool._manager = self.subagent_manager
 

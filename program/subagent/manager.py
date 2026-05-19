@@ -22,11 +22,12 @@ from typing import TYPE_CHECKING
 
 from program.subagent.pool import TaskPool
 from program.subagent.service import Subagent
-from program.subagent.types import SubagentRecord, SubagentSettings
+from program.subagent.types import SubagentRecord, SubagentSettings, SubagentStatus
 
 if TYPE_CHECKING:
     from program.agent.service import Agent
     from program.bus.service import Bus
+    from program.hooks.service import Hooks
     from program.inference.api.text.service import LLM
     from program.tool.types import Tool
 
@@ -52,9 +53,10 @@ class SubagentManager:
         bus: Bus | None = None,
         agent: Agent | None = None,
         settings: SubagentSettings | None = None,
+        hooks: Hooks | None = None,
     ) -> None:
         self._settings = settings or SubagentSettings()
-        self._runner = Subagent(llm=llm, tools=tools, settings=self._settings)
+        self._runner = Subagent(llm=llm, tools=tools, settings=self._settings, hooks=hooks)
         self._pool = TaskPool(max_concurrent=self._settings.max_concurrent)
         self._records: dict[str, SubagentRecord] = {}
         self._tasks: dict[str, asyncio.Task] = {}
@@ -89,7 +91,7 @@ class SubagentManager:
             task_id=task_id,
             label=display_label,
             task=task,
-            status='running',
+            status=SubagentStatus.running,
             started_at=datetime.now(),
             channel=channel,
             chat_id=chat_id,
@@ -143,7 +145,7 @@ class SubagentManager:
         to the bus so the result flows through the normal message pipeline.
         If not (CLI mode), fall back to invoking the agent directly.
         """
-        status_label = 'completed' if record.status == 'completed' else record.status
+        status_label = record.status.value
         result_text = record.result or f'(subagent {record.status})'
         content = (
             f'[Subagent result — task_id={record.task_id} label="{record.label}" status={status_label}]\n\n'
