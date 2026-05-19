@@ -129,7 +129,7 @@ class DiscordChannel(BaseChannel):
                 ch = self._discord_channels.get(chat_id)
                 if ch is not None:
                     try:
-                        await ch.trigger_typing()  # type: ignore[reportAttributeAccessIssue]
+                        await ch.trigger_typing()  # pyright: ignore[reportAttributeAccessIssue]
                     except Exception:
                         pass
                 await asyncio.sleep(8)

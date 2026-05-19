@@ -8,8 +8,6 @@ import ssl
 from email import message_from_bytes
 from email.message import EmailMessage
 from email.policy import default as email_policy
-from typing import TYPE_CHECKING
-
 from program.gateway.types import BaseChannel
 from program.bus.types import (
     IncomingMessage, OutgoingMessage, StreamPhase,
