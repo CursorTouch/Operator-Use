@@ -94,7 +94,9 @@ class ProcessManager:
             return
         record.ended_at = time.time()
         record.return_code = return_code
-        record.status = ProcessStatus.COMPLETED if return_code == 0 else ProcessStatus.FAILED
+        # Don't override KILLED status set by stop()
+        if record.status == ProcessStatus.RUNNING:
+            record.status = ProcessStatus.COMPLETED if return_code == 0 else ProcessStatus.FAILED
         self._subprocesses.pop(pid, None)
         logger.debug('Process %s exited with code %d', pid, return_code)
 
@@ -117,17 +119,26 @@ class ProcessManager:
             except ProcessLookupError:
                 pass
 
-        watcher = self._watchers.pop(process_id, None)
-        if watcher and not watcher.done():
-            watcher.cancel()
-            try:
-                await watcher
-            except (asyncio.CancelledError, Exception):
-                pass
-
-        self._subprocesses.pop(process_id, None)
+        # Mark killed before the watcher can touch the record, then let the
+        # watcher drain any remaining pipe output (process is dead so EOF
+        # arrives immediately). Shield so a timeout doesn't cancel it early.
         record.ended_at = time.time()
         record.status = ProcessStatus.KILLED
+        self._subprocesses.pop(process_id, None)
+
+        watcher = self._watchers.pop(process_id, None)
+        if watcher and not watcher.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(watcher), timeout=2.0)
+            except (asyncio.TimeoutError, Exception):
+                pass
+            if not watcher.done():
+                watcher.cancel()
+                try:
+                    await watcher
+                except (asyncio.CancelledError, Exception):
+                    pass
+
         logger.debug('Process %s killed', process_id)
         return record
 
