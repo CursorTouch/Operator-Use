@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 
 from program.gateway.types import BaseChannel
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
+from program.gateway.channels.websocket.utils import (
+    MSG_TYPE_MESSAGE, MSG_TYPE_START, MSG_TYPE_CHUNK,
+    MSG_TYPE_END, MSG_TYPE_DONE, MSG_TYPE_ERROR,
+)
 
 if TYPE_CHECKING:
     from program.gateway.service import Gateway
@@ -58,18 +62,17 @@ class WebSocketChannel(BaseChannel):
                 try:
                     msg = json.loads(raw)
                 except json.JSONDecodeError:
-                    await self._conn.send(json.dumps({'type': 'error', 'text': 'Invalid JSON.'}))
+                    await self._conn.send(json.dumps({'type': MSG_TYPE_ERROR, 'text': 'Invalid JSON.'}))
                     continue
 
-                if msg.get('type') == 'message':
+                if msg.get('type') == MSG_TYPE_MESSAGE:
                     text = str(msg.get('text', '')).strip()
                     if text:
-                        incoming = IncomingMessage(
+                        await self.receive(IncomingMessage(
                             channel=self._conn_id,
                             chat_id=self._conn_id,
                             parts=[TextPart(text)],
-                        )
-                        await self.receive(incoming)
+                        ))
                 else:
                     logger.debug(
                         "WebSocketChannel %r: unknown message type %r",
@@ -91,23 +94,20 @@ class WebSocketChannel(BaseChannel):
         metadata = msg.metadata
 
         if phase == StreamPhase.START:
-            payload = {'type': 'start'}
+            payload = {'type': MSG_TYPE_START}
         elif phase == StreamPhase.CHUNK:
             text = text_from_parts(msg.parts)
-            payload = {'type': 'chunk', **metadata}
+            payload = {'type': MSG_TYPE_CHUNK, **metadata}
             if text:
                 payload['text'] = text
         elif phase == StreamPhase.END:
-            payload = {'type': 'end'}
+            payload = {'type': MSG_TYPE_END}
         elif phase == StreamPhase.DONE:
-            payload = {'type': 'done'}
+            payload = {'type': MSG_TYPE_DONE}
         elif phase == StreamPhase.ERROR:
-            text = text_from_parts(msg.parts) or "Unknown error"
-            payload = {'type': 'error', 'text': text}
+            payload = {'type': MSG_TYPE_ERROR, 'text': text_from_parts(msg.parts) or "Unknown error"}
         else:
-            # Direct/out-of-band send
-            text = text_from_parts(msg.parts)
-            payload = {'type': 'message', 'text': text}
+            payload = {'type': MSG_TYPE_MESSAGE, 'text': text_from_parts(msg.parts)}
 
         try:
             await self._conn.send(json.dumps(payload))
@@ -121,15 +121,10 @@ class WebSocketServer:
 
     Usage:
         server = WebSocketServer(gateway, host='127.0.0.1', port=8765)
-        await server.start()   # run as a background task or directly
+        await server.start()
     """
 
-    def __init__(
-        self,
-        gateway: Gateway,
-        host: str = '127.0.0.1',
-        port: int = 8765,
-    ) -> None:
+    def __init__(self, gateway: Gateway, host: str = '127.0.0.1', port: int = 8765) -> None:
         if not _WS_AVAILABLE:
             raise ImportError("websockets package is required for WebSocket support.")
         self._gateway = gateway

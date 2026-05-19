@@ -2,29 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
 from program.gateway.types import BaseChannel
-from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
+from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, text_from_parts
+from program.gateway.channels.telegram.utils import _TELEGRAM_MSG_LIMIT, _MEDIA_DIR, audio_mime_ext
 
 logger = logging.getLogger(__name__)
 
 try:
-    from telegram import Bot, Update
+    from telegram import Bot, InputFile, Update
     from telegram.constants import ChatAction
     from telegram.ext import Application, ContextTypes, MessageHandler, filters
     _PTB_AVAILABLE = True
 except ImportError:
     _PTB_AVAILABLE = False
 
-_TELEGRAM_MSG_LIMIT = 4096
-
 
 class TelegramChannel(BaseChannel):
     """
     A single Telegram bot that handles all chats.
 
-    One instance = one bot = all chats. Each chat_id gets its own text
-    accumulation buffer. Bus and gateway are set externally via register().
+    Supports text messages, voice notes, and audio files incoming.
+    Outgoing supports text and audio (TTS) via direct send.
 
     Requires: pip install "python-telegram-bot>=20.0"
     """
@@ -42,27 +42,65 @@ class TelegramChannel(BaseChannel):
         return "telegram"
 
     async def connect(self) -> None:
-        """Build PTB app, register handler, start polling. Runs until cancelled."""
+        """Build PTB app, register handlers, start polling. Runs until cancelled."""
         self._app = Application.builder().token(self._token).build()
 
         async def _on_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-            if not update.message or not update.message.text:
+            if not update.message:
                 return
-            chat_id = update.message.chat_id
-            text = update.message.text.strip()
-            if not text:
-                return
-            user_id = str(update.message.from_user.id) if update.message.from_user else ""
-            await ctx.bot.send_chat_action(chat_id, ChatAction.TYPING)
-            msg = IncomingMessage(
-                channel="telegram",
-                chat_id=str(chat_id),
-                parts=[TextPart(text)],
-                user_id=user_id,
-            )
-            await self.receive(msg)
+            msg = update.message
+            chat_id = str(msg.chat_id)
+            user_id = str(msg.from_user.id) if msg.from_user else ""
 
-        self._app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _on_message))
+            parts: list = []
+
+            if msg.voice:
+                try:
+                    _MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+                    file = await ctx.bot.get_file(msg.voice.file_id)
+                    path = _MEDIA_DIR / f"{msg.voice.file_id[:20]}.ogg"
+                    await file.download_to_drive(str(path))
+                    parts.append(AudioPart(audio=str(path), mime_type='audio/ogg'))
+                    await ctx.bot.send_chat_action(msg.chat_id, ChatAction.TYPING)
+                except Exception:
+                    logger.exception("TelegramChannel: failed to download voice message")
+                    return
+
+            elif msg.audio:
+                try:
+                    _MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+                    file = await ctx.bot.get_file(msg.audio.file_id)
+                    mime = msg.audio.mime_type or 'audio/mpeg'
+                    ext = audio_mime_ext(mime)
+                    path = _MEDIA_DIR / f"{msg.audio.file_id[:20]}{ext}"
+                    await file.download_to_drive(str(path))
+                    parts.append(AudioPart(audio=str(path), mime_type=mime))
+                    await ctx.bot.send_chat_action(msg.chat_id, ChatAction.TYPING)
+                except Exception:
+                    logger.exception("TelegramChannel: failed to download audio message")
+                    return
+
+            elif msg.text:
+                text = msg.text.strip()
+                if not text:
+                    return
+                parts.append(TextPart(text))
+                await ctx.bot.send_chat_action(msg.chat_id, ChatAction.TYPING)
+
+            if not parts:
+                return
+
+            await self.receive(IncomingMessage(
+                channel="telegram",
+                chat_id=chat_id,
+                parts=parts,
+                user_id=user_id,
+            ))
+
+        self._app.add_handler(MessageHandler(
+            (filters.TEXT | filters.VOICE | filters.AUDIO) & ~filters.COMMAND,
+            _on_message,
+        ))
 
         await self._app.initialize()
         await self._app.start()
@@ -89,14 +127,13 @@ class TelegramChannel(BaseChannel):
 
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to the Telegram chat."""
-        chat_id = msg.chat_id
-        phase = msg.stream_phase
-        metadata = msg.metadata
-
         if self._app is None:
             logger.warning("TelegramChannel: send() called but app is not running")
             return
 
+        chat_id = msg.chat_id
+        phase = msg.stream_phase
+        metadata = msg.metadata
         bot: Bot = self._app.bot
 
         if phase == StreamPhase.START:
@@ -117,7 +154,6 @@ class TelegramChannel(BaseChannel):
                 except Exception:
                     logger.exception("TelegramChannel: send_message failed (tool_end)")
             else:
-                # text or thinking chunk — accumulate
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
@@ -138,7 +174,18 @@ class TelegramChannel(BaseChannel):
                 logger.exception("TelegramChannel: send_message failed (error)")
 
         elif phase is None:
-            # Direct send (out-of-band)
+            # Direct send (out-of-band) — handles TTS audio and plain text
+            for p in msg.parts:
+                if isinstance(p, AudioPart):
+                    try:
+                        audio_path = Path(p.audio)
+                        with open(audio_path, 'rb') as f:
+                            if audio_path.suffix.lower() == '.ogg':
+                                await bot.send_voice(int(chat_id), InputFile(f, filename='voice.ogg'))
+                            else:
+                                await bot.send_audio(int(chat_id), InputFile(f, filename=audio_path.name))
+                    except Exception:
+                        logger.exception("TelegramChannel: send audio failed for %r", p.audio)
             text = text_from_parts(msg.parts)
             if text:
                 for i in range(0, len(text), _TELEGRAM_MSG_LIMIT):
@@ -148,5 +195,4 @@ class TelegramChannel(BaseChannel):
                         logger.exception("TelegramChannel: send_message failed (direct)")
 
 
-# Backward compatibility alias
 TelegramBot = TelegramChannel

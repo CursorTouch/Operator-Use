@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
 from program.gateway.types import BaseChannel
-from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
+from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, text_from_parts
+from program.gateway.channels.discord.utils import _DISCORD_MSG_LIMIT, _MEDIA_DIR, is_audio_attachment
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +16,13 @@ try:
 except ImportError:
     _DISCORD_AVAILABLE = False
 
-_DISCORD_MSG_LIMIT = 2000
-
 
 class DiscordChannel(BaseChannel):
     """
     A single Discord bot that handles all channels/DMs.
 
-    One instance = one bot = all chats. Discord channel objects are stored
-    per chat_id when messages arrive so we can reply later.
+    Supports text messages and audio file attachments incoming.
+    Outgoing supports text and audio (TTS) via direct send.
 
     Requires: pip install "discord.py>=2.0"
     Requires intents: message_content=True (enable in Discord Developer Portal).
@@ -62,24 +62,38 @@ class DiscordChannel(BaseChannel):
             if not is_dm and not is_mentioned:
                 return
 
+            chat_id = str(message.channel.id)
+            self._discord_channels[chat_id] = message.channel
+            user_id = str(message.author.id)
+
+            parts: list = []
+
+            for attachment in message.attachments:
+                if is_audio_attachment(attachment):
+                    try:
+                        _MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+                        path = _MEDIA_DIR / attachment.filename
+                        await attachment.save(str(path))
+                        mime = getattr(attachment, 'content_type', None) or 'audio/mpeg'
+                        parts.append(AudioPart(audio=str(path), mime_type=mime))
+                    except Exception:
+                        logger.exception("DiscordChannel: failed to download audio attachment %r", attachment.filename)
+
             text = message.content
             if client.user:
                 text = text.replace(f'<@{client.user.id}>', '').strip()
-            if not text:
+            if text:
+                parts.append(TextPart(text))
+
+            if not parts:
                 return
 
-            chat_id = str(message.channel.id)
-            # Store channel reference for later sends
-            self._discord_channels[chat_id] = message.channel
-
-            user_id = str(message.author.id)
-            incoming = IncomingMessage(
+            await self.receive(IncomingMessage(
                 channel="discord",
                 chat_id=chat_id,
-                parts=[TextPart(text)],
+                parts=parts,
                 user_id=user_id,
-            )
-            await self.receive(incoming)
+            ))
 
         try:
             await client.start(self._token)
@@ -124,7 +138,6 @@ class DiscordChannel(BaseChannel):
                     except Exception:
                         logger.exception("DiscordChannel: send failed (tool_end)")
             else:
-                # text or thinking chunk — accumulate
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
@@ -146,15 +159,21 @@ class DiscordChannel(BaseChannel):
                     logger.exception("DiscordChannel: send failed (error)")
 
         elif phase is None:
-            # Direct send (out-of-band)
-            text = text_from_parts(msg.parts)
-            if text and discord_ch is not None:
-                for i in range(0, len(text), _DISCORD_MSG_LIMIT):
-                    try:
-                        await discord_ch.send(text[i:i + _DISCORD_MSG_LIMIT])
-                    except Exception:
-                        logger.exception("DiscordChannel: send failed (direct)")
+            if discord_ch is not None:
+                for p in msg.parts:
+                    if isinstance(p, AudioPart):
+                        try:
+                            with open(p.audio, 'rb') as f:
+                                await discord_ch.send(file=discord.File(f, filename=Path(p.audio).name))
+                        except Exception:
+                            logger.exception("DiscordChannel: send audio failed for %r", p.audio)
+                text = text_from_parts(msg.parts)
+                if text:
+                    for i in range(0, len(text), _DISCORD_MSG_LIMIT):
+                        try:
+                            await discord_ch.send(text[i:i + _DISCORD_MSG_LIMIT])
+                        except Exception:
+                            logger.exception("DiscordChannel: send failed (direct)")
 
 
-# Backward compatibility alias
 DiscordBot = DiscordChannel

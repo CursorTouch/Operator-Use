@@ -4,13 +4,7 @@ import sys
 
 from program.gateway.types import BaseChannel
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, text_from_parts
-
-
-def _blue(s: str) -> str:   return f"\033[1;34m{s}\033[0m"
-def _yellow(s: str) -> str: return f"\033[1;33m{s}\033[0m"
-def _green(s: str) -> str:  return f"\033[1;32m{s}\033[0m"
-def _grey(s: str) -> str:   return f"\033[1;30m{s}\033[0m"
-def _red(s: str) -> str:    return f"\033[1;31m{s}\033[0m"
+from program.gateway.channels.stdio.utils import blue, yellow, grey, red
 
 
 class StdioChannel(BaseChannel):
@@ -51,16 +45,16 @@ class StdioChannel(BaseChannel):
                 if not text:
                     return
                 if self._streaming_kind.get(chat_id) != 'thinking':
-                    print(f"\n{_grey('[Thinking]')} ", end='', flush=True)
+                    print(f"\n{grey('[Thinking]')} ", end='', flush=True)
                     self._streaming_kind[chat_id] = 'thinking'
-                sys.stdout.write(_grey(text))
+                sys.stdout.write(grey(text))
                 sys.stdout.flush()
 
             elif kind == 'text':
                 if not text:
                     return
                 if self._streaming_kind.get(chat_id) != 'text':
-                    print(f"\n{_blue('[Assistant]')} ", end='', flush=True)
+                    print(f"\n{blue('[Assistant]')} ", end='', flush=True)
                     self._streaming_kind[chat_id] = 'text'
                 sys.stdout.write(text)
                 sys.stdout.flush()
@@ -69,16 +63,15 @@ class StdioChannel(BaseChannel):
                 name = metadata.get('name', '')
                 args = metadata.get('args', {})
                 args_str = ', '.join(f'{k}={v!r}' for k, v in args.items()) if isinstance(args, dict) else str(args)
-                print(f"\n{_yellow(f'[Tool] {name}({args_str})')}")
+                print(f"\n{yellow(f'[Tool] {name}({args_str})')}")
                 self._streaming_kind[chat_id] = None
 
             elif kind == 'tool_end':
                 result = metadata.get('result', '')
-                is_error = metadata.get('is_error', False)
-                if is_error:
+                if metadata.get('is_error', False):
                     if len(result) > 500:
-                        result = result[:500] + _grey(' … [truncated]')
-                    print(f"{_red('[Error]')} {result}")
+                        result = result[:500] + grey(' … [truncated]')
+                    print(f"{red('[Error]')} {result}")
                 self._streaming_kind[chat_id] = None
 
         elif phase == StreamPhase.END:
@@ -88,7 +81,7 @@ class StdioChannel(BaseChannel):
 
         elif phase == StreamPhase.ERROR:
             text = text_from_parts(msg.parts) or "Unknown error"
-            print(f"{_red('[Error]')} {text}", file=sys.stderr)
+            print(f"{red('[Error]')} {text}", file=sys.stderr)
             self._streaming_kind[chat_id] = None
 
         elif phase == StreamPhase.DONE:

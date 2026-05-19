@@ -2,36 +2,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class WebSocketChannelConfig(BaseModel):
-    model_config = ConfigDict(extra='ignore')
-    enabled: bool = False
-    host: str = '127.0.0.1'
-    port: int = 8765
-
-
-class TelegramChannelConfig(BaseModel):
-    model_config = ConfigDict(extra='ignore')
-    enabled: bool = False
-
-
-class DiscordChannelConfig(BaseModel):
-    model_config = ConfigDict(extra='ignore')
-    enabled: bool = False
-
-
-class SlackChannelConfig(BaseModel):
-    model_config = ConfigDict(extra='ignore')
-    enabled: bool = False
-
-
-class TwitchChannelConfig(BaseModel):
-    model_config = ConfigDict(extra='ignore')
-    enabled: bool = False
-    channel_name: str = ''
-    nick: str = ''
-    prefix: str = '!'
-    allow_from: list[str] = Field(default_factory=list)
+from program.gateway.channels.telegram.types import TelegramChannelConfig
+from program.gateway.channels.discord.types import DiscordChannelConfig
+from program.gateway.channels.slack.types import SlackChannelConfig
+from program.gateway.channels.websocket.types import WebSocketChannelConfig
+from program.gateway.channels.twitch.types import TwitchChannelConfig
 
 
 class ChannelsSettings(BaseModel):

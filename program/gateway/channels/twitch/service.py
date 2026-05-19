@@ -5,6 +5,7 @@ import logging
 
 from program.gateway.types import BaseChannel
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
+from program.gateway.channels.twitch.utils import split_message
 
 logger = logging.getLogger(__name__)
 
@@ -14,28 +15,6 @@ try:
     _TWITCHIO_AVAILABLE = True
 except ImportError:
     _TWITCHIO_AVAILABLE = False
-
-_TWITCH_MSG_LIMIT = 500
-
-
-def _split(text: str, limit: int = _TWITCH_MSG_LIMIT) -> list[str]:
-    """Split text into chunks within limit, breaking on newlines then spaces."""
-    if len(text) <= limit:
-        return [text]
-    chunks: list[str] = []
-    while text:
-        if len(text) <= limit:
-            chunks.append(text)
-            break
-        cut = text[:limit]
-        pos = cut.rfind('\n')
-        if pos <= 0:
-            pos = cut.rfind(' ')
-        if pos <= 0:
-            pos = limit
-        chunks.append(text[:pos])
-        text = text[pos:].lstrip()
-    return chunks
 
 
 class TwitchChannel(BaseChannel):
@@ -58,8 +37,7 @@ class TwitchChannel(BaseChannel):
         channel_name: str,
         prefix: str = "!",
         allow_from: list[str] | None = None,
-        # Legacy param kept for backward compat — ignored
-        gateway=None,
+        gateway=None,  # legacy param, ignored
     ) -> None:
         super().__init__()
         if not _TWITCHIO_AVAILABLE:
@@ -92,8 +70,6 @@ class TwitchChannel(BaseChannel):
         except asyncio.CancelledError:
             pass
         finally:
-            if self.bus is not None:
-                pass  # unregister handled externally via GatewayManager / gateway
             try:
                 await bot.close()
             except Exception:
@@ -119,14 +95,11 @@ class TwitchChannel(BaseChannel):
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
             if kind == 'tool_start':
-                name = metadata.get('name', '')
-                await self._send_raw(f"⚙️ {name}…")
+                await self._send_raw(f"⚙️ {metadata.get('name', '')}…")
             elif kind == 'tool_end' and metadata.get('is_error'):
-                result = str(metadata.get('result', ''))
-                await self._send_raw(f"⚠️ {result}")
+                await self._send_raw(f"⚠️ {metadata.get('result', '')}")
             else:
-                text = text_from_parts(msg.parts)
-                self._buffer += text
+                self._buffer += text_from_parts(msg.parts)
 
         elif phase == StreamPhase.END:
             if self._buffer.strip():
@@ -134,8 +107,7 @@ class TwitchChannel(BaseChannel):
             self._buffer = ""
 
         elif phase == StreamPhase.ERROR:
-            text = text_from_parts(msg.parts) or "Unknown error"
-            await self._send_raw(f"❌ {text}")
+            await self._send_raw(f"❌ {text_from_parts(msg.parts) or 'Unknown error'}")
             self._buffer = ""
 
         elif phase is None:
@@ -150,7 +122,7 @@ class TwitchChannel(BaseChannel):
         if not twitch_ch:
             logger.warning("TwitchChannel: channel %r not found in bot", self._twitch_channel_name)
             return
-        for chunk in _split(text):
+        for chunk in split_message(text):
             try:
                 await twitch_ch.send(chunk)
             except Exception:
@@ -190,13 +162,12 @@ class _TwitchBotImpl(twitch_commands.Bot if _TWITCHIO_AVAILABLE else object):
         text = (message.content or "").strip()
         if not text:
             return
-        incoming = IncomingMessage(
+        asyncio.create_task(self._operator_channel.receive(IncomingMessage(
             channel=self._operator_channel.channel_id,
             chat_id=self._operator_channel.channel_id,
             parts=[TextPart(text)],
             user_id=author,
-        )
-        asyncio.create_task(self._operator_channel.receive(incoming))
+        )))
 
     async def event_error(self, error: Exception, data: str = "") -> None:
         logger.error("Twitch bot error: %s", error, exc_info=True)
