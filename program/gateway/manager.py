@@ -122,7 +122,15 @@ class GatewayManager:
     def _start_task(self, name: str, coro) -> None:
         task = asyncio.create_task(coro, name=f'gateway:{name}')
         self._tasks.append(task)
+        task.add_done_callback(lambda t: self._on_task_done(name, t))
         logger.info('Gateway channel started: %s', name)
+
+    def _on_task_done(self, name: str, task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error('Gateway channel %r crashed: %s', name, exc, exc_info=exc)
 
     async def _run_websocket(self, cfg) -> None:
         from program.gateway.channels.websocket import WebSocketServer

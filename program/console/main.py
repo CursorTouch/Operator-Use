@@ -10,7 +10,7 @@ from program.console.repl import repl
 from program.console.acp import acp
 
 
-async def _run_gateway(cwd: Path, model_id: str | None, provider: str | None) -> None:
+async def _run_gateway(cwd: Path, model_id: str, provider: str | None) -> None:
     from program.runtime import Runtime, RuntimeConfig
     config = RuntimeConfig(
         cwd=cwd,
@@ -59,7 +59,7 @@ def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | 
             ctx.invoke(repl, cwd=cwd, model=model, provider=provider)
         else:
             try:
-                asyncio.run(_run_gateway(cwd=cwd_path, model_id=model, provider=provider))
+                asyncio.run(_run_gateway(cwd=cwd_path, model_id=model or 'claude-sonnet-4-6', provider=provider))
             except KeyboardInterrupt:
                 pass
 

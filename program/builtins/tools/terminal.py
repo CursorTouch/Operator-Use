@@ -93,7 +93,7 @@ class TerminalTool(Tool):
                 cwd=cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=env,
+                env=env
             )
 
             try:
