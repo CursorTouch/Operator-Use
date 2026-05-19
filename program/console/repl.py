@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from program.runtime import Runtime, RuntimeConfig
@@ -103,6 +104,17 @@ def _bind_renderer(runtime: Runtime, current_session, unsubscribe):
     return next_session, next_unsubscribe
 
 
+# ── Esc key cancel ────────────────────────────────────────────────────────────
+
+def _make_cancel_bindings(cancel: asyncio.Event) -> KeyBindings:
+    """Return key bindings that set cancel on Esc while the agent is running."""
+    kb = KeyBindings()
+
+    kb.add('escape')(lambda _: cancel.set())
+
+    return kb
+
+
 async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False) -> None:
     config = RuntimeConfig(
         cwd=cwd,
@@ -123,7 +135,8 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     _session_channel.set('stdio')
     _session_chat_id.set('cli')
 
-    session: PromptSession = PromptSession()
+    cancel: asyncio.Event = asyncio.Event()
+    session: PromptSession = PromptSession(key_bindings=_make_cancel_bindings(cancel))
     last_interrupt = False
 
     # patch_stdout() keeps the event loop running during prompt_async() so
@@ -154,7 +167,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
             global _attempt
             _attempt = 0
             try:
-                cancel = asyncio.Event()
+                cancel.clear()
 
                 def _on_sigint(*_):
                     cancel.set()
@@ -163,16 +176,17 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
                 try:
                     agent_task = asyncio.ensure_future(runtime.user_input(user_input))
                     cancel_task = asyncio.ensure_future(cancel.wait())
-                    done, pending = await asyncio.wait(
+                    await asyncio.wait(
                         [agent_task, cancel_task],
                         return_when=asyncio.FIRST_COMPLETED,
                     )
-                    for t in pending:
-                        t.cancel()
-                        try:
-                            await t
-                        except (asyncio.CancelledError, Exception):
-                            pass
+                    for t in (agent_task, cancel_task):
+                        if not t.done():
+                            t.cancel()
+                            try:
+                                await t
+                            except (asyncio.CancelledError, Exception):
+                                pass
                     if cancel.is_set():
                         print(f"\n{_yellow('[Interrupted]')}")
                     else:
