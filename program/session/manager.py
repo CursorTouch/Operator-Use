@@ -230,8 +230,20 @@ class SessionManager:
         )
         return self._append_entry(entry)
 
-    def append_session_info(self, name: str) -> str:
-        entry = SessionInfoEntry(name=name, parent_id=self.leaf_id)
+    def append_session_info(
+        self,
+        name: str | None = None,
+        channel_id: str | None = None,
+        chat_id: str | None = None,
+        user_id: str | None = None,
+    ) -> str:
+        entry = SessionInfoEntry(
+            name=name,
+            channel_id=channel_id,
+            chat_id=chat_id,
+            user_id=user_id,
+            parent_id=self.leaf_id,
+        )
         return self._append_entry(entry)
 
     def get_session_name(self) -> str | None:

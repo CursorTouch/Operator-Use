@@ -60,6 +60,9 @@ class SessionHeader(BaseModel):
 class SessionInfoEntry(BaseSessionEntry):
     type: Literal[SessionType.SESSION_INFO] = Field(SessionType.SESSION_INFO, init=False)
     name: str | None = None
+    channel_id: str | None = None
+    chat_id: str | None = None
+    user_id: str | None = None
 
 
 class MessageEntry(BaseSessionEntry):
