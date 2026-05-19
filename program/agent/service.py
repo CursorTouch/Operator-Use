@@ -17,6 +17,7 @@ from program.extension.types import (
     SavePointEvent, SettledEvent, MessageEndEvent,
 )
 from program.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent
+from program.message.utils import strip_unusable_trailing_assistant
 from program.tool.types import ToolInvocation, ToolResult
 
 from program.prompt.builder import PromptTemplate
@@ -349,6 +350,14 @@ class Agent(ExtensionContext):
             if isinstance(r, ContextEventResult) and r.messages is not None:
                 base_messages = r.messages
 
+        # The session is append-only: a failed/interrupted turn leaves its
+        # record intact (an empty error assistant message and/or an assistant
+        # message whose tool_calls never got results). Those are kept on disk
+        # for the audit trail but must not be sent to the provider, which
+        # rejects dangling tool_calls / empty assistant turns. Strip them from
+        # the *context* only (mirrors the engine's run_continue() guard).
+        base_messages = strip_unusable_trailing_assistant(base_messages)
+
         # Persist the user message once (not retried)
         user_message = UserMessage(contents=[TextContent(content=user_input)])
         user_entry_id = self._session_manager.append_message(user_message)
@@ -425,23 +434,29 @@ class Agent(ExtensionContext):
                     )
                 return
 
-            # Failed attempt — rewind session entries from this attempt
-            self._rewind_session(persisted_ids)
             self._engine.reset()
 
             if attempt < max_retries:
+                # The same turn will be replayed next attempt — rewind this
+                # attempt's partial entries so the replay does not persist
+                # duplicate assistant/tool messages.
+                self._rewind_session(persisted_ids)
                 await self._extensions.emit(
                     'retry_end',
                     RetryEndEvent(attempt=attempt, success=False, error=error),
                 )
             else:
-                # All retries exhausted — rewind user message too and re-raise
-                self._session_manager.entries = [
-                    e for e in self._session_manager.entries if e.id != user_entry_id
-                ]
-                self._session_manager.by_id.pop(user_entry_id, None)
-                self._session_manager.leaf_id = self._session_manager.entries[-1].id if self._session_manager.entries else None
-                raise RuntimeError(f"Agent failed after {attempt + 1} attempt(s): {error}")
+                # Retries exhausted. Fully non-destructive (same model as the
+                # engine): the session keeps every persisted message of
+                # this turn — user, assistant text, tool_call, tool_result, and
+                # the trailing error turn — so the record is complete and the
+                # user can send "continue". Any unusable trailing assistant
+                # turn is filtered out of the LLM context at turn-build time by
+                # strip_unusable_trailing_assistant(), not deleted from disk.
+                raise RuntimeError(
+                    f"Agent failed after {attempt + 1} attempt(s): {error}. "
+                    f'Progress was preserved — send "continue" to resume.'
+                )
 
     # -------------------------------------------------------------------------
     # Compaction

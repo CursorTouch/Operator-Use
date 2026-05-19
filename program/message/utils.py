@@ -81,3 +81,36 @@ def audio_to_base64(item: bytes | str) -> tuple[str, str]:
     except Exception:
         mime = "audio/mpeg"
     return item, mime
+
+
+def strip_unusable_trailing_assistant(messages: list) -> list:
+    """Return messages with unusable trailing assistant turns removed.
+
+    Non-destructive: operates on the given list only (the caller's session
+    record should stay append-only). Drops, from the end:
+
+    - an assistant message with no usable content (empty / error turn), and
+    - an assistant message containing tool_calls (a trailing assistant is by
+      definition unanswered — no tool result follows it),
+
+    because providers reject dangling tool_calls and empty assistant turns. A
+    trailing assistant message with real text is a legitimately completed turn
+    and is kept.
+    """
+    from program.message.types import Role, TextContent, ToolCallContent
+
+    msgs = list(messages)
+    while msgs:
+        last = msgs[-1]
+        if getattr(last, "role", None) != Role.ASSISTANT:
+            break
+        contents = getattr(last, "contents", [])
+        has_text = any(
+            isinstance(c, TextContent) and c.content.strip() for c in contents
+        )
+        has_tool_calls = any(isinstance(c, ToolCallContent) for c in contents)
+        if has_tool_calls or not has_text:
+            msgs.pop()
+            continue
+        break
+    return msgs
