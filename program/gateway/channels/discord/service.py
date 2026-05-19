@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from program.gateway.types import BaseChannel
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
@@ -10,11 +11,15 @@ from program.gateway.channels.discord.utils import _DISCORD_MSG_LIMIT, _MEDIA_DI
 
 logger = logging.getLogger(__name__)
 
-try:
+if TYPE_CHECKING:
     import discord
     _DISCORD_AVAILABLE = True
-except ImportError:
-    _DISCORD_AVAILABLE = False
+else:
+    try:
+        import discord
+        _DISCORD_AVAILABLE = True
+    except ImportError:
+        _DISCORD_AVAILABLE = False
 
 
 class DiscordChannel(BaseChannel):
@@ -37,6 +42,7 @@ class DiscordChannel(BaseChannel):
         self._client: discord.Client | None = None
         self._discord_channels: dict[str, discord.abc.Messageable] = {}
         self._discord_messages: dict[str, discord.Message] = {}
+        self._typing_tasks: dict[str, asyncio.Task] = {}
 
     @property
     def channel_id(self) -> str:
@@ -75,7 +81,7 @@ class DiscordChannel(BaseChannel):
                     try:
                         _MEDIA_DIR.mkdir(parents=True, exist_ok=True)
                         path = _MEDIA_DIR / attachment.filename
-                        await attachment.save(str(path))
+                        await attachment.save(path)
                         mime = getattr(attachment, 'content_type', None) or 'audio/mpeg'
                         parts.append(AudioPart(audio=str(path), mime_type=mime))
                     except Exception:
@@ -114,6 +120,27 @@ class DiscordChannel(BaseChannel):
                 logger.exception("DiscordChannel: error during disconnect")
             self._client = None
 
+    def _start_typing(self, chat_id: str) -> None:
+        """Send typing indicator every 8s until _stop_typing is called."""
+        self._stop_typing(chat_id)
+
+        async def _loop() -> None:
+            while True:
+                ch = self._discord_channels.get(chat_id)
+                if ch is not None:
+                    try:
+                        await ch.trigger_typing()  # type: ignore[reportAttributeAccessIssue]
+                    except Exception:
+                        pass
+                await asyncio.sleep(8)
+
+        self._typing_tasks[chat_id] = asyncio.create_task(_loop())
+
+    def _stop_typing(self, chat_id: str) -> None:
+        task = self._typing_tasks.pop(chat_id, None)
+        if task:
+            task.cancel()
+
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to the Discord channel."""
         chat_id = msg.chat_id
@@ -123,6 +150,7 @@ class DiscordChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            self._start_typing(chat_id)
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
@@ -145,6 +173,7 @@ class DiscordChannel(BaseChannel):
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
         elif phase == StreamPhase.END:
+            self._stop_typing(chat_id)
             buffered = self._buffers.pop(chat_id, "")
             if buffered.strip() and discord_ch is not None:
                 for i in range(0, len(buffered), _DISCORD_MSG_LIMIT):
@@ -154,6 +183,7 @@ class DiscordChannel(BaseChannel):
                         logger.exception("DiscordChannel: send failed (end)")
 
         elif phase == StreamPhase.ERROR:
+            self._stop_typing(chat_id)
             text = text_from_parts(msg.parts) or "Unknown error"
             if discord_ch is not None:
                 try:

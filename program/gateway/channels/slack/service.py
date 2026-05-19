@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from program.gateway.types import BaseChannel
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
@@ -14,13 +15,19 @@ from program.gateway.channels.slack.utils import (
 
 logger = logging.getLogger(__name__)
 
-try:
+if TYPE_CHECKING:
     from slack_bolt.async_app import AsyncApp
     from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
     from slack_sdk.web.async_client import AsyncWebClient
     _SLACK_AVAILABLE = True
-except ImportError:
-    _SLACK_AVAILABLE = False
+else:
+    try:
+        from slack_bolt.async_app import AsyncApp
+        from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+        from slack_sdk.web.async_client import AsyncWebClient
+        _SLACK_AVAILABLE = True
+    except ImportError:
+        _SLACK_AVAILABLE = False
 
 
 class SlackChannel(BaseChannel):
@@ -118,7 +125,7 @@ class SlackChannel(BaseChannel):
                 chat_id=chat_id,
                 parts=parts,
                 user_id=event.get('user', ''),
-                metadata={'message_id': event.get('ts', '')},
+                message_id=event.get('ts', ''),
             ))
 
         self._handler = AsyncSocketModeHandler(app, self._app_token)

@@ -17,11 +17,8 @@ from program.bus.types import (
 )
 from program.gateway.channels.email.utils import (
     is_noreply, extract_address, extract_text,
-    build_reply_headers, thread_id_from, message_id_from, build_email,
+    thread_id_from, message_id_from, build_email,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

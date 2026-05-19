@@ -36,6 +36,7 @@ class TelegramChannel(BaseChannel):
         self._token = token
         self._buffers: dict[str, str] = {}
         self._app: Application | None = None
+        self._typing_tasks: dict[str, asyncio.Task] = {}
 
     @property
     def channel_id(self) -> str:
@@ -126,6 +127,26 @@ class TelegramChannel(BaseChannel):
                 logger.exception("TelegramChannel: error during disconnect")
             self._app = None
 
+    def _start_typing(self, chat_id: str) -> None:
+        """Send typing action every 4s until _stop_typing is called."""
+        self._stop_typing(chat_id)
+
+        async def _loop() -> None:
+            while True:
+                if self._app is not None:
+                    try:
+                        await self._app.bot.send_chat_action(int(chat_id), ChatAction.TYPING)
+                    except Exception:
+                        pass
+                await asyncio.sleep(4)
+
+        self._typing_tasks[chat_id] = asyncio.create_task(_loop())
+
+    def _stop_typing(self, chat_id: str) -> None:
+        task = self._typing_tasks.pop(chat_id, None)
+        if task:
+            task.cancel()
+
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to the Telegram chat."""
         if self._app is None:
@@ -139,6 +160,7 @@ class TelegramChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            self._start_typing(chat_id)
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
@@ -159,6 +181,7 @@ class TelegramChannel(BaseChannel):
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
         elif phase == StreamPhase.END:
+            self._stop_typing(chat_id)
             buffered = self._buffers.pop(chat_id, "")
             if buffered.strip():
                 for i in range(0, len(buffered), _TELEGRAM_MSG_LIMIT):
@@ -168,6 +191,7 @@ class TelegramChannel(BaseChannel):
                         logger.exception("TelegramChannel: send_message failed (end)")
 
         elif phase == StreamPhase.ERROR:
+            self._stop_typing(chat_id)
             text = text_from_parts(msg.parts) or "Unknown error"
             try:
                 await bot.send_message(int(chat_id), f"❌ {text}")
