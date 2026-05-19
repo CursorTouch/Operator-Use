@@ -5,7 +5,7 @@ from pathlib import Path
 
 from program.inference.provider.registry import ProviderRegistry
 from program.inference.provider.oauth import OAuthLoginCallbacks
-from program.settings.paths import get_auth_path
+from program.settings.paths import get_providers_auth_path
 from program.auth.types import AuthCredential, AuthStatus, OAuthCredential, APICredential, AuthType, LockResult
 from program.auth.storage import AuthStorage, FileAuthStorage, InMemoryAuthStorage
 
@@ -18,7 +18,7 @@ class ProviderAuthManager:
     """
     Manages LLM provider credentials (API keys and OAuth tokens).
 
-    Credentials are stored in auth.json keyed by provider name.
+    Credentials are stored in auth/providers.json keyed by provider name.
     Supports API keys, OAuth tokens with auto-refresh, runtime overrides,
     and environment variable fallback.
     """
@@ -33,7 +33,7 @@ class ProviderAuthManager:
 
     @staticmethod
     def create(registry: ProviderRegistry, auth_path: Path | None = None) -> ProviderAuthManager:
-        path = auth_path or get_auth_path()
+        path = auth_path or get_providers_auth_path()
         return ProviderAuthManager(registry, FileAuthStorage(path))
 
     @staticmethod

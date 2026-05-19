@@ -64,25 +64,25 @@ class GatewayManager:
 
         if cfg.telegram.enabled:
             if not auth.telegram.bot_token:
-                logger.warning('Telegram channel enabled but bot_token is not set in auth.json.')
+                logger.warning('Telegram channel enabled but bot_token is not set in auth/channels.json (or TELEGRAM_BOT_TOKEN env var).')
             else:
                 self._start_task('telegram', self._run_telegram(auth.telegram.bot_token))
 
         if cfg.discord.enabled:
             if not auth.discord.bot_token:
-                logger.warning('Discord channel enabled but bot_token is not set in auth.json.')
+                logger.warning('Discord channel enabled but bot_token is not set in auth/channels.json (or DISCORD_BOT_TOKEN env var).')
             else:
                 self._start_task('discord', self._run_discord(auth.discord.bot_token))
 
         if cfg.slack.enabled:
             if not auth.slack.bot_token or not auth.slack.app_token:
-                logger.warning('Slack channel enabled but bot_token/app_token not set in auth.json.')
+                logger.warning('Slack channel enabled but bot_token/app_token not set in auth/channels.json (or SLACK_BOT_TOKEN/SLACK_APP_TOKEN env vars).')
             else:
                 self._start_task('slack', self._run_slack(auth.slack.bot_token, auth.slack.app_token))
 
         if cfg.twitch.enabled:
             if not auth.twitch.token:
-                logger.warning('Twitch channel enabled but token is not set in auth.json.')
+                logger.warning('Twitch channel enabled but token is not set in auth/channels.json (or TWITCH_TOKEN env var).')
             elif not cfg.twitch.channel_name or not cfg.twitch.nick:
                 logger.warning('Twitch channel enabled but channel_name/nick not set in settings.')
             else:

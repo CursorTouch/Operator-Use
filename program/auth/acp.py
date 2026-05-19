@@ -13,16 +13,13 @@ logger = logging.getLogger(__name__)
 
 class ACPAuthManager:
     """
-    Manages ACP agent credentials persisted in the `acp` section of auth.json.
+    Manages ACP agent credentials persisted in ~/.program/auth/acp.json.
 
-    auth.json structure (coexists with provider credentials)::
+    File structure::
 
         {
-            "anthropic": { "type": "api_key", "key": "sk-..." },
-            "acp": {
-                "codex": { "token": "...", "added_at": "2026-05-18T..." },
-                "claude-code": { "token": "...", "added_at": "..." }
-            }
+            "codex":       { "token": "...", "added_at": "2026-05-18T..." },
+            "claude-code": { "token": "...", "added_at": "..." }
         }
 
     Token lifecycle:
@@ -36,53 +33,47 @@ class ACPAuthManager:
 
     # ── Internal read/write ───────────────────────────────────────────────────
 
-    def _read_acp(self) -> dict[str, dict]:
+    def _read(self) -> dict[str, dict]:
         result = self._storage.with_lock(lambda current: LockResult(result=current))
         try:
-            data = json.loads(result.result or '{}')
+            return json.loads(result.result or '{}')
         except Exception:
-            data = {}
-        return data.get('acp', {})
+            return {}
 
-    def _write_acp(self, acp: dict[str, dict]) -> None:
-        def update(current: str | None) -> LockResult:
-            try:
-                data = json.loads(current or '{}')
-            except Exception:
-                data = {}
-            data['acp'] = acp
-            return LockResult(result=None, next=json.dumps(data, indent=2))
-        self._storage.with_lock(update)
+    def _write(self, data: dict[str, dict]) -> None:
+        self._storage.with_lock(
+            lambda _: LockResult(result=None, next=json.dumps(data, indent=2))
+        )
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def get_token(self, agent_name: str) -> str | None:
-        return self._read_acp().get(agent_name, {}).get('token')
+        return self._read().get(agent_name, {}).get('token')
 
     def has_token(self, agent_name: str) -> bool:
-        return agent_name in self._read_acp()
+        return agent_name in self._read()
 
     def set_token(self, agent_name: str, token: str) -> None:
-        acp = self._read_acp()
-        acp[agent_name] = {
+        data = self._read()
+        data[agent_name] = {
             'token': token,
             'added_at': datetime.now(timezone.utc).isoformat(),
         }
-        self._write_acp(acp)
+        self._write(data)
         logger.info('ACP: stored token for agent %r', agent_name)
 
     def delete_token(self, agent_name: str) -> bool:
         """Delete token and return True if it existed."""
-        acp = self._read_acp()
-        if agent_name not in acp:
+        data = self._read()
+        if agent_name not in data:
             return False
-        del acp[agent_name]
-        self._write_acp(acp)
+        del data[agent_name]
+        self._write(data)
         logger.info('ACP: removed token for agent %r', agent_name)
         return True
 
     def list_agents(self) -> list[str]:
-        return list(self._read_acp().keys())
+        return list(self._read().keys())
 
     def get_entry(self, agent_name: str) -> dict | None:
-        return self._read_acp().get(agent_name)
+        return self._read().get(agent_name)

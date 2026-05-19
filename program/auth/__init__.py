@@ -7,6 +7,7 @@ from program.auth.channels import (
     SlackAuth,
     TwitchAuth,
 )
+from program.auth.acp import ACPAuthManager
 from program.auth.types import AuthCredential, OAuthCredential, APICredential, AuthStatus
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     'DiscordAuth',
     'SlackAuth',
     'TwitchAuth',
+    'ACPAuthManager',
     'AuthCredential',
     'OAuthCredential',
     'APICredential',

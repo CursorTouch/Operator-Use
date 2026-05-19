@@ -2,11 +2,21 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
+
+# Environment variable names for each token field.
+# JSON file takes precedence; env vars fill in any blank fields.
+_ENV_VARS: dict[str, dict[str, str]] = {
+    'telegram': {'bot_token': 'TELEGRAM_BOT_TOKEN'},
+    'discord':  {'bot_token': 'DISCORD_BOT_TOKEN'},
+    'slack':    {'bot_token': 'SLACK_BOT_TOKEN', 'app_token': 'SLACK_APP_TOKEN'},
+    'twitch':   {'token': 'TWITCH_TOKEN'},
+}
 
 
 # ── Per-channel auth models ───────────────────────────────────────────────────
@@ -33,7 +43,7 @@ class TwitchAuth(BaseModel):
 
 
 class ChannelTokens(BaseModel):
-    """Root model for ~/.program/channels_auth.json."""
+    """Root model for ~/.program/auth/channels.json."""
     model_config = ConfigDict(extra='ignore')
     telegram: TelegramAuth = TelegramAuth()
     discord: DiscordAuth = DiscordAuth()
@@ -45,7 +55,7 @@ class ChannelTokens(BaseModel):
 
 class ChannelAuthManager:
     """
-    Loads and persists channel bot tokens from ~/.program/channels_auth.json.
+    Loads and persists channel bot tokens from ~/.program/auth/channels.json.
 
     Kept separate from provider auth (OAuth / API keys) so channel credentials
     are never mixed with LLM provider credentials. The file is global-only and
@@ -64,13 +74,24 @@ class ChannelAuthManager:
     # ── Load / save ───────────────────────────────────────────────────────────
 
     def _load(self) -> ChannelTokens:
-        if not self._path.exists():
-            return ChannelTokens()
-        try:
-            return ChannelTokens.model_validate(json.loads(self._path.read_text()))
-        except Exception:
-            logger.warning('channels_auth.json could not be parsed, using empty tokens.')
-            return ChannelTokens()
+        tokens = ChannelTokens()
+        if self._path.exists():
+            try:
+                tokens = ChannelTokens.model_validate(json.loads(self._path.read_text()))
+            except Exception:
+                logger.warning('auth/channels.json could not be parsed, using empty tokens.')
+
+        # Fill any blank fields from environment variables.
+        for channel, field_map in _ENV_VARS.items():
+            channel_obj = getattr(tokens, channel)
+            for field, env_var in field_map.items():
+                if not getattr(channel_obj, field):
+                    value = os.environ.get(env_var, '')
+                    if value:
+                        setattr(channel_obj, field, value)
+                        logger.debug('Channel %s.%s loaded from env var %s', channel, field, env_var)
+
+        return tokens
 
     def _save(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)

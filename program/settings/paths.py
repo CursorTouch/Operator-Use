@@ -9,7 +9,7 @@ CONFIG_DIR_PATH = Path.home() / CONFIG_DIR_NAME
 
 # ── Config root ───────────────────────────────────────────────────────────────
 # ~/.program/  or  <project>/.program/
-# Contains user-editable files: settings.json, auth.json, SYSTEM.md, AGENTS.md
+# Contains user-editable files: settings.json, auth/, SYSTEM.md, AGENTS.md
 
 def get_config_dir(cwd: Path | None = None) -> Path:
     if cwd is not None and cwd.exists():
@@ -23,12 +23,27 @@ def get_settings_path(cwd: Path | None = None) -> Path:
     return get_config_dir(cwd) / "settings.json"
 
 
-def get_auth_path() -> Path:
-    return get_config_dir() / "auth.json"
+# ── Auth directory — ~/.program/auth/ ────────────────────────────────────────
+# Split into three files so each domain is independently editable and lockable.
+
+def get_auth_dir() -> Path:
+    return get_config_dir() / "auth"
+
+
+def get_providers_auth_path() -> Path:
+    """LLM provider credentials (API keys + OAuth tokens) → ~/.program/auth/providers.json"""
+    return get_auth_dir() / "providers.json"
 
 
 def get_channels_auth_path() -> Path:
-    return get_config_dir() / "channels_auth.json"
+    """Channel bot tokens (Telegram, Discord, Slack, Twitch) → ~/.program/auth/channels.json"""
+    return get_auth_dir() / "channels.json"
+
+
+def get_acp_auth_path() -> Path:
+    """ACP agent credentials → ~/.program/auth/acp.json"""
+    return get_auth_dir() / "acp.json"
+
 
 
 def get_system_prompt_path(cwd: Path | None = None) -> Path:
