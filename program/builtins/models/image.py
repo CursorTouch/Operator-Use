@@ -42,8 +42,4 @@ models = [
     Model(id="sourceful/riverflow-v2-pro",   name="Riverflow V2 Pro",   provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
     # OpenRouter Auto
     Model(id="openrouter/auto", name="OpenRouter Auto", provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_TEXT_IMAGE_OUT),
-    # NVIDIA NIM
-    Model(id="qwen/qwen-image",                   name="Qwen Image",       provider="nvidia", cost=Cost(), input=_TEXT, output=_IMAGE),
-    Model(id="qwen/qwen-image-edit",              name="Qwen Image Edit",  provider="nvidia", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
-    Model(id="black-forest-labs/flux_2-klein-4b", name="FLUX.2 Klein 4B",  provider="nvidia", cost=Cost(), input=_TEXT, output=_IMAGE),
 ]
