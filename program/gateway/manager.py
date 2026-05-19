@@ -91,6 +91,14 @@ class GatewayManager:
             else:
                 self._start_task('twitch', self._run_twitch(cfg.twitch, auth.twitch.token))
 
+        if cfg.email.enabled:
+            if not auth.email.username or not auth.email.password:
+                logger.warning('Email channel enabled but username/password not set in auth/channels.json (or EMAIL_USERNAME/EMAIL_PASSWORD env vars).')
+            elif not cfg.email.imap_host or not cfg.email.smtp_host:
+                logger.warning('Email channel enabled but imap_host/smtp_host not set in settings.')
+            else:
+                self._start_task('email', self._run_email(cfg.email, auth.email.username, auth.email.password))
+
         asyncio.get_event_loop().create_task(
             self.gateway.hooks.emit(GatewayStartupEvent(
                 channel_ids=list(self.gateway._channels.keys()),
@@ -146,6 +154,21 @@ class GatewayManager:
             channel_name=cfg.channel_name,
             prefix=cfg.prefix,
             allow_from=cfg.allow_from,
+        )
+        self.gateway.register(ch)
+        await ch.connect()
+
+    async def _run_email(self, cfg, username: str, password: str) -> None:
+        from program.gateway.channels.email import EmailChannel
+        ch = EmailChannel(
+            username=username,
+            password=password,
+            imap_host=cfg.imap_host,
+            smtp_host=cfg.smtp_host,
+            imap_port=cfg.imap_port,
+            smtp_port=cfg.smtp_port,
+            poll_interval=cfg.poll_interval,
+            allow_from=cfg.allow_from if cfg.allow_from else None,
         )
         self.gateway.register(ch)
         await ch.connect()

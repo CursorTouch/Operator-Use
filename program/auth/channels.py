@@ -16,6 +16,7 @@ _ENV_VARS: dict[str, dict[str, str]] = {
     'discord':  {'bot_token': 'DISCORD_BOT_TOKEN'},
     'slack':    {'bot_token': 'SLACK_BOT_TOKEN', 'app_token': 'SLACK_APP_TOKEN'},
     'twitch':   {'token': 'TWITCH_TOKEN'},
+    'email':    {'username': 'EMAIL_USERNAME', 'password': 'EMAIL_PASSWORD'},
 }
 
 
@@ -42,6 +43,12 @@ class TwitchAuth(BaseModel):
     token: str = ''
 
 
+class EmailAuth(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+    username: str = ''
+    password: str = ''
+
+
 class ChannelTokens(BaseModel):
     """Root model for ~/.program/auth/channels.json."""
     model_config = ConfigDict(extra='ignore')
@@ -49,6 +56,7 @@ class ChannelTokens(BaseModel):
     discord: DiscordAuth = DiscordAuth()
     slack: SlackAuth = SlackAuth()
     twitch: TwitchAuth = TwitchAuth()
+    email: EmailAuth = EmailAuth()
 
 
 # ── ChannelAuthManager ────────────────────────────────────────────────────────
@@ -116,6 +124,10 @@ class ChannelAuthManager:
     def twitch(self) -> TwitchAuth:
         return self._tokens.twitch
 
+    @property
+    def email(self) -> EmailAuth:
+        return self._tokens.email
+
     # ── Setters (persist immediately) ─────────────────────────────────────────
 
     def set_telegram(self, *, bot_token: str) -> None:
@@ -132,4 +144,8 @@ class ChannelAuthManager:
 
     def set_twitch(self, *, token: str) -> None:
         self._tokens.twitch = TwitchAuth(token=token)
+        self._save()
+
+    def set_email(self, *, username: str, password: str) -> None:
+        self._tokens.email = EmailAuth(username=username, password=password)
         self._save()

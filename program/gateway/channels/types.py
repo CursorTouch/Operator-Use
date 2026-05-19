@@ -7,6 +7,7 @@ from program.gateway.channels.discord.types import DiscordChannelConfig
 from program.gateway.channels.slack.types import SlackChannelConfig
 from program.gateway.channels.websocket.types import WebSocketChannelConfig
 from program.gateway.channels.twitch.types import TwitchChannelConfig
+from program.gateway.channels.email.types import EmailChannelConfig
 
 
 class ChannelsSettings(BaseModel):
@@ -16,3 +17,4 @@ class ChannelsSettings(BaseModel):
     discord: DiscordChannelConfig = Field(default_factory=DiscordChannelConfig)
     slack: SlackChannelConfig = Field(default_factory=SlackChannelConfig)
     twitch: TwitchChannelConfig = Field(default_factory=TwitchChannelConfig)
+    email: EmailChannelConfig = Field(default_factory=EmailChannelConfig)
