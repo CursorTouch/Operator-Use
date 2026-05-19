@@ -109,6 +109,7 @@ class AgentStartEvent:
 class AgentEndEvent:
     type: Literal['agent_end'] = field(default='agent_end', init=False)
     messages: list[Any] = field(default_factory=list)
+    reason: Literal['completed', 'aborted', 'error'] = 'completed'
 
 
 @dataclass
@@ -182,6 +183,15 @@ class MessageEndEvent:
 # ============================================================================
 # Tool execution
 # ============================================================================
+
+@dataclass
+class ToolExecutionFailureEvent:
+    type: Literal['tool_execution_failure'] = field(default='tool_execution_failure', init=False)
+    tool_name: str = ''
+    tool_call_id: str = ''
+    input: dict[str, Any] = field(default_factory=dict)
+    error: str = ''
+
 
 @dataclass
 class ToolExecutionStartEvent:
@@ -301,6 +311,7 @@ HookEvent = (
     | MessageStartEvent
     | MessageUpdateEvent
     | MessageEndEvent
+    | ToolExecutionFailureEvent
     | ToolExecutionStartEvent
     | ToolExecutionUpdateEvent
     | ToolExecutionEndEvent

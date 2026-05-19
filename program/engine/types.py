@@ -46,6 +46,7 @@ from program.hooks.types import (
     TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
+    ToolExecutionFailureEvent,
 )
 
 AgentEvent = (
@@ -59,6 +60,7 @@ AgentEvent = (
     | ToolExecutionStartEvent
     | ToolExecutionUpdateEvent
     | ToolExecutionEndEvent
+    | ToolExecutionFailureEvent
     | AgentErrorEvent
 )
 

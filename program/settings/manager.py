@@ -11,7 +11,7 @@ from program.settings.types import (
     Settings, SCOPE, SettingsError,
     CompactionSettings, BranchSummarySettings,
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
-    ImageSettings,
+    ImageSettings, STTSettings, TTSSettings,
 )
 from program.gateway.channels.types import (
     ChannelsSettings,
@@ -26,6 +26,8 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
     'branch_summary': BranchSummarySettings,
     'thinking_budgets': ThinkingBudgetsSettings,
     'image': ImageSettings,
+    'stt': STTSettings,
+    'tts': TTSSettings,
 }
 
 # Pydantic BaseModel fields — use model_validate() instead of **kwargs
@@ -720,3 +722,13 @@ class SettingsManager:
         ch.twitch = TwitchChannelConfig(**{**ch.twitch.model_dump(), **kwargs})
         self._mark_modified('channels')
         self._save()
+
+    # ── STT / TTS ─────────────────────────────────────────────────────────────
+
+    def get_stt_settings(self) -> STTSettings:
+        """Return the resolved STT settings, with empty defaults when unset."""
+        return self.settings.stt or STTSettings()
+
+    def get_tts_settings(self) -> TTSSettings:
+        """Return the resolved TTS settings, with empty defaults when unset."""
+        return self.settings.tts or TTSSettings()

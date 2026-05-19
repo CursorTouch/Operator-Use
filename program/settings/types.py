@@ -69,6 +69,24 @@ class ImageSettings:
 
 
 @dataclass
+class STTSettings:
+    enabled: Optional[bool] = None       # None = auto (only when AudioPart present), True = always, False = off
+    model: Optional[str] = None          # audio model id, e.g. "whisper-1"
+    provider: Optional[str] = None       # override provider
+    language: Optional[str] = None       # BCP-47 language hint, e.g. "en"
+
+
+@dataclass
+class TTSSettings:
+    enabled: Optional[bool] = None       # None = only for voice-originated messages, True = always, False = off
+    model: Optional[str] = None          # audio model id, e.g. "tts-1"
+    provider: Optional[str] = None       # override provider
+    voice: Optional[str] = None          # voice name, e.g. "alloy"
+    speed: Optional[float] = None        # playback speed multiplier (default: 1.0)
+    language: Optional[str] = None       # target language hint
+
+
+@dataclass
 class Settings:
     # Model / provider
     default_provider: Optional[str] = None
@@ -113,3 +131,7 @@ class Settings:
 
     # ACP agents — pre-approved registry of remote ACP agents
     acp_agents: Optional[list[dict]] = None
+
+    # Audio I/O
+    stt: Optional[STTSettings] = None
+    tts: Optional[TTSSettings] = None

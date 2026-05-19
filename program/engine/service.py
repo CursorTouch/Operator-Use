@@ -1,13 +1,14 @@
 from __future__ import annotations
 from program.message.types import ToolResultContent
 import asyncio
-from typing import TYPE_CHECKING, Optional, Callable
+from typing import TYPE_CHECKING, Optional, Callable, Literal
 from program.hooks.service import Hooks
 from program.engine.types import (
     EmitEvent, TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent,
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
+    ToolExecutionFailureEvent,
 )
 from program.inference.types import (
     LLMContext,
@@ -196,10 +197,16 @@ class Engine:
                 terminate=raw.terminate,
             )
         except Exception as e:
+            error = f"Tool '{tool_call.name}' execution failed:\n{e}"
             tool_result = ToolResultContent(
-                id=tool_call.id, is_error=True,
-                content=f"Tool '{tool_call.name}' execution failed:\n{e}", metadata={},
+                id=tool_call.id, is_error=True, content=error, metadata={},
             )
+            await emit(ToolExecutionFailureEvent(
+                tool_name=tool_call.name,
+                tool_call_id=tool_call.id,
+                input=tool_call.args,
+                error=error,
+            ))
 
         await emit(ToolExecutionEndEvent(tool_result=tool_result))
         return tool_result
@@ -267,6 +274,7 @@ class Engine:
 
         tool_calls: list[ToolCallContent] = []
         tool_results: list[ToolResultContent] = []
+        end_reason: Literal['completed', 'aborted', 'error'] = 'completed'
 
         try:
             while True:
@@ -278,6 +286,7 @@ class Engine:
                     messages = self.options.transform_context(messages, signal)
 
                 if signal.is_set():
+                    end_reason = 'aborted'
                     await emit(TurnEndEvent(message=message, tool_results=tool_results))
                     break
 
@@ -317,6 +326,7 @@ class Engine:
                 match message.stop_reason:
                     case StopReason.Error | StopReason.Abort:
                         err_msg = message.error or f"Turn failed with reason: {message.stop_reason.value}"
+                        end_reason = 'error'
                         await emit(AgentErrorEvent(error=err_msg))
                         await emit(TurnEndEvent(message=message, tool_results=tool_results))
                         break
@@ -338,6 +348,7 @@ class Engine:
                             break
 
                         if signal.is_set():
+                            end_reason = 'aborted'
                             await emit(TurnEndEvent(message=message, tool_results=tool_results))
                             break
 
@@ -377,9 +388,10 @@ class Engine:
 
                 tool_results.clear()
         except Exception as e:
+            end_reason = 'error'
             await emit(AgentErrorEvent(error=str(e)))
 
-        await emit(AgentEndEvent(messages=messages))
+        await emit(AgentEndEvent(messages=messages, reason=end_reason))
 
     async def run(self, ctx: AgentContext) -> None:
         if isinstance(ctx, list):
