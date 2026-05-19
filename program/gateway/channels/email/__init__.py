@@ -1,3 +1,17 @@
-from program.gateway.channels.email.service import EmailChannel
+from typing import TYPE_CHECKING
+
+# Lazy for consistency with the other channels (see channels/__init__.py).
+if TYPE_CHECKING:
+    from program.gateway.channels.email.service import EmailChannel
+
+
+def __getattr__(name: str):
+    if name == 'EmailChannel':
+        import importlib
+        return importlib.import_module(
+            'program.gateway.channels.email.service'
+        ).EmailChannel
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = ['EmailChannel']
