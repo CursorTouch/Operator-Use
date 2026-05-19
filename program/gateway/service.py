@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from program.bus.service import Bus
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart
+from program.commands.types import parse_command
 from program.gateway.types import BaseChannel
 from program.hooks.service import Hooks
 from program.subagent.manager import _session_channel, _session_chat_id, _session_message_id
@@ -156,6 +157,11 @@ class Gateway:
 
         is_voice = any(isinstance(p, AudioPart) for p in msg.parts)
 
+        parsed = parse_command(text)
+        if parsed is not None:
+            await self._run_command(msg.channel, msg.chat_id, parsed)
+            return
+
         session_key = f"{msg.channel}:{msg.chat_id}"
         entry = self._get_or_create_session(session_key, channel_id=msg.channel, chat_id=msg.chat_id)
 
@@ -250,6 +256,23 @@ class Gateway:
             stream_phase=StreamPhase.END,
         ))
         await self.hooks.emit(MessageCancelEvent(channel_id=channel_id, chat_id=chat_id))
+
+    # ── Command runner ────────────────────────────────────────────────────────
+
+    async def _run_command(self, channel_id: str, chat_id: str, parsed) -> None:
+        """Dispatch a slash command and send its printed output back to the channel."""
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            await self._runtime.commands.dispatch(parsed)
+        output = buf.getvalue().strip()
+        if output:
+            await self._bus.publish_outgoing(OutgoingMessage(
+                channel=channel_id,
+                chat_id=chat_id,
+                parts=[TextPart(output)],
+            ))
 
     # ── Session runner ────────────────────────────────────────────────────────
 

@@ -101,7 +101,7 @@ class TelegramChannel(BaseChannel):
             ))
 
         self._app.add_handler(MessageHandler(
-            (filters.TEXT | filters.VOICE | filters.AUDIO) & ~filters.COMMAND,
+            filters.TEXT | filters.VOICE | filters.AUDIO,
             _on_message,
         ))
 
