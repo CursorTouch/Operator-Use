@@ -1,6 +1,6 @@
 """mcp tool — list, connect, and disconnect MCP servers at runtime.
 
-One MCPBuiltinTool instance is created per session agent so it holds
+One MCPTool instance is created per session agent so it holds
 a stable reference to that session's Engine for dynamic tool registration.
 """
 
@@ -40,7 +40,7 @@ class _MCPSchema(BaseModel):
         return self
 
 
-class MCPBuiltinTool(Tool):
+class MCPTool(Tool):
     """Per-session tool for managing MCP server connections."""
 
     def __init__(self, manager: MCPManager | None, engine: Engine, agent_id: str) -> None:

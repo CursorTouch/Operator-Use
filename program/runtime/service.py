@@ -10,7 +10,6 @@ from program.cron.types import CronJob
 from program.commands.registry import CommandRegistry
 from program.gateway.manager import GatewayManager
 from program.subagent.manager import SubagentManager
-from program.builtins.tools.subagent import tool as subagent_tool
 from program.commands.types import parse_command
 from program.extension.types import (
     SessionStartEvent, SessionShutdownEvent, SessionBeforeSwitchEvent,
@@ -67,7 +66,11 @@ class Runtime:
             settings=context.subagent_settings,
             hooks=context.hooks,
         )
-        subagent_tool._manager = self.subagent_manager
+        # Look up the tool instance from the engine (the resource loader registers it
+        # under a different module name than the package import, so they are distinct objects).
+        _subagent_tool = context.engine._tools.get('subagent')
+        if _subagent_tool is not None:
+            _subagent_tool._manager = self.subagent_manager
 
         # Expose MCPManager for use in create_session_agent() and shutdown.
         self.mcp_manager = context.mcp_manager
@@ -256,8 +259,8 @@ class Runtime:
         # Add a per-session MCP tool so each gateway session can independently
         # connect/disconnect servers without affecting other sessions.
         if self.mcp_manager is not None:
-            from program.builtins.tools.mcp import MCPBuiltinTool
-            engine.add_tool(MCPBuiltinTool(
+            from program.builtins.tools.mcp import MCPTool
+            engine.add_tool(MCPTool(
                 manager=self.mcp_manager,
                 engine=engine,
                 agent_id=str(id(engine)),

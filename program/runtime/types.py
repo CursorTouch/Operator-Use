@@ -197,12 +197,17 @@ class RuntimeContext:
         acp_manager = ACPSessionManager(get_acp_sessions_dir())
 
         # ── Cron ─────────────────────────────────────────────────────────────
-        from program.builtins.tools.cron import tool as cron_tool
         cron: Cron | None = None
         all_tools = resource_loader.get_tools() + config.tools
         if settings_manager.get_cron_enabled():
             cron = Cron(store_path=get_crons_path(config_dir))
-            cron_tool._cron = cron
+            # Wire cron into the tool instance from the resource loader — the loader
+            # registers the module under a different name than the package import, so
+            # importing via 'from program.builtins.tools.cron import tool' would give
+            # a distinct object that the engine never sees.
+            _cron_tool = next((t for t in all_tools if t.name == 'cron'), None)
+            if _cron_tool is not None:
+                _cron_tool._cron = cron  # type: ignore[attr-defined]
         else:
             all_tools = [t for t in all_tools if t.name != 'cron']
 
@@ -220,8 +225,8 @@ class RuntimeContext:
 
         # ── MCP builtin tool (per-engine, so the agent can manage connections) ─
         if mcp_manager is not None:
-            from program.builtins.tools.mcp import MCPBuiltinTool
-            engine.add_tool(MCPBuiltinTool(
+            from program.builtins.tools.mcp import MCPTool
+            engine.add_tool(MCPTool(
                 manager=mcp_manager,
                 engine=engine,
                 agent_id=str(id(engine)),
