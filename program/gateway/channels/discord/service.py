@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from program.gateway.types import BaseChannel
-from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, text_from_parts
+from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from program.gateway.channels.discord.utils import _DISCORD_MSG_LIMIT, _MEDIA_DIR, is_audio_attachment
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ class DiscordChannel(BaseChannel):
         self._buffers: dict[str, str] = {}
         self._client: discord.Client | None = None
         self._discord_channels: dict[str, discord.abc.Messageable] = {}
+        self._discord_messages: dict[str, discord.Message] = {}
 
     @property
     def channel_id(self) -> str:
@@ -64,6 +65,7 @@ class DiscordChannel(BaseChannel):
 
             chat_id = str(message.channel.id)
             self._discord_channels[chat_id] = message.channel
+            self._discord_messages[chat_id] = message
             user_id = str(message.author.id)
 
             parts: list = []
@@ -93,6 +95,7 @@ class DiscordChannel(BaseChannel):
                 chat_id=chat_id,
                 parts=parts,
                 user_id=user_id,
+                message_id=str(message.id),
             ))
 
         try:
@@ -159,19 +162,70 @@ class DiscordChannel(BaseChannel):
                     logger.exception("DiscordChannel: send failed (error)")
 
         elif phase is None:
+            kind = metadata.get('kind')
+            if kind == 'react':
+                emoji = metadata.get('emoji', '👍')
+                message_id = metadata.get('message_id')
+                discord_msg = self._discord_messages.get(chat_id)
+                if discord_msg is not None and str(discord_msg.id) == str(message_id):
+                    try:
+                        await discord_msg.add_reaction(emoji)
+                    except Exception:
+                        logger.exception("DiscordChannel: add_reaction failed for %r", chat_id)
+                elif discord_ch is not None and message_id is not None:
+                    try:
+                        fetched = await discord_ch.fetch_message(int(message_id))  # type: ignore[union-attr]
+                        await fetched.add_reaction(emoji)
+                    except Exception:
+                        logger.exception("DiscordChannel: fetch_message/add_reaction failed for %r", message_id)
+                return
+
             if discord_ch is not None:
+                reply_to = metadata.get('reply_to')
+                reference = None
+                if reply_to:
+                    try:
+                        reference = discord.MessageReference(
+                            message_id=int(reply_to),
+                            channel_id=int(chat_id),
+                            fail_if_not_exists=False,
+                        )
+                    except Exception:
+                        pass
+
                 for p in msg.parts:
-                    if isinstance(p, AudioPart):
-                        try:
-                            with open(p.audio, 'rb') as f:
-                                await discord_ch.send(file=discord.File(f, filename=Path(p.audio).name))
-                        except Exception:
-                            logger.exception("DiscordChannel: send audio failed for %r", p.audio)
+                    match p:
+                        case AudioPart(audio=audio):
+                            try:
+                                with open(audio, 'rb') as f:
+                                    dfile = discord.File(f, filename=Path(audio).name)  # type: ignore[possibly-unbound]
+                                    if reference is not None:
+                                        await discord_ch.send(file=dfile, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
+                                    else:
+                                        await discord_ch.send(file=dfile)
+                            except Exception:
+                                logger.exception("DiscordChannel: send audio failed for %r", audio)
+                        case FilePart(path=fp):
+                            try:
+                                caption = text_from_parts(msg.parts) or None
+                                with open(fp, 'rb') as f:
+                                    dfile = discord.File(f, filename=Path(fp).name)  # type: ignore[possibly-unbound]
+                                    if reference is not None:
+                                        await discord_ch.send(content=caption, file=dfile, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
+                                    else:
+                                        await discord_ch.send(content=caption, file=dfile)
+                            except Exception:
+                                logger.exception("DiscordChannel: send_file failed for %r", fp)
+                            return  # caption already sent with the file
                 text = text_from_parts(msg.parts)
                 if text:
                     for i in range(0, len(text), _DISCORD_MSG_LIMIT):
+                        chunk = text[i:i + _DISCORD_MSG_LIMIT]
                         try:
-                            await discord_ch.send(text[i:i + _DISCORD_MSG_LIMIT])
+                            if i == 0 and reference is not None:
+                                await discord_ch.send(chunk, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
+                            else:
+                                await discord_ch.send(chunk)
                         except Exception:
                             logger.exception("DiscordChannel: send failed (direct)")
 

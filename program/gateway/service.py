@@ -9,7 +9,7 @@ from program.bus.service import Bus
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart
 from program.gateway.types import BaseChannel
 from program.hooks.service import Hooks
-from program.subagent.manager import _session_channel, _session_chat_id
+from program.subagent.manager import _session_channel, _session_chat_id, _session_message_id
 from program.hooks.types import (
     AgentErrorEvent, MessageEndEvent, MessageUpdateEvent,
     ToolExecutionEndEvent, ToolExecutionStartEvent,
@@ -164,7 +164,11 @@ class Gateway:
             return
 
         entry.task = asyncio.create_task(
-            self._run_session(session_key, msg.channel, msg.chat_id, entry.agent, text, is_voice=is_voice),
+            self._run_session(
+                session_key, msg.channel, msg.chat_id, entry.agent, text,
+                is_voice=is_voice,
+                message_id=msg.message_id or None,
+            ),
             name=f'gateway:session:{session_key}',
         )
 
@@ -193,6 +197,32 @@ class Gateway:
             except RuntimeError:
                 await asyncio.sleep(0.1)
         logger.warning('stdio: could not inject result — agent stayed busy')
+
+    # ── File sending ─────────────────────────────────────────────────────────
+
+    async def send_file(
+        self,
+        channel_id: str,
+        chat_id: str,
+        file_path: str,
+        caption: str | None = None,
+        mime_type: str | None = None,
+    ) -> None:
+        """Send a local file to a channel/chat as an out-of-band message."""
+        from program.bus.types import FilePart
+        parts: list = [FilePart(path=file_path, mime_type=mime_type)]
+        if caption:
+            parts.append(TextPart(caption))
+        msg = OutgoingMessage(
+            channel=channel_id,
+            chat_id=chat_id,
+            parts=parts,
+        )
+        channel = self._channels.get(channel_id)
+        if channel is not None:
+            await channel.send(msg)
+        else:
+            logger.warning("Gateway.send_file: unknown channel %r — dropping", channel_id)
 
     # ── Session management ────────────────────────────────────────────────────
 
@@ -231,6 +261,7 @@ class Gateway:
         agent: Agent,
         text: str,
         is_voice: bool = False,
+        message_id: str | None = None,
     ) -> None:
         """Invoke the agent and publish OutgoingMessage events to the bus."""
         from program.agent.types import PromptOptions
@@ -301,10 +332,11 @@ class Gateway:
             stream_phase=StreamPhase.START,
         ))
 
-        # Expose channel + chat_id via contextvars so the subagent tool can
-        # capture them when spawning background tasks in this session.
+        # Expose channel + chat_id + message_id via contextvars so tools (send,
+        # subagent) know where to deliver results and which message to react to.
         _session_channel.set(channel_id)
         _session_chat_id.set(chat_id)
+        _session_message_id.set(message_id)
 
         unsub = agent.hooks.subscribe(_on_event)
         try:

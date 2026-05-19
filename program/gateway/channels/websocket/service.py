@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from program.gateway.types import BaseChannel
-from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
+from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, FilePart, text_from_parts
 from program.gateway.channels.websocket.utils import (
     MSG_TYPE_MESSAGE, MSG_TYPE_START, MSG_TYPE_CHUNK,
     MSG_TYPE_END, MSG_TYPE_DONE, MSG_TYPE_ERROR,
+    MSG_TYPE_REACT, MSG_TYPE_FILE,
 )
 
 if TYPE_CHECKING:
@@ -36,10 +39,12 @@ class WebSocketChannel(BaseChannel):
         {"type": "end"}
         {"type": "done"}
         {"type": "error", "text": "..."}
-        {"type": "message", "text": "..."}   ← out-of-band send()
+        {"type": "message", "text": "...", "reply_to": "msg-id"|null}   ← intermediate / direct send
+        {"type": "file", "filename": "...", "mime_type": "...", "data": "<b64>", "caption": "...", "reply_to": "msg-id"|null}
+        {"type": "react", "message_id": "...", "emoji": "..."}
 
     Client → server JSON protocol:
-        {"type": "message", "text": "..."}
+        {"type": "message", "text": "...", "message_id": "client-assigned-id"}
     """
 
     def __init__(self, connection: ServerConnection, gateway: Gateway) -> None:
@@ -72,6 +77,7 @@ class WebSocketChannel(BaseChannel):
                             channel=self._conn_id,
                             chat_id=self._conn_id,
                             parts=[TextPart(text)],
+                            message_id=str(msg.get('message_id', '')),
                         ))
                 else:
                     logger.debug(
@@ -107,7 +113,33 @@ class WebSocketChannel(BaseChannel):
         elif phase == StreamPhase.ERROR:
             payload = {'type': MSG_TYPE_ERROR, 'text': text_from_parts(msg.parts) or "Unknown error"}
         else:
-            payload = {'type': MSG_TYPE_MESSAGE, 'text': text_from_parts(msg.parts)}
+            kind = metadata.get('kind')
+            if kind == 'react':
+                payload = {
+                    'type': MSG_TYPE_REACT,
+                    'message_id': metadata.get('message_id', ''),
+                    'emoji': metadata.get('emoji', ''),
+                }
+            else:
+                reply_to = metadata.get('reply_to') or None
+                payload = {'type': MSG_TYPE_MESSAGE, 'text': text_from_parts(msg.parts), 'reply_to': reply_to}
+                for p in msg.parts:
+                    match p:
+                        case FilePart(path=fp, mime_type=mime):
+                            file_path = Path(fp)
+                            try:
+                                data = base64.b64encode(file_path.read_bytes()).decode()
+                                payload = {
+                                    'type': MSG_TYPE_FILE,
+                                    'filename': file_path.name,
+                                    'mime_type': mime or 'application/octet-stream',
+                                    'data': data,
+                                    'caption': text_from_parts(msg.parts) or None,
+                                    'reply_to': reply_to,
+                                }
+                            except Exception:
+                                logger.warning("WebSocketChannel %r: failed to read file %r", self._conn_id, fp)
+                            break
 
         try:
             await self._conn.send(json.dumps(payload))
@@ -137,6 +169,6 @@ class WebSocketServer:
             channel = WebSocketChannel(connection, self._gateway)
             await channel.connect()
 
-        async with ws_serve(_handler, self._host, self._port):
+        async with ws_serve(_handler, self._host, self._port):  # type: ignore[possibly-unbound]
             logger.info("WebSocket gateway listening on ws://%s:%d", self._host, self._port)
             await asyncio.Future()  # run until cancelled

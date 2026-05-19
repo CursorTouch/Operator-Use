@@ -68,6 +68,12 @@ class Runtime:
         if _subagent_tool is not None and isinstance(_subagent_tool, SubagentTool):
             _subagent_tool._manager = self.subagent_manager
 
+        # Wire bus into the send tool.
+        from program.builtins.tools.send import SendTool
+        _send_tool = context.engine._tools.get('send')
+        if _send_tool is not None and isinstance(_send_tool, SendTool):
+            _send_tool._bus = self.gateway_manager._bus
+
         # Expose MCPManager for use in create_session_agent() and shutdown.
         self.mcp_manager = context.mcp_manager
 

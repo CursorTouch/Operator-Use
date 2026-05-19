@@ -40,6 +40,11 @@ _session_channel: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 _session_chat_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     '_session_chat_id', default=None
 )
+# Channel-side message ID of the user message that triggered this turn.
+# Used by the send tool's react mode to add an emoji reaction to that message.
+_session_message_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    '_session_message_id', default=None
+)
 
 
 class SubagentManager:

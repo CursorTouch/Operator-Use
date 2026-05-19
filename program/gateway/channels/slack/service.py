@@ -5,10 +5,11 @@ import logging
 from pathlib import Path
 
 from program.gateway.types import BaseChannel
-from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, text_from_parts
+from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from program.gateway.channels.slack.utils import (
     _MEDIA_DIR, _MENTION_RE,
     is_audio_file, audio_ext_from_file, download_slack_file,
+    emoji_to_slack_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ class SlackChannel(BaseChannel):
                 chat_id=chat_id,
                 parts=parts,
                 user_id=event.get('user', ''),
+                message_id=event.get('ts', ''),
             ))
 
         @app.event("message")
@@ -116,6 +118,7 @@ class SlackChannel(BaseChannel):
                 chat_id=chat_id,
                 parts=parts,
                 user_id=event.get('user', ''),
+                metadata={'message_id': event.get('ts', '')},
             ))
 
         self._handler = AsyncSocketModeHandler(app, self._app_token)
@@ -185,22 +188,64 @@ class SlackChannel(BaseChannel):
             await _post(f"❌ {text_from_parts(msg.parts) or 'Unknown error'}")
 
         elif phase is None:
-            for p in msg.parts:
-                if isinstance(p, AudioPart):
+            kind = metadata.get('kind')
+            if kind == 'react':
+                emoji = emoji_to_slack_name(metadata.get('emoji', 'thumbsup'))
+                message_id = metadata.get('message_id', '')
+                if client is not None and message_id:
                     try:
-                        if client is not None:
-                            with open(p.audio, 'rb') as f:
-                                await client.files_upload_v2(
-                                    channel=slack_channel_id,
-                                    file=f.read(),
-                                    filename=Path(p.audio).name,
-                                    thread_ts=thread_ts,
-                                )
+                        await client.reactions_add(
+                            channel=slack_channel_id,
+                            name=emoji,
+                            timestamp=message_id,
+                        )
                     except Exception:
-                        logger.exception("SlackChannel: send audio failed for %r", p.audio)
+                        logger.exception("SlackChannel: reactions_add failed for %r", chat_id)
+                return
+
+            # When reply=True the send tool passes reply_to=<original message ts>
+            reply_thread_ts = metadata.get('reply_to') or thread_ts
+
+            for p in msg.parts:
+                match p:
+                    case AudioPart(audio=audio):
+                        try:
+                            if client is not None:
+                                with open(audio, 'rb') as f:
+                                    await client.files_upload_v2(
+                                        channel=slack_channel_id,
+                                        file=f.read(),
+                                        filename=Path(audio).name,
+                                        thread_ts=reply_thread_ts,
+                                    )
+                        except Exception:
+                            logger.exception("SlackChannel: send audio failed for %r", audio)
+                    case FilePart(path=fp):
+                        try:
+                            if client is not None:
+                                caption = text_from_parts(msg.parts) or None
+                                with open(fp, 'rb') as f:
+                                    await client.files_upload_v2(
+                                        channel=slack_channel_id,
+                                        file=f.read(),
+                                        filename=Path(fp).name,
+                                        initial_comment=caption,
+                                        thread_ts=reply_thread_ts,
+                                    )
+                        except Exception:
+                            logger.exception("SlackChannel: send_file failed for %r", fp)
+                        return  # caption already sent with the file
             text = text_from_parts(msg.parts)
             if text:
-                await _post(text)
+                if client is not None:
+                    try:
+                        await client.chat_postMessage(
+                            channel=slack_channel_id,
+                            text=text,
+                            thread_ts=reply_thread_ts,
+                        )
+                    except Exception:
+                        logger.exception("SlackChannel: chat_postMessage failed")
 
 
 SlackBot = SlackChannel

@@ -54,6 +54,7 @@ class IncomingMessage:
     chat_id: str      # unique conversation within the channel
     parts: list[ContentPart] = field(default_factory=list)
     user_id: str = ""
+    message_id: str = ""   # channel-side message ID (used for reactions, threading)
     metadata: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
 

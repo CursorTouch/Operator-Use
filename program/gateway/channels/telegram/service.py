@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from program.gateway.types import BaseChannel
-from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, text_from_parts
+from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from program.gateway.channels.telegram.utils import _TELEGRAM_MSG_LIMIT, _MEDIA_DIR, audio_mime_ext
 
 logger = logging.getLogger(__name__)
@@ -95,6 +95,7 @@ class TelegramChannel(BaseChannel):
                 chat_id=chat_id,
                 parts=parts,
                 user_id=user_id,
+                message_id=str(msg.message_id),
             ))
 
         self._app.add_handler(MessageHandler(
@@ -174,23 +175,58 @@ class TelegramChannel(BaseChannel):
                 logger.exception("TelegramChannel: send_message failed (error)")
 
         elif phase is None:
-            # Direct send (out-of-band) — handles TTS audio and plain text
-            for p in msg.parts:
-                if isinstance(p, AudioPart):
+            kind = metadata.get('kind')
+            if kind == 'react':
+                emoji = metadata.get('emoji', '👍')
+                message_id = metadata.get('message_id')
+                if message_id is not None:
                     try:
-                        audio_path = Path(p.audio)
-                        with open(audio_path, 'rb') as f:
-                            if audio_path.suffix.lower() == '.ogg':
-                                await bot.send_voice(int(chat_id), InputFile(f, filename='voice.ogg'))
-                            else:
-                                await bot.send_audio(int(chat_id), InputFile(f, filename=audio_path.name))
+                        from telegram import ReactionTypeEmoji
+                        await bot.set_message_reaction(
+                            int(chat_id),
+                            int(message_id),
+                            [ReactionTypeEmoji(emoji)],
+                        )
                     except Exception:
-                        logger.exception("TelegramChannel: send audio failed for %r", p.audio)
+                        logger.exception("TelegramChannel: set_message_reaction failed for %r", message_id)
+                return
+
+            # Direct send (out-of-band) — handles TTS audio, files, and plain text
+            reply_to = metadata.get('reply_to')
+            reply_params = None
+            if reply_to:
+                try:
+                    from telegram import ReplyParameters
+                    reply_params = ReplyParameters(message_id=int(reply_to))
+                except Exception:
+                    pass
+
+            for p in msg.parts:
+                match p:
+                    case AudioPart(audio=audio):
+                        try:
+                            audio_path = Path(audio)
+                            with open(audio_path, 'rb') as f:
+                                if audio_path.suffix.lower() == '.ogg':
+                                    await bot.send_voice(int(chat_id), InputFile(f, filename='voice.ogg'), reply_parameters=reply_params)
+                                else:
+                                    await bot.send_audio(int(chat_id), InputFile(f, filename=audio_path.name), reply_parameters=reply_params)
+                        except Exception:
+                            logger.exception("TelegramChannel: send audio failed for %r", audio)
+                    case FilePart(path=fp):
+                        try:
+                            file_path = Path(fp)
+                            caption = text_from_parts(msg.parts) or None
+                            with open(file_path, 'rb') as f:
+                                await bot.send_document(int(chat_id), InputFile(f, filename=file_path.name), caption=caption, reply_parameters=reply_params)
+                        except Exception:
+                            logger.exception("TelegramChannel: send_document failed for %r", fp)
+                        return  # caption already sent with the document
             text = text_from_parts(msg.parts)
             if text:
                 for i in range(0, len(text), _TELEGRAM_MSG_LIMIT):
                     try:
-                        await bot.send_message(int(chat_id), text[i:i + _TELEGRAM_MSG_LIMIT])
+                        await bot.send_message(int(chat_id), text[i:i + _TELEGRAM_MSG_LIMIT], reply_parameters=reply_params)
                     except Exception:
                         logger.exception("TelegramChannel: send_message failed (direct)")
 
