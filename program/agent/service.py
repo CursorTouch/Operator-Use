@@ -32,6 +32,28 @@ if TYPE_CHECKING:
     from program.runtime.service import Runtime
 
 
+# Substrings that mark an LLM error as permanent — it will fail identically on
+# every retry, so the agent should stop immediately rather than burn attempts.
+# Kept deliberately narrow: anything not matched is treated as transient.
+_PERMANENT_ERROR_MARKERS = (
+    "401", "403", "unauthorized", "forbidden",
+    "invalid api key", "invalid_api_key", "incorrect api key",
+    "authentication", "no api key", "api key not",
+    "permission denied", "permissiondenied",
+    "invalid request", "invalid_request_error", "bad request",
+    "badrequesterror", "bad_request",
+    "model not found", "does not exist", "unknown model",
+)
+
+
+def _is_permanent_error(error: str | None) -> bool:
+    """True if the error is non-retryable (auth, bad request, missing model)."""
+    if not error:
+        return False
+    low = error.lower()
+    return any(marker in low for marker in _PERMANENT_ERROR_MARKERS)
+
+
 class Agent(ExtensionContext):
     """
     High-level agent session tying together Engine, SessionManager,
@@ -436,7 +458,14 @@ class Agent(ExtensionContext):
 
             self._engine.reset()
 
-            if attempt < max_retries:
+            # Permanent errors (bad/missing API key, bad request, model not
+            # found) will fail identically on every retry — stop now instead
+            # of burning the remaining attempts. Transient errors (rate limit,
+            # overload, 5xx) are already auto-retried with the provider's
+            # Retry-After by the underlying SDK; this loop is the outer cushion.
+            permanent = _is_permanent_error(error)
+
+            if not permanent and attempt < max_retries:
                 # The same turn will be replayed next attempt — rewind this
                 # attempt's partial entries so the replay does not persist
                 # duplicate assistant/tool messages.
@@ -446,15 +475,21 @@ class Agent(ExtensionContext):
                     RetryEndEvent(attempt=attempt, success=False, error=error),
                 )
             else:
-                # Retries exhausted. Fully non-destructive (same model as the
-                # engine): the session keeps every persisted message of
-                # this turn — user, assistant text, tool_call, tool_result, and
-                # the trailing error turn — so the record is complete and the
-                # user can send "continue". Any unusable trailing assistant
-                # turn is filtered out of the LLM context at turn-build time by
-                # strip_unusable_trailing_assistant(), not deleted from disk.
+                # Permanent error, or retries exhausted. Fully non-destructive
+                # (same model as the engine): the session keeps every persisted
+                # message of this turn — user, assistant text, tool_call,
+                # tool_result, and the trailing error turn — so the record is
+                # complete and the user can send "continue". Any unusable
+                # trailing assistant turn is filtered out of the LLM context at
+                # turn-build time by strip_unusable_trailing_assistant(), not
+                # deleted from disk.
+                detail = (
+                    "permanent error, not retried"
+                    if permanent
+                    else f"{attempt + 1} attempt(s)"
+                )
                 raise RuntimeError(
-                    f"Agent failed after {attempt + 1} attempt(s): {error}. "
+                    f"Agent failed ({detail}): {error}. "
                     f'Progress was preserved — send "continue" to resume.'
                 )
 
