@@ -14,14 +14,14 @@ if TYPE_CHECKING:
     from program.bus.service import Bus
 
 
-class SendMode(str, Enum):
+class SendAction(str, Enum):
     file = 'file'
     intermediate = 'intermediate'
     react = 'react'
 
 
 class SendSchema(BaseModel):
-    mode: SendMode = Field(
+    action: SendAction = Field(
         description=(
             'What to send:\n'
             '  file         — deliver a local file (document, image, PDF, CSV, etc.) to the user.\n'
@@ -42,20 +42,20 @@ class SendSchema(BaseModel):
     )
     path: str | None = Field(
         default=None,
-        description='Absolute path to the local file to send. Required when mode=file.',
+        description='Absolute path to the local file to send. Required when action=file.',
     )
     caption: str | None = Field(
         default=None,
-        description='Optional caption shown alongside the file. Only used when mode=file.',
+        description='Optional caption shown alongside the file. Only used when action=file.',
     )
     text: str | None = Field(
         default=None,
-        description='Status message to send to the user. Required when mode=intermediate.',
+        description='Status message to send to the user. Required when action=intermediate.',
     )
     emoji: str | None = Field(
         default=None,
         description=(
-            'Emoji to react with. Required when mode=react. '
+            'Emoji to react with. Required when action=react. '
             'For Slack: emoji name without colons (e.g. "thumbsup", "white_check_mark"). '
             'For Telegram: must be one of the 74 allowed reaction emojis '
             '(e.g. "👍", "👎", "❤", "🔥", "🥰", "👏", "😁", "🤔", "😢", "🎉", "🤩", "💩", '
@@ -68,8 +68,8 @@ class SendSchema(BaseModel):
         default=None,
         description=(
             'Channel-side message ID to target. '
-            'For mode=react: the message to add the reaction to (defaults to the user\'s triggering message). '
-            'For mode=file/intermediate with reply=True: the message to reply to (defaults to the user\'s triggering message). '
+            'For action=react: the message to add the reaction to (defaults to the user\'s triggering message). '
+            'For action=file/intermediate with reply=True: the message to reply to (defaults to the user\'s triggering message). '
             'Use this when you need to react or reply to a specific earlier message rather than the current one.'
         ),
     )
@@ -77,19 +77,19 @@ class SendSchema(BaseModel):
         default=False,
         description=(
             'When True, send this message as a reply to the triggering message (or message_id if provided). '
-            'Applicable to mode=file and mode=intermediate. '
+            'Applicable to action=file and action=intermediate. '
             'On Slack this creates a threaded reply; on Telegram/Discord it quotes the original message.'
         ),
     )
 
     @model_validator(mode='after')
     def _check_required_fields(self) -> SendSchema:
-        if self.mode == SendMode.file and not self.path:
-            raise ValueError("'path' is required when mode='file'")
-        if self.mode == SendMode.intermediate and not self.text:
-            raise ValueError("'text' is required when mode='intermediate'")
-        if self.mode == SendMode.react and not self.emoji:
-            raise ValueError("'emoji' is required when mode='react'")
+        if self.action == SendAction.file and not self.path:
+            raise ValueError("'path' is required when action='file'")
+        if self.action == SendAction.intermediate and not self.text:
+            raise ValueError("'text' is required when action='intermediate'")
+        if self.action == SendAction.react and not self.emoji:
+            raise ValueError("'emoji' is required when action='react'")
         return self
 
 
@@ -99,7 +99,7 @@ class SendTool(Tool):
             name='send',
             description=(
                 'Send content to the user in the current channel outside the normal response flow.\n\n'
-                'Three modes:\n'
+                'Three actions:\n'
                 '  file         — upload a local file (any format) to the chat.\n'
                 '  intermediate — push a mid-turn status update so the user knows what you are doing\n'
                 '                 while a long task is still in progress.\n'
@@ -131,17 +131,17 @@ class SendTool(Tool):
             )
 
         params = invocation.params
-        mode = params.get('mode')
+        action = params.get('action')
 
-        match mode:
-            case SendMode.file:
+        match action:
+            case SendAction.file:
                 return await self._send_file(invocation, channel, chat_id, params)
-            case SendMode.intermediate:
+            case SendAction.intermediate:
                 return await self._send_intermediate(invocation, channel, chat_id, params)
-            case SendMode.react:
+            case SendAction.react:
                 return await self._send_react(invocation, channel, chat_id, params)
             case _:
-                return ToolResult.error(id=invocation.id, content=f"send: unknown mode '{mode}'.")
+                return ToolResult.error(id=invocation.id, content=f"send: unknown action '{action}'.")
 
     async def _send_file(
         self,

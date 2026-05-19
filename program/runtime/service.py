@@ -366,6 +366,8 @@ class Runtime:
         """
         if self._context.cron is not None:
             self._context.cron.stop()
+        if self._context.process_manager is not None:
+            await self._context.process_manager.close()
         await self.gateway_manager.astop()
         if self.mcp_manager is not None:
             try:

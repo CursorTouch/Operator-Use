@@ -28,6 +28,7 @@ from program.subagent.manager import SubagentManager
 from program.subagent.types import SubagentSettings
 from program.mcp.manager import MCPManager
 from program.acp.manager import ACPSessionManager
+from program.process.manager import ProcessManager
 from program.settings.paths import (
     get_config_dir, get_crons_path, get_acp_sessions_dir,
     get_channels_auth_path, get_acp_auth_path,
@@ -96,6 +97,7 @@ class RuntimeContext:
         mcp_manager: MCPManager | None = None,
         acp_auth: ACPAuthManager | None = None,
         acp_manager: ACPSessionManager | None = None,
+        process_manager: ProcessManager | None = None,
     ) -> None:
         self.agent = agent
         self.llm = llm
@@ -112,6 +114,7 @@ class RuntimeContext:
         self.mcp_manager: MCPManager | None = mcp_manager
         self.acp_auth: ACPAuthManager | None = acp_auth
         self.acp_manager: ACPSessionManager | None = acp_manager
+        self.process_manager: ProcessManager | None = process_manager
 
     @classmethod
     async def create(
@@ -211,6 +214,12 @@ class RuntimeContext:
         else:
             all_tools = [t for t in all_tools if t.name != 'cron']
 
+        # ── Process manager ───────────────────────────────────────────────────
+        process_manager = ProcessManager(default_cwd=str(cwd))
+        _process_tool = next((t for t in all_tools if t.name == 'process'), None)
+        if _process_tool is not None:
+            _process_tool._manager = process_manager  # type: ignore[attr-defined]
+
         # ── MCP ───────────────────────────────────────────────────────────────
         mcp_configs = settings_manager.get_mcp_servers()
         mcp_manager: MCPManager | None = MCPManager(mcp_configs) if mcp_configs else None
@@ -284,6 +293,7 @@ class RuntimeContext:
             mcp_manager=mcp_manager,
             acp_auth=acp_auth,
             acp_manager=acp_manager,
+            process_manager=process_manager,
         )
 
 

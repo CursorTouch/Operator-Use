@@ -138,3 +138,5 @@ def get_acp_sessions_dir() -> Path:
 def get_knowledge_dir(cwd: Path | None = None) -> Path:
     """Knowledge reference docs — ~/.program/knowledge/ or <project>/.program/knowledge/."""
     return get_config_dir(cwd) / 'knowledge'
+
+
