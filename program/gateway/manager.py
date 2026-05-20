@@ -169,7 +169,7 @@ class GatewayManager:
             commands=cmds,
             allow_from=tcfg.allow_from,
             group_policy=tcfg.group_policy,
-            show_tool_notifications=tcfg.show_tool_notifications,
+            show_tool_calls=tcfg.show_tool_calls,
         )
         self.gateway.register(ch)
         await ch.connect()
@@ -180,7 +180,7 @@ class GatewayManager:
             token=bot_token,
             allow_from=dcfg.allow_from,
             group_policy=dcfg.group_policy,
-            show_tool_notifications=dcfg.show_tool_notifications,
+            show_tool_calls=dcfg.show_tool_calls,
         )
         self.gateway.register(ch)
         await ch.connect()
@@ -191,7 +191,7 @@ class GatewayManager:
             bot_token=bot_token,
             app_token=app_token,
             allow_from=scfg.allow_from,
-            show_tool_notifications=scfg.show_tool_notifications,
+            show_tool_calls=scfg.show_tool_calls,
         )
         self.gateway.register(ch)
         await ch.connect()

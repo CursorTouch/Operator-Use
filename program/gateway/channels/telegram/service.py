@@ -36,7 +36,7 @@ class TelegramChannel(BaseChannel):
         commands: list[tuple[str, str]] | None = None,
         allow_from: list[str] | None = None,
         group_policy: str = "mention",
-        show_tool_notifications: bool = True,
+        show_tool_calls: bool = True,
     ) -> None:
         super().__init__()
         if not _PTB_AVAILABLE:
@@ -45,7 +45,7 @@ class TelegramChannel(BaseChannel):
         self._commands = commands or []
         self._allow_from = set(allow_from or [])
         self._group_policy = group_policy
-        self._show_tool_notifications = show_tool_notifications
+        self._show_tool_calls = show_tool_calls
         self._is_group: dict[str, bool] = {}  # chat_id → True if group/supergroup/channel
         self._buffers: dict[str, str] = {}
         self._app: Application | None = None
@@ -216,13 +216,13 @@ class TelegramChannel(BaseChannel):
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
-            if kind == 'tool_start' and self._show_tool_notifications:
+            if kind == 'tool_start' and self._show_tool_calls:
                 name = metadata.get('name', '')
                 try:
                     await bot.send_message(int(chat_id), f"⚙️ {name}…")
                 except Exception:
                     logger.exception("TelegramChannel: send_message failed (tool_start)")
-            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_notifications:
+            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_calls:
                 result = str(metadata.get('result', ''))
                 try:
                     await bot.send_message(int(chat_id), f"⚠️ {result}")

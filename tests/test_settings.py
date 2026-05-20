@@ -251,14 +251,17 @@ class TestChannelSettings:
         tg = sm.get_telegram_channel_config()
         assert tg.streaming is True
         assert tg.streaming_latency == 1.0
+        assert tg.show_tool_calls is True
 
         dc = sm.get_discord_channel_config()
         assert dc.streaming is True
         assert dc.streaming_latency == 1.0
+        assert dc.show_tool_calls is True
 
         sl = sm.get_slack_channel_config()
         assert sl.streaming is True
         assert sl.streaming_latency == 1.0
+        assert sl.show_tool_calls is True
 
         tw = sm.get_twitch_channel_config()
         assert tw.streaming is True
@@ -275,20 +278,23 @@ class TestChannelSettings:
         assert ws.streaming is False
         assert ws.streaming_latency == 0.5
 
-        sm.set_telegram_channel_config(streaming=False, streaming_latency=0.6)
+        sm.set_telegram_channel_config(streaming=False, streaming_latency=0.6, show_tool_calls=False)
         tg = sm.get_telegram_channel_config()
         assert tg.streaming is False
         assert tg.streaming_latency == 0.6
+        assert tg.show_tool_calls is False
 
-        sm.set_discord_channel_config(streaming=False, streaming_latency=0.7)
+        sm.set_discord_channel_config(streaming=False, streaming_latency=0.7, show_tool_calls=False)
         dc = sm.get_discord_channel_config()
         assert dc.streaming is False
         assert dc.streaming_latency == 0.7
+        assert dc.show_tool_calls is False
 
-        sm.set_slack_channel_config(streaming=False, streaming_latency=0.8)
+        sm.set_slack_channel_config(streaming=False, streaming_latency=0.8, show_tool_calls=False)
         sl = sm.get_slack_channel_config()
         assert sl.streaming is False
         assert sl.streaming_latency == 0.8
+        assert sl.show_tool_calls is False
 
         sm.set_twitch_channel_config(streaming=False, streaming_latency=0.9)
         tw = sm.get_twitch_channel_config()

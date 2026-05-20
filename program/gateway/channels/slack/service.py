@@ -49,7 +49,7 @@ class SlackChannel(BaseChannel):
         bot_token: str,
         app_token: str,
         allow_from: list[str] | None = None,
-        show_tool_notifications: bool = True,
+        show_tool_calls: bool = True,
     ) -> None:
         super().__init__()
         if not _SLACK_AVAILABLE:
@@ -57,7 +57,7 @@ class SlackChannel(BaseChannel):
         self._bot_token = bot_token
         self._app_token = app_token
         self._allow_from = set(allow_from or [])
-        self._show_tool_notifications = show_tool_notifications
+        self._show_tool_calls = show_tool_calls
         self._is_group: dict[str, bool] = {}  # chat_id → True if channel (not DM)
         self._buffers: dict[str, str] = {}
         self._clients: dict[str, AsyncWebClient] = {}
@@ -201,9 +201,9 @@ class SlackChannel(BaseChannel):
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
-            if kind == 'tool_start' and self._show_tool_notifications:
+            if kind == 'tool_start' and self._show_tool_calls:
                 await _post(f"⚙️ `{metadata.get('name', '')}`…")
-            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_notifications:
+            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_calls:
                 await _post(f"⚠️ {metadata.get('result', '')}")
             else:
                 text = text_from_parts(msg.parts)
