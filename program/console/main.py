@@ -8,6 +8,7 @@ import click
 
 from program.console.repl import repl
 from program.console.acp import acp
+from program.console.auth import auth
 
 
 async def _run_gateway(cwd: Path, model_id: str, provider: str | None) -> None:
@@ -66,3 +67,4 @@ def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | 
 
 cli.add_command(repl)
 cli.add_command(acp)
+cli.add_command(auth)

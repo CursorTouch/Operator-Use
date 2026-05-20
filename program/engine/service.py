@@ -137,7 +137,8 @@ class Engine:
                 self.state.streaming_message = message
             case MessageEndEvent(message=message):
                 self.state.streaming_message = None
-                self.state.messages.append(message)
+                if message:
+                    self.state.messages.append(message)
             case ToolExecutionStartEvent(tool_call=tool_call):
                 self.state.pending_tool_calls.add(tool_call.id)
             case ToolExecutionEndEvent(tool_result=tool_result):
@@ -344,17 +345,18 @@ class Engine:
                         model=self.llm.model,
                         response=message,
                     ))
-                await emit(MessageEndEvent(message=message))
 
                 match message.stop_reason:
                     case StopReason.Error | StopReason.Abort:
+                        await emit(MessageEndEvent(message=None))
                         err_msg = message.error or f"Turn failed with reason: {message.stop_reason.value}"
                         end_reason = 'error'
                         await emit(AgentErrorEvent(error=err_msg))
-                        await emit(TurnEndEvent(message=message, tool_results=tool_results))
+                        await emit(TurnEndEvent(message=None, tool_results=tool_results))
                         break
 
                     case StopReason.ToolCalls:
+                        await emit(MessageEndEvent(message=message))
                         messages.append(message)
                         tool_results = await self._execute_tool_calls(
                             tool_calls=tool_calls,
@@ -388,6 +390,7 @@ class Engine:
                             messages.append(msg)
 
                     case StopReason.Stop:
+                        await emit(MessageEndEvent(message=message))
                         messages.append(message)
                         # Drain the live follow-up queue first, then call the options callback.
                         follow_up_messages: list[BaseMessage] = []

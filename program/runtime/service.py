@@ -61,26 +61,25 @@ class Runtime:
             settings=context.subagent_settings,
             hooks=context.hooks,
         )
-        # Look up the tool instance from the engine (the resource loader registers it
-        # under a different module name than the package import, so they are distinct objects).
-        from program.builtins.tools.subagent import SubagentTool
+        # Look up the tool instance from the engine. The resource loader registers each
+        # builtin under a synthetic module name (`_tool_<stem>`), so the class object in
+        # the engine is distinct from the one we'd get via a package import — `isinstance`
+        # would always be False. Duck-type on the attribute we need to wire instead.
         _subagent_tool = context.engine._tools.get('subagent')
-        if _subagent_tool is not None and isinstance(_subagent_tool, SubagentTool):
+        if _subagent_tool is not None and hasattr(_subagent_tool, '_manager'):
             _subagent_tool._manager = self.subagent_manager
 
         # Wire bus into the send tool.
-        from program.builtins.tools.send import SendTool
         _send_tool = context.engine._tools.get('send')
-        if _send_tool is not None and isinstance(_send_tool, SendTool):
+        if _send_tool is not None and hasattr(_send_tool, '_bus'):
             _send_tool._bus = self.gateway_manager._bus
 
         # Expose MCPManager for use in create_session_agent() and shutdown.
         self.mcp_manager = context.mcp_manager
 
         # Wire bus + agent into the ACP agent tool now that the gateway is up.
-        from program.builtins.tools.acp_agent import ACPAgentTool
         acp_tool = context.engine._tools.get('acp_agent')
-        if acp_tool is not None and isinstance(acp_tool, ACPAgentTool):
+        if acp_tool is not None and hasattr(acp_tool, '_bus') and hasattr(acp_tool, '_agent'):
             acp_tool._bus = self.gateway_manager._bus
             acp_tool._agent = context.agent
 
