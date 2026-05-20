@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Awaitable
 
 from program.bus.service import Bus
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart
@@ -50,9 +50,21 @@ class Gateway:
         self._runtime = runtime
         self._channels: dict[str, BaseChannel] = {}
         self._sessions: dict[str, _SessionEntry] = {}
+        self._direct_handlers: dict[str, Callable[[IncomingMessage], Awaitable[None]]] = {}
         self._incoming_loop_task: asyncio.Task | None = None
         self._outgoing_loop_task: asyncio.Task | None = None
         self.hooks = Hooks()
+
+    # ── Direct handler registration ───────────────────────────────────────────
+
+    def register_direct_handler(
+        self,
+        channel_id: str,
+        handler: Callable[[IncomingMessage], Awaitable[None]],
+    ) -> None:
+        """Register a handler that receives all incoming messages for channel_id
+        directly, bypassing gateway session management entirely."""
+        self._direct_handlers[channel_id] = handler
 
     # ── Channel management ────────────────────────────────────────────────────
 
@@ -79,17 +91,16 @@ class Gateway:
         self._outgoing_loop_task = asyncio.create_task(
             self._outgoing_loop(), name='gateway:outgoing_loop'
         )
-        # Wait for both tasks; re-raise any exceptions
+        # Wait for both loops; re-raise any exceptions
         await asyncio.gather(self._incoming_loop_task, self._outgoing_loop_task)
 
     async def stop(self) -> None:
-        """Cancel both processing loop tasks."""
-        if self._incoming_loop_task is not None:
-            self._incoming_loop_task.cancel()
-            self._incoming_loop_task = None
-        if self._outgoing_loop_task is not None:
-            self._outgoing_loop_task.cancel()
-            self._outgoing_loop_task = None
+        """Cancel all processing loop tasks."""
+        for attr in ('_incoming_loop_task', '_outgoing_loop_task'):
+            task = getattr(self, attr, None)
+            if task is not None:
+                task.cancel()
+                setattr(self, attr, None)
 
     # ── Incoming message loop ─────────────────────────────────────────────────
 
@@ -107,12 +118,12 @@ class Gateway:
     async def _handle_incoming(self, msg: IncomingMessage) -> None:
         """Handle one incoming message: hook → get/create session → run.
 
-        'stdio' messages (subagent results from the CLI) bypass gateway session
-        management and are delivered directly to runtime.current_session so the
-        REPL's own hook subscriber handles rendering — no double output.
+        Channels registered via register_direct_handler() bypass gateway session
+        management entirely and are delivered straight to their handler.
         """
-        if msg.channel == 'stdio':
-            await self._handle_stdio(msg)
+        handler = self._direct_handlers.get(msg.channel)
+        if handler is not None:
+            await handler(msg)
             return
 
         from program.bus.types import AudioPart
@@ -180,32 +191,6 @@ class Gateway:
             ),
             name=f'gateway:session:{session_key}',
         )
-
-    # ── stdio fast path ───────────────────────────────────────────────────────
-
-    async def _handle_stdio(self, msg: IncomingMessage) -> None:
-        """Deliver a subagent result to the REPL's main agent.
-
-        Bypasses gateway session management entirely — always targets
-        runtime.current_session so the REPL's own hook subscriber renders
-        the output without double-printing via StdioChannel.
-        Retries if the agent is mid-turn (RuntimeError).
-        """
-        from program.bus.types import text_from_parts
-        from program.agent.types import PromptOptions
-        agent = self._runtime.current_session
-        if agent is None:
-            logger.warning('stdio message arrived but runtime has no active session — dropped')
-            return
-        content = text_from_parts(msg.parts)
-        opts = PromptOptions(source='subagent')
-        for _ in range(600):
-            try:
-                await agent.invoke(content, opts)
-                return
-            except RuntimeError:
-                await asyncio.sleep(0.1)
-        logger.warning('stdio: could not inject result — agent stayed busy')
 
     # ── File sending ─────────────────────────────────────────────────────────
 

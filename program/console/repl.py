@@ -144,9 +144,40 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     subscribed_session, unsubscribe_renderer = _bind_renderer(runtime, None, None)
 
     # Mark this task as the 'stdio' CLI session so subagents know to route
-    # their results back through the gateway's stdio fast path.
+    # their results back through the gateway.
     _session_channel.set('stdio')
     _session_chat_id.set('cli')
+
+    # Own the stdio subagent result queue and consumer here in the REPL —
+    # the gateway delegates 'stdio' channel messages to _on_stdio_message via
+    # register_direct_handler(), keeping the gateway free of REPL-specific logic.
+    _stdio_queue: asyncio.Queue = asyncio.Queue()
+
+    async def _on_stdio_message(msg) -> None:
+        from program.bus.types import text_from_parts
+        from program.agent.types import PromptOptions
+        agent = runtime.current_session
+        if agent is None:
+            return
+        await _stdio_queue.put((agent, text_from_parts(msg.parts), PromptOptions(source='subagent')))
+
+    async def _stdio_consumer() -> None:
+        while True:
+            try:
+                agent, content, opts = await _stdio_queue.get()
+                while True:
+                    try:
+                        await agent.invoke(content, opts)
+                        break
+                    except RuntimeError:
+                        await asyncio.sleep(0.05)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                pass
+
+    runtime.gateway_manager.gateway.register_direct_handler('stdio', _on_stdio_message)
+    stdio_consumer_task = asyncio.create_task(_stdio_consumer(), name='repl:stdio_consumer')
 
     cancel: asyncio.Event = asyncio.Event()
     session: PromptSession = PromptSession(key_bindings=_make_cancel_bindings(cancel))
@@ -154,7 +185,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
 
     # patch_stdout() keeps the event loop running during prompt_async() so
     # background asyncio tasks (subagents) can print above the prompt line
-    # without corrupting it, and _handle_stdio() can call agent.invoke() while
+    # without corrupting it, and the stdio consumer can deliver results while
     # the user is idle.
     with patch_stdout(raw=True):
         while True:
@@ -221,6 +252,11 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
                     runtime, subscribed_session, unsubscribe_renderer
                 )
 
+    stdio_consumer_task.cancel()
+    try:
+        await stdio_consumer_task
+    except asyncio.CancelledError:
+        pass
     if unsubscribe_renderer is not None:
         unsubscribe_renderer()
     await runtime.ashutdown()
