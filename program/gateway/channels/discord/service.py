@@ -34,11 +34,22 @@ class DiscordChannel(BaseChannel):
     Requires intents: message_content=True (enable in Discord Developer Portal).
     """
 
-    def __init__(self, token: str) -> None:
+    def __init__(
+        self,
+        token: str,
+        allow_from: list[str] | None = None,
+        reply_to_message: bool = False,
+        group_policy: str = "mention",
+        show_tool_notifications: bool = True,
+    ) -> None:
         super().__init__()
         if not _DISCORD_AVAILABLE:
             raise ImportError('discord.py>=2.0 is required for DiscordChannel.')
         self._token = token
+        self._allow_from = set(allow_from or [])
+        self._reply_to_message = reply_to_message
+        self._group_policy = group_policy
+        self._show_tool_notifications = show_tool_notifications
         self._buffers: dict[str, str] = {}
         self._client: discord.Client | None = None
         self._discord_channels: dict[str, discord.abc.Messageable] = {}
@@ -67,13 +78,16 @@ class DiscordChannel(BaseChannel):
 
             is_dm = isinstance(message.channel, discord.DMChannel)
             is_mentioned = client.user in message.mentions if client.user else False
-            if not is_dm and not is_mentioned:
+            if self._group_policy == "mention" and not is_dm and not is_mentioned:
+                return
+
+            user_id = str(message.author.id)
+            if self._allow_from and user_id not in self._allow_from:
                 return
 
             chat_id = str(message.channel.id)
             self._discord_channels[chat_id] = message.channel
             self._discord_messages[chat_id] = message
-            user_id = str(message.author.id)
 
             parts: list = []
 
@@ -163,14 +177,14 @@ class DiscordChannel(BaseChannel):
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
-            if kind == 'tool_start':
+            if kind == 'tool_start' and self._show_tool_notifications:
                 name = metadata.get('name', '')
                 if discord_ch is not None:
                     try:
                         await discord_ch.send(f"⚙️ `{name}`…")
                     except Exception:
                         logger.exception("DiscordChannel: send failed (tool_start)")
-            elif kind == 'tool_end' and metadata.get('is_error'):
+            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_notifications:
                 result = str(metadata.get('result', ''))
                 if discord_ch is not None:
                     try:
@@ -184,10 +198,24 @@ class DiscordChannel(BaseChannel):
         elif phase == StreamPhase.END:
             self._stop_typing(chat_id)
             buffered = self._buffers.pop(chat_id, "")
+            reference = None
+            origin_msg_id = metadata.get('origin_message_id')
+            if self._reply_to_message and origin_msg_id and discord_ch is not None:
+                try:
+                    reference = discord.MessageReference(
+                        message_id=int(origin_msg_id),
+                        channel_id=int(chat_id),
+                        fail_if_not_exists=False,
+                    )
+                except Exception:
+                    reference = None
             if buffered.strip() and discord_ch is not None:
-                for chunk in split_message(buffered):
+                for i, chunk in enumerate(split_message(buffered)):
                     try:
-                        await discord_ch.send(chunk)
+                        if i == 0 and reference is not None:
+                            await discord_ch.send(chunk, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
+                        else:
+                            await discord_ch.send(chunk)
                     except Exception:
                         logger.exception("DiscordChannel: send failed (end)")
 

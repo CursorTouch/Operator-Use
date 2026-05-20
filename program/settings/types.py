@@ -133,6 +133,7 @@ class Settings:
     # Feature flags
     enable_skill_commands: Optional[bool] = None
     cron_enabled: Optional[bool] = None
+    unified_session: Optional[bool] = None       # share one session across all channels (default: True)
 
     # Channels
     channels: Optional[ChannelsSettings] = None

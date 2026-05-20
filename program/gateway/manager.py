@@ -69,19 +69,19 @@ class GatewayManager:
             if not auth.telegram.bot_token:
                 logger.warning('Telegram channel enabled but bot_token is not set in auth/channels.json (or TELEGRAM_BOT_TOKEN env var).')
             else:
-                self._start_task('telegram', self._run_telegram(auth.telegram.bot_token))
+                self._start_task('telegram', self._run_telegram(auth.telegram.bot_token, cfg.telegram))
 
         if cfg.discord.enabled:
             if not auth.discord.bot_token:
                 logger.warning('Discord channel enabled but bot_token is not set in auth/channels.json (or DISCORD_BOT_TOKEN env var).')
             else:
-                self._start_task('discord', self._run_discord(auth.discord.bot_token))
+                self._start_task('discord', self._run_discord(auth.discord.bot_token, cfg.discord))
 
         if cfg.slack.enabled:
             if not auth.slack.bot_token or not auth.slack.app_token:
                 logger.warning('Slack channel enabled but bot_token/app_token not set in auth/channels.json (or SLACK_BOT_TOKEN/SLACK_APP_TOKEN env vars).')
             else:
-                self._start_task('slack', self._run_slack(auth.slack.bot_token, auth.slack.app_token))
+                self._start_task('slack', self._run_slack(auth.slack.bot_token, auth.slack.app_token, cfg.slack))
 
         if cfg.twitch.enabled:
             if not auth.twitch.token:
@@ -161,22 +161,41 @@ class GatewayManager:
         from program.gateway.channels.websocket import WebSocketServer
         await WebSocketServer(self.gateway, host=cfg.host, port=cfg.port).start()
 
-    async def _run_telegram(self, bot_token: str) -> None:
+    async def _run_telegram(self, bot_token: str, tcfg) -> None:
         from program.gateway.channels.telegram import TelegramChannel
         cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
-        ch = TelegramChannel(token=bot_token, commands=cmds)
+        ch = TelegramChannel(
+            token=bot_token,
+            commands=cmds,
+            allow_from=tcfg.allow_from,
+            reply_to_message=tcfg.reply_to_message,
+            group_policy=tcfg.group_policy,
+            show_tool_notifications=tcfg.show_tool_notifications,
+        )
         self.gateway.register(ch)
         await ch.connect()
 
-    async def _run_discord(self, bot_token: str) -> None:
+    async def _run_discord(self, bot_token: str, dcfg) -> None:
         from program.gateway.channels.discord import DiscordChannel
-        ch = DiscordChannel(token=bot_token)
+        ch = DiscordChannel(
+            token=bot_token,
+            allow_from=dcfg.allow_from,
+            reply_to_message=dcfg.reply_to_message,
+            group_policy=dcfg.group_policy,
+            show_tool_notifications=dcfg.show_tool_notifications,
+        )
         self.gateway.register(ch)
         await ch.connect()
 
-    async def _run_slack(self, bot_token: str, app_token: str) -> None:
+    async def _run_slack(self, bot_token: str, app_token: str, scfg) -> None:
         from program.gateway.channels.slack import SlackChannel
-        ch = SlackChannel(bot_token=bot_token, app_token=app_token)
+        ch = SlackChannel(
+            bot_token=bot_token,
+            app_token=app_token,
+            allow_from=scfg.allow_from,
+            reply_to_message=scfg.reply_to_message,
+            show_tool_notifications=scfg.show_tool_notifications,
+        )
         self.gateway.register(ch)
         await ch.connect()
 

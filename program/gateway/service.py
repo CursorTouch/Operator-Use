@@ -237,9 +237,18 @@ class Gateway:
 
     def _get_or_create_session(self, session_key: str, channel_id: str | None = None, chat_id: str | None = None) -> _SessionEntry:
         if session_key not in self._sessions:
-            agent = self._runtime.current_session
-            if agent is None:
-                raise RuntimeError("No active session available.")
+            # `unified_session` (default True) shares the REPL agent across all channels.
+            # When False, each channel:chat_id pair gets its own isolated agent.
+            settings = self._runtime._context.settings_manager
+            unified = True
+            if settings is not None and settings.settings.unified_session is not None:
+                unified = settings.settings.unified_session
+            if unified:
+                agent = self._runtime.current_session
+                if agent is None:
+                    raise RuntimeError("No active session available.")
+            else:
+                agent = self._runtime.create_session_agent()
             self._sessions[session_key] = _SessionEntry(agent=agent)
         return self._sessions[session_key]
 
@@ -322,6 +331,7 @@ class Gateway:
                         channel=channel_id,
                         chat_id=chat_id,
                         stream_phase=StreamPhase.END,
+                        metadata={'origin_message_id': message_id} if message_id else {},
                     )
                     await self._bus.publish_outgoing(out)
 

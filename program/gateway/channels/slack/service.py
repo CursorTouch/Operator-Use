@@ -44,12 +44,22 @@ class SlackChannel(BaseChannel):
     Requires: pip install "slack-bolt>=1.0"
     """
 
-    def __init__(self, bot_token: str, app_token: str) -> None:
+    def __init__(
+        self,
+        bot_token: str,
+        app_token: str,
+        allow_from: list[str] | None = None,
+        reply_to_message: bool = True,
+        show_tool_notifications: bool = True,
+    ) -> None:
         super().__init__()
         if not _SLACK_AVAILABLE:
             raise ImportError('slack-bolt>=1.0 is required for SlackChannel.')
         self._bot_token = bot_token
         self._app_token = app_token
+        self._allow_from = set(allow_from or [])
+        self._reply_to_message = reply_to_message
+        self._show_tool_notifications = show_tool_notifications
         self._buffers: dict[str, str] = {}
         self._clients: dict[str, AsyncWebClient] = {}
         self._thread_ts_map: dict[str, str | None] = {}
@@ -78,6 +88,9 @@ class SlackChannel(BaseChannel):
 
         @app.event("app_mention")
         async def handle_mention(event: dict, client: AsyncWebClient) -> None:
+            user_id = event.get('user', '')
+            if self._allow_from and user_id not in self._allow_from:
+                return
             slack_channel_id = event['channel']
             thread_ts = event.get('thread_ts') or event.get('ts')
             chat_id = f"{slack_channel_id}:{thread_ts}" if thread_ts else slack_channel_id
@@ -106,6 +119,9 @@ class SlackChannel(BaseChannel):
                 return
             subtype = event.get('subtype')
             if subtype and subtype != 'file_share':
+                return
+            user_id = event.get('user', '')
+            if self._allow_from and user_id not in self._allow_from:
                 return
 
             slack_channel_id = event['channel']
@@ -160,6 +176,9 @@ class SlackChannel(BaseChannel):
         parts = chat_id.split(":", 1)
         slack_channel_id = parts[0]
         thread_ts = parts[1] if len(parts) > 1 else self._thread_ts_map.get(chat_id)
+        # `reply_to_message=False` posts to the channel root instead of the thread.
+        if not self._reply_to_message:
+            thread_ts = None
 
         client = self._clients.get(chat_id)
 
@@ -181,9 +200,9 @@ class SlackChannel(BaseChannel):
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
-            if kind == 'tool_start':
+            if kind == 'tool_start' and self._show_tool_notifications:
                 await _post(f"⚙️ `{metadata.get('name', '')}`…")
-            elif kind == 'tool_end' and metadata.get('is_error'):
+            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_notifications:
                 await _post(f"⚠️ {metadata.get('result', '')}")
             else:
                 text = text_from_parts(msg.parts)

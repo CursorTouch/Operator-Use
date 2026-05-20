@@ -30,12 +30,24 @@ class TelegramChannel(BaseChannel):
     Requires: pip install "python-telegram-bot>=20.0"
     """
 
-    def __init__(self, token: str, commands: list[tuple[str, str]] | None = None) -> None:
+    def __init__(
+        self,
+        token: str,
+        commands: list[tuple[str, str]] | None = None,
+        allow_from: list[str] | None = None,
+        reply_to_message: bool = False,
+        group_policy: str = "mention",
+        show_tool_notifications: bool = True,
+    ) -> None:
         super().__init__()
         if not _PTB_AVAILABLE:
             raise ImportError('python-telegram-bot>=20.0 is required for TelegramChannel.')
         self._token = token
         self._commands = commands or []
+        self._allow_from = set(allow_from or [])
+        self._reply_to_message = reply_to_message
+        self._group_policy = group_policy
+        self._show_tool_notifications = show_tool_notifications
         self._buffers: dict[str, str] = {}
         self._app: Application | None = None
         self._typing_tasks: dict[str, asyncio.Task] = {}
@@ -54,6 +66,23 @@ class TelegramChannel(BaseChannel):
             msg = update.message
             chat_id = str(msg.chat_id)
             user_id = str(msg.from_user.id) if msg.from_user else ""
+
+            if self._allow_from and user_id not in self._allow_from:
+                return
+
+            # Group policy: in group/supergroup chats, respond only when mentioned
+            if self._group_policy == "mention" and msg.chat.type in ("group", "supergroup"):
+                bot_user = self._app.bot.username if self._app else None  # type: ignore[union-attr]
+                text_for_check = msg.text or msg.caption or ""
+                mentioned = bool(bot_user) and f"@{bot_user}" in text_for_check
+                is_reply_to_bot = (
+                    msg.reply_to_message is not None
+                    and msg.reply_to_message.from_user is not None
+                    and msg.reply_to_message.from_user.is_bot
+                    and msg.reply_to_message.from_user.username == bot_user
+                )
+                if not mentioned and not is_reply_to_bot:
+                    return
 
             parts: list = []
 
@@ -186,13 +215,13 @@ class TelegramChannel(BaseChannel):
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
-            if kind == 'tool_start':
+            if kind == 'tool_start' and self._show_tool_notifications:
                 name = metadata.get('name', '')
                 try:
                     await bot.send_message(int(chat_id), f"⚙️ {name}…")
                 except Exception:
                     logger.exception("TelegramChannel: send_message failed (tool_start)")
-            elif kind == 'tool_end' and metadata.get('is_error'):
+            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_notifications:
                 result = str(metadata.get('result', ''))
                 try:
                     await bot.send_message(int(chat_id), f"⚠️ {result}")
@@ -205,14 +234,22 @@ class TelegramChannel(BaseChannel):
         elif phase == StreamPhase.END:
             self._stop_typing(chat_id)
             buffered = self._buffers.pop(chat_id, "")
+            reply_params = None
+            origin_msg_id = metadata.get('origin_message_id')
+            if self._reply_to_message and origin_msg_id:
+                try:
+                    from telegram import ReplyParameters
+                    reply_params = ReplyParameters(message_id=int(origin_msg_id))
+                except Exception:
+                    reply_params = None
             if buffered.strip():
                 for chunk in split_message(buffered):
                     try:
-                        await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML")
+                        await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
                     except Exception:
                         logger.exception("TelegramChannel: send_message failed (end)")
                         try:
-                            await bot.send_message(int(chat_id), chunk)
+                            await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
                         except Exception:
                             logger.exception("TelegramChannel: send_message fallback failed (end)")
 
