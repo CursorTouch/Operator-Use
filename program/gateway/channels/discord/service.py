@@ -38,7 +38,6 @@ class DiscordChannel(BaseChannel):
         self,
         token: str,
         allow_from: list[str] | None = None,
-        reply_to_message: bool = False,
         group_policy: str = "mention",
         show_tool_notifications: bool = True,
     ) -> None:
@@ -47,9 +46,9 @@ class DiscordChannel(BaseChannel):
             raise ImportError('discord.py>=2.0 is required for DiscordChannel.')
         self._token = token
         self._allow_from = set(allow_from or [])
-        self._reply_to_message = reply_to_message
         self._group_policy = group_policy
         self._show_tool_notifications = show_tool_notifications
+        self._is_group: dict[str, bool] = {}  # chat_id → True if guild channel (not DM)
         self._buffers: dict[str, str] = {}
         self._client: discord.Client | None = None
         self._discord_channels: dict[str, discord.abc.Messageable] = {}
@@ -88,6 +87,7 @@ class DiscordChannel(BaseChannel):
             chat_id = str(message.channel.id)
             self._discord_channels[chat_id] = message.channel
             self._discord_messages[chat_id] = message
+            self._is_group[chat_id] = not is_dm
 
             parts: list = []
 
@@ -200,7 +200,8 @@ class DiscordChannel(BaseChannel):
             buffered = self._buffers.pop(chat_id, "")
             reference = None
             origin_msg_id = metadata.get('origin_message_id')
-            if self._reply_to_message and origin_msg_id and discord_ch is not None:
+            # Auto-reply in guild channels only — DMs need no disambiguation.
+            if self._is_group.get(chat_id, False) and origin_msg_id and discord_ch is not None:
                 try:
                     reference = discord.MessageReference(
                         message_id=int(origin_msg_id),

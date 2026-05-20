@@ -49,7 +49,6 @@ class SlackChannel(BaseChannel):
         bot_token: str,
         app_token: str,
         allow_from: list[str] | None = None,
-        reply_to_message: bool = True,
         show_tool_notifications: bool = True,
     ) -> None:
         super().__init__()
@@ -58,8 +57,8 @@ class SlackChannel(BaseChannel):
         self._bot_token = bot_token
         self._app_token = app_token
         self._allow_from = set(allow_from or [])
-        self._reply_to_message = reply_to_message
         self._show_tool_notifications = show_tool_notifications
+        self._is_group: dict[str, bool] = {}  # chat_id → True if channel (not DM)
         self._buffers: dict[str, str] = {}
         self._clients: dict[str, AsyncWebClient] = {}
         self._thread_ts_map: dict[str, str | None] = {}
@@ -96,6 +95,7 @@ class SlackChannel(BaseChannel):
             chat_id = f"{slack_channel_id}:{thread_ts}" if thread_ts else slack_channel_id
             self._clients[chat_id] = client
             self._thread_ts_map[chat_id] = thread_ts
+            self._is_group[chat_id] = True  # app_mention always fires in a channel
 
             parts = await self._build_parts(event)
             text = _MENTION_RE.sub('', event.get('text', '')).strip()
@@ -128,6 +128,7 @@ class SlackChannel(BaseChannel):
             chat_id = slack_channel_id
             self._clients[chat_id] = client
             self._thread_ts_map[chat_id] = None
+            self._is_group[chat_id] = False  # 'im' channel_type means DM
 
             parts = await self._build_parts(event)
             text = event.get('text', '').strip()
@@ -176,8 +177,8 @@ class SlackChannel(BaseChannel):
         parts = chat_id.split(":", 1)
         slack_channel_id = parts[0]
         thread_ts = parts[1] if len(parts) > 1 else self._thread_ts_map.get(chat_id)
-        # `reply_to_message=False` posts to the channel root instead of the thread.
-        if not self._reply_to_message:
+        # Auto-reply in channels only — DMs post to the root, no threading needed.
+        if not self._is_group.get(chat_id, False):
             thread_ts = None
 
         client = self._clients.get(chat_id)

@@ -168,7 +168,6 @@ class GatewayManager:
             token=bot_token,
             commands=cmds,
             allow_from=tcfg.allow_from,
-            reply_to_message=tcfg.reply_to_message,
             group_policy=tcfg.group_policy,
             show_tool_notifications=tcfg.show_tool_notifications,
         )
@@ -180,7 +179,6 @@ class GatewayManager:
         ch = DiscordChannel(
             token=bot_token,
             allow_from=dcfg.allow_from,
-            reply_to_message=dcfg.reply_to_message,
             group_policy=dcfg.group_policy,
             show_tool_notifications=dcfg.show_tool_notifications,
         )
@@ -193,7 +191,6 @@ class GatewayManager:
             bot_token=bot_token,
             app_token=app_token,
             allow_from=scfg.allow_from,
-            reply_to_message=scfg.reply_to_message,
             show_tool_notifications=scfg.show_tool_notifications,
         )
         self.gateway.register(ch)

@@ -35,7 +35,6 @@ class TelegramChannel(BaseChannel):
         token: str,
         commands: list[tuple[str, str]] | None = None,
         allow_from: list[str] | None = None,
-        reply_to_message: bool = False,
         group_policy: str = "mention",
         show_tool_notifications: bool = True,
     ) -> None:
@@ -45,9 +44,9 @@ class TelegramChannel(BaseChannel):
         self._token = token
         self._commands = commands or []
         self._allow_from = set(allow_from or [])
-        self._reply_to_message = reply_to_message
         self._group_policy = group_policy
         self._show_tool_notifications = show_tool_notifications
+        self._is_group: dict[str, bool] = {}  # chat_id → True if group/supergroup/channel
         self._buffers: dict[str, str] = {}
         self._app: Application | None = None
         self._typing_tasks: dict[str, asyncio.Task] = {}
@@ -69,6 +68,8 @@ class TelegramChannel(BaseChannel):
 
             if self._allow_from and user_id not in self._allow_from:
                 return
+
+            self._is_group[chat_id] = msg.chat.type in ("group", "supergroup", "channel")
 
             # Group policy: in group/supergroup chats, respond only when mentioned
             if self._group_policy == "mention" and msg.chat.type in ("group", "supergroup"):
@@ -236,7 +237,8 @@ class TelegramChannel(BaseChannel):
             buffered = self._buffers.pop(chat_id, "")
             reply_params = None
             origin_msg_id = metadata.get('origin_message_id')
-            if self._reply_to_message and origin_msg_id:
+            # Auto-reply in groups only — DMs need no disambiguation.
+            if self._is_group.get(chat_id, False) and origin_msg_id:
                 try:
                     from telegram import ReplyParameters
                     reply_params = ReplyParameters(message_id=int(origin_msg_id))

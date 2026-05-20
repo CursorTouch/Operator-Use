@@ -9,6 +9,5 @@ class DiscordChannelConfig(BaseModel):
     model_config = ConfigDict(extra='ignore')
     enabled: bool = False
     allow_from: list[str] = Field(default_factory=list)  # user_id allowlist; empty = open
-    reply_to_message: bool = False                       # reply-thread vs new message when delivering response
     group_policy: Literal["mention", "open"] = "mention" # in servers, respond only when mentioned vs every message
     show_tool_notifications: bool = True                 # send ⚙️ tool_start / ⚠️ tool_end notifications
