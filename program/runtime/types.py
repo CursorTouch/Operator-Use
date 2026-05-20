@@ -229,6 +229,8 @@ class RuntimeContext:
         _terminal_tool = next((t for t in all_tools if t.name == 'terminal'), None)
         if _terminal_tool is not None:
             _terminal_tool._manager = process_manager  # type: ignore[attr-defined]
+            _terminal_tool._execute_path = settings_manager.get_execute_path()  # type: ignore[attr-defined]
+            _terminal_tool._execute_command_prefix = settings_manager.get_execute_command_prefix()  # type: ignore[attr-defined]
 
         # ── MCP ───────────────────────────────────────────────────────────────
         mcp_configs = settings_manager.get_mcp_servers()

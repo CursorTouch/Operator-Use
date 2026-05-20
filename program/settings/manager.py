@@ -660,28 +660,6 @@ class SettingsManager:
         self._mark_modified("execute_command_prefix")
         self._save()
 
-    # ── Shell / execution ─────────────────────────────────────────────────────
-
-    def get_shell_path(self) -> str | None:
-        """Return the custom shell executable path, or None to use the system default."""
-        return self.settings.shell_path
-
-    def set_shell_path(self, path: str | None):
-        """Set the custom shell executable path and persist to global settings."""
-        self.global_settings.shell_path = path
-        self._mark_modified("shell_path")
-        self._save()
-
-    def get_shell_command_prefix(self) -> str | None:
-        """Return the prefix prepended to every shell command, or None if unset."""
-        return self.settings.shell_command_prefix
-
-    def set_shell_command_prefix(self, prefix: str | None):
-        """Set the shell command prefix and persist to global settings."""
-        self.global_settings.shell_command_prefix = prefix
-        self._mark_modified("shell_command_prefix")
-        self._save()
-
     # ── Channels ──────────────────────────────────────────────────────────────
 
     def get_channels_settings(self) -> ChannelsSettings:

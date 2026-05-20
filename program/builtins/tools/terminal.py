@@ -78,6 +78,8 @@ class TerminalTool(Tool):
             execution_mode=ToolExecutionMode.Parallel,
         )
         self._manager: 'ProcessManager | None' = None
+        self._execute_path: str | None = None
+        self._execute_command_prefix: str | None = None
 
     def _is_command_blocked(self, cmd: str) -> str | None:
         """Return blocked pattern if cmd matches, else None."""
@@ -157,10 +159,13 @@ class TerminalTool(Tool):
 
         env = os.environ.copy()
 
+        effective_cmd = f"{self._execute_command_prefix} {cmd}" if self._execute_command_prefix else cmd
         if sys.platform == "win32":
-            shell_cmd = ["cmd", "/c", cmd]
+            shell_bin = self._execute_path or "cmd"
+            shell_cmd = [shell_bin, "/c", effective_cmd]
         else:
-            shell_cmd = ["/bin/bash", "-c", cmd]
+            shell_bin = self._execute_path or "/bin/bash"
+            shell_cmd = [shell_bin, "-c", effective_cmd]
 
         try:
             process = await asyncio.create_subprocess_exec(
