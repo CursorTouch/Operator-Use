@@ -11,3 +11,6 @@ class TelegramChannelConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)  # user_id allowlist; empty = open
     group_policy: Literal["mention", "open"] = "mention" # in groups, respond only when mentioned vs every message
     show_tool_notifications: bool = True                 # send ⚙️ tool_start / ⚠️ tool_end notifications
+    streaming: bool = True
+    streaming_latency: float = 1.0
+

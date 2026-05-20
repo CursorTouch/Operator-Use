@@ -12,3 +12,5 @@ class EmailChannelConfig(BaseModel):
     smtp_port: int = 587
     poll_interval: int = 30   # seconds between IMAP checks
     allow_from: list[str] = []  # whitelist of sender addresses; empty = allow all
+
+

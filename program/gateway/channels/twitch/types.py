@@ -10,3 +10,6 @@ class TwitchChannelConfig(BaseModel):
     nick: str = ''
     prefix: str = '!'
     allow_from: list[str] = Field(default_factory=list)
+    streaming: bool = True
+    streaming_latency: float = 1.0
+

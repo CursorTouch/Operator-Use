@@ -236,3 +236,65 @@ class TestOverridesAndFlush:
         cs = sm.get_compaction_settings()
         assert cs['enabled'] is True
         assert cs['keep_recent_tokens'] == 5000
+
+
+class TestChannelSettings:
+    @pytest.mark.asyncio
+    async def test_default_channels_streaming_config(self):
+        sm = _sm()
+        
+        # Test default values for each channel
+        ws = sm.get_websocket_channel_config()
+        assert ws.streaming is True
+        assert ws.streaming_latency == 1.0
+
+        tg = sm.get_telegram_channel_config()
+        assert tg.streaming is True
+        assert tg.streaming_latency == 1.0
+
+        dc = sm.get_discord_channel_config()
+        assert dc.streaming is True
+        assert dc.streaming_latency == 1.0
+
+        sl = sm.get_slack_channel_config()
+        assert sl.streaming is True
+        assert sl.streaming_latency == 1.0
+
+        tw = sm.get_twitch_channel_config()
+        assert tw.streaming is True
+        assert tw.streaming_latency == 1.0
+        await asyncio.sleep(0)
+
+    @pytest.mark.asyncio
+    async def test_modify_channels_streaming_config(self):
+        sm = _sm()
+        
+        # Modify and assert for each channel
+        sm.set_websocket_channel_config(streaming=False, streaming_latency=0.5)
+        ws = sm.get_websocket_channel_config()
+        assert ws.streaming is False
+        assert ws.streaming_latency == 0.5
+
+        sm.set_telegram_channel_config(streaming=False, streaming_latency=0.6)
+        tg = sm.get_telegram_channel_config()
+        assert tg.streaming is False
+        assert tg.streaming_latency == 0.6
+
+        sm.set_discord_channel_config(streaming=False, streaming_latency=0.7)
+        dc = sm.get_discord_channel_config()
+        assert dc.streaming is False
+        assert dc.streaming_latency == 0.7
+
+        sm.set_slack_channel_config(streaming=False, streaming_latency=0.8)
+        sl = sm.get_slack_channel_config()
+        assert sl.streaming is False
+        assert sl.streaming_latency == 0.8
+
+        sm.set_twitch_channel_config(streaming=False, streaming_latency=0.9)
+        tw = sm.get_twitch_channel_config()
+        assert tw.streaming is False
+        assert tw.streaming_latency == 0.9
+        await asyncio.sleep(0)
+
+
+

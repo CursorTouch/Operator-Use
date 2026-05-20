@@ -8,3 +8,6 @@ class WebSocketChannelConfig(BaseModel):
     enabled: bool = False
     host: str = '127.0.0.1'
     port: int = 8765
+    streaming: bool = True
+    streaming_latency: float = 1.0
+
