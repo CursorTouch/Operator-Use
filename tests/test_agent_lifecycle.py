@@ -126,6 +126,72 @@ class TestAgentRetry:
         assert attempt[0] == 2  # failed once, succeeded on second
 
     @pytest.mark.asyncio
+    async def test_retry_context_clean_after_error(self):
+        """Engine must not append error/abort turns to messages. If it did, retry
+        attempt 2 would see a dangling assistant message and the provider would
+        reject it with a role-order error (cascading 400s after an initial 429)."""
+        from program.agent.service import Agent
+        from program.agent.types import AgentConfig
+        from program.extension.runtime import ExtensionRuntime
+        from program.extension.types import LoadExtensionsResult
+        from program.resource.types import BaseResourceLoader
+        from program.session.manager import SessionManager
+        from program.compaction.compact import Compaction
+        from program.hooks.service import Hooks
+        from pathlib import Path
+
+        class FakeLoader(BaseResourceLoader):
+            def get_extensions(self): return LoadExtensionsResult()
+            def get_skills(self): return [], []
+            def get_tools(self): return []
+            def get_commands(self): return []
+            def get_hooks(self): return []
+            def get_context_files(self): return []
+            def get_system_prompt(self): return None
+            def get_append_system_prompt(self): return []
+            def extend_resources(self, paths): pass
+            def get_diagnostics(self, runtime=None): return []
+            async def reload(self): pass
+
+        attempt = [0]
+        seen_counts: list[int] = []
+
+        class RecordingLLM:
+            model = SimpleNamespace(name="fake", provider="fake")
+            api = SimpleNamespace(options=SimpleNamespace())
+            async def stream(self, ctx):
+                attempt[0] += 1
+                seen_counts.append(len(ctx.messages))
+                if attempt[0] == 1:
+                    for e in error_seq("transient"):
+                        yield e
+                else:
+                    for e in text_seq("recovered"):
+                        yield e
+            async def invoke(self, ctx, thinking_level=None): return text_seq()
+
+        hooks = Hooks()
+        from program.engine.service import Engine
+        engine = Engine(llm=RecordingLLM(), tools=[], hooks=hooks)
+        load_result = LoadExtensionsResult()
+        config = AgentConfig(cwd=Path("/tmp"), retry_enabled=True, retry_max_retries=2, retry_base_delay_ms=0)
+        agent = Agent(
+            engine=engine,
+            session_manager=SessionManager.in_memory(),
+            resource_loader=FakeLoader(),
+            extension_runtime=ExtensionRuntime(load_result, object(), hooks),
+            compaction=Compaction(llm=RecordingLLM(), settings=CompactionSettings(enabled=False)),
+            config=config,
+        )
+        agent._extensions = ExtensionRuntime(load_result, agent, hooks)
+
+        await agent.invoke("go")
+        assert attempt[0] == 2
+        assert seen_counts[0] == seen_counts[1], (
+            f"Retry received extra messages: attempt1={seen_counts[0]}, attempt2={seen_counts[1]}"
+        )
+
+    @pytest.mark.asyncio
     async def test_retry_exhausted_raises_runtime_error(self):
         from program.agent.service import Agent
         from program.agent.types import AgentConfig

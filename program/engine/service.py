@@ -345,7 +345,6 @@ class Engine:
                         response=message,
                     ))
                 await emit(MessageEndEvent(message=message))
-                messages.append(message)
 
                 match message.stop_reason:
                     case StopReason.Error | StopReason.Abort:
@@ -356,6 +355,7 @@ class Engine:
                         break
 
                     case StopReason.ToolCalls:
+                        messages.append(message)
                         tool_results = await self._execute_tool_calls(
                             tool_calls=tool_calls,
                             emit=emit,
@@ -388,6 +388,7 @@ class Engine:
                             messages.append(msg)
 
                     case StopReason.Stop:
+                        messages.append(message)
                         # Drain the live follow-up queue first, then call the options callback.
                         follow_up_messages: list[BaseMessage] = []
                         if self.state.follow_up_queue and not self.state.follow_up_queue.is_empty():
