@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from helpers import FakeLLM, make_agent, text_seq, error_seq
@@ -17,6 +18,8 @@ class TestAgentPhaseGuard:
         started = asyncio.Event()
 
         class SlowLLM:
+            model = SimpleNamespace(name="fake", provider="fake")
+            api = SimpleNamespace(options=SimpleNamespace())
             async def stream(self, ctx):
                 started.set()
                 await asyncio.sleep(0.3)
@@ -36,6 +39,8 @@ class TestAgentPhaseGuard:
         started = asyncio.Event()
 
         class SlowLLM:
+            model = SimpleNamespace(name="fake", provider="fake")
+            api = SimpleNamespace(options=SimpleNamespace())
             async def stream(self, ctx):
                 started.set()
                 await asyncio.sleep(0.3)
@@ -89,6 +94,8 @@ class TestAgentRetry:
         attempt = [0]
 
         class RetryLLM:
+            model = SimpleNamespace(name="fake", provider="fake")
+            api = SimpleNamespace(options=SimpleNamespace())
             async def stream(self, ctx):
                 attempt[0] += 1
                 if attempt[0] == 1:
@@ -146,6 +153,8 @@ class TestAgentRetry:
         class _Null: pass
 
         class AlwaysFailLLM:
+            model = SimpleNamespace(name="fake", provider="fake")
+            api = SimpleNamespace(options=SimpleNamespace())
             async def stream(self, ctx):
                 for e in error_seq("permanent"):
                     yield e

@@ -37,6 +37,8 @@ class TelegramChannel(BaseChannel):
         allow_from: list[str] | None = None,
         group_policy: str = "mention",
         show_tool_calls: bool = True,
+        streaming: bool = True,
+        streaming_latency: float = 1.0,
     ) -> None:
         super().__init__()
         if not _PTB_AVAILABLE:
@@ -46,10 +48,14 @@ class TelegramChannel(BaseChannel):
         self._allow_from = set(allow_from or [])
         self._group_policy = group_policy
         self._show_tool_calls = show_tool_calls
+        self._streaming = streaming
+        self._streaming_latency = streaming_latency
         self._is_group: dict[str, bool] = {}  # chat_id → True if group/supergroup/channel
         self._buffers: dict[str, str] = {}
         self._app: Application | None = None
         self._typing_tasks: dict[str, asyncio.Task] = {}
+        self._live_tasks: dict[str, asyncio.Task] = {}
+        self._live_msg_ids: dict[str, int | None] = {}
 
     @property
     def channel_id(self) -> str:
@@ -199,6 +205,47 @@ class TelegramChannel(BaseChannel):
         if task:
             task.cancel()
 
+    def _start_live_streaming(self, chat_id: str) -> None:
+        self._stop_live_streaming(chat_id)
+        self._live_msg_ids[chat_id] = None
+        latency = self._streaming_latency
+
+        async def _loop() -> None:
+            await asyncio.sleep(latency)
+            while True:
+                buffered = self._buffers.get(chat_id, "")
+                if buffered.strip() and self._app is not None:
+                    bot = self._app.bot
+                    existing = self._live_msg_ids.get(chat_id)
+                    if existing is None:
+                        try:
+                            sent = await bot.send_message(
+                                int(chat_id),
+                                markdown_to_telegram_html(buffered),
+                                parse_mode="HTML",
+                            )
+                            self._live_msg_ids[chat_id] = sent.message_id
+                        except Exception:
+                            logger.exception("TelegramChannel: live send_message failed")
+                    else:
+                        try:
+                            await bot.edit_message_text(
+                                markdown_to_telegram_html(buffered),
+                                chat_id=int(chat_id),
+                                message_id=existing,
+                                parse_mode="HTML",
+                            )
+                        except Exception:
+                            pass  # edit conflicts during rapid chunks are benign
+                await asyncio.sleep(latency)
+
+        self._live_tasks[chat_id] = asyncio.create_task(_loop())
+
+    def _stop_live_streaming(self, chat_id: str) -> None:
+        task = self._live_tasks.pop(chat_id, None)
+        if task:
+            task.cancel()
+
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to the Telegram chat."""
         if self._app is None:
@@ -212,7 +259,10 @@ class TelegramChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
-            self._start_typing(chat_id)
+            if self._streaming:
+                self._start_live_streaming(chat_id)
+            else:
+                self._start_typing(chat_id)
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
@@ -233,7 +283,6 @@ class TelegramChannel(BaseChannel):
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
         elif phase == StreamPhase.END:
-            self._stop_typing(chat_id)
             buffered = self._buffers.pop(chat_id, "")
             reply_params = None
             origin_msg_id = metadata.get('origin_message_id')
@@ -244,16 +293,45 @@ class TelegramChannel(BaseChannel):
                     reply_params = ReplyParameters(message_id=int(origin_msg_id))
                 except Exception:
                     reply_params = None
-            if buffered.strip():
-                for chunk in split_message(buffered):
-                    try:
-                        await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
-                    except Exception:
-                        logger.exception("TelegramChannel: send_message failed (end)")
+
+            if self._streaming:
+                self._stop_live_streaming(chat_id)
+                live_msg_id = self._live_msg_ids.pop(chat_id, None)
+                if buffered.strip():
+                    if live_msg_id is not None:
+                        # Edit the live message to its final content (single chunk, no splitting needed for edits)
                         try:
-                            await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
+                            await bot.edit_message_text(
+                                markdown_to_telegram_html(buffered),
+                                chat_id=int(chat_id),
+                                message_id=live_msg_id,
+                                parse_mode="HTML",
+                            )
                         except Exception:
-                            logger.exception("TelegramChannel: send_message fallback failed (end)")
+                            logger.exception("TelegramChannel: edit_message_text failed (end)")
+                    else:
+                        # Nothing was posted yet; send now with reply
+                        for chunk in split_message(buffered):
+                            try:
+                                await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
+                            except Exception:
+                                logger.exception("TelegramChannel: send_message failed (end, streaming)")
+                                try:
+                                    await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
+                                except Exception:
+                                    logger.exception("TelegramChannel: send_message fallback failed (end, streaming)")
+            else:
+                self._stop_typing(chat_id)
+                if buffered.strip():
+                    for chunk in split_message(buffered):
+                        try:
+                            await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
+                        except Exception:
+                            logger.exception("TelegramChannel: send_message failed (end)")
+                            try:
+                                await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
+                            except Exception:
+                                logger.exception("TelegramChannel: send_message fallback failed (end)")
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)

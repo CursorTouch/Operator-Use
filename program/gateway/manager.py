@@ -170,6 +170,8 @@ class GatewayManager:
             allow_from=tcfg.allow_from,
             group_policy=tcfg.group_policy,
             show_tool_calls=tcfg.show_tool_calls,
+            streaming=tcfg.streaming,
+            streaming_latency=tcfg.streaming_latency,
         )
         self.gateway.register(ch)
         await ch.connect()
@@ -181,6 +183,8 @@ class GatewayManager:
             allow_from=dcfg.allow_from,
             group_policy=dcfg.group_policy,
             show_tool_calls=dcfg.show_tool_calls,
+            streaming=dcfg.streaming,
+            streaming_latency=dcfg.streaming_latency,
         )
         self.gateway.register(ch)
         await ch.connect()
@@ -192,6 +196,8 @@ class GatewayManager:
             app_token=app_token,
             allow_from=scfg.allow_from,
             show_tool_calls=scfg.show_tool_calls,
+            streaming=scfg.streaming,
+            streaming_latency=scfg.streaming_latency,
         )
         self.gateway.register(ch)
         await ch.connect()

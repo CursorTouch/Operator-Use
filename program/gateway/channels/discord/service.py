@@ -40,6 +40,8 @@ class DiscordChannel(BaseChannel):
         allow_from: list[str] | None = None,
         group_policy: str = "mention",
         show_tool_calls: bool = True,
+        streaming: bool = True,
+        streaming_latency: float = 1.0,
     ) -> None:
         super().__init__()
         if not _DISCORD_AVAILABLE:
@@ -48,12 +50,16 @@ class DiscordChannel(BaseChannel):
         self._allow_from = set(allow_from or [])
         self._group_policy = group_policy
         self._show_tool_calls = show_tool_calls
+        self._streaming = streaming
+        self._streaming_latency = streaming_latency
         self._is_group: dict[str, bool] = {}  # chat_id → True if guild channel (not DM)
         self._buffers: dict[str, str] = {}
         self._client: discord.Client | None = None
         self._discord_channels: dict[str, discord.abc.Messageable] = {}
         self._discord_messages: dict[str, discord.Message] = {}
         self._typing_tasks: dict[str, asyncio.Task] = {}
+        self._live_tasks: dict[str, asyncio.Task] = {}
+        self._live_messages: dict[str, discord.Message | None] = {}
 
     @property
     def channel_id(self) -> str:
@@ -164,6 +170,38 @@ class DiscordChannel(BaseChannel):
         if task:
             task.cancel()
 
+    def _start_live_streaming(self, chat_id: str) -> None:
+        self._stop_live_streaming(chat_id)
+        self._live_messages[chat_id] = None
+        latency = self._streaming_latency
+
+        async def _loop() -> None:
+            await asyncio.sleep(latency)
+            while True:
+                buffered = self._buffers.get(chat_id, "")
+                discord_ch = self._discord_channels.get(chat_id)
+                if buffered.strip() and discord_ch is not None:
+                    existing = self._live_messages.get(chat_id)
+                    if existing is None:
+                        try:
+                            sent = await discord_ch.send(buffered)
+                            self._live_messages[chat_id] = sent
+                        except Exception:
+                            logger.exception("DiscordChannel: live send failed")
+                    else:
+                        try:
+                            await existing.edit(content=buffered)
+                        except Exception:
+                            pass  # edit conflicts during rapid chunks are benign
+                await asyncio.sleep(latency)
+
+        self._live_tasks[chat_id] = asyncio.create_task(_loop())
+
+    def _stop_live_streaming(self, chat_id: str) -> None:
+        task = self._live_tasks.pop(chat_id, None)
+        if task:
+            task.cancel()
+
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to the Discord channel."""
         chat_id = msg.chat_id
@@ -173,7 +211,10 @@ class DiscordChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
-            self._start_typing(chat_id)
+            if self._streaming:
+                self._start_live_streaming(chat_id)
+            else:
+                self._start_typing(chat_id)
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
@@ -196,7 +237,6 @@ class DiscordChannel(BaseChannel):
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
         elif phase == StreamPhase.END:
-            self._stop_typing(chat_id)
             buffered = self._buffers.pop(chat_id, "")
             reference = None
             origin_msg_id = metadata.get('origin_message_id')
@@ -210,15 +250,36 @@ class DiscordChannel(BaseChannel):
                     )
                 except Exception:
                     reference = None
-            if buffered.strip() and discord_ch is not None:
-                for i, chunk in enumerate(split_message(buffered)):
-                    try:
-                        if i == 0 and reference is not None:
-                            await discord_ch.send(chunk, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
-                        else:
-                            await discord_ch.send(chunk)
-                    except Exception:
-                        logger.exception("DiscordChannel: send failed (end)")
+
+            if self._streaming:
+                self._stop_live_streaming(chat_id)
+                live_msg = self._live_messages.pop(chat_id, None)
+                if buffered.strip() and discord_ch is not None:
+                    if live_msg is not None:
+                        try:
+                            await live_msg.edit(content=buffered)
+                        except Exception:
+                            logger.exception("DiscordChannel: edit failed (end)")
+                    else:
+                        for i, chunk in enumerate(split_message(buffered)):
+                            try:
+                                if i == 0 and reference is not None:
+                                    await discord_ch.send(chunk, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
+                                else:
+                                    await discord_ch.send(chunk)
+                            except Exception:
+                                logger.exception("DiscordChannel: send failed (end, streaming)")
+            else:
+                self._stop_typing(chat_id)
+                if buffered.strip() and discord_ch is not None:
+                    for i, chunk in enumerate(split_message(buffered)):
+                        try:
+                            if i == 0 and reference is not None:
+                                await discord_ch.send(chunk, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
+                            else:
+                                await discord_ch.send(chunk)
+                        except Exception:
+                            logger.exception("DiscordChannel: send failed (end)")
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)

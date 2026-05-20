@@ -50,6 +50,8 @@ class SlackChannel(BaseChannel):
         app_token: str,
         allow_from: list[str] | None = None,
         show_tool_calls: bool = True,
+        streaming: bool = True,
+        streaming_latency: float = 1.0,
     ) -> None:
         super().__init__()
         if not _SLACK_AVAILABLE:
@@ -58,11 +60,15 @@ class SlackChannel(BaseChannel):
         self._app_token = app_token
         self._allow_from = set(allow_from or [])
         self._show_tool_calls = show_tool_calls
+        self._streaming = streaming
+        self._streaming_latency = streaming_latency
         self._is_group: dict[str, bool] = {}  # chat_id → True if channel (not DM)
         self._buffers: dict[str, str] = {}
         self._clients: dict[str, AsyncWebClient] = {}
         self._thread_ts_map: dict[str, str | None] = {}
         self._handler: AsyncSocketModeHandler | None = None
+        self._live_tasks: dict[str, asyncio.Task] = {}
+        self._live_ts_map: dict[str, str | None] = {}  # chat_id → posted message ts
 
     @property
     def channel_id(self) -> str:
@@ -168,6 +174,45 @@ class SlackChannel(BaseChannel):
                         logger.exception("SlackChannel: error during disconnect")
             self._handler = None
 
+    def _start_live_streaming(self, chat_id: str, slack_channel_id: str, thread_ts: str | None, client) -> None:
+        self._stop_live_streaming(chat_id)
+        self._live_ts_map[chat_id] = None
+        latency = self._streaming_latency
+
+        async def _loop() -> None:
+            await asyncio.sleep(latency)
+            while True:
+                buffered = self._buffers.get(chat_id, "")
+                if buffered.strip() and client is not None:
+                    existing_ts = self._live_ts_map.get(chat_id)
+                    if existing_ts is None:
+                        try:
+                            resp = await client.chat_postMessage(
+                                channel=slack_channel_id,
+                                text=markdown_to_slack_mrkdwn(buffered),
+                                thread_ts=thread_ts,
+                            )
+                            self._live_ts_map[chat_id] = resp.get("ts")
+                        except Exception:
+                            logger.exception("SlackChannel: live chat_postMessage failed")
+                    else:
+                        try:
+                            await client.chat_update(
+                                channel=slack_channel_id,
+                                ts=existing_ts,
+                                text=markdown_to_slack_mrkdwn(buffered),
+                            )
+                        except Exception:
+                            pass  # edit conflicts during rapid chunks are benign
+                await asyncio.sleep(latency)
+
+        self._live_tasks[chat_id] = asyncio.create_task(_loop())
+
+    def _stop_live_streaming(self, chat_id: str) -> None:
+        task = self._live_tasks.pop(chat_id, None)
+        if task:
+            task.cancel()
+
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to Slack."""
         chat_id = msg.chat_id
@@ -198,6 +243,8 @@ class SlackChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            if self._streaming:
+                self._start_live_streaming(chat_id, slack_channel_id, thread_ts, client)
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
@@ -211,9 +258,26 @@ class SlackChannel(BaseChannel):
 
         elif phase == StreamPhase.END:
             buffered = self._buffers.pop(chat_id, "")
-            if buffered.strip():
-                for chunk in split_message(buffered):
-                    await _post(markdown_to_slack_mrkdwn(chunk))
+            if self._streaming:
+                self._stop_live_streaming(chat_id)
+                live_ts = self._live_ts_map.pop(chat_id, None)
+                if buffered.strip():
+                    if live_ts is not None and client is not None:
+                        try:
+                            await client.chat_update(
+                                channel=slack_channel_id,
+                                ts=live_ts,
+                                text=markdown_to_slack_mrkdwn(buffered),
+                            )
+                        except Exception:
+                            logger.exception("SlackChannel: chat_update failed (end)")
+                    else:
+                        for chunk in split_message(buffered):
+                            await _post(markdown_to_slack_mrkdwn(chunk))
+            else:
+                if buffered.strip():
+                    for chunk in split_message(buffered):
+                        await _post(markdown_to_slack_mrkdwn(chunk))
 
         elif phase == StreamPhase.ERROR:
             await _post(f"❌ {text_from_parts(msg.parts) or 'Unknown error'}")
