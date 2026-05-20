@@ -21,12 +21,64 @@ An `Extension` object holds:
 ```python
 @dataclass
 class Extension:
-    path: str                              # source file path (for error attribution)
-    handlers: dict[str, list[Callable]]   # event_type → list of handlers
-    tools: dict[str, RuntimeToolDef]      # tool_name → tool definition
-    commands: dict[str, CommandDef]       # command_name → slash command
-    hooks_api: Any                        # the API object passed to the extension
+    path: str                                # source file path (for error attribution)
+    source_info: SourceInfo                  # path + source label
+    handlers: dict[str, list[Callable]]      # event_type → list of handlers
+    tools: dict[str, RegisteredTool]         # tool_name → registered tool
+    commands: dict[str, RegisteredCommand]   # command_name → slash command
+    config: dict                             # per-extension settings (from extension_list)
 ```
+
+## Writing an extension
+
+An extension file must export a callable named `extension`. It receives an `ExtensionAPI` object and uses it to register handlers, tools, and commands:
+
+```python
+# ~/.program/agent/extensions/my_ext.py
+from pydantic import BaseModel
+from program.extension.types import ToolDefinition
+from program.tool.types import ToolResult
+
+class MyParams(BaseModel):
+    text: str
+
+async def _execute(params, invocation, ctx):
+    return ToolResult.ok(invocation.id, params.text.upper())
+
+def extension(api):
+    # Read per-extension settings (configured in settings.json)
+    threshold = api.config.get("threshold", 10)
+
+    # Register an event handler
+    api.on("session_start", lambda event, ctx: None)
+
+    # Register a tool
+    api.register_tool(ToolDefinition(
+        name="my_tool",
+        description="Does something useful.",
+        parameters=MyParams,
+        execute=_execute,
+    ))
+
+    # Register a slash command
+    api.register_command("mytool", my_handler, description="Run my tool")
+```
+
+The factory may also be `async def extension(api)` for startup work such as fetching remote config.
+
+## Extension API
+
+`ExtensionAPI` is passed to the factory. It provides:
+
+| Method / property | Purpose |
+|---|---|
+| `api.config` | Per-extension settings dict from `extension_list` in `settings.json` |
+| `api.events` | The shared `EventBus` |
+| `api.on(event, handler)` | Register an event handler |
+| `api.register_tool(ToolDefinition)` | Register a tool the LLM can call |
+| `api.register_command(name, handler, description?)` | Register a slash command |
+
+`ctx` in event handlers is the `ExtensionContext` — the live `Agent` instance. See [agent.md](./agent.md) for what it exposes.
 
 ## Loading
 
@@ -37,42 +89,67 @@ class Extension:
 | `program/builtins/extensions/` | `get_builtins_extensions_dir()` | Shipped built-in extensions |
 | `<project>/.program/agent/extensions/` | `get_extensions_dir(cwd)` | Project-level extensions |
 | `~/.program/agent/extensions/` | `get_extensions_dir()` | Global user extensions |
+| Installed package `extensions/` dirs | `get_packages_dir()` | From packages in `settings.packages` |
 | `ResourceLoaderOptions.additional_extension_dirs` | — | Programmatically injected extras |
 
 All path functions are defined in `program/settings/paths.py`.
 
-Each file is executed in a sandboxed module. The extension receives an `api` object through which it registers handlers and tools.
+Each file is executed in a sandboxed module. Files starting with `_` are skipped. Load errors are non-fatal: a file that raises on import is recorded as an `ExtensionError` and skipped. The rest of the extensions load normally.
 
-Load errors are non-fatal: a file that raises on import is recorded as an `ExtensionError` and skipped. The rest of the extensions load normally.
+## Per-extension configuration
 
-## Extension API
+Extensions are configured in `settings.json` under `extension_list`. Each entry can toggle the extension on or off and pass a settings dict that the extension reads via `api.config`:
 
-Inside an extension file, the extension interacts via an `api` object:
-
-```python
-def setup(api):
-    # Register an event handler
-    @api.on('agent_end')
-    async def on_end(event, ctx):
-        print(f"Turn complete: {len(event.messages)} messages")
-
-    # Register a tool
-    api.register_tool(
-        name="my_tool",
-        description="Does something useful",
-        parameters={...},  # JSON Schema
-        execute=my_execute_fn,
-    )
-
-    # Register a slash command
-    api.register_command(
-        name="mycommand",
-        description="Custom command",
-        handler=my_command_handler,
-    )
+```json
+{
+  "extensions": true,
+  "extension_list": [
+    {
+      "path": "~/.program/agent/extensions/git_guard.py",
+      "name": "git_guard",
+      "enabled": true,
+      "author": "jeomon",
+      "source": "local",
+      "settings": {
+        "strict": true,
+        "block_force_push": false
+      }
+    },
+    {
+      "path": "~/.program/agent/extensions/noisy.py",
+      "name": "noisy",
+      "enabled": false
+    }
+  ]
+}
 ```
 
-`ctx` in event handlers is the `ExtensionContext` — the live `Agent` instance. See [agent.md](./agent.md) for what it exposes.
+**`extensions`** (top-level bool) — global kill switch. Set to `false` to disable all extensions. Defaults to `true`.
+
+**`extension_list`** — per-extension overrides. Each entry is matched to a discovered file by stem name (`name` field, or stem of `path` if `name` is omitted).
+
+`ExtensionEntry` fields:
+
+| Field | Type | Required | Purpose |
+|---|---|---|---|
+| `path` | `str` | yes | File path (metadata only — discovery still uses dirs) |
+| `name` | `str` | no | Stem name used for matching; derived from path if omitted |
+| `enabled` | `bool` | no | Defaults to `true` |
+| `source` | `str` | no | Informational: `"local"`, `"git"`, etc. |
+| `author` | `str` | no | Informational |
+| `settings` | `dict` | no | Passed to the extension as `api.config` |
+
+Entries with `enabled: false` are skipped during discovery. Extensions not listed in `extension_list` are loaded with an empty `config`.
+
+### Settings manager API
+
+```python
+sm.is_extensions_enabled() -> bool              # global toggle (default True)
+sm.set_extensions_enabled(enabled: bool)        # set global toggle
+
+sm.get_extension_list() -> list[ExtensionEntry] # per-extension entries
+sm.set_extension_list(entries: list[ExtensionEntry])
+```
 
 ## Dispatch
 
@@ -91,7 +168,9 @@ async def emit(self, event_type: str, event: Any) -> list[Any]:
     for ext in self._extensions:
         for handler in ext.handlers.get(event_type, []):
             try:
-                result = await handler(event, self._ctx)
+                result = handler(event, self._ctx)
+                if inspect.isawaitable(result):
+                    result = await result
                 if result is not None:
                     results.append(result)
             except Exception:
@@ -168,14 +247,15 @@ These are non-fatal. The extension system continues operating after any handler 
 
 `ResourceLoader` handles the filesystem side of extension discovery. It is separate from `ExtensionRuntime` and responsible for:
 
-- Discovering extension files on disk
-- Loading skills and context files
-- Reading system prompt files
+- Discovering extension files on disk (including from installed packages)
+- Filtering disabled extensions and injecting per-extension configs
+- Loading skills, tools, context files, and system prompts
 
 It does not dispatch events. After `ResourceLoader.reload()`, the caller rebuilds the system prompt and re-creates the `ExtensionRuntime` with the fresh load result.
 
 ## Related documents
 
+- [packages.md](./packages.md) — Package installation and how packages contribute extensions
 - [agent.md](./agent.md) — Agent as ExtensionContext, tool merging, event fan-out
 - [hooks.md](./hooks.md) — Event types and result semantics
 - [engine.md](./engine.md) — Engine events that flow through `_on_engine_event`
