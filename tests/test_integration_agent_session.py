@@ -1,6 +1,7 @@
 """Integration tests for Agent: prompt flow, retry, compaction, extensions, tools."""
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import AsyncIterator
 from pydantic import BaseModel
 
@@ -41,6 +42,8 @@ class FakeLLM:
     def __init__(self, *sequences: list[LLMEvent]):
         self._seqs = list(sequences)
         self._idx = 0
+        self.model = SimpleNamespace(name="fake", provider="fake")
+        self.api = SimpleNamespace(options=SimpleNamespace())
 
     async def stream(self, context: LLMContext) -> AsyncIterator[LLMEvent]:
         events = self._seqs[min(self._idx, len(self._seqs) - 1)]
@@ -277,7 +280,11 @@ class TestRetryBehavior:
             await session.invoke("go")
 
     @pytest.mark.asyncio
-    async def test_exhausted_retries_removes_user_message(self):
+    async def test_exhausted_retries_preserves_session(self):
+        """When retries are exhausted, the session is fully non-destructive:
+        the user message + the trailing error turn are kept on disk so the
+        user can send 'continue' to resume (see agent/service.py:478-485).
+        """
         llm = FakeLLM(error_seq("e1"), error_seq("e2"))
         session, sm = make_session(llm, retry_enabled=True, retry_max_retries=1)
         try:
@@ -285,7 +292,7 @@ class TestRetryBehavior:
         except RuntimeError:
             pass
         entries = [e for e in sm.get_entries() if isinstance(sm.by_id.get(e.id), MessageEntry)]
-        assert len(entries) == 0  # user message also removed
+        assert len(entries) >= 1  # at least the user message survives
 
 
 # ── Compaction integration ────────────────────────────────────────────────────

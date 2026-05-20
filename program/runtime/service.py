@@ -228,16 +228,13 @@ class Runtime:
         sm.branch(from_entry_id)
         await self._emit_session_start('fork')
 
-    def create_session_agent(self, channel_id: str | None = None, chat_id: str | None = None) -> Agent:
+    def create_session_agent(self) -> Agent:
         """
-        Create an isolated agent for a gateway session.
+        Create an isolated agent for an ACP session.
 
         Shares LLM, tools, and resources with the main runtime context but
         isolates conversation state (session manager, hooks, extension runtime).
-
-        When channel_id and chat_id are provided the session is persisted to a
-        deterministic file so the conversation survives restarts (same behaviour
-        as the REPL). Pass neither to get a transient in-memory session.
+        Always uses an in-memory (non-persisted) session.
         """
         from program.hooks.service import Hooks
         from program.engine.service import Engine
@@ -245,10 +242,6 @@ class Runtime:
         from program.session.manager import SessionManager
         from program.extension.runtime import ExtensionRuntime
         from program.runtime.types import _DeferredExtensionRuntime
-        from program.settings.paths import get_gateway_sessions_dir
-        import json
-        import uuid
-        from datetime import datetime
 
         hooks = Hooks()
 
@@ -259,45 +252,10 @@ class Runtime:
             hooks=hooks,
         )
 
-        # Persist gateway sessions using timestamp_id filenames (same convention as
-        # REPL sessions). An index file maps channel:chat_id → session file path so
-        # the correct history is loaded when the same user reconnects after a restart.
-        if channel_id and chat_id:
-            sessions_dir = get_gateway_sessions_dir()
-            sessions_dir.mkdir(parents=True, exist_ok=True)
-            index_path = sessions_dir / 'index.json'
-            index: dict[str, str] = {}
-            if index_path.exists():
-                try:
-                    index = json.loads(index_path.read_text())
-                except Exception:
-                    index = {}
-
-            session_key = f'{channel_id}:{chat_id}'
-            session_file_str = index.get(session_key)
-            session_file = None
-            if session_file_str:
-                candidate = sessions_dir / session_file_str
-                if candidate.exists():
-                    session_file = candidate
-
-            if session_file is None:
-                timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S-%f')
-                uid = uuid.uuid4().hex[:8]
-                session_file = sessions_dir / f'{timestamp}_{uid}.jsonl'
-                index[session_key] = session_file.name
-                index_path.write_text(json.dumps(index, indent=2))
-
-            session_manager = SessionManager(
-                cwd=self._context.session_manager.cwd,
-                session_file=session_file,
-                persist=True,
-            )
-        else:
-            session_manager = SessionManager(
-                cwd=self._context.session_manager.cwd,
-                persist=False,
-            )
+        session_manager = SessionManager(
+            cwd=self._context.session_manager.cwd,
+            persist=False,
+        )
 
         load_result = self._context.resource_loader.get_extensions()
         deferred = _DeferredExtensionRuntime(load_result)
@@ -336,14 +294,6 @@ class Runtime:
         real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
         agent._extensions = real_ext
         agent._runtime = self
-
-        # Write channel/chat_id into the session info entry on first creation so
-        # the session file is self-describing without consulting the index.
-        if channel_id and chat_id and not session_manager.entries:
-            session_manager.append_session_info(
-                channel_id=channel_id,
-                chat_id=chat_id,
-            )
 
         return agent
 

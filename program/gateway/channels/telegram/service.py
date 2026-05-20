@@ -93,12 +93,17 @@ class TelegramChannel(BaseChannel):
             if not parts:
                 return
 
+            meta: dict = {}
+            if msg.reply_to_message:
+                meta['reply_to'] = str(msg.reply_to_message.message_id)
+
             await self.receive(IncomingMessage(
                 channel="telegram",
                 chat_id=chat_id,
                 parts=parts,
                 user_id=user_id,
                 message_id=str(msg.message_id),
+                metadata=meta,
             ))
 
         self._app.add_handler(MessageHandler(

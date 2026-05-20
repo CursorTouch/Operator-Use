@@ -97,12 +97,18 @@ class DiscordChannel(BaseChannel):
             if not parts:
                 return
 
+            meta: dict = {}
+            ref = getattr(message, 'reference', None)
+            if ref is not None and getattr(ref, 'message_id', None):
+                meta['reply_to'] = str(ref.message_id)
+
             await self.receive(IncomingMessage(
                 channel="discord",
                 chat_id=chat_id,
                 parts=parts,
                 user_id=user_id,
                 message_id=str(message.id),
+                metadata=meta,
             ))
 
         try:

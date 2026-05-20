@@ -1,6 +1,8 @@
 """Extension lifecycle — context event, tool blocking, result modification, error isolation."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from helpers import FakeLLM, make_tool, text_seq, tool_call_seq, AnyParams
 
@@ -74,6 +76,8 @@ class TestContextEvent:
         captured = []
 
         class CapLLM:
+            model = SimpleNamespace(name="fake", provider="fake")
+            api = SimpleNamespace(options=SimpleNamespace())
             async def stream(self, context):
                 captured.append(context.messages)
                 for ev in text_seq("ok"):
@@ -114,6 +118,8 @@ class TestToolResultModification:
         received_results = []
 
         class CapLLM:
+            model = SimpleNamespace(name="fake", provider="fake")
+            api = SimpleNamespace(options=SimpleNamespace())
             def __init__(self): self._calls = 0
             async def stream(self, context):
                 self._calls += 1

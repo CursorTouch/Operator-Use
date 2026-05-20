@@ -172,6 +172,9 @@ class Gateway:
         entry.task = asyncio.create_task(
             self._run_session(
                 session_key, msg.channel, msg.chat_id, entry.agent, text,
+                user_id=msg.user_id,
+                parts=list(msg.parts),
+                msg_metadata=msg.metadata,
                 is_voice=is_voice,
                 message_id=msg.message_id or None,
             ),
@@ -234,7 +237,9 @@ class Gateway:
 
     def _get_or_create_session(self, session_key: str, channel_id: str | None = None, chat_id: str | None = None) -> _SessionEntry:
         if session_key not in self._sessions:
-            agent = self._runtime.create_session_agent(channel_id=channel_id, chat_id=chat_id)
+            agent = self._runtime.current_session
+            if agent is None:
+                raise RuntimeError("No active session available.")
             self._sessions[session_key] = _SessionEntry(agent=agent)
         return self._sessions[session_key]
 
@@ -283,6 +288,9 @@ class Gateway:
         chat_id: str,
         agent: Agent,
         text: str,
+        user_id: str = '',
+        parts: list | None = None,
+        msg_metadata: dict | None = None,
         is_voice: bool = False,
         message_id: str | None = None,
     ) -> None:
@@ -355,6 +363,24 @@ class Gateway:
             stream_phase=StreamPhase.START,
         ))
 
+        # Write a ChannelEntry when the active channel changes.
+        if agent._session_manager.get_current_channel() != channel_id:
+            agent._session_manager.append_channel_entry(channel_id, chat_id, user_id or None)
+
+        # Build per-message meta: attachments from non-text parts, reply_to if present.
+        from program.session.types import MessageMeta, MessageAttachment
+        from program.bus.types import AudioPart, FilePart
+        attachments = [
+            MessageAttachment(path=getattr(p, 'audio', None) or getattr(p, 'path', ''), mime_type=getattr(p, 'mime_type', None))
+            for p in (parts or [])
+            if isinstance(p, (AudioPart, FilePart))
+        ]
+        reply_to = (msg_metadata or {}).get('reply_to')
+        msg_meta = MessageMeta(
+            reply_to=str(reply_to) if reply_to else None,
+            attachments=attachments or None,
+        )
+
         # Expose channel + chat_id + message_id via contextvars so tools (send,
         # subagent) know where to deliver results and which message to react to.
         _session_channel.set(channel_id)
@@ -363,7 +389,7 @@ class Gateway:
 
         unsub = agent.hooks.subscribe(_on_event)
         try:
-            await agent.invoke(text, PromptOptions(source='interactive'))
+            await agent.invoke(text, PromptOptions(source='interactive', meta=msg_meta))
         except Exception as exc:
             logger.exception("Gateway: agent.invoke failed for session %r", session_key)
             err_msg = str(exc)

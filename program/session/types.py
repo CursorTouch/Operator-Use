@@ -38,6 +38,7 @@ class SessionType(str, Enum):
     SESSION_INFO = "session_info"
     CUSTOM_MESSAGE = "custom_message"
     LEAF = "leaf"
+    CHANNEL = "channel"
 
 
 class BaseSessionEntry(BaseModel):
@@ -60,14 +61,30 @@ class SessionHeader(BaseModel):
 class SessionInfoEntry(BaseSessionEntry):
     type: Literal[SessionType.SESSION_INFO] = Field(SessionType.SESSION_INFO, init=False)
     name: str | None = None
-    channel_id: str | None = None
+
+
+class ChannelEntry(BaseSessionEntry):
+    type: Literal[SessionType.CHANNEL] = Field(SessionType.CHANNEL, init=False)
+    name: str
     chat_id: str | None = None
     user_id: str | None = None
+
+
+class MessageAttachment(BaseModel):
+    path: str
+    mime_type: str | None = None
+
+
+class MessageMeta(BaseModel):
+    reply_to: str | None = None                      # message_id this is replying to
+    attachments: list[MessageAttachment] | None = None
+    reactions: list[str] | None = None
 
 
 class MessageEntry(BaseSessionEntry):
     type: Literal[SessionType.SESSION_MESSAGE] = Field(SessionType.SESSION_MESSAGE, init=False)
     message: "AgentMessage"
+    meta: MessageMeta | None = None
 
 
 class ThinkingLevelChangeEntry(BaseSessionEntry):
@@ -125,6 +142,7 @@ class CustomMessageEntry(BaseSessionEntry):
 
 SessionEntries = (
     SessionInfoEntry
+    | ChannelEntry
     | MessageEntry
     | ThinkingLevelChangeEntry
     | ModelChangeEntry

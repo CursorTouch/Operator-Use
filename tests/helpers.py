@@ -5,6 +5,7 @@ import asyncio
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from pydantic import BaseModel
@@ -50,6 +51,8 @@ class FakeLLM:
         self._seqs = list(sequences)
         self._idx = 0
         self.call_count = 0
+        self.model = SimpleNamespace(name="fake", provider="fake")
+        self.api = SimpleNamespace(options=SimpleNamespace())
 
     async def stream(self, context: LLMContext) -> AsyncIterator[LLMEvent]:
         events = self._seqs[min(self._idx, len(self._seqs) - 1)]

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 async def _handle_start(registry: CommandRegistry, args: list[str]) -> None:
     print(
-        "Hi! I'm Operator, a stateful AI agent.\n"
+        "Hi! I'm Operator, a personal assistant.\n"
         "I can help you with tasks, answer questions, and run tools.\n"
         "Type /help to see all available commands."
     )

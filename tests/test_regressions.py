@@ -6,6 +6,7 @@ comment explaining the original failure mode so the constraint is clear to
 future readers.
 """
 import pytest
+from types import SimpleNamespace
 from typing import AsyncIterator
 from pydantic import BaseModel
 
@@ -36,6 +37,8 @@ class FakeLLM:
     def __init__(self, *sequences: list[LLMEvent]):
         self._seqs = list(sequences)
         self._idx = 0
+        self.model = SimpleNamespace(name="fake", provider="fake")
+        self.api = SimpleNamespace(options=SimpleNamespace())
 
     async def stream(self, context: LLMContext) -> AsyncIterator[LLMEvent]:
         events = self._seqs[min(self._idx, len(self._seqs) - 1)]

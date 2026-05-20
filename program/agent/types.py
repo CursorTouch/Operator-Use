@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
 from program.message.types import BaseMessage
+from program.session.types import MessageMeta
 
 if TYPE_CHECKING:
     from program.tool.types import Tool
@@ -35,6 +36,7 @@ class AgentConfig(BaseModel):
 class PromptOptions(BaseModel):
     source: Literal['interactive', 'rpc', 'extension', 'cron', 'subagent'] = 'interactive'
     compaction_custom_instructions: str | None = None
+    meta: MessageMeta | None = None
 
 
 @dataclass

@@ -6,11 +6,11 @@ from pathlib import Path
 from program.session.types import (
     SessionFileEntry, SessionHeader,
     SessionEntry, LabelEntry, LeafEntry, CompactionEntry,
-    SessionOptions, SessionType, MessageEntry,
+    SessionOptions, MessageEntry,
     ThinkingLevelChangeEntry, SessionInfoEntry,
     ModelChangeEntry, BranchEntry, CustomInfoEntry,
     CustomMessageEntry, SessionContext, SessionInfo,
-    SessionTreeNode,
+    SessionTreeNode, ChannelEntry, MessageMeta, MessageAttachment,
 )
 from program.session.utils import (
     create_session_id, generate_timestamp, generate_id, read_session_file,
@@ -116,8 +116,8 @@ class SessionManager:
     def _rewrite_file(self):
         if not self.persist or not self.session_file:
             return None
-        lines = [entry.model_dump_json(exclude_none=True) for entry in self.entries]
-        self.session_file.write_text("\n".join(lines), encoding="utf-8")
+        lines = [entry.model_dump_json(exclude_none=True) + "\n" for entry in self.entries]
+        self.session_file.write_text("".join(lines), encoding="utf-8")
 
     def _build_index(self):
         self.by_id.clear()
@@ -155,12 +155,11 @@ class SessionManager:
             self.flushed = False
             return
 
-        with self.session_file.open("a", encoding="utf-8") as f:
-            if not self.flushed:
-                lines = [e.model_dump_json(exclude_none=True) + "\n" for e in self.entries]
-                f.writelines(lines)
-                self.flushed = True
-            else:
+        if not self.flushed:
+            self._rewrite_file()
+            self.flushed = True
+        else:
+            with self.session_file.open("a", encoding="utf-8") as f:
                 f.write(entry.model_dump_json(exclude_none=True) + "\n")
 
     def _append_entry(self, entry: SessionEntry) -> str:
@@ -170,9 +169,19 @@ class SessionManager:
         self._persist(entry)
         return entry.id
 
-    def append_message(self, message: AgentMessage) -> str:
-        entry = MessageEntry(message=message, parent_id=self.leaf_id)
+    def append_message(self, message: AgentMessage, meta: MessageMeta | None = None) -> str:
+        entry = MessageEntry(message=message, parent_id=self.leaf_id, meta=meta)
         return self._append_entry(entry)
+
+    def append_channel_entry(self, name: str, chat_id: str | None = None, user_id: str | None = None) -> str:
+        entry = ChannelEntry(name=name, chat_id=chat_id, user_id=user_id, parent_id=self.leaf_id)
+        return self._append_entry(entry)
+
+    def get_current_channel(self) -> str | None:
+        for entry in reversed(self.entries):
+            if isinstance(entry, ChannelEntry):
+                return entry.name
+        return None
 
     def append_thinking_level_change(self, thinking_level: ThinkingLevel) -> str:
         entry = ThinkingLevelChangeEntry(thinking_level=thinking_level, parent_id=self.leaf_id)
@@ -230,20 +239,8 @@ class SessionManager:
         )
         return self._append_entry(entry)
 
-    def append_session_info(
-        self,
-        name: str | None = None,
-        channel_id: str | None = None,
-        chat_id: str | None = None,
-        user_id: str | None = None,
-    ) -> str:
-        entry = SessionInfoEntry(
-            name=name,
-            channel_id=channel_id,
-            chat_id=chat_id,
-            user_id=user_id,
-            parent_id=self.leaf_id,
-        )
+    def append_session_info(self, name: str | None = None) -> str:
+        entry = SessionInfoEntry(name=name, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
     def get_session_name(self) -> str | None:

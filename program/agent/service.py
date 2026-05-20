@@ -382,7 +382,7 @@ class Agent(ExtensionContext):
 
         # Persist the user message once (not retried)
         user_message = UserMessage(contents=[TextContent(content=user_input)])
-        user_entry_id = self._session_manager.append_message(user_message)
+        user_entry_id = self._session_manager.append_message(user_message, meta=opts.meta)
 
         # Assemble tools: base tools + extension tools (base names take priority)
         base_tool_names = {t.name for t in self._engine.tools}
