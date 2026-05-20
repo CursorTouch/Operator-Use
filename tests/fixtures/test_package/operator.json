@@ -1,0 +1,8 @@
+{
+  "name": "test-package",
+  "version": "0.1.0",
+  "author": "jeomon",
+  "description": "A fixture package used in integration tests.",
+  "extensions": ["extensions"],
+  "skills": ["skills"]
+}

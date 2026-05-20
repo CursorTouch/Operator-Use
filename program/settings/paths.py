@@ -72,6 +72,10 @@ def get_gateway_sessions_dir() -> Path:
     return get_agent_dir() / "gateway_sessions"
 
 
+def get_packages_dir(cwd: Path | None = None) -> Path:
+    return get_agent_dir(cwd) / "packages"
+
+
 def get_extensions_dir(cwd: Path | None = None) -> Path:
     return get_agent_dir(cwd) / "extensions"
 

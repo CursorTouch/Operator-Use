@@ -173,10 +173,19 @@ class TestSetters:
         assert sm.get_packages() == ["pkg-a", "pkg-b"]
 
     @pytest.mark.asyncio
-    async def test_set_extension_paths(self):
+    async def test_set_extension_list(self):
+        from program.settings.types import ExtensionEntry
         sm = SettingsManager.in_memory()
-        sm.set_extension_paths(["/ext/a.py"])
-        assert "/ext/a.py" in sm.get_extension_paths()
+        entry = ExtensionEntry(path="/ext/a.py", name="a", enabled=True, author="jeomon")
+        sm.set_extension_list([entry])
+        assert sm.get_extension_list()[0].path == "/ext/a.py"
+
+    @pytest.mark.asyncio
+    async def test_extensions_enabled_toggle(self):
+        sm = SettingsManager.in_memory()
+        assert sm.is_extensions_enabled() is True
+        sm.set_extensions_enabled(False)
+        assert sm.is_extensions_enabled() is False
 
     @pytest.mark.asyncio
     async def test_set_skill_paths(self):

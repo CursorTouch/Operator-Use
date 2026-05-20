@@ -31,7 +31,7 @@ from program.acp.manager import ACPSessionManager
 from program.process.manager import ProcessManager
 from program.settings.paths import (
     get_config_dir, get_crons_path, get_acp_sessions_dir,
-    get_channels_auth_path, get_acp_auth_path,
+    get_channels_auth_path, get_acp_auth_path, get_packages_dir,
 )
 
 
@@ -135,14 +135,21 @@ class RuntimeContext:
         llm = LLM(model_id=model_id, provider=provider)
 
         # ── Resource loader ───────────────────────────────────────────────────
+        ext_entries = settings_manager.get_extension_list()
+        disabled_stems = {(e.name or Path(e.path).stem) for e in ext_entries if not e.enabled}
+        entry_configs = {(e.name or Path(e.path).stem): (e.settings or {}) for e in ext_entries}
         loader_opts = ResourceLoaderOptions(
             cwd=cwd,
             config_dir=config_dir,
-            no_extensions=config.no_extensions,
+            no_extensions=config.no_extensions or not settings_manager.is_extensions_enabled(),
             no_skills=config.no_skills,
             no_context_files=config.no_context_files,
             system_prompt=config.system_prompt,
             append_system_prompt=config.append_system_prompt,
+            disabled_extension_stems=disabled_stems,
+            extension_configs=entry_configs,
+            package_sources=settings_manager.get_packages(),
+            packages_dir=get_packages_dir(),
         )
         resource_loader = ResourceLoader(loader_opts)
         await resource_loader.reload()

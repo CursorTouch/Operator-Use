@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Literal, Any
 from program.engine.types import SteeringMode, FollowupMode
@@ -22,6 +22,16 @@ class LockResult:
 class SettingsError:
     scope: SCOPE
     error: Exception
+
+
+@dataclass
+class ExtensionEntry:
+    path: str
+    name: Optional[str] = None
+    enabled: bool = True
+    source: Optional[str] = None
+    author: Optional[str] = None
+    settings: Optional[dict] = field(default=None)
 
 
 @dataclass
@@ -108,7 +118,8 @@ class Settings:
 
     # Resource paths
     packages: Optional[list[str]] = None
-    extensions: Optional[list[str]] = None
+    extensions: Optional[bool] = None          # global toggle for all extensions
+    extension_list: Optional[list[ExtensionEntry]] = None  # per-extension config
     skills: Optional[list[str]] = None
     prompts: Optional[list[str]] = None
 

@@ -15,6 +15,7 @@ from program.tool.types import Tool
 from program.commands.loader import load_commands
 from program.commands.types import SlashCommandInfo
 from program.hooks.loader import load_hooks, HookRegistration
+from program.package.loader import load_packages_from_settings
 from program.settings.paths import (
     get_extensions_dir, get_skills_dir, get_tools_dir, get_commands_dir, get_hooks_dir,
     get_system_prompt_path, get_append_system_prompt_path, get_knowledge_dir,
@@ -66,6 +67,10 @@ class ResourceLoader(BaseResourceLoader):
         self._no_context_files = options.no_context_files
         self._system_prompt_override = options.system_prompt
         self._append_system_prompt_override = options.append_system_prompt
+        self._disabled_extension_stems = options.disabled_extension_stems
+        self._extension_configs = options.extension_configs
+        self._package_sources = options.package_sources
+        self._packages_dir = options.packages_dir
 
         self._bus = EventBus()
 
@@ -150,7 +155,18 @@ class ResourceLoader(BaseResourceLoader):
             dirs.append(global_ext)
         dirs.extend(self._additional_extension_dirs)
 
-        self._extensions_result = await discover_and_load_extensions(dirs, self._bus)
+        if self._package_sources and self._packages_dir:
+            loaded = load_packages_from_settings(self._package_sources, self._packages_dir, self._cwd)
+            self._package_skill_paths = loaded.skill_paths
+            dirs.extend(loaded.extension_dirs)
+        else:
+            self._package_skill_paths: list[str] = []
+
+        self._extensions_result = await discover_and_load_extensions(
+            dirs, self._bus,
+            disabled_stems=self._disabled_extension_stems or None,
+            entry_configs=self._extension_configs or None,
+        )
 
     def _reload_skills(self) -> None:
         if self._no_skills:
@@ -158,7 +174,12 @@ class ResourceLoader(BaseResourceLoader):
             self._skill_diagnostics = []
             return
 
-        all_skill_paths = [str(get_builtins_skills_dir())] + list(self._additional_skill_paths) + list(self._extension_skill_paths)
+        all_skill_paths = (
+            [str(get_builtins_skills_dir())]
+            + list(self._additional_skill_paths)
+            + list(self._extension_skill_paths)
+            + getattr(self, "_package_skill_paths", [])
+        )
         result = load_skills(LoadSkillsOptions(
             cwd=self._cwd,
             skill_paths=all_skill_paths,

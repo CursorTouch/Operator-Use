@@ -11,7 +11,7 @@ from program.settings.types import (
     Settings, SCOPE, SettingsError,
     CompactionSettings, BranchSummarySettings,
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
-    ImageSettings, STTSettings, TTSSettings,
+    ImageSettings, STTSettings, TTSSettings, ExtensionEntry,
 )
 from program.gateway.channels.types import (
     ChannelsSettings,
@@ -101,6 +101,13 @@ class SettingsManager:
                 nested_cls = _NESTED_FIELD_TYPES[key]
                 valid_nested = {f.name for f in dc.fields(nested_cls)}
                 kwargs[key] = nested_cls(**{k: v for k, v in value.items() if k in valid_nested})
+            elif key == 'extension_list' and isinstance(value, list):
+                valid_fields = {f.name for f in dc.fields(ExtensionEntry)}
+                entries = []
+                for item in value:
+                    if isinstance(item, dict):
+                        entries.append(ExtensionEntry(**{k: v for k, v in item.items() if k in valid_fields}))
+                kwargs[key] = entries
             elif key == 'retry' and isinstance(value, dict):
                 provider = value.get('provider')
                 if isinstance(provider, dict):
@@ -464,14 +471,24 @@ class SettingsManager:
         self._mark_modified("packages")
         self._save()
 
-    def get_extension_paths(self) -> list[str]:
-        """Return the list of local extension file paths."""
-        return self.settings.extensions or []
+    def is_extensions_enabled(self) -> bool:
+        """Return whether extensions are globally enabled (default True)."""
+        return self.settings.extensions if self.settings.extensions is not None else True
 
-    def set_extension_paths(self, paths: list[str]):
-        """Set the extension paths and persist to global settings."""
-        self.global_settings.extensions = paths
+    def set_extensions_enabled(self, enabled: bool):
+        """Set the global extension toggle and persist to global settings."""
+        self.global_settings.extensions = enabled
         self._mark_modified("extensions")
+        self._save()
+
+    def get_extension_list(self) -> list[ExtensionEntry]:
+        """Return the list of per-extension config entries."""
+        return self.settings.extension_list or []
+
+    def set_extension_list(self, entries: list[ExtensionEntry]):
+        """Set the per-extension config entries and persist to global settings."""
+        self.global_settings.extension_list = entries
+        self._mark_modified("extension_list")
         self._save()
 
     def get_skill_paths(self) -> list[str]:

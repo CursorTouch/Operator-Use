@@ -13,7 +13,7 @@ from program.extension.types import (
 )
 
 
-async def load_extension_from_file(path: Path, bus: EventBus | None = None) -> tuple[Extension | None, list[ExtensionError]]:
+async def load_extension_from_file(path: Path, bus: EventBus | None = None, config: dict | None = None) -> tuple[Extension | None, list[ExtensionError]]:
     """Load a single Python extension file and call its factory."""
     errors: list[ExtensionError] = []
     str_path = str(path)
@@ -41,7 +41,7 @@ async def load_extension_from_file(path: Path, bus: EventBus | None = None) -> t
             return None, errors
 
         source_info = SourceInfo(path=str_path, source='local')
-        ext = Extension(path=str_path, source_info=source_info)
+        ext = Extension(path=str_path, source_info=source_info, config=config or {})
         api = ExtensionAPI(ext, bus or EventBus())
 
         result = factory(api)
@@ -60,7 +60,12 @@ async def load_extension_from_file(path: Path, bus: EventBus | None = None) -> t
         return None, errors
 
 
-async def discover_and_load_extensions(dirs: list[Path], bus: EventBus | None = None) -> LoadExtensionsResult:
+async def discover_and_load_extensions(
+    dirs: list[Path],
+    bus: EventBus | None = None,
+    disabled_stems: set[str] | None = None,
+    entry_configs: dict[str, dict] | None = None,
+) -> LoadExtensionsResult:
     """Discover all *.py extension files in the given directories and load them."""
     shared_bus = bus or EventBus()
     extensions: list[Extension] = []
@@ -72,7 +77,10 @@ async def discover_and_load_extensions(dirs: list[Path], bus: EventBus | None = 
         for file in sorted(directory.glob('*.py')):
             if file.name.startswith('_'):
                 continue
-            ext, errors = await load_extension_from_file(file, shared_bus)
+            if disabled_stems and file.stem in disabled_stems:
+                continue
+            config = (entry_configs or {}).get(file.stem, {})
+            ext, errors = await load_extension_from_file(file, shared_bus, config)
             if ext:
                 extensions.append(ext)
             all_errors.extend(errors)

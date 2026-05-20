@@ -88,3 +88,7 @@ class ResourceLoaderOptions(BaseModel):
     no_context_files: bool = False
     system_prompt: str | None = None
     append_system_prompt: list[str] = Field(default_factory=list)
+    disabled_extension_stems: set[str] = Field(default_factory=set)
+    extension_configs: dict[str, dict] = Field(default_factory=dict)
+    package_sources: list[str] = Field(default_factory=list)
+    packages_dir: Path | None = None

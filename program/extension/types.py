@@ -222,6 +222,7 @@ class Extension:
     handlers: dict[str, list[EventHandler]] = field(default_factory=dict)
     tools: dict[str, RegisteredTool] = field(default_factory=dict)
     commands: dict[str, RegisteredCommand] = field(default_factory=dict)
+    config: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -243,6 +244,11 @@ class ExtensionAPI:
     def __init__(self, extension: Extension, bus: EventBus) -> None:
         self._extension = extension
         self.events = bus
+
+    @property
+    def config(self) -> dict:
+        """Per-extension settings dict from extension_list in settings.json."""
+        return self._extension.config
 
     def on(self, event: str, handler: EventHandler) -> None:
         self._extension.handlers.setdefault(event, []).append(handler)
