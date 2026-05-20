@@ -130,6 +130,70 @@ def audio_ext_from_file(file: dict) -> str:
     return ext_map.get(file.get('mimetype', ''), '.mp3')
 
 
+_SLACK_MSG_LIMIT = 4000
+
+
+def markdown_to_slack_mrkdwn(text: str) -> str:
+    """Convert standard Markdown to Slack mrkdwn format."""
+    import re
+    if not text:
+        return ""
+
+    code_blocks: list[str] = []
+
+    def save_code_block(m: re.Match) -> str:
+        code_blocks.append(m.group(1))
+        return f"\x00CB{len(code_blocks) - 1}\x00"
+
+    text = re.sub(r"```[\w]*\n?([\s\S]*?)```", save_code_block, text)
+
+    inline_codes: list[str] = []
+
+    def save_inline_code(m: re.Match) -> str:
+        inline_codes.append(m.group(1))
+        return f"\x00IC{len(inline_codes) - 1}\x00"
+
+    text = re.sub(r"`([^`]+)`", save_inline_code, text)
+
+    text = re.sub(r"^#{1,6}\s+(.+)$", r"\1", text, flags=re.MULTILINE)
+    text = re.sub(r"^>\s*(.*)$", r"\1", text, flags=re.MULTILINE)
+    text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+    text = re.sub(r"__(.+?)__", r"*\1*", text)
+    text = re.sub(r"~~(.+?)~~", r"~\1~", text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"<\2|\1>", text)
+    text = re.sub(r"^[-*]\s+", "• ", text, flags=re.MULTILINE)
+
+    for i, code in enumerate(inline_codes):
+        text = text.replace(f"\x00IC{i}\x00", f"`{code}`")
+
+    for i, code in enumerate(code_blocks):
+        text = text.replace(f"\x00CB{i}\x00", f"```\n{code}\n```")
+
+    return text
+
+
+def split_message(text: str, limit: int = _SLACK_MSG_LIMIT) -> list[str]:
+    """Split text into chunks within limit, preferring line breaks."""
+    if not text:
+        return []
+    if len(text) <= limit:
+        return [text]
+    chunks: list[str] = []
+    while text:
+        if len(text) <= limit:
+            chunks.append(text)
+            break
+        cut = text[:limit]
+        pos = cut.rfind("\n")
+        if pos <= 0:
+            pos = cut.rfind(" ")
+        if pos <= 0:
+            pos = limit
+        chunks.append(text[:pos])
+        text = text[pos:].lstrip()
+    return chunks
+
+
 async def download_slack_file(url: str, bot_token: str, dest: Path) -> bool:
     """Download a Slack private file using bearer auth. Returns True on success."""
     try:

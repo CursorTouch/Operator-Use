@@ -7,7 +7,7 @@ from pathlib import Path
 from program.gateway.channels.shutdown import quiet_library_logging
 from program.gateway.types import BaseChannel
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
-from program.gateway.channels.telegram.utils import _TELEGRAM_MSG_LIMIT, _MEDIA_DIR, audio_mime_ext
+from program.gateway.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, markdown_to_telegram_html, split_message
 
 logger = logging.getLogger(__name__)
 
@@ -201,11 +201,15 @@ class TelegramChannel(BaseChannel):
             self._stop_typing(chat_id)
             buffered = self._buffers.pop(chat_id, "")
             if buffered.strip():
-                for i in range(0, len(buffered), _TELEGRAM_MSG_LIMIT):
+                for chunk in split_message(buffered):
                     try:
-                        await bot.send_message(int(chat_id), buffered[i:i + _TELEGRAM_MSG_LIMIT])
+                        await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML")
                     except Exception:
                         logger.exception("TelegramChannel: send_message failed (end)")
+                        try:
+                            await bot.send_message(int(chat_id), chunk)
+                        except Exception:
+                            logger.exception("TelegramChannel: send_message fallback failed (end)")
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)
@@ -265,11 +269,15 @@ class TelegramChannel(BaseChannel):
                         return  # caption already sent with the document
             text = text_from_parts(msg.parts)
             if text:
-                for i in range(0, len(text), _TELEGRAM_MSG_LIMIT):
+                for chunk in split_message(text):
                     try:
-                        await bot.send_message(int(chat_id), text[i:i + _TELEGRAM_MSG_LIMIT], reply_parameters=reply_params)
+                        await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
                     except Exception:
                         logger.exception("TelegramChannel: send_message failed (direct)")
+                        try:
+                            await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
+                        except Exception:
+                            logger.exception("TelegramChannel: send_message fallback failed (direct)")
 
 
 TelegramBot = TelegramChannel

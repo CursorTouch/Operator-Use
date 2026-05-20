@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from program.gateway.types import BaseChannel
 from program.gateway.channels.shutdown import quiet_library_logging
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
-from program.gateway.channels.discord.utils import _DISCORD_MSG_LIMIT, _MEDIA_DIR, is_audio_attachment
+from program.gateway.channels.discord.utils import _MEDIA_DIR, is_audio_attachment, split_message
 
 logger = logging.getLogger(__name__)
 
@@ -179,9 +179,9 @@ class DiscordChannel(BaseChannel):
             self._stop_typing(chat_id)
             buffered = self._buffers.pop(chat_id, "")
             if buffered.strip() and discord_ch is not None:
-                for i in range(0, len(buffered), _DISCORD_MSG_LIMIT):
+                for chunk in split_message(buffered):
                     try:
-                        await discord_ch.send(buffered[i:i + _DISCORD_MSG_LIMIT])
+                        await discord_ch.send(chunk)
                     except Exception:
                         logger.exception("DiscordChannel: send failed (end)")
 
@@ -252,8 +252,7 @@ class DiscordChannel(BaseChannel):
                             return  # caption already sent with the file
                 text = text_from_parts(msg.parts)
                 if text:
-                    for i in range(0, len(text), _DISCORD_MSG_LIMIT):
-                        chunk = text[i:i + _DISCORD_MSG_LIMIT]
+                    for i, chunk in enumerate(split_message(text)):
                         try:
                             if i == 0 and reference is not None:
                                 await discord_ch.send(chunk, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]

@@ -11,7 +11,7 @@ from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, Tex
 from program.gateway.channels.slack.utils import (
     _MEDIA_DIR, _MENTION_RE,
     is_audio_file, audio_ext_from_file, download_slack_file,
-    emoji_to_slack_name,
+    emoji_to_slack_name, markdown_to_slack_mrkdwn, split_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -192,7 +192,8 @@ class SlackChannel(BaseChannel):
         elif phase == StreamPhase.END:
             buffered = self._buffers.pop(chat_id, "")
             if buffered.strip():
-                await _post(buffered)
+                for chunk in split_message(buffered):
+                    await _post(markdown_to_slack_mrkdwn(chunk))
 
         elif phase == StreamPhase.ERROR:
             await _post(f"❌ {text_from_parts(msg.parts) or 'Unknown error'}")
@@ -248,14 +249,15 @@ class SlackChannel(BaseChannel):
             text = text_from_parts(msg.parts)
             if text:
                 if client is not None:
-                    try:
-                        await client.chat_postMessage(
-                            channel=slack_channel_id,
-                            text=text,
-                            thread_ts=reply_thread_ts,
-                        )
-                    except Exception:
-                        logger.exception("SlackChannel: chat_postMessage failed")
+                    for chunk in split_message(text):
+                        try:
+                            await client.chat_postMessage(
+                                channel=slack_channel_id,
+                                text=markdown_to_slack_mrkdwn(chunk),
+                                thread_ts=reply_thread_ts,
+                            )
+                        except Exception:
+                            logger.exception("SlackChannel: chat_postMessage failed")
 
 
 SlackBot = SlackChannel
