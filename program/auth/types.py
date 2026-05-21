@@ -9,7 +9,7 @@ class OAuthCredential:
     access: str = ""
     refresh: str = ""
     expires: int = 0  # Unix timestamp in milliseconds
-    account_id: str | None = None
+    extra: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

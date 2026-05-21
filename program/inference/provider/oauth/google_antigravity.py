@@ -277,13 +277,6 @@ async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
     data = await asyncio.to_thread(_exchange_code, code, recv_state)
     access, refresh, expires_ms = _parse_token_response(data)
 
-    if callbacks.on_progress:
-        callbacks.on_progress("Setting up Cloud Code Assist access...")
-
-    from program.inference.api.text.google_antigravity import fetch_project_id, onboard_user
-    project_id = await fetch_project_id(access)
-    await onboard_user(access, project_id)
-
     return OAuthCredential(access=access, refresh=refresh, expires=expires_ms)
 
 

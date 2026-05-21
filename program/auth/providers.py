@@ -58,11 +58,17 @@ class ProviderAuthManager:
             cred_type = v.get("type")
             match cred_type:
                 case AuthType.OAuth:
+                    raw_extra = v.get("extra") or {}
+                    extra = {str(ek): str(ev) for ek, ev in raw_extra.items()} if isinstance(raw_extra, dict) else {}
+                    # Backwards-compat: fold legacy top-level account_id into extra.
+                    legacy_account_id = v.get("account_id")
+                    if legacy_account_id and "account_id" not in extra:
+                        extra["account_id"] = str(legacy_account_id)
                     data[k] = OAuthCredential(
                         access=v.get("access", ""),
                         refresh=v.get("refresh", ""),
                         expires=v.get("expires", 0),
-                        account_id=v.get("account_id"),
+                        extra=extra,
                     )
                 case AuthType.ApiKey:
                     data[k] = APICredential(key=v.get("key", ""))
@@ -86,7 +92,7 @@ class ProviderAuthManager:
                 "access": credential.access,
                 "refresh": credential.refresh,
                 "expires": credential.expires,
-                "account_id": credential.account_id,
+                "extra": dict(credential.extra),
             }
         return {"type": AuthType.ApiKey, "key": credential.key}
 
@@ -186,6 +192,10 @@ class ProviderAuthManager:
                 return LockResult(result=credential)
             try:
                 refreshed = await oauth_provider.refresh_token(credential=credential)
+                if credential.extra:
+                    merged_extra = dict(credential.extra)
+                    merged_extra.update(refreshed.extra)
+                    refreshed.extra = merged_extra
                 current_data[provider] = refreshed
                 self.data = current_data
                 serialized = {k: self._serialize_credential(v) for k, v in current_data.items()}

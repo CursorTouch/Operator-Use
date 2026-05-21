@@ -6,6 +6,7 @@ through Google's Antigravity IDE quota.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from collections.abc import AsyncIterator
@@ -62,55 +63,79 @@ def _antigravity_headers(access_token: str) -> dict[str, str]:
     }
 
 
-async def fetch_project_id(access_token: str, base_url: str = _DEFAULT_BASE_URL) -> str:
-    """Discover the user's Cloud Code Assist project ID via loadCodeAssist."""
+_METADATA = {
+    "ideType": "ANTIGRAVITY",
+    "platform": "PLATFORM_UNSPECIFIED",
+    "pluginType": "GEMINI",
+}
+
+
+def _extract_managed_project(payload: dict[str, Any]) -> Optional[str]:
+    project = payload.get("cloudaicompanionProject")
+    if isinstance(project, str) and project:
+        return project
+    if isinstance(project, dict) and isinstance(project.get("id"), str):
+        return project["id"]
+    return None
+
+
+def _pick_default_tier(allowed: list[dict[str, Any]]) -> Optional[str]:
+    for tier in allowed:
+        if tier.get("isDefault") and tier.get("id"):
+            return tier["id"]
+    return allowed[0].get("id") if allowed else None
+
+
+async def resolve_project_id(access_token: str, base_url: str = _DEFAULT_BASE_URL) -> str:
+    """Resolve the user's managed Cloud Code Assist project ID.
+
+    Calls loadCodeAssist; if no project is returned, calls onboardUser and
+    polls the returned Long Running Operation until done (up to 10×5s).
+    """
     headers = _antigravity_headers(access_token)
-    body = {
-        "metadata": {
-            "ideType": "ANTIGRAVITY",
-            "platform": "PLATFORM_UNSPECIFIED",
-            "pluginType": "GEMINI",
-        }
-    }
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        load_payload: dict[str, Any] = {}
+        try:
             r = await client.post(
                 f"{base_url}{_LOAD_CODE_ASSIST_PATH}",
-                json=body,
+                json={"metadata": _METADATA},
                 headers=headers,
             )
             if r.status_code == 200:
-                data = r.json()
-                project = data.get("cloudaicompanionProject", "")
-                if isinstance(project, str) and project:
-                    return project
-                if isinstance(project, dict) and project.get("id"):
-                    return project["id"]
-    except Exception:
-        pass
+                load_payload = r.json()
+        except Exception:
+            pass
+
+        existing = _extract_managed_project(load_payload)
+        if existing:
+            return existing
+
+        tier_id = _pick_default_tier(load_payload.get("allowedTiers") or []) or "free-tier"
+        body = {"tierId": tier_id, "metadata": _METADATA}
+
+        for _ in range(10):
+            try:
+                r = await client.post(
+                    f"{base_url}{_ONBOARD_USER_PATH}",
+                    json=body,
+                    headers=headers,
+                )
+                if r.status_code != 200:
+                    break
+                payload = r.json()
+                if payload.get("done"):
+                    resp = payload.get("response") or {}
+                    project = resp.get("cloudaicompanionProject") or {}
+                    proj_id = project.get("id") if isinstance(project, dict) else None
+                    if proj_id:
+                        return proj_id
+                    break
+            except Exception:
+                break
+            await asyncio.sleep(5)
+
     return _FALLBACK_PROJECT_ID
-
-
-async def onboard_user(access_token: str, project_id: str, base_url: str = _DEFAULT_BASE_URL) -> None:
-    """Activate the account for API access (safe to call repeatedly)."""
-    headers = _antigravity_headers(access_token)
-    body = {
-        "cloudaicompanionProject": project_id,
-        "metadata": {
-            "ideType": "ANTIGRAVITY",
-            "platform": "PLATFORM_UNSPECIFIED",
-            "pluginType": "GEMINI",
-        },
-    }
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            await client.post(
-                f"{base_url}{_ONBOARD_USER_PATH}",
-                json=body,
-                headers=headers,
-            )
-    except Exception:
-        pass
 
 
 def _messages_to_contents(
@@ -175,17 +200,51 @@ def _messages_to_contents(
     return system, contents
 
 
+_PROVIDER_ID = "google-antigravity"
+_EXTRA_PROJECT_KEY = "project_id"
+
+
+def _load_cached_project_id() -> Optional[str]:
+    try:
+        from program.inference.api.text.service import LLM
+        from program.auth.types import OAuthCredential as _Cred
+        cred = LLM._auth_store.get(_PROVIDER_ID)
+        if isinstance(cred, _Cred):
+            return cred.extra.get(_EXTRA_PROJECT_KEY) or None
+    except Exception:
+        pass
+    return None
+
+
+def _persist_project_id(project_id: str) -> None:
+    try:
+        from program.inference.api.text.service import LLM
+        from program.auth.types import OAuthCredential as _Cred
+        cred = LLM._auth_store.get(_PROVIDER_ID)
+        if isinstance(cred, _Cred) and cred.extra.get(_EXTRA_PROJECT_KEY) != project_id:
+            cred.extra[_EXTRA_PROJECT_KEY] = project_id
+            LLM._auth_store.set(_PROVIDER_ID, cred)
+    except Exception:
+        pass
+
+
 class GoogleAntigravityAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         self._base_url = (options.base_url or _DEFAULT_BASE_URL).rstrip("/")
-        self._project_id: Optional[str] = (options.headers or {}).get("x-goog-user-project")
+        self._project_id: Optional[str] = (
+            (options.headers or {}).get("x-goog-user-project")
+            or _load_cached_project_id()
+        )
 
     async def _ensure_project_id(self) -> str:
         if not self._project_id:
-            self._project_id = await fetch_project_id(
+            resolved = await resolve_project_id(
                 self.options.api_key or "", self._base_url
             )
+            self._project_id = resolved
+            if resolved and resolved != _FALLBACK_PROJECT_ID:
+                _persist_project_id(resolved)
         return self._project_id
 
     def _build_request_body(

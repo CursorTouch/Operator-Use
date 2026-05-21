@@ -42,7 +42,7 @@ def fresh_credential(access: str = "access-token", refresh: str = "refresh-token
         access=access,
         refresh=refresh,
         expires=int(time.time() * 1000) + 3_600_000,
-        account_id=account_id,
+        extra={"account_id": account_id} if account_id else {},
     )
 
 

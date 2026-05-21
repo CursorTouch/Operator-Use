@@ -311,7 +311,7 @@ async def login_openai_codex(
     if not account_id:
         raise ValueError("missing chatgpt_account_id in token. Ensure you have a valid ChatGPT subscription.")
 
-    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
+    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms, extra={"account_id": account_id})
 
 
 async def refresh_openai_codex_token(credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
@@ -322,7 +322,7 @@ async def refresh_openai_codex_token(credential: OAuthCredential, signal: Option
     if not account_id:
         raise ValueError("missing chatgpt_account_id in refreshed token. Ensure you have a valid ChatGPT subscription.")
 
-    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms, account_id=account_id)
+    return OAuthCredential(access=access, refresh=refresh, expires=expires_ms, extra={"account_id": account_id})
 
 
 @dataclass
