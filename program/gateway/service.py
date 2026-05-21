@@ -311,7 +311,7 @@ class Gateway:
                             )
                             await self._bus.publish_outgoing(out)
 
-                case MessageEndEvent(message=m) if m.role == Role.ASSISTANT:
+                case MessageEndEvent(message=m) if m is not None and m.role == Role.ASSISTANT:
                     out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,

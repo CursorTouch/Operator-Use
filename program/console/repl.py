@@ -65,7 +65,7 @@ def _render_event(event) -> None:
                     sys.stdout.write(content)
                     sys.stdout.flush()
 
-        case MessageEndEvent(message=msg) if msg.role == Role.ASSISTANT:
+        case MessageEndEvent(message=msg) if msg is not None and msg.role == Role.ASSISTANT:
             if _streaming_role is not None:
                 print()
             _streaming_role = None

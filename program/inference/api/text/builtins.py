@@ -1,27 +1,18 @@
-from program.inference.api.text.openai_responses import OpenAIResponsesAPI
-from program.inference.api.text.openai_completions import OpenAICompletionsAPI
-from program.inference.api.text.openai_codex_responses import OpenAICodexResponsesAPI
-from program.inference.api.text.anthropic_messages import AnthropicMessagesAPI
-from program.inference.api.text.anthropic_claude_code import AnthropicClaudeCodeAPI
-from program.inference.api.text.github_copilot_chat import GitHubCopilotChatAPI
-from program.inference.api.text.gemini_generate import GeminiGenerateAPI
-from program.inference.api.text.mistral_chat import MistralChatAPI
-from program.inference.api.text.ollama_chat import OllamaChatAPI
-from program.inference.api.text.google_antigravity import GoogleAntigravityAPI
-from program.inference.api.text.base import BaseLLMAPI
-from typing import Type
-
-LLM_APIS: list[tuple[str, Type[BaseLLMAPI]]] = [
-    ("openai_responses", OpenAIResponsesAPI),
-    ("openai_completions", OpenAICompletionsAPI),
-    ("openai_codex_responses", OpenAICodexResponsesAPI),
-    ("anthropic_messages", AnthropicMessagesAPI),
-    ("anthropic_claude_code", AnthropicClaudeCodeAPI),
-    ("github_copilot_chat", GitHubCopilotChatAPI),
-    ("gemini_generate", GeminiGenerateAPI),
-    ("mistral_chat", MistralChatAPI),
-    ("ollama_chat", OllamaChatAPI),
-    ("google_antigravity", GoogleAntigravityAPI),
+# Lazy registry entries: each provider API is referenced by a "module:ClassName"
+# path so its SDK (anthropic, openai, google.genai, mistralai, ...) is only
+# imported when that provider is actually used. Loading every SDK at startup
+# previously cost ~1.5s on cold start.
+LLM_APIS: list[tuple[str, str]] = [
+    ("openai_responses",       "program.inference.api.text.openai_responses:OpenAIResponsesAPI"),
+    ("openai_completions",     "program.inference.api.text.openai_completions:OpenAICompletionsAPI"),
+    ("openai_codex_responses", "program.inference.api.text.openai_codex_responses:OpenAICodexResponsesAPI"),
+    ("anthropic_messages",     "program.inference.api.text.anthropic_messages:AnthropicMessagesAPI"),
+    ("anthropic_claude_code",  "program.inference.api.text.anthropic_claude_code:AnthropicClaudeCodeAPI"),
+    ("github_copilot_chat",    "program.inference.api.text.github_copilot_chat:GitHubCopilotChatAPI"),
+    ("gemini_generate",        "program.inference.api.text.gemini_generate:GeminiGenerateAPI"),
+    ("mistral_chat",           "program.inference.api.text.mistral_chat:MistralChatAPI"),
+    ("ollama_chat",            "program.inference.api.text.ollama_chat:OllamaChatAPI"),
+    ("google_antigravity",     "program.inference.api.text.google_antigravity:GoogleAntigravityAPI"),
 ]
 
 # Backward-compat alias
