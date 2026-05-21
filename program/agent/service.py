@@ -489,8 +489,7 @@ class Agent(ExtensionContext):
                     else f"{attempt + 1} attempt(s)"
                 )
                 raise RuntimeError(
-                    f"Agent failed ({detail}): {error}. "
-                    f'Progress was preserved — send "continue" to resume.'
+                    f"Agent failed ({detail}): {error}."
                 )
 
     # -------------------------------------------------------------------------

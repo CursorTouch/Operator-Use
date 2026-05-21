@@ -201,9 +201,11 @@ class GoogleAntigravityAPI(BaseAPI):
             generation_config["temperature"] = self.options.temperature
         if self.options.max_tokens is not None:
             generation_config["maxOutputTokens"] = self.options.max_tokens
-        if self.options.thinking_budget is not None:
+        if self.options.thinking_level is not None:
+            from program.inference.types import ThinkingBudgets
+            budgets = self.options.thinking_budgets or ThinkingBudgets()
             generation_config["thinkingConfig"] = {
-                "thinkingBudget": self.options.thinking_budget,
+                "thinkingBudget": budgets.get(self.options.thinking_level),
                 "includeThoughts": True,
             }
 
