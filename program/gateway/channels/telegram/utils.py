@@ -25,10 +25,28 @@ def audio_mime_ext(mime_type: str | None) -> str:
     return '.ogg'
 
 
+_PIPE_TABLE_BLOCK_RE = re.compile(r"(?m)((?:^\|[^\n]*\n)+)")
+_TABLE_SEP_RE = re.compile(r"^\|[\s\-:|]+\|", re.MULTILINE)
+
+
+def _tables_to_code_blocks(text: str) -> str:
+    """Wrap markdown pipe tables in fenced code blocks before HTML conversion."""
+    def _replace(m: re.Match) -> str:
+        block = m.group(1)
+        if _TABLE_SEP_RE.search(block):
+            return f"```\n{block.rstrip()}\n```\n"
+        return block
+    return _PIPE_TABLE_BLOCK_RE.sub(_replace, text)
+
+
 def markdown_to_telegram_html(text: str) -> str:
     """Convert standard Markdown to Telegram-safe HTML."""
     if not text:
         return ""
+
+    # Convert pipe tables to fenced code blocks before any other processing
+    # so the existing <pre><code> handler renders them as monospace blocks.
+    text = _tables_to_code_blocks(text)
 
     code_blocks: list[str] = []
 
