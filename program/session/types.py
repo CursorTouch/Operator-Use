@@ -6,10 +6,36 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Any, Literal, Annotated, TYPE_CHECKING
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, Discriminator, Tag
 from program.inference.types import ThinkingLevel
 
-from program.message.types import AgentMessage, ImageContent, TextContent
+from program.message.types import (
+    AgentMessage, ImageContent, TextContent,
+    SystemMessage, UserMessage, AssistantMessage, ToolMessage,
+)
+
+
+def _message_role_discriminator(v: Any) -> str | None:
+    """Pull the message role to discriminate the AgentMessage union.
+
+    The variant dataclasses keep `role` as `init=False`, which makes it
+    invisible to pydantic's default union resolution — pydantic then picks the
+    first structurally-matching member (SystemMessage) for any user/tool JSON.
+    """
+    if isinstance(v, dict):
+        role = v.get("role")
+        return role if isinstance(role, str) else None
+    role = getattr(v, "role", None)
+    return role.value if role is not None and hasattr(role, "value") else role
+
+
+_DiscriminatedMessage = Annotated[
+    Annotated[SystemMessage, Tag("system")]
+    | Annotated[UserMessage, Tag("user")]
+    | Annotated[AssistantMessage, Tag("assistant")]
+    | Annotated[ToolMessage, Tag("tool")],
+    Discriminator(_message_role_discriminator),
+]
 
 if TYPE_CHECKING:
     pass
@@ -83,7 +109,7 @@ class MessageMeta(BaseModel):
 
 class MessageEntry(BaseSessionEntry):
     type: Literal[SessionType.SESSION_MESSAGE] = Field(SessionType.SESSION_MESSAGE, init=False)
-    message: "AgentMessage"
+    message: _DiscriminatedMessage
     meta: MessageMeta | None = None
 
 

@@ -438,7 +438,7 @@ class Engine:
         self.state.system_prompt = ctx.system_prompt
         self.state.tools = ctx.tools
         self._tools = {t.name: t for t in ctx.tools}
-        await self._loop(ctx.messages, self.process_events, self._signal)
+        await self._loop(list(ctx.messages), self.process_events, self._signal)
         self.state.is_streaming = False
 
     async def run_continue(self) -> None:
