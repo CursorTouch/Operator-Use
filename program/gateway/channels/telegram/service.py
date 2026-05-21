@@ -228,6 +228,12 @@ class TelegramChannel(BaseChannel):
                             self._live_msg_ids[chat_id] = sent.message_id
                         except Exception:
                             logger.exception("TelegramChannel: live send_message failed")
+                        # Posting a real message clears the client-side typing
+                        # indicator; re-trigger so it stays visible while streaming.
+                        try:
+                            await bot.send_chat_action(int(chat_id), ChatAction.TYPING)
+                        except Exception:
+                            pass
                     else:
                         try:
                             await bot.edit_message_text(
@@ -260,10 +266,11 @@ class TelegramChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            # Typing indicator runs in both modes so the dots stay visible during
+            # text streaming. Live streaming is layered on top when enabled.
+            self._start_typing(chat_id)
             if self._streaming:
                 self._start_live_streaming(chat_id)
-            else:
-                self._start_typing(chat_id)
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
@@ -312,6 +319,7 @@ class TelegramChannel(BaseChannel):
             if self._streaming:
                 if not keep_typing:
                     self._stop_live_streaming(chat_id)
+                    self._stop_typing(chat_id)
                 live_msg_id = self._live_msg_ids.pop(chat_id, None)
                 if buffered.strip():
                     if live_msg_id is not None:

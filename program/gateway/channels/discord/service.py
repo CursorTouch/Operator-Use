@@ -189,6 +189,12 @@ class DiscordChannel(BaseChannel):
                             self._live_messages[chat_id] = sent
                         except Exception:
                             logger.exception("DiscordChannel: live send failed")
+                        # Posting a real message clears the client-side typing
+                        # indicator; re-trigger so it stays visible while streaming.
+                        try:
+                            await discord_ch.trigger_typing()  # pyright: ignore[reportAttributeAccessIssue]
+                        except Exception:
+                            pass
                     else:
                         try:
                             await existing.edit(content=buffered)
@@ -212,10 +218,11 @@ class DiscordChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            # Typing indicator runs in both modes so the dots stay visible during
+            # text streaming. Live streaming is layered on top when enabled.
+            self._start_typing(chat_id)
             if self._streaming:
                 self._start_live_streaming(chat_id)
-            else:
-                self._start_typing(chat_id)
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
@@ -268,6 +275,7 @@ class DiscordChannel(BaseChannel):
             if self._streaming:
                 if not keep_typing:
                     self._stop_live_streaming(chat_id)
+                    self._stop_typing(chat_id)
                 live_msg = self._live_messages.pop(chat_id, None)
                 if buffered.strip() and discord_ch is not None:
                     if live_msg is not None:
