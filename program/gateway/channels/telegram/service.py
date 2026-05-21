@@ -467,6 +467,14 @@ class TelegramChannel(BaseChannel):
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)
+            self._stop_live_streaming(chat_id)
+            stale_live = self._live_msg_ids.pop(chat_id, None)
+            if stale_live is not None:
+                try:
+                    await bot.delete_message(int(chat_id), stale_live)
+                except Exception:
+                    pass
+            self._buffers.pop(chat_id, None)
             retry_flag = metadata.get('retry', False)
             if retry_flag:
                 existing_id = self._retry_msg_ids.get(chat_id)

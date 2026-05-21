@@ -63,7 +63,7 @@ def get_agent_dir(cwd: Path | None = None) -> Path:
 
 
 def get_sessions_dir() -> Path:
-    """Global session storage — always ~/.program/agent/sessions/, keyed by project cwd slug."""
+    """Global session storage — always ~/.program/agent/sessions/."""
     return get_agent_dir() / "sessions"
 
 
@@ -142,5 +142,10 @@ def get_acp_sessions_dir() -> Path:
 def get_knowledge_dir(cwd: Path | None = None) -> Path:
     """Knowledge reference docs — ~/.program/knowledge/ or <project>/.program/knowledge/."""
     return get_config_dir(cwd) / 'knowledge'
+
+
+def get_temp_dir(cwd: Path | None = None) -> Path:
+    """Scratch space for agent experiments — ~/.program/temp/ or <project>/.program/temp/."""
+    return get_config_dir(cwd) / 'temp'
 
 

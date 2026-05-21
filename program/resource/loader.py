@@ -18,7 +18,7 @@ from program.hooks.loader import load_hooks, HookRegistration
 from program.package.loader import load_packages_from_settings
 from program.settings.paths import (
     get_extensions_dir, get_skills_dir, get_tools_dir, get_commands_dir, get_hooks_dir,
-    get_system_prompt_path, get_append_system_prompt_path, get_knowledge_dir,
+    get_system_prompt_path, get_append_system_prompt_path, get_knowledge_dir, get_temp_dir,
     get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
     get_builtins_extensions_dir, get_builtins_hooks_dir,
 )
@@ -244,3 +244,7 @@ class ResourceLoader(BaseResourceLoader):
         knowledge = Knowledge(get_knowledge_dir(self._cwd), get_knowledge_dir())
         if index := knowledge.build_knowledge_index():
             self._append_system_prompt.append(index)
+
+        # Ensure temp dirs exist so the agent can use them immediately
+        get_temp_dir().mkdir(parents=True, exist_ok=True)
+        get_temp_dir(self._cwd).mkdir(parents=True, exist_ok=True)

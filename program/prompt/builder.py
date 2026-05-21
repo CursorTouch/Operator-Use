@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from program.prompt.types import ContextFile, SystemPromptOptions
@@ -33,7 +34,13 @@ class PromptTemplate:
     def build(self) -> str:
         today = date.today().isoformat()
         cwd = self.cwd.replace("\\", "/")
-        footer = f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
+        global_temp = Path.home() / ".program" / "temp"
+        project_temp = Path(self.cwd) / ".program" / "temp"
+        footer = (
+            f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
+            f"\nGlobal temp directory: {global_temp} (scratch space shared across projects)"
+            f"\nProject temp directory: {project_temp} (scratch space for this project)"
+        )
 
         has_read = any(t.name == "read" for t in self.tools)
 

@@ -39,7 +39,7 @@ class SessionManager:
         self.persist = persist
         self.session_dir = (
             Path(session_dir).resolve() if session_dir
-            else get_default_session_dir(self.cwd)
+            else get_default_session_dir()
         )
         self.session_file = session_file
         self.by_id: dict[str, SessionEntry] = {}
@@ -488,7 +488,7 @@ class SessionManager:
     @classmethod
     def create(cls, cwd: Path | str, session_dir: Path | str | None = None) -> SessionManager:
         cwd = Path(cwd).resolve()
-        session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir(cwd)
+        session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir()
         return SessionManager(cwd, session_dir)
 
     @staticmethod
@@ -509,7 +509,7 @@ class SessionManager:
     @staticmethod
     def continue_recent(cwd: Path | str, session_dir: Path | str | None = None) -> SessionManager:
         cwd = Path(cwd).resolve()
-        session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir(cwd)
+        session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir()
         most_recent = find_most_recent_session(session_dir)
         if most_recent:
             return SessionManager(cwd, session_dir, most_recent)
@@ -535,7 +535,7 @@ class SessionManager:
         if not isinstance(source_entries[0], SessionHeader):
             raise ValueError(f"Cannot fork: source session has no header: {source}")
 
-        session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir(target_cwd)
+        session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir()
         session_dir.mkdir(parents=True, exist_ok=True)
 
         new_session_id = create_session_id()
@@ -565,7 +565,7 @@ class SessionManager:
         on_progress: Callable[[int, int], None] | None = None,
     ) -> list[SessionInfo]:
         cwd = Path(cwd).resolve()
-        session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir(cwd)
+        session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir()
         sessions = list_sessions_from_dir(session_dir, on_progress=on_progress)
         sessions.sort(key=lambda s: s.modified.timestamp(), reverse=True)
         return sessions
