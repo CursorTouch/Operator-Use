@@ -70,8 +70,10 @@ class SlackChannel(BaseChannel):
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_ts_map: dict[str, str | None] = {}  # chat_id → posted message ts
         self._retry_ts_map: dict[str, str] = {}     # chat_id → rolling retry-status message ts
-        self._tool_ts_map: dict[str, str] = {}      # chat_id → rolling tool-status message ts
+        self._tool_ts_map: dict[str, str] = {}      # chat_id → rolling tool/thinking-status message ts (shared slot)
         self._prev_tool_ts: dict[str, str] = {}     # chat_id → tool-status ts from previous failed attempt
+        self._thinking_buffers: dict[str, str] = {} # chat_id → accumulated thinking text
+        self._thinking_tasks: dict[str, asyncio.Task] = {}  # chat_id → debounced thinking-stream task
 
     @property
     def channel_id(self) -> str:
@@ -216,6 +218,43 @@ class SlackChannel(BaseChannel):
         if task:
             task.cancel()
 
+    _THINKING_MAX_CHARS = 800
+
+    def _start_thinking_stream(self, chat_id: str, slack_channel_id: str, thread_ts: str | None, client) -> None:
+        self._stop_thinking_stream(chat_id)
+        latency = self._streaming_latency
+
+        async def _loop() -> None:
+            await asyncio.sleep(latency)
+            while True:
+                buffered = self._thinking_buffers.get(chat_id, "")
+                if buffered.strip() and client is not None:
+                    display = buffered[:self._THINKING_MAX_CHARS]
+                    if len(buffered) > self._THINKING_MAX_CHARS:
+                        display += "…"
+                    label = f"💭 {display}"
+                    existing_ts = self._tool_ts_map.get(chat_id)
+                    if existing_ts is not None:
+                        try:
+                            await client.chat_update(channel=slack_channel_id, ts=existing_ts, text=label)
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            resp = await client.chat_postMessage(channel=slack_channel_id, text=label, thread_ts=thread_ts)
+                            if resp.get('ok') and resp.get('ts'):
+                                self._tool_ts_map[chat_id] = resp['ts']
+                        except Exception:
+                            logger.exception("SlackChannel: chat_postMessage failed (thinking)")
+                await asyncio.sleep(latency)
+
+        self._thinking_tasks[chat_id] = asyncio.create_task(_loop())
+
+    def _stop_thinking_stream(self, chat_id: str) -> None:
+        task = self._thinking_tasks.pop(chat_id, None)
+        if task:
+            task.cancel()
+
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to Slack."""
         chat_id = msg.chat_id
@@ -246,6 +285,8 @@ class SlackChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            self._thinking_buffers.pop(chat_id, None)
+            self._stop_thinking_stream(chat_id)
             stale = self._tool_ts_map.pop(chat_id, None)
             if stale is not None:
                 self._prev_tool_ts[chat_id] = stale
@@ -254,7 +295,14 @@ class SlackChannel(BaseChannel):
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
-            if kind == 'tool_start' and self._show_tool_calls:
+            if kind == 'thinking':
+                chunk = text_from_parts(msg.parts)
+                self._thinking_buffers[chat_id] = self._thinking_buffers.get(chat_id, "") + chunk
+                if chat_id not in self._thinking_tasks:
+                    self._start_thinking_stream(chat_id, slack_channel_id, thread_ts, client)
+            elif kind == 'tool_start' and self._show_tool_calls:
+                self._stop_thinking_stream(chat_id)
+                self._thinking_buffers.pop(chat_id, None)
                 name = metadata.get('name', '')
                 label = f"⚙️ `{name}`…"
                 existing_ts = self._tool_ts_map.get(chat_id)
@@ -291,7 +339,9 @@ class SlackChannel(BaseChannel):
                     except Exception:
                         pass
             else:
-                # text / thinking chunk — delete the rolling tool-status message
+                # text chunk — stop thinking stream and delete the rolling status message.
+                self._stop_thinking_stream(chat_id)
+                self._thinking_buffers.pop(chat_id, None)
                 existing_ts = self._tool_ts_map.pop(chat_id, None)
                 if existing_ts is not None and client is not None:
                     try:
@@ -302,6 +352,8 @@ class SlackChannel(BaseChannel):
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
         elif phase == StreamPhase.END:
+            self._stop_thinking_stream(chat_id)
+            self._thinking_buffers.pop(chat_id, None)
             buffered = self._buffers.pop(chat_id, "")
             # keep_typing leaves the live-streaming loop running so subsequent
             # turns (e.g. after a tool call) stream into a new live message.

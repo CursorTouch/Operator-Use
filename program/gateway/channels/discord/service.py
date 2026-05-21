@@ -61,8 +61,10 @@ class DiscordChannel(BaseChannel):
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_messages: dict[str, discord.Message | None] = {}
         self._retry_messages: dict[str, discord.Message] = {}      # chat_id → rolling retry-status message
-        self._tool_messages: dict[str, discord.Message] = {}       # chat_id → rolling tool-status message
+        self._tool_messages: dict[str, discord.Message] = {}       # chat_id → rolling tool/thinking-status message (shared slot)
         self._prev_tool_messages: dict[str, discord.Message] = {}  # chat_id → tool-status msg from previous failed attempt
+        self._thinking_buffers: dict[str, str] = {}                # chat_id → accumulated thinking text
+        self._thinking_tasks: dict[str, asyncio.Task] = {}         # chat_id → debounced thinking-stream task
 
     @property
     def channel_id(self) -> str:
@@ -211,6 +213,44 @@ class DiscordChannel(BaseChannel):
         if task:
             task.cancel()
 
+    _THINKING_MAX_CHARS = 800
+
+    def _start_thinking_stream(self, chat_id: str) -> None:
+        self._stop_thinking_stream(chat_id)
+        latency = self._streaming_latency
+
+        async def _loop() -> None:
+            await asyncio.sleep(latency)
+            while True:
+                buffered = self._thinking_buffers.get(chat_id, "")
+                discord_ch = self._discord_channels.get(chat_id)
+                if buffered.strip() and discord_ch is not None:
+                    display = buffered[:self._THINKING_MAX_CHARS]
+                    if len(buffered) > self._THINKING_MAX_CHARS:
+                        display += "…"
+                    label = f"💭 {display}"
+                    existing = self._tool_messages.get(chat_id)
+                    if existing is not None:
+                        try:
+                            await existing.edit(content=label)
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            sent = await discord_ch.send(label)
+                            self._tool_messages[chat_id] = sent
+                            await discord_ch.trigger_typing()  # pyright: ignore[reportAttributeAccessIssue]
+                        except Exception:
+                            logger.exception("DiscordChannel: send failed (thinking)")
+                await asyncio.sleep(latency)
+
+        self._thinking_tasks[chat_id] = asyncio.create_task(_loop())
+
+    def _stop_thinking_stream(self, chat_id: str) -> None:
+        task = self._thinking_tasks.pop(chat_id, None)
+        if task:
+            task.cancel()
+
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to the Discord channel."""
         chat_id = msg.chat_id
@@ -220,6 +260,8 @@ class DiscordChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            self._thinking_buffers.pop(chat_id, None)
+            self._stop_thinking_stream(chat_id)
             # Save the stale tool-status handle so retry_success can delete it.
             stale = self._tool_messages.pop(chat_id, None)
             if stale is not None:
@@ -232,7 +274,14 @@ class DiscordChannel(BaseChannel):
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
-            if kind == 'tool_start' and self._show_tool_calls:
+            if kind == 'thinking':
+                chunk = text_from_parts(msg.parts)
+                self._thinking_buffers[chat_id] = self._thinking_buffers.get(chat_id, "") + chunk
+                if chat_id not in self._thinking_tasks:
+                    self._start_thinking_stream(chat_id)
+            elif kind == 'tool_start' and self._show_tool_calls:
+                self._stop_thinking_stream(chat_id)
+                self._thinking_buffers.pop(chat_id, None)
                 # Rolling tool-status: one message that updates as each tool runs.
                 name = metadata.get('name', '')
                 label = f"⚙️ `{name}`…"
@@ -278,8 +327,9 @@ class DiscordChannel(BaseChannel):
                     except Exception:
                         pass
             else:
-                # text / thinking chunk — delete the rolling tool-status so the
-                # final streaming response stands on its own.
+                # text chunk — stop thinking stream and delete the rolling status message.
+                self._stop_thinking_stream(chat_id)
+                self._thinking_buffers.pop(chat_id, None)
                 existing = self._tool_messages.pop(chat_id, None)
                 if existing is not None:
                     try:
@@ -290,6 +340,8 @@ class DiscordChannel(BaseChannel):
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
         elif phase == StreamPhase.END:
+            self._stop_thinking_stream(chat_id)
+            self._thinking_buffers.pop(chat_id, None)
             buffered = self._buffers.pop(chat_id, "")
             reference = None
             origin_msg_id = metadata.get('origin_message_id')

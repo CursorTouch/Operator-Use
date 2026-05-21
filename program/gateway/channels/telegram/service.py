@@ -57,8 +57,10 @@ class TelegramChannel(BaseChannel):
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_msg_ids: dict[str, int | None] = {}
         self._retry_msg_ids: dict[str, int] = {}       # chat_id → rolling retry-status message ID
-        self._tool_msg_ids: dict[str, int] = {}        # chat_id → rolling tool-status message ID
+        self._tool_msg_ids: dict[str, int] = {}        # chat_id → rolling tool/thinking-status message ID (shared slot)
         self._prev_tool_msg_ids: dict[str, int] = {}   # chat_id → tool-status msg from previous failed attempt
+        self._thinking_buffers: dict[str, str] = {}    # chat_id → accumulated thinking text
+        self._thinking_tasks: dict[str, asyncio.Task] = {}  # chat_id → debounced thinking-stream task
 
     @property
     def channel_id(self) -> str:
@@ -255,6 +257,45 @@ class TelegramChannel(BaseChannel):
         if task:
             task.cancel()
 
+    _THINKING_MAX_CHARS = 800
+
+    def _start_thinking_stream(self, chat_id: str) -> None:
+        """Debounced loop that edits the shared rolling-status slot with streaming thinking text."""
+        self._stop_thinking_stream(chat_id)
+        latency = self._streaming_latency
+
+        async def _loop() -> None:
+            await asyncio.sleep(latency)
+            while True:
+                buffered = self._thinking_buffers.get(chat_id, "")
+                if buffered.strip() and self._app is not None:
+                    bot = self._app.bot
+                    display = buffered[:self._THINKING_MAX_CHARS]
+                    if len(buffered) > self._THINKING_MAX_CHARS:
+                        display += "…"
+                    label = f"💭 {display}"
+                    existing_id = self._tool_msg_ids.get(chat_id)
+                    if existing_id is not None:
+                        try:
+                            await bot.edit_message_text(label, chat_id=int(chat_id), message_id=existing_id)
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            sent = await bot.send_message(int(chat_id), label)
+                            self._tool_msg_ids[chat_id] = sent.message_id
+                            await bot.send_chat_action(int(chat_id), ChatAction.TYPING)
+                        except Exception:
+                            logger.exception("TelegramChannel: send_message failed (thinking)")
+                await asyncio.sleep(latency)
+
+        self._thinking_tasks[chat_id] = asyncio.create_task(_loop())
+
+    def _stop_thinking_stream(self, chat_id: str) -> None:
+        task = self._thinking_tasks.pop(chat_id, None)
+        if task:
+            task.cancel()
+
     async def send(self, msg: OutgoingMessage) -> None:
         """Deliver an outgoing message to the Telegram chat."""
         if self._app is None:
@@ -268,6 +309,8 @@ class TelegramChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            self._thinking_buffers.pop(chat_id, None)
+            self._stop_thinking_stream(chat_id)
             # Save the stale tool-status id so retry_success can delete it.
             stale = self._tool_msg_ids.pop(chat_id, None)
             if stale is not None:
@@ -280,7 +323,16 @@ class TelegramChannel(BaseChannel):
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
-            if kind == 'tool_start' and self._show_tool_calls:
+            if kind == 'thinking':
+                # Accumulate thinking text and stream it into the shared rolling-status slot.
+                chunk = text_from_parts(msg.parts)
+                self._thinking_buffers[chat_id] = self._thinking_buffers.get(chat_id, "") + chunk
+                if chat_id not in self._thinking_tasks:
+                    self._start_thinking_stream(chat_id)
+            elif kind == 'tool_start' and self._show_tool_calls:
+                # Thinking is done — stop the stream; tool_start will reuse the same slot.
+                self._stop_thinking_stream(chat_id)
+                self._thinking_buffers.pop(chat_id, None)
                 # Rolling tool-status: one message that updates as each tool runs.
                 # On a new tool_start we edit the existing status (replacing the previous
                 # ✅/❌ marker) or post a fresh one if none exists yet.
@@ -325,9 +377,10 @@ class TelegramChannel(BaseChannel):
                 except Exception:
                     pass
             else:
-                # text / thinking chunk — if a rolling tool-status message is still up,
-                # delete it now: the model is starting to stream its next response, so
-                # the prior tool status no longer needs to be visible.
+                # text chunk — stop thinking stream and delete the rolling status message
+                # (thinking/tool) so the final response stands on its own.
+                self._stop_thinking_stream(chat_id)
+                self._thinking_buffers.pop(chat_id, None)
                 existing_id = self._tool_msg_ids.pop(chat_id, None)
                 if existing_id is not None:
                     try:
@@ -338,6 +391,8 @@ class TelegramChannel(BaseChannel):
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
         elif phase == StreamPhase.END:
+            self._stop_thinking_stream(chat_id)
+            self._thinking_buffers.pop(chat_id, None)
             buffered = self._buffers.pop(chat_id, "")
             reply_params = None
             origin_msg_id = metadata.get('origin_message_id')
