@@ -226,6 +226,12 @@ class DiscordChannel(BaseChannel):
                         await discord_ch.send(f"⚙️ `{name}`…")
                     except Exception:
                         logger.exception("DiscordChannel: send failed (tool_start)")
+                    # Sending a real message clears the client-side typing indicator;
+                    # re-trigger it so it stays visible during tool execution.
+                    try:
+                        await discord_ch.trigger_typing()  # pyright: ignore[reportAttributeAccessIssue]
+                    except Exception:
+                        pass
             elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_calls:
                 result = str(metadata.get('result', ''))
                 if discord_ch is not None:
@@ -233,6 +239,10 @@ class DiscordChannel(BaseChannel):
                         await discord_ch.send(f"⚠️ `{result}`")
                     except Exception:
                         logger.exception("DiscordChannel: send failed (tool_end)")
+                    try:
+                        await discord_ch.trigger_typing()  # pyright: ignore[reportAttributeAccessIssue]
+                    except Exception:
+                        pass
             else:
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
@@ -241,6 +251,9 @@ class DiscordChannel(BaseChannel):
             buffered = self._buffers.pop(chat_id, "")
             reference = None
             origin_msg_id = metadata.get('origin_message_id')
+            # keep_typing: flush text but leave the indicator running (non-final
+            # stop reasons like tool_calls).
+            keep_typing = metadata.get('keep_typing', False)
             # Auto-reply in guild channels only — DMs need no disambiguation.
             if self._is_group.get(chat_id, False) and origin_msg_id and discord_ch is not None:
                 try:
@@ -253,7 +266,8 @@ class DiscordChannel(BaseChannel):
                     reference = None
 
             if self._streaming:
-                self._stop_live_streaming(chat_id)
+                if not keep_typing:
+                    self._stop_live_streaming(chat_id)
                 live_msg = self._live_messages.pop(chat_id, None)
                 if buffered.strip() and discord_ch is not None:
                     if live_msg is not None:
@@ -270,8 +284,11 @@ class DiscordChannel(BaseChannel):
                                     await discord_ch.send(chunk)
                             except Exception:
                                 logger.exception("DiscordChannel: send failed (end, streaming)")
+                if keep_typing:
+                    self._buffers[chat_id] = ""
             else:
-                self._stop_typing(chat_id)
+                if not keep_typing:
+                    self._stop_typing(chat_id)
                 if buffered.strip() and discord_ch is not None:
                     for i, chunk in enumerate(split_message(buffered)):
                         try:
@@ -281,6 +298,8 @@ class DiscordChannel(BaseChannel):
                                 await discord_ch.send(chunk)
                         except Exception:
                             logger.exception("DiscordChannel: send failed (end)")
+                if keep_typing:
+                    self._buffers[chat_id] = ""
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)

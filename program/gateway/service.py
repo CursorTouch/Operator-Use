@@ -21,6 +21,7 @@ from program.hooks.types import (
     GatewayErrorEvent,
 )
 from program.message.types import UserMessage, Role
+from program.inference.types import StopReason
 if TYPE_CHECKING:
     from program.runtime.service import Runtime
     from program.agent.service import Agent
@@ -317,11 +318,20 @@ class Gateway:
                             await self._bus.publish_outgoing(out)
 
                 case MessageEndEvent(message=m) if m is not None and m.role == Role.ASSISTANT:
+                    # Flush the buffered text on every turn boundary, but only ask the
+                    # channel to stop its typing indicator when the model produced a
+                    # final answer (stop_reason == Stop). For tool_calls the typing
+                    # indicator must keep running through tool execution. For Error/Abort
+                    # the engine emits message=None (filtered by the guard above), and
+                    # the retry/final-error flow handles the indicator via ERROR.
+                    meta: dict = {'origin_message_id': message_id} if message_id else {}
+                    if m.stop_reason != StopReason.Stop:
+                        meta['keep_typing'] = True
                     out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
                         stream_phase=StreamPhase.END,
-                        metadata={'origin_message_id': message_id} if message_id else {},
+                        metadata=meta,
                     )
                     await self._bus.publish_outgoing(out)
 
@@ -355,6 +365,13 @@ class Gateway:
 
                 case RetryStartEvent(max_retries=mx):
                     _retry_max[0] = mx + 1
+                    # Restart the typing indicator so it stays on during the retry delay
+                    # and the next attempt.
+                    await self._bus.publish_outgoing(OutgoingMessage(
+                        channel=channel_id,
+                        chat_id=chat_id,
+                        stream_phase=StreamPhase.START,
+                    ))
 
                 case RetryEndEvent(success=True):
                     # A retry succeeded — ask the channel to silently remove its rolling

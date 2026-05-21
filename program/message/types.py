@@ -4,7 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, TYPE_CHECKING, Any, Optional
+from typing import Literal, TYPE_CHECKING, Any, Optional, Annotated
 from enum import Enum
 from PIL import Image
 from program.inference.types import StopReason
@@ -17,13 +17,13 @@ if TYPE_CHECKING:
 
 @dataclass
 class TextContent:
-    type: Literal["text"] = field(default="text", init=False)
+    type: Literal["text"] = "text"
     content: str = ""
 
 
 @dataclass
 class ImageContent:
-    type: Literal["image"] = field(default="image", init=False)
+    type: Literal["image"] = "image"
     images: list[str | Image.Image | bytes] = field(default_factory=list)
 
     def to_base64(self) -> list[tuple[str, str]]:
@@ -41,7 +41,7 @@ class ImageContent:
 
 @dataclass
 class AudioContent:
-    type: Literal["audio"] = field(default="audio", init=False)
+    type: Literal["audio"] = "audio"
     # Each item is raw bytes, a base64 string, or a file path string prefixed with "file:".
     audio: list[bytes | str] = field(default_factory=list)
 
@@ -60,14 +60,14 @@ class AudioContent:
 
 @dataclass
 class ThinkingContent:
-    type: Literal["thinking"] = field(default="thinking", init=False)
+    type: Literal["thinking"] = "thinking"
     content: str = ""
     signature: str = ""
 
 
 @dataclass
 class ToolCallContent:
-    type: Literal["tool_call"] = field(default="tool_call", init=False)
+    type: Literal["tool_call"] = "tool_call"
     id: str = ""
     name: str = ""
     kind: Optional[ToolKind] = None
@@ -76,7 +76,7 @@ class ToolCallContent:
 
 @dataclass
 class ToolResultContent:
-    type: Literal["tool_result"] = field(default="tool_result", init=False)
+    type: Literal["tool_result"] = "tool_result"
     id: str = ""
     content: str = ""
     is_error: bool = False
@@ -111,14 +111,14 @@ class Usage:
     cost: UsageCost = field(default_factory=UsageCost)
 
 
-class Role(Enum):
+class Role(str, Enum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
     TOOL = "tool"
     CUSTOM = "custom"
-    BRANCH_SUMMARY="branch_summary"
-    COMPACTION_SUMMARY="compaction_summary"
+    BRANCH_SUMMARY = "branch_summary"
+    COMPACTION_SUMMARY = "compaction_summary"
 
 
 @dataclass
@@ -131,7 +131,7 @@ class BaseMessage:
 
 @dataclass
 class SystemMessage(BaseMessage):
-    role: Role = field(default=Role.SYSTEM, init=False)
+    role: Literal[Role.SYSTEM] = Role.SYSTEM  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
     def text(cls, content: str) -> SystemMessage:
@@ -140,7 +140,7 @@ class SystemMessage(BaseMessage):
 
 @dataclass
 class UserMessage(BaseMessage):
-    role: Role = field(default=Role.USER, init=False)
+    role: Literal[Role.USER] = Role.USER  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
     def text(cls, content: str) -> UserMessage:
@@ -157,7 +157,7 @@ class UserMessage(BaseMessage):
 
 @dataclass
 class AssistantMessage(BaseMessage):
-    role: Role = field(default=Role.ASSISTANT, init=False)
+    role: Literal[Role.ASSISTANT] = Role.ASSISTANT  # pyright: ignore[reportIncompatibleVariableOverride]
     usage: Usage = field(default_factory=Usage)
     stop_reason: StopReason = StopReason.Stop
     error: str = ""
@@ -174,7 +174,7 @@ class AssistantMessage(BaseMessage):
 
 @dataclass
 class ToolMessage(BaseMessage):
-    role: Role = field(default=Role.TOOL, init=False)
+    role: Literal[Role.TOOL] = Role.TOOL  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
     def from_results(cls, results: list[ToolResultContent]) -> ToolMessage:
@@ -190,7 +190,7 @@ LLMMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 
 @dataclass
 class CustomMessage:
-    role: Role = field(default=Role.CUSTOM, init=False)
+    role: Literal[Role.CUSTOM] = field(default=Role.CUSTOM, init=False)
     custom_type: str
     timestamp: float
     contents: list[TextContent | ImageContent] = field(default_factory=list)
@@ -215,7 +215,7 @@ class CustomMessage:
 
 @dataclass
 class BranchSummaryMessage:
-    role: Role = field(default=Role.BRANCH_SUMMARY, init=False)
+    role: Literal[Role.BRANCH_SUMMARY] = field(default=Role.BRANCH_SUMMARY, init=False)
     summary: str
     from_id:str
     timestamp:float
@@ -230,7 +230,7 @@ class BranchSummaryMessage:
 
 @dataclass
 class CompactionSummaryMessage:
-    role: Role = field(default=Role.COMPACTION_SUMMARY, init=False)
+    role: Literal[Role.COMPACTION_SUMMARY] = field(default=Role.COMPACTION_SUMMARY, init=False)
     summary: str
     tokens_before:int
     timestamp:float
@@ -244,6 +244,6 @@ class CompactionSummaryMessage:
         )
 
 
-SessionMessage = CustomMessage|BranchSummaryMessage|CompactionSummaryMessage
+SessionMessage = CustomMessage | BranchSummaryMessage | CompactionSummaryMessage
 
-AgentMessage = LLMMessage|SessionMessage
+AgentMessage = LLMMessage | SessionMessage

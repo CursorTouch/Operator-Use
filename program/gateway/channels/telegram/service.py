@@ -273,12 +273,22 @@ class TelegramChannel(BaseChannel):
                     await bot.send_message(int(chat_id), f"⚙️ {name}…")
                 except Exception:
                     logger.exception("TelegramChannel: send_message failed (tool_start)")
+                # Sending a real message clears the client-side typing indicator;
+                # re-send the typing action so it stays visible during tool execution.
+                try:
+                    await bot.send_chat_action(int(chat_id), ChatAction.TYPING)
+                except Exception:
+                    pass
             elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_calls:
                 result = str(metadata.get('result', ''))
                 try:
                     await bot.send_message(int(chat_id), f"⚠️ {result}")
                 except Exception:
                     logger.exception("TelegramChannel: send_message failed (tool_end)")
+                try:
+                    await bot.send_chat_action(int(chat_id), ChatAction.TYPING)
+                except Exception:
+                    pass
             else:
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
@@ -287,6 +297,10 @@ class TelegramChannel(BaseChannel):
             buffered = self._buffers.pop(chat_id, "")
             reply_params = None
             origin_msg_id = metadata.get('origin_message_id')
+            # When keep_typing is set the model hit a non-final stop reason (e.g.
+            # tool_calls): flush the buffered text but leave the typing/live-stream
+            # task running so the indicator stays on through tool execution.
+            keep_typing = metadata.get('keep_typing', False)
             # Auto-reply in groups only — DMs need no disambiguation.
             if self._is_group.get(chat_id, False) and origin_msg_id:
                 try:
@@ -296,7 +310,8 @@ class TelegramChannel(BaseChannel):
                     reply_params = None
 
             if self._streaming:
-                self._stop_live_streaming(chat_id)
+                if not keep_typing:
+                    self._stop_live_streaming(chat_id)
                 live_msg_id = self._live_msg_ids.pop(chat_id, None)
                 if buffered.strip():
                     if live_msg_id is not None:
@@ -321,8 +336,12 @@ class TelegramChannel(BaseChannel):
                                     await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
                                 except Exception:
                                     logger.exception("TelegramChannel: send_message fallback failed (end, streaming)")
+                if keep_typing:
+                    # Next turn re-uses a fresh live message — buffer was just popped.
+                    self._buffers[chat_id] = ""
             else:
-                self._stop_typing(chat_id)
+                if not keep_typing:
+                    self._stop_typing(chat_id)
                 if buffered.strip():
                     for chunk in split_message(buffered):
                         try:
@@ -333,6 +352,8 @@ class TelegramChannel(BaseChannel):
                                 await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
                             except Exception:
                                 logger.exception("TelegramChannel: send_message fallback failed (end)")
+                if keep_typing:
+                    self._buffers[chat_id] = ""
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)

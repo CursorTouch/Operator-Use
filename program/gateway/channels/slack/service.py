@@ -259,8 +259,12 @@ class SlackChannel(BaseChannel):
 
         elif phase == StreamPhase.END:
             buffered = self._buffers.pop(chat_id, "")
+            # keep_typing leaves the live-streaming loop running so subsequent
+            # turns (e.g. after a tool call) stream into a new live message.
+            keep_typing = metadata.get('keep_typing', False)
             if self._streaming:
-                self._stop_live_streaming(chat_id)
+                if not keep_typing:
+                    self._stop_live_streaming(chat_id)
                 live_ts = self._live_ts_map.pop(chat_id, None)
                 if buffered.strip():
                     if live_ts is not None and client is not None:
@@ -275,6 +279,8 @@ class SlackChannel(BaseChannel):
                     else:
                         for chunk in split_message(buffered):
                             await _post(markdown_to_slack_mrkdwn(chunk))
+                if keep_typing:
+                    self._buffers[chat_id] = ""
             else:
                 if buffered.strip():
                     for chunk in split_message(buffered):

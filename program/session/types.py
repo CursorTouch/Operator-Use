@@ -6,36 +6,10 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Any, Literal, Annotated, TYPE_CHECKING
 
-from pydantic import BaseModel, Field, ConfigDict, Discriminator, Tag
+from pydantic import BaseModel, Field, ConfigDict
 from program.inference.types import ThinkingLevel
 
-from program.message.types import (
-    AgentMessage, ImageContent, TextContent,
-    SystemMessage, UserMessage, AssistantMessage, ToolMessage,
-)
-
-
-def _message_role_discriminator(v: Any) -> str | None:
-    """Pull the message role to discriminate the AgentMessage union.
-
-    The variant dataclasses keep `role` as `init=False`, which makes it
-    invisible to pydantic's default union resolution — pydantic then picks the
-    first structurally-matching member (SystemMessage) for any user/tool JSON.
-    """
-    if isinstance(v, dict):
-        role = v.get("role")
-        return role if isinstance(role, str) else None
-    role = getattr(v, "role", None)
-    return role.value if role is not None and hasattr(role, "value") else role
-
-
-_DiscriminatedMessage = Annotated[
-    Annotated[SystemMessage, Tag("system")]
-    | Annotated[UserMessage, Tag("user")]
-    | Annotated[AssistantMessage, Tag("assistant")]
-    | Annotated[ToolMessage, Tag("tool")],
-    Discriminator(_message_role_discriminator),
-]
+from program.message.types import AgentMessage, ImageContent, TextContent
 
 if TYPE_CHECKING:
     pass
@@ -76,7 +50,7 @@ class BaseSessionEntry(BaseModel):
 
 class SessionHeader(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    type: Literal[SessionType.SESSION_HEADER] = Field(SessionType.SESSION_HEADER, init=False)
+    type: Literal[SessionType.SESSION_HEADER] = SessionType.SESSION_HEADER
     version: int = SESSION_VERSION
     id: str = Field(default_factory=_generate_id)
     timestamp: float = Field(default_factory=generate_timestamp)
@@ -85,12 +59,12 @@ class SessionHeader(BaseModel):
 
 
 class SessionInfoEntry(BaseSessionEntry):
-    type: Literal[SessionType.SESSION_INFO] = Field(SessionType.SESSION_INFO, init=False)
+    type: Literal[SessionType.SESSION_INFO] = SessionType.SESSION_INFO
     name: str | None = None
 
 
 class ChannelEntry(BaseSessionEntry):
-    type: Literal[SessionType.CHANNEL] = Field(SessionType.CHANNEL, init=False)
+    type: Literal[SessionType.CHANNEL] = SessionType.CHANNEL
     name: str
     chat_id: str | None = None
     user_id: str | None = None
@@ -108,24 +82,24 @@ class MessageMeta(BaseModel):
 
 
 class MessageEntry(BaseSessionEntry):
-    type: Literal[SessionType.SESSION_MESSAGE] = Field(SessionType.SESSION_MESSAGE, init=False)
-    message: _DiscriminatedMessage
+    type: Literal[SessionType.SESSION_MESSAGE] = SessionType.SESSION_MESSAGE
+    message: Annotated["AgentMessage", Field(discriminator="role")]
     meta: MessageMeta | None = None
 
 
 class ThinkingLevelChangeEntry(BaseSessionEntry):
-    type: Literal[SessionType.THINKING_LEVEL_CHANGE] = Field(SessionType.THINKING_LEVEL_CHANGE, init=False)
+    type: Literal[SessionType.THINKING_LEVEL_CHANGE] = SessionType.THINKING_LEVEL_CHANGE
     thinking_level: ThinkingLevel
 
 
 class ModelChangeEntry(BaseSessionEntry):
-    type: Literal[SessionType.MODEL_CHANGE] = Field(SessionType.MODEL_CHANGE, init=False)
+    type: Literal[SessionType.MODEL_CHANGE] = SessionType.MODEL_CHANGE
     model_id: str
     provider_id: str
 
 
 class CompactionEntry(BaseSessionEntry):
-    type: Literal[SessionType.COMPACTION] = Field(SessionType.COMPACTION, init=False)
+    type: Literal[SessionType.COMPACTION] = SessionType.COMPACTION
     summary: str
     first_kept_entry_id: str
     tokens_before: int
@@ -134,7 +108,7 @@ class CompactionEntry(BaseSessionEntry):
 
 
 class BranchEntry(BaseSessionEntry):
-    type: Literal[SessionType.BRANCH] = Field(SessionType.BRANCH, init=False)
+    type: Literal[SessionType.BRANCH] = SessionType.BRANCH
     from_id: str
     summary: str
     details: Any | None = None
@@ -142,24 +116,24 @@ class BranchEntry(BaseSessionEntry):
 
 
 class LabelEntry(BaseSessionEntry):
-    type: Literal[SessionType.LABEL] = Field(SessionType.LABEL, init=False)
+    type: Literal[SessionType.LABEL] = SessionType.LABEL
     label: str | None = None
     target_id: str
 
 
 class LeafEntry(BaseSessionEntry):
-    type: Literal[SessionType.LEAF] = Field(SessionType.LEAF, init=False)
+    type: Literal[SessionType.LEAF] = SessionType.LEAF
     target_id: str | None = None
 
 
 class CustomInfoEntry(BaseSessionEntry):
-    type: Literal[SessionType.CUSTOM_INFO] = Field(SessionType.CUSTOM_INFO, init=False)
+    type: Literal[SessionType.CUSTOM_INFO] = SessionType.CUSTOM_INFO
     custom_type: str
     data: Any | None = None
 
 
 class CustomMessageEntry(BaseSessionEntry):
-    type: Literal[SessionType.CUSTOM_MESSAGE] = Field(SessionType.CUSTOM_MESSAGE, init=False)
+    type: Literal[SessionType.CUSTOM_MESSAGE] = SessionType.CUSTOM_MESSAGE
     custom_type: str
     content: list["TextContent | ImageContent"]
     display: bool = True
