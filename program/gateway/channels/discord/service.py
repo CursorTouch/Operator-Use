@@ -60,6 +60,7 @@ class DiscordChannel(BaseChannel):
         self._typing_tasks: dict[str, asyncio.Task] = {}
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_messages: dict[str, discord.Message | None] = {}
+        self._retry_messages: dict[str, discord.Message] = {}  # chat_id → rolling retry-status message
 
     @property
     def channel_id(self) -> str:
@@ -283,8 +284,45 @@ class DiscordChannel(BaseChannel):
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)
-            text = text_from_parts(msg.parts) or "Unknown error"
-            if discord_ch is not None:
+            retry_flag = metadata.get('retry', False)
+            if retry_flag:
+                existing = self._retry_messages.get(chat_id)
+                if metadata.get('retry_success'):
+                    if existing is not None:
+                        try:
+                            await existing.delete()
+                        except Exception:
+                            pass
+                        self._retry_messages.pop(chat_id, None)
+                    return
+                text = text_from_parts(msg.parts) or "Unknown error"
+                attempt = metadata.get('retry_attempt', 1)
+                total = metadata.get('retry_max', 1)
+                is_final = metadata.get('retry_final', False)
+                if is_final:
+                    label = f"❌ {text}" if total <= 1 else f"❌ {text}\n(failed after {total} attempt{'s' if total != 1 else ''})"
+                else:
+                    label = f"❌ {text}\n⏳ Retrying… ({attempt}/{total})"
+                if existing is not None:
+                    try:
+                        await existing.edit(content=label)
+                    except Exception:
+                        if discord_ch is not None:
+                            try:
+                                sent = await discord_ch.send(label)
+                                self._retry_messages[chat_id] = sent
+                            except Exception:
+                                logger.exception("DiscordChannel: send failed (retry error)")
+                elif discord_ch is not None:
+                    try:
+                        sent = await discord_ch.send(label)
+                        self._retry_messages[chat_id] = sent
+                    except Exception:
+                        logger.exception("DiscordChannel: send failed (retry error)")
+                if is_final:
+                    self._retry_messages.pop(chat_id, None)
+            elif discord_ch is not None:
+                text = text_from_parts(msg.parts) or "Unknown error"
                 try:
                     await discord_ch.send(f"❌ {text}")
                 except Exception:

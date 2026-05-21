@@ -69,6 +69,7 @@ class SlackChannel(BaseChannel):
         self._handler: AsyncSocketModeHandler | None = None
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_ts_map: dict[str, str | None] = {}  # chat_id → posted message ts
+        self._retry_ts_map: dict[str, str] = {}  # chat_id → rolling retry-status message ts
 
     @property
     def channel_id(self) -> str:
@@ -280,7 +281,42 @@ class SlackChannel(BaseChannel):
                         await _post(markdown_to_slack_mrkdwn(chunk))
 
         elif phase == StreamPhase.ERROR:
-            await _post(f"❌ {text_from_parts(msg.parts) or 'Unknown error'}")
+            retry_flag = metadata.get('retry', False)
+            if retry_flag:
+                existing_ts = self._retry_ts_map.get(chat_id)
+                if metadata.get('retry_success'):
+                    if existing_ts is not None and client is not None:
+                        try:
+                            await client.chat_delete(channel=slack_channel_id, ts=existing_ts)
+                        except Exception:
+                            pass
+                        self._retry_ts_map.pop(chat_id, None)
+                    return
+                text = text_from_parts(msg.parts) or 'Unknown error'
+                attempt = metadata.get('retry_attempt', 1)
+                total = metadata.get('retry_max', 1)
+                is_final = metadata.get('retry_final', False)
+                if is_final:
+                    label = f"❌ {text}" if total <= 1 else f"❌ {text}\n(failed after {total} attempt{'s' if total != 1 else ''})"
+                else:
+                    label = f"❌ {text}\n⏳ Retrying… ({attempt}/{total})"
+                if existing_ts is not None and client is not None:
+                    try:
+                        await client.chat_update(channel=slack_channel_id, ts=existing_ts, text=label)
+                    except Exception:
+                        await _post(label)
+                else:
+                    if client is not None:
+                        try:
+                            resp = await client.chat_postMessage(channel=slack_channel_id, text=label, thread_ts=thread_ts)
+                            if resp.get('ok') and resp.get('ts'):
+                                self._retry_ts_map[chat_id] = resp['ts']
+                        except Exception:
+                            logger.exception("SlackChannel: chat_postMessage failed (retry error)")
+                if is_final:
+                    self._retry_ts_map.pop(chat_id, None)
+            else:
+                await _post(f"❌ {text_from_parts(msg.parts) or 'Unknown error'}")
 
         elif phase is None:
             kind = metadata.get('kind')

@@ -56,6 +56,7 @@ class TelegramChannel(BaseChannel):
         self._typing_tasks: dict[str, asyncio.Task] = {}
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_msg_ids: dict[str, int | None] = {}
+        self._retry_msg_ids: dict[str, int] = {}  # chat_id → rolling retry-status message ID
 
     @property
     def channel_id(self) -> str:
@@ -335,11 +336,50 @@ class TelegramChannel(BaseChannel):
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)
-            text = text_from_parts(msg.parts) or "Unknown error"
-            try:
-                await bot.send_message(int(chat_id), f"❌ {text}")
-            except Exception:
-                logger.exception("TelegramChannel: send_message failed (error)")
+            retry_flag = metadata.get('retry', False)
+            if retry_flag:
+                existing_id = self._retry_msg_ids.get(chat_id)
+                if metadata.get('retry_success'):
+                    # A later attempt succeeded — quietly delete the rolling status message.
+                    if existing_id is not None:
+                        try:
+                            await bot.delete_message(int(chat_id), existing_id)
+                        except Exception:
+                            pass
+                        self._retry_msg_ids.pop(chat_id, None)
+                    return
+                text = text_from_parts(msg.parts) or "Unknown error"
+                attempt = metadata.get('retry_attempt', 1)
+                total = metadata.get('retry_max', 1)
+                is_final = metadata.get('retry_final', False)
+                if is_final:
+                    label = f"❌ {text}" if total <= 1 else f"❌ {text}\n(failed after {total} attempt{'s' if total != 1 else ''})"
+                else:
+                    label = f"❌ {text}\n⏳ Retrying… ({attempt}/{total})"
+                if existing_id is not None:
+                    try:
+                        await bot.edit_message_text(label, chat_id=int(chat_id), message_id=existing_id)
+                    except Exception:
+                        # Edit failed (e.g. identical text) — post fresh
+                        try:
+                            sent = await bot.send_message(int(chat_id), label)
+                            self._retry_msg_ids[chat_id] = sent.message_id
+                        except Exception:
+                            logger.exception("TelegramChannel: send_message failed (retry error)")
+                else:
+                    try:
+                        sent = await bot.send_message(int(chat_id), label)
+                        self._retry_msg_ids[chat_id] = sent.message_id
+                    except Exception:
+                        logger.exception("TelegramChannel: send_message failed (retry error)")
+                if is_final:
+                    self._retry_msg_ids.pop(chat_id, None)
+            else:
+                text = text_from_parts(msg.parts) or "Unknown error"
+                try:
+                    await bot.send_message(int(chat_id), f"❌ {text}")
+                except Exception:
+                    logger.exception("TelegramChannel: send_message failed (error)")
 
         elif phase is None:
             kind = metadata.get('kind')

@@ -128,13 +128,14 @@ def _make_cancel_bindings(cancel: asyncio.Event) -> KeyBindings:
     return kb
 
 
-async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False) -> None:
+async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False, resume: bool = False) -> None:
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
         sandbox=sandbox if sandbox != 'off' else None,
         persist_session=not ephemeral,
+        resume=resume,
     )
 
     print(f"Agent starting in {cwd}  (model: {config.model_id})")
@@ -275,13 +276,14 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     help='Sandbox mode: strict=write-locked+OS sandbox; enforce=policy only; warn=log; off=disabled',
 )
 @click.option('--ephemeral', is_flag=True, default=False, help='Run in-memory only — session is not saved to disk.')
-def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, ephemeral: bool) -> None:
+@click.option('--resume', is_flag=True, default=False, help='Resume the most recent session instead of starting fresh')
+def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, ephemeral: bool, resume: bool) -> None:
     """Start the interactive agent REPL."""
     from dotenv import load_dotenv
     load_dotenv()
 
     cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
     try:
-        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, ephemeral=ephemeral))
+        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, ephemeral=ephemeral, resume=resume))
     except KeyboardInterrupt:
         pass

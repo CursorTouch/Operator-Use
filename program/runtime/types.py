@@ -49,6 +49,7 @@ class RuntimeConfig(BaseModel):
     # Session
     session_file: Path | None = None
     persist_session: bool = True
+    resume: bool = False  # resume the most recent session instead of starting fresh
 
     # Tools & prompt
     tools: list[Tool] = Field(default_factory=list)
@@ -194,12 +195,15 @@ class RuntimeContext:
 
         # ── Session manager ───────────────────────────────────────────────────
         session_dir = settings_manager.get_session_dir()
-        session_manager = SessionManager(
-            cwd=cwd,
-            session_dir=session_dir,
-            session_file=config.session_file,
-            persist=config.persist_session,
-        )
+        if config.resume and not config.session_file and config.persist_session:
+            session_manager = SessionManager.continue_recent(cwd, session_dir)
+        else:
+            session_manager = SessionManager(
+                cwd=cwd,
+                session_dir=session_dir,
+                session_file=config.session_file,
+                persist=config.persist_session,
+            )
 
         # ── Auth ─────────────────────────────────────────────────────────────
         auth_manager = ChannelAuthManager(get_channels_auth_path())

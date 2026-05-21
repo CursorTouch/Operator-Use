@@ -61,7 +61,7 @@ models = [
     # Groq (caps max_completion_tokens at 8192)
     Model(id="openai/gpt-oss-120b",                       name="GPT-OSS 120B",          provider="groq", cost=Cost(input=0.15,  output=0.60), thinking=True, context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
     Model(id="openai/gpt-oss-20b",                        name="GPT-OSS 20B",           provider="groq", cost=Cost(input=0.075, output=0.30), thinking=True, context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
-    Model(id="qwen3-32b",                                 name="Qwen3 32B",             provider="groq", cost=Cost(input=0.29,  output=0.59), thinking=True, context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
+    Model(id="qwen/qwen3-32b",                            name="Qwen3 32B",             provider="groq", cost=Cost(input=0.29,  output=0.59), thinking=True, context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
     Model(id="llama-3.3-70b-versatile",                   name="Llama 3.3 70B",         provider="groq", cost=Cost(input=0.59,  output=0.79),               context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
     Model(id="llama-3.1-8b-instant",                      name="Llama 3.1 8B Instant",  provider="groq", cost=Cost(input=0.05,  output=0.08),               context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
     Model(id="meta-llama/llama-4-scout-17b-16e-instruct", name="Llama 4 Scout 17Bx16E", provider="groq", cost=Cost(input=0.11,  output=0.34),               context_window=131_072, max_tokens=8192, input=_TEXT_IMAGE, output=_TEXT),

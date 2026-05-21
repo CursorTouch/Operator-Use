@@ -11,6 +11,7 @@ from program.commands.types import parse_command
 from program.gateway.types import BaseChannel
 from program.hooks.service import Hooks
 from program.subagent.manager import _session_channel, _session_chat_id, _session_message_id
+from program.agent.types import RetryStartEvent, RetryEndEvent
 from program.hooks.types import (
     AgentErrorEvent, MessageEndEvent, MessageUpdateEvent,
     ToolExecutionEndEvent, ToolExecutionStartEvent,
@@ -292,6 +293,10 @@ class Gateway:
         from program.agent.types import PromptOptions
 
         response_parts: list[str] = []
+        # Tracks the last error text seen from the engine and retry metadata.
+        # Wrapped in lists/dicts for mutability inside the closure.
+        _last_error: list[str] = ['']
+        _retry_max: list[int] = [0]  # total attempts (max_retries + 1)
 
         async def _on_event(event) -> None:
             match event:
@@ -343,13 +348,38 @@ class Gateway:
                     await self._bus.publish_outgoing(out)
 
                 case AgentErrorEvent(error=err):
-                    out = OutgoingMessage(
+                    # Store the error; it will be surfaced via RetryEndEvent (mid-retry)
+                    # or the final except block (exhausted/permanent). Posting here would
+                    # show a duplicate for every retry attempt.
+                    _last_error[0] = str(err)
+
+                case RetryStartEvent(max_retries=mx):
+                    _retry_max[0] = mx + 1
+
+                case RetryEndEvent(success=True):
+                    # A retry succeeded — ask the channel to silently remove its rolling
+                    # retry-status message so the success response stands on its own.
+                    await self._bus.publish_outgoing(OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
-                        parts=[TextPart(str(err))],
                         stream_phase=StreamPhase.ERROR,
-                    )
-                    await self._bus.publish_outgoing(out)
+                        metadata={'retry': True, 'retry_success': True},
+                    ))
+
+                case RetryEndEvent(attempt=att, success=False, error=err):
+                    # Mid-retry: replace (edit) the previous retry-status message rather
+                    # than stacking a new one for every attempt.
+                    await self._bus.publish_outgoing(OutgoingMessage(
+                        channel=channel_id,
+                        chat_id=chat_id,
+                        parts=[TextPart(err or _last_error[0])],
+                        stream_phase=StreamPhase.ERROR,
+                        metadata={
+                            'retry': True,
+                            'retry_attempt': att + 1,
+                            'retry_max': _retry_max[0],
+                        },
+                    ))
 
         # Publish START
         await self._bus.publish_outgoing(OutgoingMessage(
@@ -387,12 +417,13 @@ class Gateway:
             await agent.invoke(text, PromptOptions(source='interactive', meta=msg_meta))
         except Exception as exc:
             logger.exception("Gateway: agent.invoke failed for session %r", session_key)
-            err_msg = str(exc)
+            err_msg = _last_error[0] or str(exc)
             await self._bus.publish_outgoing(OutgoingMessage(
                 channel=channel_id,
                 chat_id=chat_id,
                 parts=[TextPart(err_msg)],
                 stream_phase=StreamPhase.ERROR,
+                metadata={'retry': True, 'retry_final': True},
             ))
             await self.hooks.emit(GatewayErrorEvent(channel_id=channel_id, error=err_msg))
         finally:

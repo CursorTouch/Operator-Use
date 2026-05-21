@@ -11,12 +11,13 @@ from program.console.acp import acp
 from program.console.auth import auth
 
 
-async def _run_gateway(cwd: Path, model_id: str, provider: str | None) -> None:
+async def _run_gateway(cwd: Path, model_id: str, provider: str | None, resume: bool = False) -> None:
     from program.runtime import Runtime, RuntimeConfig
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id,
         provider=provider,
+        resume=resume,
     )
     runtime = await Runtime.create(config)
     await asyncio.sleep(0.5)  # let channel tasks register before printing
@@ -44,7 +45,8 @@ async def _run_gateway(cwd: Path, model_id: str, provider: str | None) -> None:
 @click.option('--model', default=None, help='Model ID (e.g. claude-sonnet-4-6)')
 @click.option('--provider', default=None, help='Provider override')
 @click.option('--repl', 'use_repl', is_flag=True, default=False, help='Start interactive REPL')
-def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, use_repl: bool) -> None:
+@click.option('--resume', is_flag=True, default=False, help='Resume the most recent session instead of starting fresh')
+def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, use_repl: bool, resume: bool) -> None:
     """Operator — AI agent harness."""
     from dotenv import load_dotenv
     load_dotenv()
@@ -57,10 +59,10 @@ def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | 
     if ctx.invoked_subcommand is None:
         cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
         if use_repl:
-            ctx.invoke(repl, cwd=cwd, model=model, provider=provider)
+            ctx.invoke(repl, cwd=cwd, model=model, provider=provider, resume=resume)
         else:
             try:
-                asyncio.run(_run_gateway(cwd=cwd_path, model_id=model or 'claude-sonnet-4-6', provider=provider))
+                asyncio.run(_run_gateway(cwd=cwd_path, model_id=model or 'claude-sonnet-4-6', provider=provider, resume=resume))
             except KeyboardInterrupt:
                 pass
 
