@@ -85,23 +85,23 @@ class ACPAgentTool(Tool):
 
     # ── Tool entry point ──────────────────────────────────────────────────────
 
-    async def execute(self, invocation: ToolInvocation) -> ToolResult:
-        params = _ACPSchema.model_validate(invocation.input)
+    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+        params = _ACPSchema.model_validate(invocation.params)
 
         if params.action == 'agents':
-            return ToolResult(content=self._list_agents())
+            return ToolResult.ok(invocation.id, self._list_agents())
 
         if params.action == 'sessions':
-            return ToolResult(content=self._list_sessions())
+            return ToolResult.ok(invocation.id, self._list_sessions())
 
         # action == 'run'
         name = params.agent
         config = self._registry.get(name)  # type: ignore[arg-type]
         if config is None:
             known = ', '.join(self._registry) or '(none configured)'
-            return ToolResult(
-                content=f"Agent '{name}' is not in the registry. Registered agents: {known}",
-                is_error=True,
+            return ToolResult.error(
+                invocation.id,
+                f"Agent '{name}' is not in the registry. Registered agents: {known}",
             )
 
         # Capture channel/chat_id from contextvar before spawning
@@ -112,11 +112,10 @@ class ACPAgentTool(Tool):
         asyncio.create_task(
             self._run_task(config, params.task, channel, chat_id)  # type: ignore[arg-type]
         )
-        return ToolResult(
-            content=(
-                f"Task dispatched to '{name}'. "
-                "The result will arrive as a follow-up message when the agent finishes."
-            )
+        return ToolResult.ok(
+            invocation.id,
+            f"Task dispatched to '{name}'. "
+            "The result will arrive as a follow-up message when the agent finishes.",
         )
 
     # ── List helpers ──────────────────────────────────────────────────────────
@@ -167,7 +166,8 @@ class ACPAgentTool(Tool):
             elif config.transport == 'http':
                 if not config.url:
                     raise ValueError(f"ACP agent '{config.name}' requires a url for http transport")
-                client = ACPClient.http(config.url)
+                token = self._auth.get_token(config.name)
+                client = ACPClient.http(config.url, token=token)
             else:
                 client = ACPClient.discover(config.name)
 
@@ -201,4 +201,4 @@ class ACPAgentTool(Tool):
             await self._bus.publish_incoming(msg)
         elif self._agent is not None:
             from program.agent.types import PromptOptions
-            await self._agent.invoke(content, PromptOptions(source='acp'))
+            await self._agent.invoke(content, PromptOptions(source='subagent'))

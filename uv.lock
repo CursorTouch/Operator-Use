@@ -1357,6 +1357,7 @@ dependencies = [
     { name = "prompt-toolkit" },
     { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "python-telegram-bot" },
     { name = "websockets" },
 ]
 
@@ -1407,6 +1408,7 @@ requires-dist = [
     { name = "prompt-toolkit", specifier = ">=3.0.52" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "python-telegram-bot", specifier = ">=20.0" },
     { name = "python-telegram-bot", marker = "extra == 'channels'", specifier = ">=20.0" },
     { name = "python-telegram-bot", marker = "extra == 'telegram'", specifier = ">=20.0" },
     { name = "slack-bolt", marker = "extra == 'channels'", specifier = ">=1.0" },

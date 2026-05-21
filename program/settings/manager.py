@@ -18,6 +18,7 @@ from program.gateway.channels.types import (
     WebSocketChannelConfig, TelegramChannelConfig, DiscordChannelConfig,
     SlackChannelConfig, TwitchChannelConfig,
 )
+from program.acp.types import ACPSettings
 from program.engine.types import SteeringMode, FollowupMode
 from program.inference.types import Transport, ThinkingLevel
 
@@ -33,6 +34,7 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
 # Pydantic BaseModel fields — use model_validate() instead of **kwargs
 _PYDANTIC_FIELD_TYPES: dict[str, type] = {
     'channels': ChannelsSettings,
+    'acp': ACPSettings,
 }
 
 
@@ -551,21 +553,59 @@ class SettingsManager:
         return result
 
     def get_acp_agents(self) -> list:
-        """Return list of ACPAgentConfig objects parsed from settings, or empty list."""
+        """Return enabled ACPAgentConfig entries, or empty list if acp is disabled."""
+        acp = self.settings.acp
+        if acp is None or not acp.enabled:
+            return []
+        return [a for a in acp.agents if a.enabled]
+
+    def get_acp_settings(self):
+        """Return the resolved ACPSettings, with defaults when unset."""
+        return self.settings.acp or ACPSettings()
+
+    def get_acp_agent_config(self, name: str):
+        """Return the ACPAgentConfig for the named agent, or None if not found."""
+        acp = self.settings.acp
+        if acp is None:
+            return None
+        return next((a for a in acp.agents if a.name == name), None)
+
+    def _get_or_init_acp(self):
+        if self.global_settings.acp is None:
+            self.global_settings.acp = ACPSettings()
+        return self.global_settings.acp
+
+    def set_acp_enabled(self, enabled: bool) -> None:
+        self._get_or_init_acp().enabled = enabled
+        self._mark_modified('acp')
+        self._save()
+
+    def set_acp_agent_config(self, name: str, **kwargs) -> None:
+        """Upsert an agent entry by name. Pass fields to create or update."""
         from program.acp.types import ACPAgentConfig
-        raw = self.settings.acp_agents or []
-        result = []
-        for entry in raw:
-            if not isinstance(entry, dict) or 'name' not in entry:
-                continue
-            result.append(ACPAgentConfig(
-                name=entry['name'],
-                transport=entry.get('transport', 'stdio'),
-                command=entry.get('command'),
-                args=entry.get('args', []),
-                url=entry.get('url'),
-            ))
-        return result
+        acp = self._get_or_init_acp()
+        existing = next((a for a in acp.agents if a.name == name), None)
+        if existing is None:
+            acp.agents.append(ACPAgentConfig(name=name, **kwargs))
+        else:
+            updated = existing.model_dump()
+            updated.update(kwargs)
+            acp.agents[acp.agents.index(existing)] = ACPAgentConfig(**updated)
+        self._mark_modified('acp')
+        self._save()
+
+    def remove_acp_agent_config(self, name: str) -> bool:
+        """Remove an agent entry by name. Returns True if it existed."""
+        acp = self.settings.acp
+        if acp is None:
+            return False
+        before = len(acp.agents)
+        acp.agents = [a for a in acp.agents if a.name != name]
+        if len(acp.agents) == before:
+            return False
+        self._mark_modified('acp')
+        self._save()
+        return True
 
     def get_cron_enabled(self) -> bool:
         """Return whether the cron scheduler is enabled (default: True)."""

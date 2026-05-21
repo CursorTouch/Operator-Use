@@ -51,7 +51,7 @@ def serve(cwd: str | None, model: str | None, provider: str | None, sandbox: str
 
 async def _run_serve(cwd: str | None, model_id: str | None, provider: str | None, sandbox: str = 'off') -> None:
     from program.runtime import Runtime, RuntimeConfig
-    from program.acp.stdio import serve_stdio
+    from program.acp.transport.stdio import serve_stdio
 
     cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
     config = RuntimeConfig(
@@ -62,6 +62,57 @@ async def _run_serve(cwd: str | None, model_id: str | None, provider: str | None
     )
     runtime = await Runtime.create(config)
     await serve_stdio(runtime)
+
+
+# ── serve-http ────────────────────────────────────────────────────────────────
+
+@acp.command('serve-http')
+@click.option('--host', default='0.0.0.0', show_default=True, help='Bind address')
+@click.option('--port', default=8080, show_default=True, help='Listen port')
+@click.option('--cwd', default=None, type=click.Path(exists=True, file_okay=False), help='Working directory')
+@click.option('--model', default=None, help='Model ID (e.g. claude-sonnet-4-6)')
+@click.option('--provider', default=None, help='Provider override')
+def serve_http(host: str, port: int, cwd: str | None, model: str | None, provider: str | None) -> None:
+    """
+    Run the Operator ACP server over HTTP so remote machines can connect.
+
+    Remote clients authenticate via the device flow:
+      1. POST /acp/auth/device  → get user_code
+      2. POST /acp/auth/approve → owner approves (run on the server machine)
+      3. POST /acp/auth/token   → client polls until it receives the Bearer token
+      4. GET  /acp/events       → open SSE stream with Authorization: Bearer <token>
+    """
+    import logging
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
+
+    click.echo(f"ACP HTTP server starting on http://{host}:{port}")
+    try:
+        asyncio.run(_run_serve_http(host=host, port=port, cwd=cwd, model_id=model, provider=provider))
+    except KeyboardInterrupt:
+        pass
+
+
+async def _run_serve_http(
+    host: str,
+    port: int,
+    cwd: str | None,
+    model_id: str | None,
+    provider: str | None,
+) -> None:
+    from program.runtime import Runtime, RuntimeConfig
+    from program.acp.transport.http import serve_http as _serve_http
+
+    cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
+    config = RuntimeConfig(
+        cwd=cwd_path,
+        model_id=model_id or 'claude-sonnet-4-6',
+        provider=provider,
+    )
+    runtime = await Runtime.create(config)
+    await _serve_http(runtime, host=host, port=port)
 
 
 # ── connect ───────────────────────────────────────────────────────────────────

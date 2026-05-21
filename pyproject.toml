@@ -30,6 +30,7 @@ dependencies = [
     "fastmcp>=2.0.0",
     "aiohttp>=3.13.5",
     "prompt-toolkit>=3.0.52",
+    "python-telegram-bot>=20.0",
 ]
 
 [project.scripts]

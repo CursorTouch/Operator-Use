@@ -5,6 +5,7 @@ from typing import Optional, Literal, Any
 from program.engine.types import SteeringMode, FollowupMode
 from program.inference.types import Transport, ThinkingLevel
 from program.gateway.channels.types import ChannelsSettings
+from program.acp.types import ACPSettings
 
 
 class SCOPE(str, Enum):
@@ -141,8 +142,8 @@ class Settings:
     # MCP servers — list of dicts, each matching MCPServerConfig fields
     mcp_servers: Optional[list[dict]] = None
 
-    # ACP agents — pre-approved registry of remote ACP agents
-    acp_agents: Optional[list[dict]] = None
+    # ACP — enabled flag + agent registry
+    acp: Optional[ACPSettings] = None
 
     # Audio I/O
     stt: Optional[STTSettings] = None

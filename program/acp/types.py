@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 @dataclass
@@ -12,11 +15,21 @@ class DeviceCodeResponse:
     interval: float = 5.0
 
 
-@dataclass
-class ACPAgentConfig:
-    """Registry entry for a remote ACP agent (from settings.json `acp_agents`)."""
+class ACPAgentConfig(BaseModel):
+    """One ACP agent entry from settings.json `acp.agents`."""
+    model_config = ConfigDict(extra='ignore')
+
+    enabled: bool = True
     name: str
-    transport: str = 'stdio'   # 'stdio' | 'http' | 'discover'
-    command: str | None = None  # stdio: executable name (e.g. 'codex', 'operator')
-    args: list[str] = field(default_factory=list)  # stdio: extra CLI args
-    url: str | None = None      # http: base URL of the remote agent
+    transport: Literal['stdio', 'http', 'discover'] = 'stdio'
+    command: str | None = None       # stdio: executable name
+    args: list[str] = Field(default_factory=list)
+    url: str | None = None           # http: base URL
+
+
+class ACPSettings(BaseModel):
+    """Top-level `acp` block in settings.json."""
+    model_config = ConfigDict(extra='ignore')
+
+    enabled: bool = True
+    agents: list[ACPAgentConfig] = Field(default_factory=list)

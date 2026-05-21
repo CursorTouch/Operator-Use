@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
+import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, TYPE_CHECKING
@@ -70,9 +72,9 @@ class OperatorACPClient:
         update: Any,
         **kwargs: Any,
     ) -> None:
-        kind = getattr(update, 'type', '')
-        # AgentMessageChunk / AgentThoughtChunk carry delta text
-        text = getattr(update, 'text', None)
+        kind = getattr(update, 'session_update', '')
+        content = getattr(update, 'content', None)
+        text = getattr(content, 'text', None) if content is not None else None
         if text and kind in ('agent_message_chunk', 'agent_thought_chunk'):
             await self._chunks.put(text)
 
@@ -178,9 +180,9 @@ class ACPClient:
         return cls(_transport='stdio', _command=command, _args=args)
 
     @classmethod
-    def http(cls, url: str) -> ACPClient:
+    def http(cls, url: str, token: str | None = None) -> ACPClient:
         """Create a client that connects to a remote HTTP agent."""
-        return cls(_transport='http', _url=url)
+        return cls(_transport='http', _url=url, _token=token)
 
     @classmethod
     def discover(cls, agent_id: str) -> ACPClient:
@@ -197,17 +199,23 @@ class ACPClient:
         _args: tuple[str, ...] = (),
         _url: str = '',
         _agent_id: str = '',
+        _token: str | None = None,
     ) -> None:
         self._transport = _transport
         self._command = _command
         self._args = _args
         self._url = _url
         self._agent_id = _agent_id
+        self._token = _token
         self._conn: Any = None  # ClientSideConnection
         self._process: Any = None
         self._acp_client = OperatorACPClient()
         self._session_id: str | None = None
         self._ctx: Any = None
+        # HTTP transport resources
+        self._http_client: Any = None
+        self._sse_task: asyncio.Task[None] | None = None
+        self._post_task: asyncio.Task[None] | None = None
 
     # ── Context manager ───────────────────────────────────────────────────────
 
@@ -216,7 +224,7 @@ class ACPClient:
             self._ctx = spawn_agent_process(self._acp_client, self._command, *self._args)
             self._conn, self._process = await self._ctx.__aenter__()
         elif self._transport == 'http':
-            raise NotImplementedError('HTTP transport not yet implemented')
+            await self._http_aenter()
         elif self._transport == 'discover':
             from program.acp.registry import ACPRegistry
             reg = ACPRegistry()
@@ -244,6 +252,117 @@ class ACPClient:
         if self._ctx is not None:
             await self._ctx.__aexit__(*exc_info)
             self._ctx = None
+        if self._sse_task is not None:
+            self._sse_task.cancel()
+            with contextlib.suppress(Exception):
+                await self._sse_task
+            self._sse_task = None
+        if self._post_task is not None:
+            self._post_task.cancel()
+            with contextlib.suppress(Exception):
+                await self._post_task
+            self._post_task = None
+        if self._http_client is not None:
+            with contextlib.suppress(Exception):
+                await self._http_client.aclose()
+            self._http_client = None
+
+    # ── HTTP transport ────────────────────────────────────────────────────────
+
+    async def _http_aenter(self) -> None:
+        """Set up HTTP transport using a socket pair to bridge SSE↔ACP."""
+        import httpx
+
+        base = self._url.rstrip('/')
+        auth_headers: dict[str, str] = {}
+        if self._token:
+            auth_headers['Authorization'] = f'Bearer {self._token}'
+
+        # Socket pair: ACP side ↔ bridge side
+        # What ACP writes to acp_writer appears on bridge_reader (→ POST to server)
+        # What we write to bridge_writer appears on acp_reader  (← SSE from server)
+        sock_acp, sock_bridge = socket.socketpair()
+        sock_acp.setblocking(False)
+        sock_bridge.setblocking(False)
+
+        acp_reader, acp_writer = await asyncio.open_connection(sock=sock_acp)
+        bridge_reader, bridge_writer = await asyncio.open_connection(sock=sock_bridge)
+
+        # connect_to_agent(client, input_stream=StreamWriter, output_stream=StreamReader)
+        # input_stream  = process stdin  = we send outgoing messages TO acp_writer
+        # output_stream = process stdout = ACP reads incoming messages FROM acp_reader
+        self._conn = connect_to_agent(self._acp_client, acp_writer, acp_reader)
+
+        self._http_client = httpx.AsyncClient(headers=auth_headers, timeout=60.0)
+
+        # conn_id is returned by the server in X-ACP-Connection-ID header on the SSE
+        # response; _sse_listener sets it so _post_sender can address the right slot.
+        conn_id_future: asyncio.Future[str] = asyncio.get_event_loop().create_future()
+
+        # Bridge 1: SSE events from server → bridge_writer → acp_reader (incoming to ACP)
+        self._sse_task = asyncio.create_task(
+            self._sse_listener(f'{base}/acp/events', bridge_writer, conn_id_future)
+        )
+        # Bridge 2: ACP outgoing → bridge_reader → POST /acp/rpc/{conn_id}
+        self._post_task = asyncio.create_task(
+            self._post_sender(f'{base}/acp/rpc', bridge_reader, conn_id_future)
+        )
+
+    async def _sse_listener(
+        self,
+        url: str,
+        writer: asyncio.StreamWriter,
+        conn_id_future: asyncio.Future[str],
+    ) -> None:
+        """Read SSE events from the remote server and feed them to the ACP connection."""
+        try:
+            async with self._http_client.stream('GET', url) as resp:
+                resp.raise_for_status()
+                conn_id = resp.headers.get('X-ACP-Connection-ID', '')
+                if conn_id and not conn_id_future.done():
+                    conn_id_future.set_result(conn_id)
+                async for line in resp.aiter_lines():
+                    if line.startswith('data: '):
+                        data = line[6:].strip()
+                        if data and data != '[DONE]':
+                            writer.write(data.encode() + b'\n')
+                            await writer.drain()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error('ACPClient HTTP: SSE listener error: %s', exc)
+        finally:
+            if not conn_id_future.done():
+                conn_id_future.cancel()
+            with contextlib.suppress(Exception):
+                writer.close()
+
+    async def _post_sender(
+        self,
+        base_url: str,
+        reader: asyncio.StreamReader,
+        conn_id_future: asyncio.Future[str],
+    ) -> None:
+        """Read outgoing ACP messages and POST each one to /acp/rpc/{conn_id}."""
+        try:
+            conn_id = await conn_id_future
+            rpc_url = f'{base_url}/{conn_id}'
+            while True:
+                line = await reader.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                await self._http_client.post(
+                    rpc_url,
+                    content=line,
+                    headers={'Content-Type': 'application/json'},
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error('ACPClient HTTP: POST sender error: %s', exc)
 
     # ── Session management ────────────────────────────────────────────────────
 
