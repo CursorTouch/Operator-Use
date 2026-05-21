@@ -177,11 +177,15 @@ class ACPAgentTool(Tool):
                     result_text = await c.run(task, session_id)
 
             logger.info('ACP task done | agent=%s', config.name)
-            content = f"[{config.name}]\n{result_text}"
+            content = (
+                f"Agent: {config.name}\n\n"
+                f"Task:\n{task}\n\n"
+                f"Response:\n{result_text}"
+            )
 
         except Exception as exc:
             logger.exception('ACP task failed | agent=%s', config.name)
-            content = f"[{config.name}] Error: {exc}"
+            content = f"Agent '{config.name}' failed with error: {exc}"
 
         await self._deliver(content, channel, chat_id)
 
