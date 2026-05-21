@@ -466,10 +466,17 @@ class Agent(ExtensionContext):
             permanent = _is_permanent_error(error)
 
             if not permanent and attempt < max_retries:
-                # The same turn will be replayed next attempt — rewind this
-                # attempt's partial entries so the replay does not persist
-                # duplicate assistant/tool messages.
-                self._rewind_session(persisted_ids)
+                # Keep tool calls/results already persisted — the next attempt
+                # rebuilds ctx from the session so the LLM sees the work already
+                # done and continues from where it left off rather than replaying
+                # from scratch. strip_unusable_trailing_assistant removes any
+                # dangling tool_call that never got a result (abort mid-tool).
+                session_ctx = self._session_manager.build_session_context()
+                ctx = AgentContext(
+                    system_prompt=ctx.system_prompt,
+                    messages=strip_unusable_trailing_assistant(session_ctx.messages),
+                    tools=ctx.tools,
+                )
                 await self._extensions.emit(
                     'retry_end',
                     RetryEndEvent(attempt=attempt, success=False, error=error),

@@ -69,8 +69,9 @@ class SlackChannel(BaseChannel):
         self._handler: AsyncSocketModeHandler | None = None
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_ts_map: dict[str, str | None] = {}  # chat_id → posted message ts
-        self._retry_ts_map: dict[str, str] = {}  # chat_id → rolling retry-status message ts
-        self._tool_ts_map: dict[str, str] = {}   # chat_id → rolling tool-status message ts
+        self._retry_ts_map: dict[str, str] = {}     # chat_id → rolling retry-status message ts
+        self._tool_ts_map: dict[str, str] = {}      # chat_id → rolling tool-status message ts
+        self._prev_tool_ts: dict[str, str] = {}     # chat_id → tool-status ts from previous failed attempt
 
     @property
     def channel_id(self) -> str:
@@ -245,7 +246,9 @@ class SlackChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
-            self._tool_ts_map.pop(chat_id, None)
+            stale = self._tool_ts_map.pop(chat_id, None)
+            if stale is not None:
+                self._prev_tool_ts[chat_id] = stale
             if self._streaming:
                 self._start_live_streaming(chat_id, slack_channel_id, thread_ts, client)
 
@@ -346,6 +349,12 @@ class SlackChannel(BaseChannel):
                         except Exception:
                             pass
                         self._retry_ts_map.pop(chat_id, None)
+                    prev_tool_ts = self._prev_tool_ts.pop(chat_id, None)
+                    if prev_tool_ts is not None and client is not None:
+                        try:
+                            await client.chat_delete(channel=slack_channel_id, ts=prev_tool_ts)
+                        except Exception:
+                            pass
                     return
                 text = text_from_parts(msg.parts) or 'Unknown error'
                 attempt = metadata.get('retry_attempt', 1)

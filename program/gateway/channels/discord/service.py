@@ -60,8 +60,9 @@ class DiscordChannel(BaseChannel):
         self._typing_tasks: dict[str, asyncio.Task] = {}
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_messages: dict[str, discord.Message | None] = {}
-        self._retry_messages: dict[str, discord.Message] = {}  # chat_id → rolling retry-status message
-        self._tool_messages: dict[str, discord.Message] = {}   # chat_id → rolling tool-status message
+        self._retry_messages: dict[str, discord.Message] = {}      # chat_id → rolling retry-status message
+        self._tool_messages: dict[str, discord.Message] = {}       # chat_id → rolling tool-status message
+        self._prev_tool_messages: dict[str, discord.Message] = {}  # chat_id → tool-status msg from previous failed attempt
 
     @property
     def channel_id(self) -> str:
@@ -219,8 +220,10 @@ class DiscordChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
-            # New turn — abandon any stale tool-status handle.
-            self._tool_messages.pop(chat_id, None)
+            # Save the stale tool-status handle so retry_success can delete it.
+            stale = self._tool_messages.pop(chat_id, None)
+            if stale is not None:
+                self._prev_tool_messages[chat_id] = stale
             # Typing indicator runs in both modes so the dots stay visible during
             # text streaming. Live streaming is layered on top when enabled.
             self._start_typing(chat_id)
@@ -362,6 +365,12 @@ class DiscordChannel(BaseChannel):
                         except Exception:
                             pass
                         self._retry_messages.pop(chat_id, None)
+                    prev_tool = self._prev_tool_messages.pop(chat_id, None)
+                    if prev_tool is not None:
+                        try:
+                            await prev_tool.delete()
+                        except Exception:
+                            pass
                     return
                 text = text_from_parts(msg.parts) or "Unknown error"
                 attempt = metadata.get('retry_attempt', 1)

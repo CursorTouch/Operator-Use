@@ -56,8 +56,9 @@ class TelegramChannel(BaseChannel):
         self._typing_tasks: dict[str, asyncio.Task] = {}
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_msg_ids: dict[str, int | None] = {}
-        self._retry_msg_ids: dict[str, int] = {}  # chat_id → rolling retry-status message ID
-        self._tool_msg_ids: dict[str, int] = {}   # chat_id → rolling tool-status message ID
+        self._retry_msg_ids: dict[str, int] = {}       # chat_id → rolling retry-status message ID
+        self._tool_msg_ids: dict[str, int] = {}        # chat_id → rolling tool-status message ID
+        self._prev_tool_msg_ids: dict[str, int] = {}   # chat_id → tool-status msg from previous failed attempt
 
     @property
     def channel_id(self) -> str:
@@ -267,9 +268,10 @@ class TelegramChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
-            # New turn — abandon any stale tool-status id (the previous attempt's
-            # status, if a retry, stays as-is in the chat history).
-            self._tool_msg_ids.pop(chat_id, None)
+            # Save the stale tool-status id so retry_success can delete it.
+            stale = self._tool_msg_ids.pop(chat_id, None)
+            if stale is not None:
+                self._prev_tool_msg_ids[chat_id] = stale
             # Typing indicator runs in both modes so the dots stay visible during
             # text streaming. Live streaming is layered on top when enabled.
             self._start_typing(chat_id)
@@ -414,13 +416,18 @@ class TelegramChannel(BaseChannel):
             if retry_flag:
                 existing_id = self._retry_msg_ids.get(chat_id)
                 if metadata.get('retry_success'):
-                    # A later attempt succeeded — quietly delete the rolling status message.
                     if existing_id is not None:
                         try:
                             await bot.delete_message(int(chat_id), existing_id)
                         except Exception:
                             pass
                         self._retry_msg_ids.pop(chat_id, None)
+                    prev_tool_id = self._prev_tool_msg_ids.pop(chat_id, None)
+                    if prev_tool_id is not None:
+                        try:
+                            await bot.delete_message(int(chat_id), prev_tool_id)
+                        except Exception:
+                            pass
                     return
                 text = text_from_parts(msg.parts) or "Unknown error"
                 attempt = metadata.get('retry_attempt', 1)
