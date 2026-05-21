@@ -296,7 +296,7 @@ async def refresh_antigravity_token(credential: OAuthCredential, signal: Optiona
 
 @dataclass
 class GoogleAntigravityOAuthProvider(OAuthProvider):
-    id: str = "antigravity"
+    id: str = "google-antigravity"
     name: str = "Google Antigravity"
     uses_callback_server: bool = True
 

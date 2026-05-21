@@ -348,6 +348,10 @@ class Engine:
 
                 match message.stop_reason:
                     case StopReason.Error | StopReason.Abort:
+                        # message=None on error/abort is load-bearing: Agent.process_events
+                        # uses `if message:` to decide history append, and we must NOT
+                        # persist failed turns (see commit 4f388eb). Consumers of
+                        # MessageEndEvent must guard for None.
                         await emit(MessageEndEvent(message=None))
                         err_msg = message.error or f"Turn failed with reason: {message.stop_reason.value}"
                         end_reason = 'error'
