@@ -298,6 +298,7 @@ class Gateway:
         # Wrapped in lists/dicts for mutability inside the closure.
         _last_error: list[str] = ['']
         _retry_max: list[int] = [0]  # total attempts (max_retries + 1)
+        _tool_names: dict[str, str] = {}  # id → name, so tool_end can carry the name
 
         async def _on_event(event) -> None:
             match event:
@@ -336,23 +337,30 @@ class Gateway:
                     await self._bus.publish_outgoing(out)
 
                 case ToolExecutionStartEvent(tool_call=tc):
+                    _tool_names[tc.id] = tc.name
                     out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
                         stream_phase=StreamPhase.CHUNK,
-                        metadata={'kind': 'tool_start', 'name': tc.name, 'args': tc.args},
+                        metadata={'kind': 'tool_start', 'name': tc.name, 'args': tc.args, 'id': tc.id},
                     )
                     await self._bus.publish_outgoing(out)
 
-                case ToolExecutionEndEvent(tool_result=res) if res.is_error:
+                case ToolExecutionEndEvent(tool_result=res):
+                    # Emit for both success and error so channels can flip the rolling
+                    # tool-status message to ✅ / ❌. ToolResultContent doesn't carry the
+                    # tool name, so look it up from the id→name map populated on start.
+                    name = _tool_names.pop(res.id, '')
                     out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
                         stream_phase=StreamPhase.CHUNK,
                         metadata={
                             'kind': 'tool_end',
-                            'is_error': True,
-                            'result': str(res.content)[:300],
+                            'name': name,
+                            'is_error': res.is_error,
+                            'result': str(res.content)[:300] if res.is_error else '',
+                            'id': res.id,
                         },
                     )
                     await self._bus.publish_outgoing(out)

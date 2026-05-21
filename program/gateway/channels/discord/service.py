@@ -61,6 +61,7 @@ class DiscordChannel(BaseChannel):
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_messages: dict[str, discord.Message | None] = {}
         self._retry_messages: dict[str, discord.Message] = {}  # chat_id → rolling retry-status message
+        self._tool_messages: dict[str, discord.Message] = {}   # chat_id → rolling tool-status message
 
     @property
     def channel_id(self) -> str:
@@ -218,6 +219,8 @@ class DiscordChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            # New turn — abandon any stale tool-status handle.
+            self._tool_messages.pop(chat_id, None)
             # Typing indicator runs in both modes so the dots stay visible during
             # text streaming. Live streaming is layered on top when enabled.
             self._start_typing(chat_id)
@@ -227,30 +230,59 @@ class DiscordChannel(BaseChannel):
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
             if kind == 'tool_start' and self._show_tool_calls:
+                # Rolling tool-status: one message that updates as each tool runs.
                 name = metadata.get('name', '')
-                if discord_ch is not None:
+                label = f"⚙️ `{name}`…"
+                existing = self._tool_messages.get(chat_id)
+                if existing is not None:
                     try:
-                        await discord_ch.send(f"⚙️ `{name}`…")
+                        await existing.edit(content=label)
+                    except Exception:
+                        if discord_ch is not None:
+                            try:
+                                sent = await discord_ch.send(label)
+                                self._tool_messages[chat_id] = sent
+                            except Exception:
+                                logger.exception("DiscordChannel: send failed (tool_start)")
+                elif discord_ch is not None:
+                    try:
+                        sent = await discord_ch.send(label)
+                        self._tool_messages[chat_id] = sent
                     except Exception:
                         logger.exception("DiscordChannel: send failed (tool_start)")
-                    # Sending a real message clears the client-side typing indicator;
-                    # re-trigger it so it stays visible during tool execution.
+                if discord_ch is not None:
                     try:
                         await discord_ch.trigger_typing()  # pyright: ignore[reportAttributeAccessIssue]
                     except Exception:
                         pass
-            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_calls:
-                result = str(metadata.get('result', ''))
-                if discord_ch is not None:
+            elif kind == 'tool_end' and self._show_tool_calls:
+                name = metadata.get('name', '')
+                is_error = metadata.get('is_error', False)
+                if is_error:
+                    result = str(metadata.get('result', ''))
+                    label = f"❌ `{name}`\n{result}" if result else f"❌ `{name}`"
+                else:
+                    label = f"✅ `{name}`"
+                existing = self._tool_messages.get(chat_id)
+                if existing is not None:
                     try:
-                        await discord_ch.send(f"⚠️ `{result}`")
+                        await existing.edit(content=label)
                     except Exception:
-                        logger.exception("DiscordChannel: send failed (tool_end)")
+                        pass
+                if discord_ch is not None:
                     try:
                         await discord_ch.trigger_typing()  # pyright: ignore[reportAttributeAccessIssue]
                     except Exception:
                         pass
             else:
+                # text / thinking chunk — delete the rolling tool-status so the
+                # final streaming response stands on its own.
+                existing = self._tool_messages.pop(chat_id, None)
+                if existing is not None:
+                    try:
+                        await existing.delete()
+                    except Exception:
+                        pass
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
@@ -261,6 +293,15 @@ class DiscordChannel(BaseChannel):
             # keep_typing: flush text but leave the indicator running (non-final
             # stop reasons like tool_calls).
             keep_typing = metadata.get('keep_typing', False)
+            # Final END — sweep any leftover tool-status message (model ended
+            # without streaming text after the last tool).
+            if not keep_typing:
+                leftover = self._tool_messages.pop(chat_id, None)
+                if leftover is not None:
+                    try:
+                        await leftover.delete()
+                    except Exception:
+                        pass
             # Auto-reply in guild channels only — DMs need no disambiguation.
             if self._is_group.get(chat_id, False) and origin_msg_id and discord_ch is not None:
                 try:

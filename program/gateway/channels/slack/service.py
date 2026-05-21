@@ -70,6 +70,7 @@ class SlackChannel(BaseChannel):
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_ts_map: dict[str, str | None] = {}  # chat_id → posted message ts
         self._retry_ts_map: dict[str, str] = {}  # chat_id → rolling retry-status message ts
+        self._tool_ts_map: dict[str, str] = {}   # chat_id → rolling tool-status message ts
 
     @property
     def channel_id(self) -> str:
@@ -244,16 +245,56 @@ class SlackChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            self._tool_ts_map.pop(chat_id, None)
             if self._streaming:
                 self._start_live_streaming(chat_id, slack_channel_id, thread_ts, client)
 
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
             if kind == 'tool_start' and self._show_tool_calls:
-                await _post(f"⚙️ `{metadata.get('name', '')}`…")
-            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_calls:
-                await _post(f"⚠️ {metadata.get('result', '')}")
+                name = metadata.get('name', '')
+                label = f"⚙️ `{name}`…"
+                existing_ts = self._tool_ts_map.get(chat_id)
+                if existing_ts is not None and client is not None:
+                    try:
+                        await client.chat_update(channel=slack_channel_id, ts=existing_ts, text=label)
+                    except Exception:
+                        if client is not None:
+                            try:
+                                resp = await client.chat_postMessage(channel=slack_channel_id, text=label, thread_ts=thread_ts)
+                                if resp.get('ok') and resp.get('ts'):
+                                    self._tool_ts_map[chat_id] = resp['ts']
+                            except Exception:
+                                logger.exception("SlackChannel: chat_postMessage failed (tool_start)")
+                elif client is not None:
+                    try:
+                        resp = await client.chat_postMessage(channel=slack_channel_id, text=label, thread_ts=thread_ts)
+                        if resp.get('ok') and resp.get('ts'):
+                            self._tool_ts_map[chat_id] = resp['ts']
+                    except Exception:
+                        logger.exception("SlackChannel: chat_postMessage failed (tool_start)")
+            elif kind == 'tool_end' and self._show_tool_calls:
+                name = metadata.get('name', '')
+                is_error = metadata.get('is_error', False)
+                if is_error:
+                    result = str(metadata.get('result', ''))
+                    label = f"❌ `{name}`\n{result}" if result else f"❌ `{name}`"
+                else:
+                    label = f"✅ `{name}`"
+                existing_ts = self._tool_ts_map.get(chat_id)
+                if existing_ts is not None and client is not None:
+                    try:
+                        await client.chat_update(channel=slack_channel_id, ts=existing_ts, text=label)
+                    except Exception:
+                        pass
             else:
+                # text / thinking chunk — delete the rolling tool-status message
+                existing_ts = self._tool_ts_map.pop(chat_id, None)
+                if existing_ts is not None and client is not None:
+                    try:
+                        await client.chat_delete(channel=slack_channel_id, ts=existing_ts)
+                    except Exception:
+                        pass
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
@@ -262,6 +303,14 @@ class SlackChannel(BaseChannel):
             # keep_typing leaves the live-streaming loop running so subsequent
             # turns (e.g. after a tool call) stream into a new live message.
             keep_typing = metadata.get('keep_typing', False)
+            # Final END — sweep any leftover tool-status message.
+            if not keep_typing:
+                leftover = self._tool_ts_map.pop(chat_id, None)
+                if leftover is not None and client is not None:
+                    try:
+                        await client.chat_delete(channel=slack_channel_id, ts=leftover)
+                    except Exception:
+                        pass
             if self._streaming:
                 if not keep_typing:
                     self._stop_live_streaming(chat_id)

@@ -57,6 +57,7 @@ class TelegramChannel(BaseChannel):
         self._live_tasks: dict[str, asyncio.Task] = {}
         self._live_msg_ids: dict[str, int | None] = {}
         self._retry_msg_ids: dict[str, int] = {}  # chat_id → rolling retry-status message ID
+        self._tool_msg_ids: dict[str, int] = {}   # chat_id → rolling tool-status message ID
 
     @property
     def channel_id(self) -> str:
@@ -266,6 +267,9 @@ class TelegramChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            # New turn — abandon any stale tool-status id (the previous attempt's
+            # status, if a retry, stays as-is in the chat history).
+            self._tool_msg_ids.pop(chat_id, None)
             # Typing indicator runs in both modes so the dots stay visible during
             # text streaming. Live streaming is layered on top when enabled.
             self._start_typing(chat_id)
@@ -275,28 +279,59 @@ class TelegramChannel(BaseChannel):
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
             if kind == 'tool_start' and self._show_tool_calls:
+                # Rolling tool-status: one message that updates as each tool runs.
+                # On a new tool_start we edit the existing status (replacing the previous
+                # ✅/❌ marker) or post a fresh one if none exists yet.
                 name = metadata.get('name', '')
-                try:
-                    await bot.send_message(int(chat_id), f"⚙️ {name}…")
-                except Exception:
-                    logger.exception("TelegramChannel: send_message failed (tool_start)")
-                # Sending a real message clears the client-side typing indicator;
-                # re-send the typing action so it stays visible during tool execution.
+                label = f"⚙️ {name}…"
+                existing_id = self._tool_msg_ids.get(chat_id)
+                if existing_id is not None:
+                    try:
+                        await bot.edit_message_text(label, chat_id=int(chat_id), message_id=existing_id)
+                    except Exception:
+                        try:
+                            sent = await bot.send_message(int(chat_id), label)
+                            self._tool_msg_ids[chat_id] = sent.message_id
+                        except Exception:
+                            logger.exception("TelegramChannel: send_message failed (tool_start)")
+                else:
+                    try:
+                        sent = await bot.send_message(int(chat_id), label)
+                        self._tool_msg_ids[chat_id] = sent.message_id
+                    except Exception:
+                        logger.exception("TelegramChannel: send_message failed (tool_start)")
                 try:
                     await bot.send_chat_action(int(chat_id), ChatAction.TYPING)
                 except Exception:
                     pass
-            elif kind == 'tool_end' and metadata.get('is_error') and self._show_tool_calls:
-                result = str(metadata.get('result', ''))
-                try:
-                    await bot.send_message(int(chat_id), f"⚠️ {result}")
-                except Exception:
-                    logger.exception("TelegramChannel: send_message failed (tool_end)")
+            elif kind == 'tool_end' and self._show_tool_calls:
+                name = metadata.get('name', '')
+                is_error = metadata.get('is_error', False)
+                if is_error:
+                    result = str(metadata.get('result', ''))
+                    label = f"❌ {name}\n{result}" if result else f"❌ {name}"
+                else:
+                    label = f"✅ {name}"
+                existing_id = self._tool_msg_ids.get(chat_id)
+                if existing_id is not None:
+                    try:
+                        await bot.edit_message_text(label, chat_id=int(chat_id), message_id=existing_id)
+                    except Exception:
+                        pass  # benign edit conflict (e.g. identical text)
                 try:
                     await bot.send_chat_action(int(chat_id), ChatAction.TYPING)
                 except Exception:
                     pass
             else:
+                # text / thinking chunk — if a rolling tool-status message is still up,
+                # delete it now: the model is starting to stream its next response, so
+                # the prior tool status no longer needs to be visible.
+                existing_id = self._tool_msg_ids.pop(chat_id, None)
+                if existing_id is not None:
+                    try:
+                        await bot.delete_message(int(chat_id), existing_id)
+                    except Exception:
+                        pass
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
@@ -308,6 +343,16 @@ class TelegramChannel(BaseChannel):
             # tool_calls): flush the buffered text but leave the typing/live-stream
             # task running so the indicator stays on through tool execution.
             keep_typing = metadata.get('keep_typing', False)
+            # Final END (stop_reason == Stop) — sweep any leftover tool-status
+            # message in case the model finished without streaming text after the
+            # last tool.
+            if not keep_typing:
+                leftover = self._tool_msg_ids.pop(chat_id, None)
+                if leftover is not None:
+                    try:
+                        await bot.delete_message(int(chat_id), leftover)
+                    except Exception:
+                        pass
             # Auto-reply in groups only — DMs need no disambiguation.
             if self._is_group.get(chat_id, False) and origin_msg_id:
                 try:
