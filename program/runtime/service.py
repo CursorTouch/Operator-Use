@@ -343,19 +343,16 @@ class Runtime:
         channel_id = job.payload.channel_id
         chat_id = job.payload.chat_id
 
-        if channel_id and chat_id:
-            # Run a dedicated session agent and stream its response to the channel
-            from program.bus.types import IncomingMessage, TextPart
-            bus = self.gateway_manager._bus
-            msg = IncomingMessage(
-                channel=channel_id,
-                chat_id=chat_id,
-                parts=[TextPart(content=job.payload.message)],
-            )
-            await bus.publish_incoming(msg)
-        else:
-            # No channel target — inject directly into the active agent session
-            await self.invoke(job.payload.message, PromptOptions(source='cron'))
+        from program.bus.types import IncomingMessage, TextPart
+        bus = self.gateway_manager._bus
+        target_channel = channel_id or 'stdio'
+        target_chat_id = chat_id or 'cli'
+        await bus.publish_incoming(IncomingMessage(
+            channel=target_channel,
+            chat_id=target_chat_id,
+            parts=[TextPart(content=job.payload.message)],
+            metadata={'source': 'cron', 'job_id': job.id},
+        ))
 
     # -------------------------------------------------------------------------
     # Extension event helpers

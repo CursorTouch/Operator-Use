@@ -49,15 +49,23 @@ def _out(text: str = '', end: str = '\r\n') -> None:
 
 _streaming_role: str | None = None
 _attempt: int = 0
+_partial_lines: int = 0  # physical lines printed by the current attempt's streaming
 
 
 def _render_event(event) -> None:
-    global _streaming_role, _attempt
+    global _streaming_role, _attempt, _partial_lines
     match event:
         case AgentStartEvent():
             if _attempt > 0:
+                # Erase partial streamed text from the failed attempt before
+                # showing the retry label — move up to the start of that output
+                # and clear everything from there to end of screen.
+                if _partial_lines > 0:
+                    sys.stdout.write(f"\033[{max(0, _partial_lines - 1)}A\r\033[J")
+                    sys.stdout.flush()
                 _out(f"\n{_yellow(f'[Retry {_attempt}]')} Retrying...")
             _attempt += 1
+            _partial_lines = 0
             _streaming_role = None
 
         case MessageUpdateEvent(message=msg) if msg.role == Role.ASSISTANT:
@@ -70,19 +78,24 @@ def _render_event(event) -> None:
                     if _streaming_role != 'thinking':
                         _out(f"\n{_grey('[Thinking]')} ", end='')
                         _streaming_role = 'thinking'
+                        _partial_lines += 1
                     sys.stdout.write(_grey(content.replace('\n', '\r\n')))
                     sys.stdout.flush()
+                    _partial_lines += content.count('\n')
                 elif kind == 'text':
                     if _streaming_role != 'assistant':
                         _out(f"\n{_blue('[Assistant]')} ", end='')
                         _streaming_role = 'assistant'
+                        _partial_lines += 1
                     sys.stdout.write(content.replace('\n', '\r\n'))
                     sys.stdout.flush()
+                    _partial_lines += content.count('\n')
 
         case MessageEndEvent(message=msg) if msg is not None and msg.role == Role.ASSISTANT:
             if _streaming_role is not None:
                 _out()
             _streaming_role = None
+            _partial_lines = 0  # turn completed cleanly — nothing to erase
 
         case ToolExecutionStartEvent(tool_call=tc):
             args_str = ', '.join(f'{k}={v!r}' for k, v in tc.args.items())
@@ -219,9 +232,12 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
         await _stdio_queue.put((agent, text_from_parts(msg.parts), PromptOptions(source='subagent')))
 
     async def _stdio_consumer() -> None:
+        global _attempt, _partial_lines
         while True:
             try:
                 agent, content, opts = await _stdio_queue.get()
+                _attempt = 0
+                _partial_lines = 0
                 while True:
                     try:
                         await agent.invoke(content, opts)
