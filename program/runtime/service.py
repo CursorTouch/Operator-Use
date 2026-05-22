@@ -343,16 +343,24 @@ class Runtime:
         channel_id = job.payload.channel_id
         chat_id = job.payload.chat_id
 
-        from program.bus.types import IncomingMessage, TextPart
+        from program.bus.types import IncomingMessage, OutgoingMessage, TextPart
         bus = self.gateway_manager._bus
         target_channel = channel_id or 'stdio'
         target_chat_id = chat_id or 'cli'
-        await bus.publish_incoming(IncomingMessage(
-            channel=target_channel,
-            chat_id=target_chat_id,
-            parts=[TextPart(content=job.payload.message)],
-            metadata={'source': 'cron', 'job_id': job.id},
-        ))
+
+        if job.payload.deliver:
+            await bus.publish_outgoing(OutgoingMessage(
+                channel=target_channel,
+                chat_id=target_chat_id,
+                parts=[TextPart(content=job.payload.message)],
+            ))
+        else:
+            await bus.publish_incoming(IncomingMessage(
+                channel=target_channel,
+                chat_id=target_chat_id,
+                parts=[TextPart(content=job.payload.message)],
+                metadata={'source': 'cron', 'job_id': job.id},
+            ))
 
     # -------------------------------------------------------------------------
     # Extension event helpers

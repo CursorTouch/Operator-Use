@@ -243,6 +243,10 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
                         await agent.invoke(content, opts)
                         break
                     except RuntimeError:
+                        if agent.is_idle():
+                            # Agent is idle but invoke still failed — permanent error, give up.
+                            break
+                        # Agent is busy — wait and retry.
                         await asyncio.sleep(0.05)
             except asyncio.CancelledError:
                 break

@@ -17,6 +17,7 @@ class CronPayload:
     message: str = ''                # prompt injected into the agent
     channel_id: str | None = None    # route response to this channel (e.g. 'telegram')
     chat_id: str | None = None       # specific chat/user within the channel
+    deliver: bool = False            # True = send directly to channel; False = route through agent
 
 
 @dataclass

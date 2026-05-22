@@ -70,6 +70,13 @@ class CronSchema(BaseModel):
         default=None,
         description='Specific chat or user ID within the channel (required when channel_id is set).',
     )
+    deliver: bool | None = Field(
+        default=None,
+        description=(
+            'If True, send message directly to the channel when the job fires (bypasses the agent). '
+            'If False (default), the job callback runs through the agent loop instead.'
+        ),
+    )
 
 
 def _format_job(job: CronJob) -> dict:
@@ -87,6 +94,7 @@ def _format_job(job: CronJob) -> dict:
         'enabled': job.enabled,
         'schedule': schedule_str,
         'message': job.payload.message,
+        'deliver': job.payload.deliver,
         'delete_after_run': job.delete_after_run,
         'next_run_at_ms': job.state.next_run_at_ms,
         'last_status': job.state.last_status,
@@ -170,6 +178,7 @@ class CronTool(Tool):
                         message=message,
                         channel_id=params.get('channel_id'),
                         chat_id=params.get('chat_id'),
+                        deliver=params.get('deliver') or False,
                     ),
                     delete_after_run=params.get('delete_after_run', False),
                 )
@@ -203,11 +212,16 @@ class CronTool(Tool):
                     schedule = CronSchedule(mode='cron', expr=expr, tz=params.get('tz') or 'UTC')
 
                 message = params.get('message')
-                payload = CronPayload(
-                    message=message,
-                    channel_id=params.get('channel_id'),
-                    chat_id=params.get('chat_id'),
-                ) if message else None
+                deliver = params.get('deliver')
+                if message or deliver is not None:
+                    payload = CronPayload(
+                        message=message or '',
+                        channel_id=params.get('channel_id'),
+                        chat_id=params.get('chat_id'),
+                        deliver=deliver or False,
+                    )
+                else:
+                    payload = None
 
                 updated = cron.update_job(
                     job_id,
