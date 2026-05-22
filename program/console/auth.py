@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 import webbrowser
 
@@ -16,22 +15,12 @@ async def _read_line_cancelable(message: str = "") -> str:
     if message:
         sys.stdout.write(message)
         sys.stdout.flush()
-    loop = asyncio.get_running_loop()
-    dup_fd = os.dup(sys.stdin.fileno())
-    pipe = os.fdopen(dup_fd, "r")
-    reader = asyncio.StreamReader()
-    transport, _ = await loop.connect_read_pipe(
-        lambda: asyncio.StreamReaderProtocol(reader), pipe
-    )
-    try:
-        data = await reader.readline()
-        return data.decode(errors="replace").strip()
-    finally:
-        transport.close()
-        try:
-            pipe.close()
-        except Exception:
-            pass
+    line = await asyncio.to_thread(sys.stdin.readline)
+    if not line:
+        # stdin is at EOF (non-interactive context) — suspend until cancelled
+        # so the browser callback can win the race without closing the server.
+        await asyncio.Future()
+    return line.strip()
 
 
 async def _do_login(provider_id: str | None) -> None:
