@@ -71,8 +71,9 @@ class WebFetchTool(Tool):
             return ToolResult.error(id=invocation.id, content=f"Invalid URL: {url}. Must be http:// or https://")
 
         try:
+            ddgs = DDGS(timeout=timeout)
             result = await asyncio.to_thread(
-                lambda: DDGS(timeout=timeout).extract(url, fmt="text_markdown")
+                lambda: ddgs.extract(url)
             )
             text = result.get("content", "") or ""
 
