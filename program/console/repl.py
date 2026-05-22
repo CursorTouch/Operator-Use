@@ -70,13 +70,13 @@ def _render_event(event) -> None:
                     if _streaming_role != 'thinking':
                         _out(f"\n{_grey('[Thinking]')} ", end='')
                         _streaming_role = 'thinking'
-                    sys.stdout.write(_grey(content))
+                    sys.stdout.write(_grey(content.replace('\n', '\r\n')))
                     sys.stdout.flush()
                 elif kind == 'text':
                     if _streaming_role != 'assistant':
                         _out(f"\n{_blue('[Assistant]')} ", end='')
                         _streaming_role = 'assistant'
-                    sys.stdout.write(content)
+                    sys.stdout.write(content.replace('\n', '\r\n'))
                     sys.stdout.flush()
 
         case MessageEndEvent(message=msg) if msg is not None and msg.role == Role.ASSISTANT:
@@ -95,7 +95,7 @@ def _render_event(event) -> None:
             if _streaming_role != 'tool_stream':
                 _out(f"{_grey('[Tool ⋯]')} ", end='')
                 _streaming_role = 'tool_stream'
-            sys.stdout.write(text)
+            sys.stdout.write(text.replace('\n', '\r\n'))
             sys.stdout.flush()
 
         case ToolExecutionEndEvent(tool_result=res):

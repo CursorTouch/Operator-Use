@@ -30,15 +30,16 @@ class WebSearchSchema(BaseModel):
 
 def _run_search(mode: SearchMode, query: str, max_results: int) -> list[dict]:
     d = DDGS()
+    backend="auto"
     match mode:
         case SearchMode.text:
-            return d.text(query, region="us-en", safesearch="off", backend="brave", max_results=max_results) or []
+            return d.text(query, region="us-en", safesearch="off", backend=backend, max_results=max_results) or []
         case SearchMode.news:
-            return d.news(query, region="us-en", safesearch="off", max_results=max_results) or []
+            return d.news(query, region="us-en", safesearch="off", backend=backend, max_results=max_results) or []
         case SearchMode.images:
-            return d.images(query, region="us-en", safesearch="off", max_results=max_results) or []
+            return d.images(query, region="us-en", safesearch="off", backend=backend, max_results=max_results) or []
         case SearchMode.videos:
-            return d.videos(query, region="us-en", safesearch="off", max_results=max_results) or []
+            return d.videos(query, region="us-en", safesearch="off", backend=backend, max_results=max_results) or []
         case SearchMode.books:
             return d.books(query, max_results=max_results) or []
 
