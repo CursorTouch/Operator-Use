@@ -82,12 +82,39 @@ class OutgoingMessage:
 
 | Phase | Meaning |
 |---|---|
-| `START` | A new agent turn has begun — start typing indicator |
+| `START` | A new agent turn has begun — start typing indicator, clear stale tool-status slot |
 | `CHUNK` | Streaming content: `metadata['kind']` is `'text'`, `'thinking'`, `'tool_start'`, or `'tool_end'` |
 | `END` | Assistant message complete — flush buffered text, stop typing indicator |
 | `DONE` | Full turn complete (including TTS injection) |
 | `ERROR` | Turn ended with an error |
 | `None` | Out-of-band message: file, audio, intermediate text, or reaction |
+
+#### CHUNK metadata by kind
+
+| `kind` | Extra metadata fields | Meaning |
+|---|---|---|
+| `'text'` | — | Streaming assistant text |
+| `'thinking'` | — | Streaming thinking/reasoning text (debounced into a rolling 💭 message) |
+| `'tool_start'` | `name`, `args`, `id`, `tool_kind` | Tool call beginning; `tool_kind` is a `ToolKind` value: `"read"`, `"edit"`, `"write"`, `"execute"`, `"web"`, `"unknown"`, or `null` |
+| `'tool_end'` | `name`, `id`, `is_error: bool`, `result: str` | Tool call complete; `result` only populated when `is_error=True` |
+
+### Rolling tool-status messages
+
+For Telegram, Discord, and Slack, tool progress is shown through a **single shared message** per chat that is edited in-place rather than posting a new message for each event:
+
+- `tool_start` → post "⚙️ `<name>`…" (or edit the existing slot)
+- `tool_end` (success) → edit to "✅ `<name>`"
+- `tool_end` (error) → edit to "❌ `<name>`\n`<result>`"
+- First text `CHUNK` → delete the rolling status message (the response replaces it)
+- `END` (final, `keep_typing=False`) → delete any leftover status message
+- Retry success → delete the status message from the failed attempt
+
+### Thinking stream
+
+Extended thinking tokens are streamed into the same rolling-status slot:
+
+- `thinking` chunk → accumulate text; start a debounced loop that edits "💭 `<thinking…>`" (capped at 800 chars)
+- `tool_start` or text chunk → stop the thinking loop, clear the buffer
 
 ### ContentPart types
 
@@ -174,7 +201,8 @@ await server.start()
 {"type": "chunk", "text": "Hello", "kind": "text"}
 {"type": "chunk", "text": "...", "kind": "thinking"}
 {"type": "chunk", "kind": "tool_start", "name": "web_search", "args": {...}}
-{"type": "chunk", "kind": "tool_end", "is_error": true, "result": "..."}
+{"type": "chunk", "kind": "tool_end", "name": "web_search", "is_error": false, "result": ""}
+{"type": "chunk", "kind": "tool_end", "name": "web_search", "is_error": true, "result": "timeout"}
 {"type": "end"}
 {"type": "done"}
 {"type": "error", "text": "Something went wrong"}
@@ -188,6 +216,8 @@ await server.start()
 Polls via PTB (python-telegram-bot ≥ 20.0). Handles text, voice messages, and audio files. Shows a typing indicator while the agent works.
 
 **Setup:** Set `TELEGRAM_BOT_TOKEN` env var or `auth/channels.json`. Enable `message_content` intent. Enable the channel in settings (`channels.telegram.enabled = true`).
+
+**Markdown pipe tables** are automatically wrapped in fenced code blocks before HTML conversion so they render as monospace in Telegram (which does not support native table markup).
 
 ### DiscordChannel
 
@@ -313,3 +343,4 @@ asyncio.create_task(channel.connect())
 - [hooks.md](./hooks.md) — Gateway hook events and STT/TTS result types
 - [auth.md](./auth.md) — Channel credential storage (`ChannelAuthManager`)
 - [agent.md](./agent.md) — Agent session lifecycle
+- [acp.md](./acp.md) — ACP transport (stdio/HTTP) for IDE and remote-agent connections

@@ -124,16 +124,16 @@ Returns the full tree as a list of `SessionTreeNode` objects (each with children
 
 ## Session directory layout
 
-Sessions are stored under the platform config directory:
+All sessions are stored flat in a single directory:
 
 ```
-~/.config/program/sessions/<cwd-hash>/
+~/.program/agent/sessions/
   2024-01-15T10-30-00-000000_<uuid>.jsonl
   2024-01-15T11-00-00-000000_<uuid>.jsonl
   ...
 ```
 
-`get_default_session_dir(cwd)` derives the per-cwd directory. `list_sessions_from_dir()` scans it and returns `SessionInfo` objects sorted by last modification time.
+`get_default_session_dir()` returns this directory (no `cwd` parameter — sessions from all projects share the same folder). `list_sessions_from_dir()` scans it and returns `SessionInfo` objects sorted by last modification time. The `cwd` recorded in each `SessionHeader` is how per-project filtering is done at list/load time.
 
 ## Related documents
 

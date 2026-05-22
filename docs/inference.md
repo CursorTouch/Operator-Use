@@ -87,7 +87,7 @@ All text APIs emit a standardized event stream:
 
 Providers that do not stream natively still emit the same events in a single batch.
 
-### ThinkingLevel
+### ThinkingLevel and ThinkingBudgets
 
 ```python
 class ThinkingLevel(str, Enum):
@@ -99,7 +99,18 @@ class ThinkingLevel(str, Enum):
     XHigh = "xhigh"
 ```
 
-Passed through to API implementations that support extended thinking (Anthropic). APIs that do not support it ignore it.
+`ThinkingLevel` is passed to API implementations that support extended thinking (Anthropic, Google Antigravity). APIs that do not support it ignore it.
+
+The concrete token budget for each level is resolved through `ThinkingBudgets`, which maps `ThinkingLevel → int`. `LLMOptions.thinking_budgets` carries the tier table; if unset, each API uses its own defaults. The `anthropic-claude-code` and `anthropic` APIs read `options.thinking_budgets.get(options.thinking_level)` to determine `budget_tokens` sent to the API.
+
+### Google Antigravity improvements
+
+The `GoogleAntigravityAPI` now:
+
+- **Resolves Pydantic schemas** — `_resolve_schema()` flattens `$ref`/`$defs`, drops unsupported keys (`title`, `$schema`, `default`), unwraps single-element `anyOf` (for `Optional` fields). This produces schemas Gemini accepts without validation errors.
+- **Attaches function declarations** — `tools` are now passed to every request as `functionDeclarations` so the model can invoke them.
+- **Preserves thought signatures** — `ThinkingContent.signature` and `ToolCallContent.metadata["thoughtSignature"]` are populated from Gemini's `thoughtSignature` field, enabling accurate multi-turn grounding.
+- **Correct stop reason** — `EndEvent.reason` is `StopReason.ToolCalls` (not `Stop`) when at least one function call was emitted in the same response. `GeminiGenerateAPI` applies the same fix.
 
 ---
 

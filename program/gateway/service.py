@@ -342,7 +342,7 @@ class Gateway:
                         channel=channel_id,
                         chat_id=chat_id,
                         stream_phase=StreamPhase.CHUNK,
-                        metadata={'kind': 'tool_start', 'name': tc.name, 'args': tc.args, 'id': tc.id},
+                        metadata={'kind': 'tool_start', 'name': tc.name, 'args': tc.args, 'id': tc.id, 'tool_kind': tc.kind.value if tc.kind else None},
                     )
                     await self._bus.publish_outgoing(out)
 
