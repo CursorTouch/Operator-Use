@@ -11,14 +11,15 @@ if TYPE_CHECKING:
 
 
 class SubAgentSchema(BaseModel):
-    action: Literal['create', 'list', 'status', 'cancel'] = Field(
+    action: Literal['create', 'list', 'status', 'cancel', 'profiles'] = Field(
         description=(
             'Action to perform:\n'
-            '  create — delegate a task to a new background subagent (returns task_id immediately).\n'
-            '           After calling create, END YOUR TURN — the result is delivered back automatically.\n'
-            '  list   — show all subagents (running and finished) with status and results.\n'
-            '  status — get detailed status and full result of a specific subagent by task_id.\n'
-            '  cancel — stop a running subagent by task_id.'
+            '  create   — delegate a task to a new background subagent (returns task_id immediately).\n'
+            '             After calling create, END YOUR TURN — the result is delivered back automatically.\n'
+            '  list     — show all subagents (running and finished) with status and results.\n'
+            '  status   — get detailed status and full result of a specific subagent by task_id.\n'
+            '  cancel   — stop a running subagent by task_id.\n'
+            '  profiles — list all available named subagent profiles.'
         )
     )
     task: str | None = Field(
@@ -43,6 +44,14 @@ class SubAgentSchema(BaseModel):
             'The task is deferred until all dependencies finish.'
         ),
     )
+    profile: str = Field(
+        description=(
+            'Named subagent profile to use (create action). '
+            'Applies the profile\'s specialized system prompt and restricts tools to its allow-list. '
+            'Must match an existing profile name — use action="profiles" to see available options.'
+        ),
+        default='',
+    )
 
 
 def _format_duration(started: datetime, finished: datetime | None) -> str:
@@ -64,10 +73,10 @@ class SubagentTool(Tool):
         super().__init__(
             name='subagent',
             description=(
-                'Spawn ephemeral subagents for parallel or background tasks.\n\n'
-                'A subagent has no identity and no memory — it is a blank executor that runs '
-                'a task with the same tools as the main agent, then disappears. Use this when '
-                'you want to delegate self-contained work in parallel.\n\n'
+                'Spawn named subagents for parallel or background tasks.\n\n'
+                'Every subagent must use a pre-defined profile (use action="profiles" to list them). '
+                'The profile determines the subagent\'s system prompt and allowed tools — '
+                'anonymous subagents are not permitted.\n\n'
                 'After calling create, END YOUR TURN — the result is injected back automatically '
                 'when the subagent finishes. Do not poll with list or status after create.'
             ),
@@ -95,16 +104,28 @@ class SubagentTool(Tool):
                 if not task:
                     return ToolResult.error(id=invocation.id, content="'task' is required for action='create'.")
 
+                profile = params.get('profile') or ''
+                if not profile:
+                    available = ', '.join(p.name for p in self._manager.list_profiles()) or 'none'
+                    return ToolResult.error(
+                        id=invocation.id,
+                        content=f"'profile' is required for action='create'. Available profiles: {available}",
+                    )
+
                 label = params.get('label')
                 depends_on = params.get('depends_on')
 
                 try:
-                    task_id = await self._manager.invoke(task, label=label, depends_on=depends_on)
+                    task_id = await self._manager.invoke(
+                        task, label=label, depends_on=depends_on, profile=profile,
+                    )
                 except ValueError as exc:
                     return ToolResult.error(id=invocation.id, content=f'Cannot create subagent: {exc}')
 
                 display = label or task[:60]
                 msg = f"Subagent triggered — task_id={task_id}  label='{display}'"
+                if profile:
+                    msg += f"  profile='{profile}'"
                 if depends_on:
                     msg += f"\nWaiting on: {', '.join(depends_on)}"
                 msg += '\nRunning in background — result will be injected automatically when done.'
@@ -170,6 +191,16 @@ class SubagentTool(Tool):
                         content=f"Subagent {task_id} is not running (status={record.status}).",
                     )
                 return ToolResult.error(id=invocation.id, content=f"No subagent found with task_id='{task_id}'.")
+
+            case 'profiles':
+                profiles = self._manager.list_profiles()
+                if not profiles:
+                    return ToolResult.ok(id=invocation.id, content='No subagent profiles are available.')
+                lines = [f'Available subagent profiles ({len(profiles)}):']
+                for p in profiles:
+                    tool_note = ', '.join(p.tools) if p.tools else 'all tools'
+                    lines.append(f'  {p.name} — {p.description}  [tools: {tool_note}]')
+                return ToolResult.ok(id=invocation.id, content='\n'.join(lines))
 
             case _:
                 return ToolResult.error(id=invocation.id, content=f"Unknown action '{action}'.")

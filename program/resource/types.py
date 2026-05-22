@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from program.extension.runtime import ExtensionRuntime
     from program.skill.types import Skill
     from program.extension.types import LoadExtensionsResult
+    from program.subagent.profile import SubagentProfile
 
 
 # ============================================================================
@@ -64,6 +65,9 @@ class BaseResourceLoader(ABC):
 
     @abstractmethod
     async def reload(self) -> None: ...
+
+    @abstractmethod
+    def get_subagent_profiles(self) -> list['SubagentProfile']: ...
 
     @abstractmethod
     def get_diagnostics(self, runtime: 'ExtensionRuntime | None' = None) -> list['ResourceDiagnostic']:

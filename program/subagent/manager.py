@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from program.inference.api.text.service import LLM
     from program.tool.types import Tool
 
+from program.subagent.profile import SubagentProfile
+
 logger = logging.getLogger(__name__)
 
 # Set by Gateway._run_session() before invoking each session agent so that
@@ -57,6 +59,7 @@ class SubagentManager:
         bus: Bus | None = None,
         settings: SubagentSettings | None = None,
         hooks: Hooks | None = None,
+        profiles: list[SubagentProfile] | None = None,
     ) -> None:
         self._settings = settings or SubagentSettings()
         self._runner = Subagent(llm=llm, tools=tools, settings=self._settings, hooks=hooks)
@@ -64,14 +67,25 @@ class SubagentManager:
         self._records: dict[str, SubagentRecord] = {}
         self._tasks: dict[str, asyncio.Task] = {}
         self._bus: Bus | None = bus
+        self._profiles: dict[str, SubagentProfile] = {p.name: p for p in (profiles or [])}
 
     # ── Public API ────────────────────────────────────────────────────────────
+
+    def update_profiles(self, profiles: list[SubagentProfile]) -> None:
+        self._profiles = {p.name: p for p in profiles}
+
+    def list_profiles(self) -> list[SubagentProfile]:
+        return list(self._profiles.values())
+
+    def get_profile(self, name: str) -> SubagentProfile | None:
+        return self._profiles.get(name)
 
     async def invoke(
         self,
         task: str,
         label: str | None = None,
         depends_on: list[str] | None = None,
+        profile: str | None = None,
     ) -> str:
         """Spawn a background subagent. Returns task_id immediately.
 
@@ -82,6 +96,14 @@ class SubagentManager:
         channel = _session_channel.get()
         chat_id = _session_chat_id.get()
 
+        if not profile:
+            raise ValueError("A profile is required. Use list_profiles() to see available options.")
+        if profile not in self._profiles:
+            raise ValueError(
+                f"Unknown subagent profile '{profile}'. "
+                f"Available: {', '.join(self._profiles) or 'none'}"
+            )
+
         task_id = f'sub_{uuid.uuid4().hex[:8]}'
         display_label = label or task[:50]
         depends_on = depends_on or []
@@ -89,6 +111,7 @@ class SubagentManager:
         if depends_on:
             self._check_for_cycles(task_id, depends_on)
 
+        resolved = self._profiles[profile]
         record = SubagentRecord(
             task_id=task_id,
             label=display_label,
@@ -98,6 +121,9 @@ class SubagentManager:
             channel=channel,
             chat_id=chat_id,
             depends_on=depends_on,
+            profile=profile,
+            system_prompt=resolved.system_prompt,
+            tool_names=resolved.tools if resolved.tools else None,
         )
         self._records[task_id] = record
 

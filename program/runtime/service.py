@@ -61,6 +61,7 @@ class Runtime:
             bus=self.gateway_manager._bus,
             settings=context.subagent_settings,
             hooks=context.hooks,
+            profiles=context.resource_loader.get_subagent_profiles(),
         )
         # Look up the tool instance from the engine. The resource loader registers each
         # builtin under a synthetic module name (`_tool_<stem>`), so the class object in
@@ -170,6 +171,9 @@ class Runtime:
             discovered=resource_loader.get_commands(),
         )
         self.commands.register_from_extensions(new_ext.get_commands())
+
+        # Refresh named subagent profiles.
+        self.subagent_manager.update_profiles(resource_loader.get_subagent_profiles())
 
     async def new_session(self) -> None:
         """Shut down the current session and start a fresh one."""

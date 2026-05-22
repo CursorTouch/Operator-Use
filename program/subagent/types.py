@@ -29,6 +29,9 @@ class SubagentRecord:
     dependents: list[str] = field(default_factory=list)
     retry_count: int = 0
     max_retries: int = 0
+    profile: str | None = None           # named profile used for this subagent
+    system_prompt: str | None = None     # profile's system prompt (overrides default)
+    tool_names: list[str] | None = None  # profile's allowed tools (None = all)
 
 
 class SubagentSettings(BaseModel):

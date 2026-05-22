@@ -21,9 +21,11 @@ from program.settings.paths import (
     get_system_prompt_path, get_append_system_prompt_path, get_knowledge_dir, get_temp_dir,
     get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
     get_builtins_extensions_dir, get_builtins_hooks_dir,
+    get_builtins_subagents_dir, get_subagents_dir,
 )
 from program.skill.loader import load_skills
 from program.skill.types import Skill, LoadSkillsOptions
+from program.subagent.profile import SubagentProfile, load_profiles
 
 if TYPE_CHECKING:
     from program.extension.runtime import ExtensionRuntime
@@ -85,6 +87,7 @@ class ResourceLoader(BaseResourceLoader):
         self._system_prompt: str | None = None
         self._append_system_prompt: list[str] = []
         self._extension_skill_paths: list[str] = []
+        self._subagent_profiles: list[SubagentProfile] = []
 
     # -------------------------------------------------------------------------
     # Public interface
@@ -122,6 +125,9 @@ class ResourceLoader(BaseResourceLoader):
         self._extension_skill_paths.extend(new_paths)
         self._reload_skills()
 
+    def get_subagent_profiles(self) -> list[SubagentProfile]:
+        return self._subagent_profiles
+
     def get_diagnostics(self, runtime: ExtensionRuntime | None = None) -> list[ResourceDiagnostic]:
         """Return all diagnostics: extension load errors, collisions, skill warnings, and (optionally) runtime errors."""
         from program.skill.types import LoadSkillsResult
@@ -136,6 +142,7 @@ class ResourceLoader(BaseResourceLoader):
         self._reload_hooks()
         self._reload_context_files()
         self._reload_system_prompt()
+        self._reload_subagent_profiles()
 
     # -------------------------------------------------------------------------
     # Internal reload helpers
@@ -224,6 +231,16 @@ class ResourceLoader(BaseResourceLoader):
             self._context_files = []
             return
         self._context_files = load_project_context_files(self._cwd, self._config_dir)
+
+    def _reload_subagent_profiles(self) -> None:
+        dirs = [get_builtins_subagents_dir()]
+        global_sub = get_subagents_dir()
+        project_sub = get_subagents_dir(self._cwd)
+        if global_sub.is_dir():
+            dirs.append(global_sub)
+        if project_sub.is_dir():
+            dirs.append(project_sub)
+        self._subagent_profiles = load_profiles(dirs).profiles
 
     def _reload_system_prompt(self) -> None:
         if self._system_prompt_override is not None:

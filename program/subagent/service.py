@@ -60,8 +60,11 @@ class Subagent:
             ))
 
         allowed_tools = [t for t in self._tools if t.name != 'subagent']
+        if record.tool_names is not None:
+            allowed_set = set(record.tool_names)
+            allowed_tools = [t for t in allowed_tools if t.name in allowed_set]
 
-        system_prompt = self._settings.system_prompt or _DEFAULT_SYSTEM_PROMPT
+        system_prompt = record.system_prompt or _DEFAULT_SYSTEM_PROMPT
         max_iterations = self._settings.max_iterations
         timeout = self._settings.timeout
 

@@ -129,6 +129,14 @@ def get_builtins_hooks_dir() -> Path:
     return _BUILTINS_ROOT / 'hooks'
 
 
+def get_builtins_subagents_dir() -> Path:
+    return _BUILTINS_ROOT / 'subagents'
+
+
+def get_subagents_dir(cwd: Path | None = None) -> Path:
+    return get_agent_dir(cwd) / 'subagents'
+
+
 def get_crons_path(cwd: Path | None = None) -> Path:
     """Path to crons.json. Project-level if cwd given, else global (~/.program/)."""
     return get_config_dir(cwd) / 'crons.json'
