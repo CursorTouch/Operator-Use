@@ -6,7 +6,7 @@ from ddgs import DDGS
 
 
 class SearchMode(StrEnum):
-    web    = "web"
+    text    = "text"
     news   = "news"
     images = "images"
     videos = "videos"
@@ -19,8 +19,8 @@ class WebSearchSchema(BaseModel):
         description="The search query. Be specific — include names, versions, or error messages for better results.",
     )
     mode: SearchMode = Field(
-        default=SearchMode.web,
-        description="Search mode: 'web' (default), 'news', 'images', 'videos', or 'books'.",
+        default=SearchMode.text,
+        description="Search mode: 'text' (default), 'news', 'images', 'videos', or 'books'.",
     )
     max_results: int = Field(
         default=10,
@@ -31,7 +31,7 @@ class WebSearchSchema(BaseModel):
 def _run_search(mode: SearchMode, query: str, max_results: int) -> list[dict]:
     d = DDGS()
     match mode:
-        case SearchMode.web:
+        case SearchMode.text:
             return d.text(query, region="us-en", safesearch="off", backend="brave", max_results=max_results) or []
         case SearchMode.news:
             return d.news(query, region="us-en", safesearch="off", max_results=max_results) or []
@@ -47,7 +47,7 @@ def _format_results(mode: SearchMode, query: str, results: list[dict]) -> str:
     lines = [f"Search results ({mode}) for: {query}"]
     for idx, r in enumerate(results, start=1):
         match mode:
-            case SearchMode.web:
+            case SearchMode.text:
                 lines += [f"{idx}. {r.get('title','')}", f"   URL: {r.get('href','')}", f"   {r.get('body','')}"]
             case SearchMode.news:
                 lines += [f"{idx}. {r.get('title','')} [{r.get('source','')}] {r.get('date','')}", f"   URL: {r.get('url','')}", f"   {r.get('body','')}"]
@@ -67,7 +67,7 @@ class WebSearchTool(Tool):
             name="web_search",
             description=(
                 "Search the web and return results. Supports multiple modes: "
-                "'web' for pages, 'news' for articles, 'images' for pictures, "
+                "'text' for pages, 'news' for articles, 'images' for pictures, "
                 "'videos' for video content, 'books' for books. "
                 "Follow up with web_fetch to read the full content of a result."
             ),
@@ -78,7 +78,7 @@ class WebSearchTool(Tool):
 
     async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
         query = invocation.params.get("query")
-        mode = SearchMode(invocation.params.get("mode", SearchMode.web))
+        mode = SearchMode(invocation.params.get("mode", SearchMode.text))
         max_results = invocation.params.get("max_results", 10)
 
         if not query:
