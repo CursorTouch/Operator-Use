@@ -189,7 +189,7 @@ class ACPAgentTool(Tool):
                     provider = self._settings_manager.get_default_provider()
                     model = self._settings_manager.get_default_model()
                     if not provider:
-                        # No explicit default — pick the first authenticated provider.
+                        # No explicit default — prefer anthropic-claude-code, then first authenticated.
                         try:
                             import json as _json
                             from program.settings.paths import get_providers_auth_path
@@ -197,7 +197,7 @@ class ACPAgentTool(Tool):
                             if _p.exists():
                                 _creds = _json.loads(_p.read_text())
                                 if _creds:
-                                    provider = next(iter(_creds))
+                                    provider = 'anthropic-claude-code' if 'anthropic-claude-code' in _creds else next(iter(_creds))
                         except Exception:
                             pass
                     if not model and provider:
