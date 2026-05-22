@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import select
 import signal
 import sys
+import termios
+import threading
+import tty
 from pathlib import Path
 
 import click
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import ANSI
-from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from program.runtime import Runtime, RuntimeConfig
@@ -117,15 +121,39 @@ def _bind_renderer(runtime: Runtime, current_session, unsubscribe):
     return next_session, next_unsubscribe
 
 
-# ── Esc key cancel ────────────────────────────────────────────────────────────
+# ── Esc key cancel (during agent execution) ───────────────────────────────────
 
-def _make_cancel_bindings(cancel: asyncio.Event) -> KeyBindings:
-    """Return key bindings that set cancel on Esc while the agent is running."""
-    kb = KeyBindings()
+async def _wait_for_esc() -> None:
+    """Block until ESC is pressed by reading raw terminal input in a thread.
 
-    kb.add('escape')(lambda _: cancel.set())
+    Runs between prompt_async() calls (agent execution phase), where the
+    terminal is in cooked mode and safe to switch to raw mode temporarily.
+    """
+    stop = threading.Event()
 
-    return kb
+    def _reader() -> None:
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            while not stop.is_set():
+                r, _, _ = select.select([sys.stdin], [], [], 0.05)
+                if r:
+                    ch = os.read(fd, 1)
+                    if ch == b'\x1b':
+                        return
+        except Exception:
+            pass
+        finally:
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+            except Exception:
+                pass
+
+    try:
+        await asyncio.to_thread(_reader)
+    finally:
+        stop.set()
 
 
 async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False, resume: bool = False, system_prompt: str | None = None) -> None:
@@ -140,7 +168,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     )
 
     print(f"Agent starting in {cwd}  (model: {config.model_id})")
-    print("Type /help for commands, Ctrl-C or /quit to exit.\n")
+    print("Type /help for commands. Esc = cancel agent, Ctrl-C twice or /quit = exit.\n")
 
     runtime = await Runtime.create(config)
     subscribed_session, unsubscribe_renderer = _bind_renderer(runtime, None, None)
@@ -182,7 +210,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     stdio_consumer_task = asyncio.create_task(_stdio_consumer(), name='repl:stdio_consumer')
 
     cancel: asyncio.Event = asyncio.Event()
-    session: PromptSession = PromptSession(key_bindings=_make_cancel_bindings(cancel))
+    session: PromptSession = PromptSession()
     last_interrupt = False
 
     # patch_stdout() keeps the event loop running during prompt_async() so
@@ -222,11 +250,14 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
                 try:
                     agent_task = asyncio.ensure_future(runtime.user_input(user_input))
                     cancel_task = asyncio.ensure_future(cancel.wait())
+                    esc_task = asyncio.ensure_future(_wait_for_esc())
                     await asyncio.wait(
-                        [agent_task, cancel_task],
+                        [agent_task, cancel_task, esc_task],
                         return_when=asyncio.FIRST_COMPLETED,
                     )
-                    for t in (agent_task, cancel_task):
+                    if esc_task.done() and not esc_task.cancelled():
+                        cancel.set()
+                    for t in (agent_task, cancel_task, esc_task):
                         if not t.done():
                             t.cancel()
                             try:
