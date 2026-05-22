@@ -1,6 +1,7 @@
 import asyncio
 from pydantic import BaseModel, Field
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from ddgs import DDGS
 
 class WebSearchSchema(BaseModel):
     query: str = Field(
@@ -30,7 +31,6 @@ class WebSearchTool(Tool):
              return ToolResult.error(id=invocation.id, content="Parameter 'query' is required.")
 
         try:
-            from ddgs import DDGS
             results = await asyncio.to_thread(
                 lambda: DDGS().text(
                     query,
