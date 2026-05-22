@@ -128,7 +128,7 @@ def _make_cancel_bindings(cancel: asyncio.Event) -> KeyBindings:
     return kb
 
 
-async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False, resume: bool = False) -> None:
+async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False, resume: bool = False, system_prompt: str | None = None) -> None:
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
@@ -136,6 +136,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
         sandbox=sandbox if sandbox != 'off' else None,
         persist_session=not ephemeral,
         resume=resume,
+        system_prompt=system_prompt,
     )
 
     print(f"Agent starting in {cwd}  (model: {config.model_id})")
@@ -277,13 +278,14 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
 )
 @click.option('--ephemeral', is_flag=True, default=False, help='Run in-memory only — session is not saved to disk.')
 @click.option('--resume', is_flag=True, default=False, help='Resume the most recent session instead of starting fresh')
-def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, ephemeral: bool, resume: bool) -> None:
+@click.option('--system-prompt', default=None, help='Override the default system prompt')
+def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, ephemeral: bool, resume: bool, system_prompt: str | None) -> None:
     """Start the interactive agent REPL."""
     from dotenv import load_dotenv
     load_dotenv()
 
     cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
     try:
-        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, ephemeral=ephemeral, resume=resume))
+        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, ephemeral=ephemeral, resume=resume, system_prompt=system_prompt))
     except KeyboardInterrupt:
         pass
