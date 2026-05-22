@@ -13,7 +13,10 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import (
+    Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult,
+    ToolExecutionUpdateCallback, AbortSignal,
+)
 
 if TYPE_CHECKING:
     from program.acp.manager import ACPSessionManager
@@ -85,7 +88,7 @@ class ACPAgentTool(Tool):
 
     # ── Tool entry point ──────────────────────────────────────────────────────
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(self, invocation: ToolInvocation, tool_execution_update_callback: ToolExecutionUpdateCallback | None = None, signal: AbortSignal | None = None) -> ToolResult:
         params = _ACPSchema.model_validate(invocation.params)
 
         if params.action == 'agents':

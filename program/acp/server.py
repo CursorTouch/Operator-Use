@@ -15,11 +15,17 @@ from acp import (
 from acp.schema import (
     AgentCapabilities,
     AuthenticateResponse,
+    ForkSessionResponse,
     Implementation,
     InitializeResponse,
+    ListSessionsResponse,
     LoadSessionResponse,
     NewSessionResponse,
+    ResumeSessionResponse,
     SessionCapabilities,
+    SessionCloseCapabilities,
+    SessionListCapabilities,
+    SessionResumeCapabilities,
 )
 
 from program.acp.utils import text_from_content_blocks
@@ -53,9 +59,9 @@ class OperatorACPAgent:
 
     # ── ACP lifecycle ─────────────────────────────────────────────────────────
 
-    def on_connect(self, connection: Any) -> None:
+    def on_connect(self, conn: Any) -> None:
         """Called by SDK with the AgentSideConnection before any messages arrive."""
-        self._connection = connection
+        self._connection = conn
 
     async def initialize(
         self,
@@ -70,9 +76,9 @@ class OperatorACPAgent:
             agent_capabilities=AgentCapabilities(
                 load_session=True,
                 session_capabilities=SessionCapabilities(
-                    close=True,
-                    list=True,
-                    resume=True,
+                    close=SessionCloseCapabilities(),
+                    list=SessionListCapabilities(),
+                    resume=SessionResumeCapabilities(),
                 ),
             ),
         )
@@ -89,14 +95,29 @@ class OperatorACPAgent:
         **kwargs: Any,
     ) -> NewSessionResponse:
         session_id = str(uuid.uuid4())
-        agent = self._runtime.create_session_agent()
+        try:
+            agent = self._runtime.create_session_agent()
+        except Exception:
+            logger.exception('ACP: failed to create agent for new session %s', session_id)
+            raise
         self._sessions[session_id] = agent
         logger.info('ACP: new session %s', session_id)
         return NewSessionResponse(session_id=session_id)
 
-    async def load_session(self, session_id: str, **kwargs: Any) -> LoadSessionResponse:
+    async def load_session(
+        self,
+        cwd: str,
+        session_id: str,
+        additional_directories: list[str] | None = None,
+        mcp_servers: Any = None,
+        **kwargs: Any,
+    ) -> LoadSessionResponse:
         if session_id not in self._sessions:
-            self._sessions[session_id] = self._runtime.create_session_agent()
+            try:
+                self._sessions[session_id] = self._runtime.create_session_agent()
+            except Exception:
+                logger.exception('ACP: failed to create agent for resumed session %s', session_id)
+                raise
             logger.info('ACP: resumed session %s (new agent)', session_id)
         return LoadSessionResponse()
 
@@ -159,6 +180,65 @@ class OperatorACPAgent:
             unsub()
 
         return PromptResponse(stop_reason='end_turn', user_message_id=message_id)
+
+    async def list_sessions(
+        self,
+        additional_directories: list[str] | None = None,
+        cursor: str | None = None,
+        cwd: str | None = None,
+        **kwargs: Any,
+    ) -> ListSessionsResponse:
+        return ListSessionsResponse(sessions=[])
+
+    async def set_session_mode(self, mode_id: str, session_id: str, **kwargs: Any) -> None:
+        return None
+
+    async def set_session_model(self, model_id: str, session_id: str, **kwargs: Any) -> None:
+        return None
+
+    async def set_config_option(self, config_id: str, session_id: str, value: str | bool, **kwargs: Any) -> None:
+        return None
+
+    async def fork_session(
+        self,
+        cwd: str,
+        session_id: str,
+        additional_directories: list[str] | None = None,
+        mcp_servers: Any = None,
+        **kwargs: Any,
+    ) -> ForkSessionResponse:
+        new_id = str(uuid.uuid4())
+        source = self._sessions.get(session_id)
+        agent = source if source is not None else self._runtime.create_session_agent()
+        self._sessions[new_id] = agent
+        logger.info('ACP: forked session %s → %s', session_id, new_id)
+        return ForkSessionResponse(session_id=new_id)
+
+    async def resume_session(
+        self,
+        cwd: str,
+        session_id: str,
+        additional_directories: list[str] | None = None,
+        mcp_servers: Any = None,
+        **kwargs: Any,
+    ) -> ResumeSessionResponse:
+        if session_id not in self._sessions:
+            try:
+                self._sessions[session_id] = self._runtime.create_session_agent()
+            except Exception:
+                logger.exception('ACP: failed to create agent for resumed session %s', session_id)
+                raise
+            logger.info('ACP: resume_session created new agent for %s', session_id)
+        return ResumeSessionResponse()
+
+    async def cancel(self, session_id: str, **kwargs: Any) -> None:
+        pass
+
+    async def ext_method(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    async def ext_notification(self, method: str, params: dict[str, Any]) -> None:
+        pass
 
     async def close_session(self, session_id: str, **kwargs: Any) -> None:
         self._sessions.pop(session_id, None)
