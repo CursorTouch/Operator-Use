@@ -11,13 +11,9 @@ from program.gateway.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, 
 
 logger = logging.getLogger(__name__)
 
-try:
-    from telegram import Bot, BotCommand, InputFile, Update
-    from telegram.constants import ChatAction
-    from telegram.ext import Application, ContextTypes, MessageHandler, filters
-    _PTB_AVAILABLE = True
-except ImportError:
-    _PTB_AVAILABLE = False
+from telegram import Bot, BotCommand, InputFile, Update
+from telegram.constants import ChatAction
+from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 
 class TelegramChannel(BaseChannel):
@@ -41,8 +37,6 @@ class TelegramChannel(BaseChannel):
         streaming_latency: float = 1.0,
     ) -> None:
         super().__init__()
-        if not _PTB_AVAILABLE:
-            raise ImportError('python-telegram-bot>=20.0 is required for TelegramChannel.')
         self._token = token
         self._commands = commands or []
         self._allow_from = set(allow_from or [])
@@ -154,6 +148,7 @@ class TelegramChannel(BaseChannel):
 
         await self._app.initialize()
         await self._app.start()
+        assert self._app.updater is not None
         await self._app.updater.start_polling()
         logger.info("Telegram bot started (polling)")
 
@@ -182,7 +177,8 @@ class TelegramChannel(BaseChannel):
         if self._app is not None:
             with quiet_library_logging("telegram", "httpx") as debug:
                 try:
-                    await self._app.updater.stop()
+                    if self._app.updater is not None:
+                        await self._app.updater.stop()
                     await self._app.stop()
                     await self._app.shutdown()
                 except Exception:
@@ -311,6 +307,14 @@ class TelegramChannel(BaseChannel):
             self._buffers[chat_id] = ""
             self._thinking_buffers.pop(chat_id, None)
             self._stop_thinking_stream(chat_id)
+            # Delete any live-stream message posted by a previous failed attempt so
+            # it doesn't linger alongside the retry's fresh response.
+            stale_live = self._live_msg_ids.pop(chat_id, None)
+            if stale_live is not None:
+                try:
+                    await bot.delete_message(int(chat_id), stale_live)
+                except Exception:
+                    pass
             # Save the stale tool-status id so retry_success can delete it.
             stale = self._tool_msg_ids.pop(chat_id, None)
             if stale is not None:
