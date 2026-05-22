@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -26,6 +26,21 @@ if TYPE_CHECKING:
     from program.acp.types import ACPAgentConfig
 
 logger = logging.getLogger(__name__)
+
+# Built-in agents available without any settings.json configuration.
+# "claude" spawns an Operator child process as an ACP server — it inherits
+# the parent's environment (API keys, model settings) automatically.
+_BUILTIN_AGENTS: dict[str, ACPAgentConfig] = {}
+
+def _init_builtins() -> None:
+    import shutil
+    from program.acp.types import ACPAgentConfig as _Cfg
+    if shutil.which('operator'):
+        _BUILTIN_AGENTS['claude'] = _Cfg(
+            name='claude', transport='stdio', command='operator', args=['acp', 'serve']
+        )
+
+_init_builtins()
 
 
 class _ACPSchema(BaseModel):
@@ -65,14 +80,17 @@ class ACPAgentTool(Tool):
         auth_manager: ACPAuthManager,
         bus: Bus | None,
         agent: Agent | None,
+        settings_manager: Any = None,
     ) -> None:
         super().__init__(
             name='acp_agent',
             description=(
-                'Interact with registered remote ACP agents (Claude Code, Codex CLI, etc.).\n\n'
-                "  agents                          — list registered agents\n"
+                'Interact with ACP agents (built-in or configured in settings).\n\n'
+                "  agents                          — list available agents\n"
                 "  run, agent='<name>', task='...' — dispatch a task (non-blocking)\n"
                 "  sessions                        — view active session state\n\n"
+                "Built-in agents (always available):\n"
+                "  claude  — spawns an Operator child via 'operator acp serve' (full tool access)\n\n"
                 'The result of a dispatched task arrives as a follow-up message — '
                 'the current agent loop is NOT blocked.'
             ),
@@ -80,11 +98,12 @@ class ACPAgentTool(Tool):
             kind=ToolKind.Execute,
             execution_mode=ToolExecutionMode.Sequential,
         )
-        self._registry: dict[str, ACPAgentConfig] = {a.name: a for a in registry}
+        self._registry: dict[str, ACPAgentConfig] = {**_BUILTIN_AGENTS, **{a.name: a for a in registry}}
         self._session_manager = session_manager
         self._auth = auth_manager
         self._bus = bus
         self._agent = agent
+        self._settings_manager = settings_manager
 
     # ── Tool entry point ──────────────────────────────────────────────────────
 
@@ -165,7 +184,41 @@ class ACPAgentTool(Tool):
             if config.transport == 'stdio':
                 if not config.command:
                     raise ValueError(f"ACP agent '{config.name}' requires a command for stdio transport")
-                client = ACPClient.stdio(config.command, *config.args)
+                args = list(config.args)
+                if config.name in _BUILTIN_AGENTS and self._settings_manager is not None:
+                    provider = self._settings_manager.get_default_provider()
+                    model = self._settings_manager.get_default_model()
+                    if not provider:
+                        # No explicit default — pick the first authenticated provider.
+                        try:
+                            import json as _json
+                            from program.settings.paths import get_providers_auth_path
+                            _p = get_providers_auth_path()
+                            if _p.exists():
+                                _creds = _json.loads(_p.read_text())
+                                if _creds:
+                                    provider = next(iter(_creds))
+                        except Exception:
+                            pass
+                    if not model and provider:
+                        # Pick the first registered model for this provider.
+                        try:
+                            from program.inference.model.registry import ModelRegistry
+                            _reg = ModelRegistry.from_llm_builtins()
+                            for _candidates in _reg._models.values():
+                                for _m in (_candidates if isinstance(_candidates, list) else [_candidates]):
+                                    if getattr(_m, 'provider', None) == provider:
+                                        model = _m.id
+                                        break
+                                if model:
+                                    break
+                        except Exception:
+                            pass
+                    if provider:
+                        args += ['--provider', provider]
+                    if model:
+                        args += ['--model', model]
+                client = ACPClient.stdio(config.command, *args)
             elif config.transport == 'http':
                 if not config.url:
                     raise ValueError(f"ACP agent '{config.name}' requires a url for http transport")

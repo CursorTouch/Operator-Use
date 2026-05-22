@@ -72,6 +72,7 @@ class ToolCallContent:
     name: str = ""
     kind: Optional[ToolKind] = None
     args: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

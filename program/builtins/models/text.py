@@ -16,7 +16,7 @@ models = [
     Model(id="claude-sonnet-4-6",         name="Claude Sonnet 4.6", provider="anthropic-claude-code", cost=Cost(), thinking=True, context_window=200_000, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="claude-haiku-4-5-20251001", name="Claude Haiku 4.5",  provider="anthropic-claude-code", cost=Cost(),               context_window=200_000, input=_TEXT_IMAGE, output=_TEXT),
     # Google Antigravity (OAuth — free IDE quota)
-    Model(id="gemini-3.5-flash",      name="Gemini 3.5 Flash",      provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="gemini-3-flash",         name="Gemini 3 Flash",         provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="gemini-3.1-pro-preview", name="Gemini 3.1 Pro",       provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="gemini-3-flash-preview", name="Gemini 3 Flash",       provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="gemini-3.1-flash-lite",  name="Gemini 3.1 Flash Lite",provider="google-antigravity", cost=Cost(),               context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),

@@ -50,9 +50,10 @@ class Runtime:
             context.cron.on_job = self._handle_cron_job
             context.cron.start()
 
-        # Start gateway channels (if any are enabled in settings)
+        # Start gateway channels (skipped when gateway=False, e.g. acp serve)
         self.gateway_manager = GatewayManager(self, context.settings_manager, context.auth_manager)
-        self.gateway_manager.start()
+        if config.gateway:
+            self.gateway_manager.start()
 
         self.subagent_manager = SubagentManager(
             llm=context.llm,
@@ -279,6 +280,7 @@ class Runtime:
                 auth_manager=main_acp._auth,                 # type: ignore[attr-defined]
                 bus=self.gateway_manager._bus,
                 agent=None,
+                settings_manager=main_acp._settings_manager,  # type: ignore[attr-defined]
             ))
 
         agent = Agent(

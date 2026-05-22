@@ -200,7 +200,8 @@ class GeminiGenerateAPI(BaseAPI):
                     if text_started:
                         yield TextEndEvent(text=TextContent(content=text_buf))
                     reason_str = finish_reason.name if hasattr(finish_reason, "name") else str(finish_reason)
-                    yield EndEvent(reason=_STOP_REASON.get(reason_str, StopReason.Stop), input_tokens=_input_tokens, output_tokens=_output_tokens)
+                    stop = StopReason.ToolCalls if tool_index > 0 else _STOP_REASON.get(reason_str, StopReason.Stop)
+                    yield EndEvent(reason=stop, input_tokens=_input_tokens, output_tokens=_output_tokens)
                     return
 
         except Exception as exc:

@@ -15,6 +15,8 @@ from acp import (
     spawn_agent_process,
 )
 from acp.schema import (
+    AllowedOutcome,
+    DeniedOutcome,
     RequestPermissionResponse,
     ReadTextFileResponse,
     WriteTextFileResponse,
@@ -85,10 +87,22 @@ class OperatorACPClient:
         tool_call: Any,
         **kwargs: Any,
     ) -> RequestPermissionResponse:
-        # Auto-allow all tool calls when acting as a programmatic client.
+        # Prefer "allow_always" so the agent doesn't re-ask on every tool call.
+        # Falls back to "allow_once", then the first option available.
+        for kind in ('allow_always', 'allow_once'):
+            for opt in options:
+                if opt.kind == kind:
+                    return RequestPermissionResponse(
+                        outcome=AllowedOutcome(option_id=opt.option_id, outcome='selected')
+                    )
         if options:
-            return RequestPermissionResponse(selected_option=options[0].id)
-        return RequestPermissionResponse(selected_option='')
+            opt = options[0]
+            if opt.kind in ('reject_once', 'reject_always'):
+                return RequestPermissionResponse(outcome=DeniedOutcome(outcome='cancelled'))
+            return RequestPermissionResponse(
+                outcome=AllowedOutcome(option_id=opt.option_id, outcome='selected')
+            )
+        return RequestPermissionResponse(outcome=DeniedOutcome(outcome='cancelled'))
 
     async def write_text_file(
         self,
@@ -127,11 +141,11 @@ class OperatorACPClient:
             logger.error('ACPClient: read_text_file failed: %s', exc)
             return ReadTextFileResponse(content='')
 
-    async def create_terminal(self, command: str, session_id: str, **kwargs: Any) -> CreateTerminalResponse:
+    async def create_terminal(self, command: str, session_id: str, args: list[str] | None = None, cwd: str | None = None, env: list | None = None, output_byte_limit: int | None = None, **kwargs: Any) -> CreateTerminalResponse:
         return CreateTerminalResponse(terminal_id='')
 
     async def terminal_output(self, session_id: str, terminal_id: str, **kwargs: Any) -> TerminalOutputResponse:
-        return TerminalOutputResponse(output='', done=True)
+        return TerminalOutputResponse(output='', truncated=False)
 
     async def release_terminal(self, session_id: str, terminal_id: str, **kwargs: Any) -> ReleaseTerminalResponse | None:
         return None

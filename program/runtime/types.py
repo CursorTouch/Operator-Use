@@ -65,6 +65,9 @@ class RuntimeConfig(BaseModel):
     # Sandbox
     sandbox: str | None = None  # 'strict' | 'enforce' | 'warn' | None (off)
 
+    # Gateway
+    gateway: bool = True  # set False to skip channel startup (e.g. acp serve)
+
     # Compaction
     compaction_enabled: bool = True
     compaction_reserve_tokens: int = 16384
@@ -258,16 +261,15 @@ class RuntimeContext:
             ))
 
         # ── ACP agent tool ─────────────────────────────────────────────────────
-        acp_agent_configs = settings_manager.get_acp_agents()
-        if acp_agent_configs:
-            from program.builtins.tools.acp_agent import ACPAgentTool
-            engine.add_tool(ACPAgentTool(
-                registry=acp_agent_configs,
-                session_manager=acp_manager,
-                auth_manager=acp_auth,
-                bus=None,   # bus not yet available; Runtime.create() re-wires after gateway starts
-                agent=None,
-            ))
+        from program.builtins.tools.acp_agent import ACPAgentTool
+        engine.add_tool(ACPAgentTool(
+            registry=settings_manager.get_acp_agents(),
+            session_manager=acp_manager,
+            auth_manager=acp_auth,
+            bus=None,   # bus not yet available; Runtime.create() re-wires after gateway starts
+            agent=None,
+            settings_manager=settings_manager,
+        ))
 
         # ── Agent config ──────────────────────────────────────────────────────
         agent_config = AgentConfig(

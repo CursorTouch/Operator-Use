@@ -33,6 +33,39 @@ if TYPE_CHECKING:
 
 __all__ = ["GoogleAntigravityAPI"]
 
+_SKIP_KEYS = {"title", "$schema", "$defs", "default"}
+
+
+def _resolve_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Flatten Pydantic JSON schema for Gemini: resolve $ref/$defs, drop unsupported keys."""
+    defs = schema.get("$defs", {})
+
+    def _resolve(obj: Any) -> Any:
+        if not isinstance(obj, dict):
+            return obj if not isinstance(obj, list) else [_resolve(i) for i in obj]
+        if "$ref" in obj:
+            ref_name = obj["$ref"].rsplit("/", 1)[-1]
+            return _resolve(defs.get(ref_name, {}))
+        result: dict[str, Any] = {}
+        for k, v in obj.items():
+            if k in _SKIP_KEYS:
+                continue
+            if k == "anyOf" and isinstance(v, list):
+                non_null = [_resolve(s) for s in v if s != {"type": "null"}]
+                if len(non_null) == 1:
+                    result.update(non_null[0])
+                else:
+                    result[k] = non_null
+            elif isinstance(v, dict):
+                result[k] = _resolve(v)
+            elif isinstance(v, list):
+                result[k] = [_resolve(i) for i in v]
+            else:
+                result[k] = v
+        return result
+
+    return _resolve(schema)
+
 _DEFAULT_BASE_URL = "https://cloudcode-pa.googleapis.com"
 _STREAM_PATH = "/v1internal:streamGenerateContent?alt=sse"
 _LOAD_CODE_ASSIST_PATH = "/v1internal:loadCodeAssist"
@@ -166,14 +199,21 @@ def _messages_to_contents(
                         case TextContent():
                             parts.append({"text": item.content})
                         case ThinkingContent():
-                            parts.append({"thought": True, "text": item.content})
+                            tp: dict[str, Any] = {"thought": True, "text": item.content}
+                            if item.signature:
+                                tp["thoughtSignature"] = item.signature
+                            parts.append(tp)
                         case ToolCallContent():
-                            parts.append({
+                            fc_entry: dict[str, Any] = {
                                 "functionCall": {
                                     "name": item.name,
                                     "args": item.args if isinstance(item.args, dict) else {},
                                 }
-                            })
+                            }
+                            sig = item.metadata.get("thoughtSignature") if item.metadata else None
+                            if sig:
+                                fc_entry["thoughtSignature"] = sig
+                            parts.append(fc_entry)
                 if parts:
                     raw.append({"role": "model", "parts": parts})
             case ToolMessage():
@@ -247,6 +287,20 @@ class GoogleAntigravityAPI(BaseAPI):
                 _persist_project_id(resolved)
         return self._project_id
 
+    @staticmethod
+    def _tools_to_declarations(tools: list[Tool]) -> list[dict[str, Any]]:
+        """Convert Tool objects to Gemini functionDeclarations format."""
+        seen: set[str] = set()
+        decls = []
+        for t in tools:
+            if t.name in seen:
+                continue
+            seen.add(t.name)
+            raw = t.schema.model_json_schema() if t.schema else {}
+            schema = _resolve_schema(raw)
+            decls.append({"name": t.name, "description": t.description or "", "parameters": schema})
+        return decls
+
     def _build_request_body(
         self,
         model: Model,
@@ -273,6 +327,10 @@ class GoogleAntigravityAPI(BaseAPI):
             inner["systemInstruction"] = {"parts": [{"text": system}]}
         if generation_config:
             inner["generationConfig"] = generation_config
+        if tools:
+            decls = self._tools_to_declarations(tools)
+            if decls:
+                inner["tools"] = [{"functionDeclarations": decls}]
 
         return {"model": model.id, "project": project, "request": inner}
 
@@ -296,6 +354,7 @@ class GoogleAntigravityAPI(BaseAPI):
         thinking_started = False
         text_buf = ""
         thinking_buf = ""
+        thinking_sig = ""
 
         yield StartEvent()
 
@@ -347,13 +406,19 @@ class GoogleAntigravityAPI(BaseAPI):
                                     thinking_started = True
                                 delta = part["text"]
                                 thinking_buf += delta
+                                if part.get("thoughtSignature"):
+                                    thinking_sig = part["thoughtSignature"]
                                 yield ThinkingDeltaEvent(thinking=ThinkingContent(content=delta))
+                            elif part.get("thought") and part.get("thoughtSignature") and not part.get("text"):
+                                # Gemini may send a signature-only thought part
+                                thinking_sig = part["thoughtSignature"]
                             elif part.get("text"):
                                 if thinking_started:
-                                    yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
+                                    yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf, signature=thinking_sig))
                                     thinking_started = False
                                     thinking_index += 1
                                     thinking_buf = ""
+                                    thinking_sig = ""
                                 if not text_started:
                                     yield TextStartEvent(text=TextContent(content=""))
                                     text_started = True
@@ -362,7 +427,7 @@ class GoogleAntigravityAPI(BaseAPI):
                                 yield TextDeltaEvent(text=TextContent(content=delta))
                             elif part.get("functionCall"):
                                 fc = part["functionCall"]
-                                name = fc.get("name", "")
+                                name = fc.get("name", "") or fc.get("id", "")
                                 args_raw = fc.get("args", {})
                                 try:
                                     if isinstance(args_raw, str) and args_raw.strip():
@@ -371,21 +436,26 @@ class GoogleAntigravityAPI(BaseAPI):
                                         args = args_raw if args_raw else {}
                                 except json.JSONDecodeError:
                                     args = {}
-
-                                yield ToolCallStartEvent(tool_call=ToolCallContent(id=name, name=name))
-                                yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=name))
-                                yield ToolCallEndEvent(tool_call=ToolCallContent(id=name, name=name, args=args))
+                                call_meta: dict[str, Any] = {}
+                                part_sig = part.get("thoughtSignature")
+                                if part_sig:
+                                    call_meta["thoughtSignature"] = part_sig
+                                call_id = fc.get("id") or name
+                                yield ToolCallStartEvent(tool_call=ToolCallContent(id=call_id, name=name))
+                                yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=call_id))
+                                yield ToolCallEndEvent(tool_call=ToolCallContent(id=call_id, name=name, args=args, metadata=call_meta))
                                 tool_index += 1
 
                         finish_reason = candidate.get("finishReason", "")
                         if finish_reason and finish_reason not in ("", "FINISH_REASON_UNSPECIFIED"):
                             if thinking_started:
-                                yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
+                                yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf, signature=thinking_sig))
                                 thinking_index += 1
                             if text_started:
                                 yield TextEndEvent(text=TextContent(content=text_buf))
                                 text_index += 1
-                            yield EndEvent(reason=_STOP_REASON.get(finish_reason, StopReason.Stop))
+                            stop = StopReason.ToolCalls if tool_index > 0 else _STOP_REASON.get(finish_reason, StopReason.Stop)
+                            yield EndEvent(reason=stop)
                             return
 
         except Exception as exc:
@@ -393,7 +463,7 @@ class GoogleAntigravityAPI(BaseAPI):
             return
 
         if thinking_started:
-            yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf))
+            yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf, signature=thinking_sig))
         if text_started:
             yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop)
