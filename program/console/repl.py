@@ -35,6 +35,16 @@ def _grey(s: str) -> str:   return f"\033[1;30m{s}\033[0m"
 def _red(s: str) -> str:    return f"\033[1;31m{s}\033[0m"
 
 
+# ── Output helper ────────────────────────────────────────────────────────────
+# patch_stdout(raw=True) is required so ANSI escape codes pass through intact.
+# In raw mode \n only moves the cursor down without a CR, so we replace \n
+# with \r\n in every print so multi-line output stays left-aligned.
+
+def _out(text: str = '', end: str = '\r\n') -> None:
+    sys.stdout.write(text.replace('\n', '\r\n') + end)
+    sys.stdout.flush()
+
+
 # ── Event renderer ────────────────────────────────────────────────────────────
 
 _streaming_role: str | None = None
@@ -46,7 +56,7 @@ def _render_event(event) -> None:
     match event:
         case AgentStartEvent():
             if _attempt > 0:
-                print(f"{_yellow(f'[Retry {_attempt}]')} Retrying...", file=sys.stderr)
+                _out(f"\n{_yellow(f'[Retry {_attempt}]')} Retrying...")
             _attempt += 1
             _streaming_role = None
 
@@ -58,53 +68,53 @@ def _render_event(event) -> None:
                     continue
                 if kind == 'thinking':
                     if _streaming_role != 'thinking':
-                        print(f"\n{_grey('[Thinking]')} ", end='', flush=True)
+                        _out(f"\n{_grey('[Thinking]')} ", end='')
                         _streaming_role = 'thinking'
                     sys.stdout.write(_grey(content))
                     sys.stdout.flush()
                 elif kind == 'text':
                     if _streaming_role != 'assistant':
-                        print(f"\n{_blue('[Assistant]')} ", end='', flush=True)
+                        _out(f"\n{_blue('[Assistant]')} ", end='')
                         _streaming_role = 'assistant'
                     sys.stdout.write(content)
                     sys.stdout.flush()
 
         case MessageEndEvent(message=msg) if msg is not None and msg.role == Role.ASSISTANT:
             if _streaming_role is not None:
-                print()
+                _out()
             _streaming_role = None
 
         case ToolExecutionStartEvent(tool_call=tc):
             args_str = ', '.join(f'{k}={v!r}' for k, v in tc.args.items())
-            print(f"\n{_yellow(f'[Tool] {tc.name}({args_str})')}")
+            _out(f"\n{_yellow(f'[Tool] {tc.name}({args_str})')}")
 
         case ToolExecutionUpdateEvent(partial_tool_result=part):
             text = getattr(part, 'content', '') if part is not None else ''
             if not text:
                 return
             if _streaming_role != 'tool_stream':
-                print(f"{_grey('[Tool ⋯]')} ", end='', flush=True)
+                _out(f"{_grey('[Tool ⋯]')} ", end='')
                 _streaming_role = 'tool_stream'
             sys.stdout.write(text)
             sys.stdout.flush()
 
         case ToolExecutionEndEvent(tool_result=res):
             if _streaming_role == 'tool_stream':
-                print()
+                _out()
                 _streaming_role = None
             content = str(res.content)
             if len(content) > 500:
                 content = content[:500] + _grey(' … [truncated]')
-            print(f"{_green('[Result]')} {content}")
+            _out(f"{_green('[Result]')} {content}")
 
         case SessionBeforeCompactEvent():
-            print(f"\n{_grey('[Compact]')} Compacting conversation history...")
+            _out(f"\n{_grey('[Compact]')} Compacting conversation history...")
 
         case SessionCompactEvent():
-            print(f"{_grey('[Compact]')} Done.")
+            _out(f"{_grey('[Compact]')} Done.")
 
         case AgentErrorEvent(error=err):
-            print(f"{_red('[Error]')} {err}", file=sys.stderr)
+            _out(f"{_red('[Error]')} {err}")
 
 
 # ── Session ───────────────────────────────────────────────────────────────────
@@ -129,7 +139,9 @@ async def _wait_for_esc() -> None:
     Runs between prompt_async() calls (agent execution phase), where the
     terminal is in cooked mode and safe to switch to raw mode temporarily.
     """
+    loop = asyncio.get_running_loop()
     stop = threading.Event()
+    terminal_restored: asyncio.Future = loop.create_future()
 
     def _reader() -> None:
         fd = sys.stdin.fileno()
@@ -141,19 +153,34 @@ async def _wait_for_esc() -> None:
                 if r:
                     ch = os.read(fd, 1)
                     if ch == b'\x1b':
-                        return
+                        # Real ESC has no bytes within 50ms.
+                        # CSI sequences (\x1b[...R for CPR, arrow keys)
+                        # have bytes immediately after — consume and ignore.
+                        r2, _, _ = select.select([sys.stdin], [], [], 0.05)
+                        if not r2:
+                            return  # bare ESC
+                        os.read(fd, 64)
         except Exception:
             pass
         finally:
             try:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+                termios.tcsetattr(fd, termios.TCSANOW, old)
             except Exception:
                 pass
+            loop.call_soon_threadsafe(
+                lambda: terminal_restored.done() or terminal_restored.set_result(None)
+            )
 
     try:
         await asyncio.to_thread(_reader)
     finally:
         stop.set()
+        # Wait for thread to restore terminal before prompt_async() starts,
+        # so CPR responses don't leak into the next input line.
+        try:
+            await asyncio.wait_for(asyncio.shield(terminal_restored), timeout=0.3)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            pass
 
 
 async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False, resume: bool = False, system_prompt: str | None = None) -> None:
@@ -217,7 +244,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     # background asyncio tasks (subagents) can print above the prompt line
     # without corrupting it, and the stdio consumer can deliver results while
     # the user is idle.
-    with patch_stdout():
+    with patch_stdout(raw=True):
         while True:
             try:
                 user_input = (await session.prompt_async(ANSI(_cyan('\n[You] ')))).strip()

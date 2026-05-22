@@ -63,7 +63,7 @@ class ReadTool(Tool):
 
         max_line_num_width = len(str(end_idx))
         numbered_lines = [
-            f"{str(i + 1).rjust(max_line_num_width)} | {line.rstrip(chr(10) + chr(13))}" 
+            f"{str(i + 1).rjust(max_line_num_width)} {line.rstrip(chr(10) + chr(13))}" 
             for i, line in enumerate(selected_lines, start=start_idx)
         ]
         content = "\n".join(numbered_lines)
