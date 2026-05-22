@@ -217,7 +217,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     # background asyncio tasks (subagents) can print above the prompt line
     # without corrupting it, and the stdio consumer can deliver results while
     # the user is idle.
-    with patch_stdout(raw=True):
+    with patch_stdout():
         while True:
             try:
                 user_input = (await session.prompt_async(ANSI(_cyan('\n[You] ')))).strip()
