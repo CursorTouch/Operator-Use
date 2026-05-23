@@ -4,7 +4,7 @@ import dataclasses as dc
 import json
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional, Set, Dict, List, Any, Callable
+from typing import Optional, Set, Dict, List, Any, Callable, cast
 
 from program.settings.storage import SettingsStorage, FileSettingsStorage, InMemorySettingsStorage, LockResult
 from program.settings.types import (
@@ -46,7 +46,7 @@ class SettingsManager:
         initial_project: Settings,
         global_load_error: Optional[Exception] = None,
         project_load_error: Optional[Exception] = None,
-        initial_errors: List[SettingsError] = None,
+        initial_errors: Optional[List[SettingsError]] = None,
     ):
         """Initialise with pre-loaded global and project settings and any load errors."""
         self.storage = storage
@@ -71,8 +71,8 @@ class SettingsManager:
     @staticmethod
     def from_storage(storage: SettingsStorage) -> SettingsManager:
         """Create a SettingsManager from an arbitrary storage backend."""
-        global_settings, global_error = SettingsManager._try_load_from_storage(storage, "global")
-        project_settings, project_error = SettingsManager._try_load_from_storage(storage, "project")
+        global_settings, global_error = SettingsManager._try_load_from_storage(storage, SCOPE.GLOBAL)
+        project_settings, project_error = SettingsManager._try_load_from_storage(storage, SCOPE.PROJECT)
         initial_errors = []
         if global_error:
             initial_errors.append(SettingsError(scope=SCOPE.GLOBAL, error=global_error))
@@ -82,7 +82,7 @@ class SettingsManager:
                 global_error, project_error, initial_errors)
 
     @staticmethod
-    def in_memory(settings: Dict = None) -> SettingsManager:
+    def in_memory(settings: Optional[Dict[str, Any]] = None) -> SettingsManager:
         """Create an in-memory SettingsManager with optional seed data (no file I/O, useful for testing)."""
         storage = InMemorySettingsStorage()
         settings_dict = settings or {}
@@ -219,7 +219,7 @@ class SettingsManager:
             if val is None:
                 result[f.name] = None
             elif dc.is_dataclass(val):
-                result[f.name] = dc.asdict(val)
+                result[f.name] = dc.asdict(cast(Any, val))
             elif hasattr(val, 'model_dump'):
                 result[f.name] = val.model_dump()
             else:
@@ -493,6 +493,14 @@ class SettingsManager:
         self._mark_modified("extension_list")
         self._save()
 
+    def get_extension_paths(self) -> list[str]:
+        """Return extension paths from the per-extension config entries."""
+        return [entry.path for entry in self.get_extension_list()]
+
+    def set_extension_paths(self, paths: list[str]):
+        """Set extension paths, preserving the current extension-list storage shape."""
+        self.set_extension_list([ExtensionEntry(path=path) for path in paths])
+
     def get_skill_paths(self) -> list[str]:
         """Return the list of local skill file paths."""
         return self.settings.skills or []
@@ -691,6 +699,14 @@ class SettingsManager:
         self._mark_modified("execute_path")
         self._save()
 
+    def get_shell_path(self) -> str | None:
+        """Compatibility alias for the configured execute path."""
+        return self.get_execute_path()
+
+    def set_shell_path(self, path: str | None):
+        """Compatibility alias for the configured execute path."""
+        self.set_execute_path(path)
+
     def get_execute_command_prefix(self) -> str | None:
         """Return the prefix prepended to every execute command, or None if unset."""
         return self.settings.execute_command_prefix
@@ -699,6 +715,14 @@ class SettingsManager:
         self.global_settings.execute_command_prefix = prefix
         self._mark_modified("execute_command_prefix")
         self._save()
+
+    def get_shell_command_prefix(self) -> str | None:
+        """Compatibility alias for the execute command prefix."""
+        return self.get_execute_command_prefix()
+
+    def set_shell_command_prefix(self, prefix: str | None):
+        """Compatibility alias for the execute command prefix."""
+        self.set_execute_command_prefix(prefix)
 
     # ── Channels ──────────────────────────────────────────────────────────────
 

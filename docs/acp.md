@@ -1,6 +1,6 @@
 # ACP (Agent Communication Protocol)
 
-Operator exposes a full ACP server so external tools (IDEs, other agents, remote machines) can drive it over a standard protocol. Two transports are available: **stdio** for local subprocess use and **HTTP** for remote connections.
+Operator exposes a full ACP server so external tools (IDEs, other agents, remote machines) can drive it over a standard protocol. Three transports are available: **stdio** for local subprocess use, **HTTP** for authenticated remote connections, and **WebRTC** for peer-to-peer remote machine communication.
 
 ## Transports
 
@@ -60,6 +60,17 @@ The HTTP server bridges SSE↔ACP using an asyncio socket pair per connection:
 - The SSE handler creates the socket pair, wraps it in an `AgentSideConnection`, and streams JSON-RPC events as `data: <json>` SSE events.
 - POST `/rpc/{conn_id}` writes the body to the corresponding `bridge_writer`, which feeds the `AgentSideConnection` as incoming messages.
 
+### WebRTC transport
+
+`ACPWebRTCServer` serves the same agent over a WebRTC DataChannel. PeerJS-compatible signaling is used only for room rendezvous and SDP exchange; ACP JSON-RPC lines flow over the peer-to-peer DataChannel after the connection is established.
+
+```
+operator acp serve-webrtc my-room [--cwd <path>] [--model <id>] [--provider <name>]
+operator acp connect webrtc:my-room
+```
+
+For settings-based agents, use `transport: "webrtc"` and put the room name in `url`.
+
 ## Interactive client
 
 `operator acp connect` opens an interactive REPL against any ACP agent:
@@ -68,9 +79,10 @@ The HTTP server bridges SSE↔ACP using an asyncio socket pair per connection:
 operator acp connect <target>
 
 # TARGET forms:
-#   <agent_id>          auto-discover via ACPRegistry
+#   <agent_id>          resolve from settings.json acp.agents
 #   stdio:<cmd> [args]  spawn a subprocess
 #   http://<url>        connect to a remote HTTP server
+#   webrtc:<room>       connect to a remote WebRTC room
 ```
 
 ## Python client (`ACPClient`)
@@ -84,7 +96,10 @@ client = ACPClient.stdio('operator', 'acp', 'serve')
 # HTTP (with optional Bearer token)
 client = ACPClient.http('http://remote:8080', token='my-token')
 
-# Auto-discover via registry
+# WebRTC peer-to-peer transport
+client = ACPClient.webrtc('my-room')
+
+# Resolve from settings.json acp.agents
 client = ACPClient.discover('operator')
 
 async with client:
@@ -131,6 +146,13 @@ When dispatching tasks to the built-in `claude` agent, the tool inherits the par
 
 ACP agents are configured under the `acp` key in `settings.json` (replaces the old flat `acp_agents` list):
 
+Install the npm ACP adapters once:
+
+```bash
+sudo npm install -g @agentclientprotocol/codex-acp
+sudo npm install -g @agentclientprotocol/claude-agent-acp
+```
+
 ```json
 {
   "acp": {
@@ -140,19 +162,41 @@ ACP agents are configured under the `acp` key in `settings.json` (replaces the o
         "name": "codex",
         "enabled": true,
         "transport": "stdio",
-        "command": "codex",
+        "command": "codex-acp",
         "args": []
+      },
+      {
+        "name": "claude-code",
+        "enabled": true,
+        "transport": "stdio",
+        "command": "claude-agent-acp",
+        "args": []
+      },
+      {
+        "name": "operator-child",
+        "enabled": true,
+        "transport": "stdio",
+        "command": "operator",
+        "args": ["acp", "serve"]
       },
       {
         "name": "remote-worker",
         "enabled": true,
         "transport": "http",
         "url": "http://worker-machine:8080"
+      },
+      {
+        "name": "remote-peer",
+        "enabled": true,
+        "transport": "webrtc",
+        "url": "my-room"
       }
     ]
   }
 }
 ```
+
+The `@agentclientprotocol/*` packages install ACP adapter binaries. They run as stdio ACP servers, so Operator starts `codex-acp` or `claude-agent-acp` and communicates over stdin/stdout.
 
 `ACPAgentConfig` fields:
 
@@ -160,10 +204,10 @@ ACP agents are configured under the `acp` key in `settings.json` (replaces the o
 |---|---|---|---|
 | `name` | `str` | required | Unique name used in `acp_agent(agent='...')` |
 | `enabled` | `bool` | `true` | Skip this entry when `false` |
-| `transport` | `'stdio' \| 'http' \| 'discover'` | `'stdio'` | Connection method |
+| `transport` | `'stdio' \| 'http' \| 'webrtc'` | `'stdio'` | Wire transport |
 | `command` | `str \| None` | `None` | Executable for stdio transport |
 | `args` | `list[str]` | `[]` | Extra CLI arguments for stdio |
-| `url` | `str \| None` | `None` | Base URL for HTTP transport |
+| `url` | `str \| None` | `None` | Base URL for HTTP transport, or room name for WebRTC |
 
 `SettingsManager` API for ACP:
 

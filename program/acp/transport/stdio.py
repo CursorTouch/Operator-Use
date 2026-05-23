@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import TYPE_CHECKING
 
 import acp
@@ -32,21 +31,9 @@ class ACPStdioServer:
 
     async def serve(self) -> None:
         """Run until stdin closes."""
-        from program.acp.registry import ACPRegistry
-
-        registry = ACPRegistry()
-        registry.register({
-            'agent_id': 'operator',
-            'transport': 'stdio',
-            'command': 'operator',
-            'args': ['acp'],
-            'pid': os.getpid(),
-        })
-
         try:
             await acp.run_agent(self._agent)
         finally:
-            registry.unregister('operator')
             logger.debug('ACP stdio server stopped')
 
 

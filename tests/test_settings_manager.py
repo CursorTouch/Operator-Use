@@ -211,6 +211,16 @@ class TestSetters:
         sm.set_enabled_models(None)
         assert sm.get_enabled_models() is None
 
+    @pytest.mark.asyncio
+    async def test_acp_agent_config(self):
+        sm = SettingsManager.in_memory()
+        sm.set_acp_agent_config("operator", transport="stdio", command="operator", args=["acp", "serve"])
+        cfg = sm.get_acp_agent_config("operator")
+        assert cfg is not None
+        assert cfg.transport == "stdio"
+        assert cfg.command == "operator"
+        assert cfg.args == ["acp", "serve"]
+
 
 # ── apply_overrides ───────────────────────────────────────────────────────────
 

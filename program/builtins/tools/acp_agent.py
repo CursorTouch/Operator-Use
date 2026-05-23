@@ -144,14 +144,15 @@ class ACPAgentTool(Tool):
 
     def _list_agents(self) -> str:
         if not self._registry:
-            return 'No ACP agents configured. Add entries to `acp_agents` in settings.json.'
+            return 'No ACP agents configured. Add entries to `acp.agents` in settings.json.'
         lines = ['Registered ACP agents:']
         for name, cfg in self._registry.items():
             has_token = self._auth.has_token(name)
             session = self._session_manager.get(name)
             token_status = 'authenticated' if has_token else 'no credentials'
             session_status = f"session {session['session_id'][:8]}..." if session else 'no session'
-            transport = f"{cfg.transport}:{cfg.command or cfg.url or 'discover'}"
+            target = cfg.command or cfg.url or 'configured'
+            transport = f"{cfg.transport}:{target}"
             lines.append(f"  {name}  [{transport}]  {token_status}  {session_status}")
         return '\n'.join(lines)
 
@@ -224,8 +225,12 @@ class ACPAgentTool(Tool):
                     raise ValueError(f"ACP agent '{config.name}' requires a url for http transport")
                 token = self._auth.get_token(config.name)
                 client = ACPClient.http(config.url, token=token)
+            elif config.transport == 'webrtc':
+                if not config.url:
+                    raise ValueError(f"ACP agent '{config.name}' requires a room in url for webrtc transport")
+                client = ACPClient.webrtc(config.url)
             else:
-                client = ACPClient.discover(config.name)
+                raise ValueError(f"Unknown ACP transport {config.transport!r} for agent '{config.name}'")
 
             async with client as c:
                 async with c.session() as session_id:

@@ -31,6 +31,7 @@ dependencies = [
     "aiohttp>=3.13.5",
     "prompt-toolkit>=3.0.52",
     "python-telegram-bot>=20.0",
+    "aiortc>=1.14.0",
 ]
 
 [project.scripts]

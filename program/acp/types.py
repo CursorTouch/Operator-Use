@@ -21,10 +21,10 @@ class ACPAgentConfig(BaseModel):
 
     enabled: bool = True
     name: str
-    transport: Literal['stdio', 'http', 'discover'] = 'stdio'
+    transport: Literal['stdio', 'http', 'webrtc'] = 'stdio'
     command: str | None = None       # stdio: executable name
     args: list[str] = Field(default_factory=list)
-    url: str | None = None           # http: base URL
+    url: str | None = None           # http: base URL; webrtc: room name
 
 
 class ACPSettings(BaseModel):

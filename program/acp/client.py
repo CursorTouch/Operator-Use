@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
 import socket
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 from acp import (
@@ -170,7 +173,7 @@ class ACPClient:
     Factory methods:
         ACPClient.stdio(command, *args)   — same-machine subprocess via stdio
         ACPClient.http(url)               — remote agent over HTTP/SSE
-        ACPClient.discover(agent_id)      — auto-discover via ACPRegistry
+        ACPClient.discover(agent_id)      — resolve by name from settings.json `acp.agents`
 
     Usage (stdio)::
 
@@ -200,8 +203,13 @@ class ACPClient:
 
     @classmethod
     def discover(cls, agent_id: str) -> ACPClient:
-        """Create a client that auto-discovers a local agent via ACPRegistry."""
+        """Create a client that resolves an agent by name from settings.json."""
         return cls(_transport='discover', _agent_id=agent_id)
+
+    @classmethod
+    def webrtc(cls, room: str) -> ACPClient:
+        """Create a client that connects to a remote WebRTC room."""
+        return cls(_transport='webrtc', _url=room)
 
     # ── Init (private; use factory methods) ───────────────────────────────────
 
@@ -230,6 +238,12 @@ class ACPClient:
         self._http_client: Any = None
         self._sse_task: asyncio.Task[None] | None = None
         self._post_task: asyncio.Task[None] | None = None
+        # WebRTC transport resources
+        self._webrtc_pc: Any = None
+        self._webrtc_ws: Any = None
+        self._webrtc_ws_task: asyncio.Task[None] | None = None
+        self._webrtc_forward_task: asyncio.Task[None] | None = None
+        self._webrtc_writer: asyncio.StreamWriter | None = None
 
     # ── Context manager ───────────────────────────────────────────────────────
 
@@ -239,20 +253,32 @@ class ACPClient:
             self._conn, self._process = await self._ctx.__aenter__()
         elif self._transport == 'http':
             await self._http_aenter()
+        elif self._transport == 'webrtc':
+            await self._webrtc_aenter()
         elif self._transport == 'discover':
-            from program.acp.registry import ACPRegistry
-            reg = ACPRegistry()
-            entry = await reg.find(self._agent_id)
-            if entry is None:
-                raise RuntimeError(f'ACPClient.discover: agent {self._agent_id!r} not found in registry')
-            transport = entry.get('transport', 'stdio')
-            if transport == 'stdio':
-                command = entry['command']
-                args = entry.get('args', [])
-                self._ctx = spawn_agent_process(self._acp_client, command, *args)
+            from program.settings.manager import SettingsManager
+
+            settings = SettingsManager.create(Path.cwd())
+            config = settings.get_acp_agent_config(self._agent_id)
+            if config is None:
+                raise RuntimeError(f'ACPClient.discover: agent {self._agent_id!r} not found in settings.json acp.agents')
+            if config.transport == 'stdio':
+                if not config.command:
+                    raise RuntimeError(f"ACPClient.discover: agent {self._agent_id!r} requires command for stdio transport")
+                self._ctx = spawn_agent_process(self._acp_client, config.command, *config.args)
                 self._conn, self._process = await self._ctx.__aenter__()
+            elif config.transport == 'http':
+                if not config.url:
+                    raise RuntimeError(f"ACPClient.discover: agent {self._agent_id!r} requires url for http transport")
+                self._url = config.url
+                await self._http_aenter()
+            elif config.transport == 'webrtc':
+                if not config.url:
+                    raise RuntimeError(f"ACPClient.discover: agent {self._agent_id!r} requires room in url for webrtc transport")
+                self._url = config.url
+                await self._webrtc_aenter()
             else:
-                raise NotImplementedError(f'Transport {transport!r} not supported via discover')
+                raise RuntimeError(f"ACPClient.discover: unsupported transport {config.transport!r}")
         await self._conn.initialize(protocol_version=PROTOCOL_VERSION)
         return self
 
@@ -268,18 +294,40 @@ class ACPClient:
             self._ctx = None
         if self._sse_task is not None:
             self._sse_task.cancel()
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._sse_task
             self._sse_task = None
         if self._post_task is not None:
             self._post_task.cancel()
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._post_task
             self._post_task = None
         if self._http_client is not None:
             with contextlib.suppress(Exception):
                 await self._http_client.aclose()
             self._http_client = None
+        if self._webrtc_ws_task is not None:
+            self._webrtc_ws_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._webrtc_ws_task
+            self._webrtc_ws_task = None
+        if self._webrtc_forward_task is not None:
+            self._webrtc_forward_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._webrtc_forward_task
+            self._webrtc_forward_task = None
+        if self._webrtc_writer is not None:
+            with contextlib.suppress(Exception):
+                self._webrtc_writer.close()
+            self._webrtc_writer = None
+        if self._webrtc_ws is not None:
+            with contextlib.suppress(Exception):
+                await self._webrtc_ws.close()
+            self._webrtc_ws = None
+        if self._webrtc_pc is not None:
+            with contextlib.suppress(Exception):
+                await self._webrtc_pc.close()
+            self._webrtc_pc = None
 
     # ── HTTP transport ────────────────────────────────────────────────────────
 
@@ -377,6 +425,114 @@ class ACPClient:
             raise
         except Exception as exc:
             logger.error('ACPClient HTTP: POST sender error: %s', exc)
+
+    # ── WebRTC transport ─────────────────────────────────────────────────────
+
+    async def _webrtc_aenter(self) -> None:
+        """Set up WebRTC transport using a DataChannel as the ACP byte stream."""
+        import websockets
+        from aiortc import RTCPeerConnection, RTCSessionDescription
+
+        from program.acp.transport.webrtc import (
+            DATA_CHANNEL_LABEL,
+            DEFAULT_RTC_CONFIGURATION,
+            DEFAULT_SIGNAL_URL,
+            _add_ice_candidate,
+            _drain_writer,
+            _forward_reader_to_channel,
+            _open_socket_bridge,
+            _payload_sdp,
+            _send_signal,
+            _signaling_url,
+            _wait_for_ice_gathering,
+            _write_channel_message,
+            peer_ids,
+        )
+
+        ids = peer_ids(self._url)
+        ws = await websockets.connect(_signaling_url(DEFAULT_SIGNAL_URL, ids.client))
+        self._webrtc_ws = ws
+
+        acp_reader, acp_writer, bridge_reader, bridge_writer = await _open_socket_bridge()
+        self._webrtc_writer = bridge_writer
+        self._conn = connect_to_agent(self._acp_client, acp_writer, acp_reader)
+
+        pc = RTCPeerConnection(configuration=DEFAULT_RTC_CONFIGURATION)
+        self._webrtc_pc = pc
+        channel = pc.createDataChannel(DATA_CHANNEL_LABEL)
+        signal_open = asyncio.Event()
+        channel_open = asyncio.Event()
+        answer_received = asyncio.Event()
+        connection_id = uuid.uuid4().hex
+
+        @channel.on('open')
+        def on_open() -> None:
+            channel_open.set()
+
+        @channel.on('message')
+        def on_message(message: Any) -> None:
+            _write_channel_message(bridge_writer, message)
+            asyncio.create_task(_drain_writer(bridge_writer))
+
+        self._webrtc_forward_task = asyncio.create_task(
+            _forward_reader_to_channel(bridge_reader, channel, ready=channel_open),
+            name=f'acp-webrtc-client-forward-{self._url}',
+        )
+
+        async def signaling_loop() -> None:
+            async for raw in ws:
+                try:
+                    data = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+
+                msg_type = str(data.get('type') or '').upper()
+                if msg_type == 'OPEN':
+                    signal_open.set()
+                    continue
+                if msg_type == 'PING':
+                    continue
+                if data.get('src') != ids.host:
+                    continue
+
+                payload = data.get('payload') or {}
+                if msg_type == 'ANSWER':
+                    sdp = _payload_sdp(payload)
+                    await pc.setRemoteDescription(RTCSessionDescription(sdp=sdp['sdp'], type=sdp['type']))
+                    answer_received.set()
+                elif msg_type == 'CANDIDATE':
+                    await _add_ice_candidate(pc, payload)
+                elif msg_type in ('LEAVE', 'EXPIRE'):
+                    raise RuntimeError(f'ACP WebRTC peer {ids.host!r} is unavailable')
+
+        self._webrtc_ws_task = asyncio.create_task(
+            signaling_loop(),
+            name=f'acp-webrtc-client-signal-{self._url}',
+        )
+
+        offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        await _wait_for_ice_gathering(pc)
+        await asyncio.wait_for(signal_open.wait(), timeout=10.0)
+
+        await _send_signal(
+            ws,
+            msg_type='OFFER',
+            src=ids.client,
+            dst=ids.host,
+            payload={
+                'type': 'data',
+                'connectionId': connection_id,
+                'metadata': {},
+                'sdp': {
+                    'type': pc.localDescription.type,
+                    'sdp': pc.localDescription.sdp,
+                },
+            },
+        )
+
+        await asyncio.wait_for(answer_received.wait(), timeout=30.0)
+        await asyncio.wait_for(channel_open.wait(), timeout=30.0)
 
     # ── Session management ────────────────────────────────────────────────────
 

@@ -117,6 +117,61 @@ async def _run_serve_http(
     await _serve_http(runtime, host=host, port=port)
 
 
+# ── serve-webrtc ──────────────────────────────────────────────────────────────
+
+@acp.command('serve-webrtc')
+@click.argument('room')
+@click.option('--cwd', default=None, type=click.Path(exists=True, file_okay=False), help='Working directory')
+@click.option('--model', default=None, help='Model ID (e.g. claude-sonnet-4-6)')
+@click.option('--provider', default=None, help='Provider override')
+@click.option('--signal-url', default=None, help='PeerJS-compatible signaling URL')
+def serve_webrtc(
+    room: str,
+    cwd: str | None,
+    model: str | None,
+    provider: str | None,
+    signal_url: str | None,
+) -> None:
+    """
+    Run the Operator ACP server over WebRTC for remote machine-to-machine use.
+
+    ROOM is the shared rendezvous name used by the remote client:
+      operator acp connect webrtc:<room>
+    """
+    import logging
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
+
+    click.echo(f"ACP WebRTC server waiting in room {room!r}")
+    try:
+        asyncio.run(_run_serve_webrtc(room=room, cwd=cwd, model_id=model, provider=provider, signal_url=signal_url))
+    except KeyboardInterrupt:
+        pass
+
+
+async def _run_serve_webrtc(
+    room: str,
+    cwd: str | None,
+    model_id: str | None,
+    provider: str | None,
+    signal_url: str | None,
+) -> None:
+    from program.runtime import Runtime, RuntimeConfig
+    from program.acp.transport.webrtc import DEFAULT_SIGNAL_URL, serve_webrtc as _serve_webrtc
+
+    cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
+    config = RuntimeConfig(
+        cwd=cwd_path,
+        model_id=model_id or 'claude-sonnet-4-6',
+        provider=provider,
+        gateway=False,
+    )
+    runtime = await Runtime.create(config)
+    await _serve_webrtc(runtime, room=room, signal_url=signal_url or DEFAULT_SIGNAL_URL)
+
+
 # ── connect ───────────────────────────────────────────────────────────────────
 
 @acp.command('connect')
@@ -128,9 +183,10 @@ def connect(target: str, extra: tuple[str, ...]) -> None:
 
     \b
     TARGET forms:
-      <agent_id>           Auto-discover via ACPRegistry
+      <agent_id>           Resolve from settings.json acp.agents
       stdio:<cmd> [args]   Spawn a subprocess and connect over stdio
       http://<url>         Connect to a remote HTTP agent
+      webrtc:<room>        Connect to a remote WebRTC room
     """
     try:
         asyncio.run(_run_connect(target=target, extra=list(extra)))
@@ -143,6 +199,8 @@ async def _run_connect(target: str, extra: list[str]) -> None:
 
     if target.startswith('http://') or target.startswith('https://'):
         client = ACPClient.http(target)
+    elif target.startswith('webrtc:'):
+        client = ACPClient.webrtc(target[len('webrtc:'):])
     elif target.startswith('stdio:'):
         command = target[len('stdio:'):]
         client = ACPClient.stdio(command, *extra)
