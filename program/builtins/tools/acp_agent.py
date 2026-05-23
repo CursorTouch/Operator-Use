@@ -130,9 +130,10 @@ class ACPAgentTool(Tool):
         from program.subagent.manager import _session_channel, _session_chat_id
         channel = _session_channel.get()
         chat_id = _session_chat_id.get()
+        caller_agent = self._agent
 
         asyncio.create_task(
-            self._run_task(config, params.task, channel, chat_id)  # type: ignore[arg-type]
+            self._run_task(config, params.task, channel, chat_id, caller_agent)  # type: ignore[arg-type]
         )
         return ToolResult.ok(
             invocation.id,
@@ -176,6 +177,7 @@ class ACPAgentTool(Tool):
         task: str,
         channel: str | None,
         chat_id: str | None,
+        caller_agent: Agent | None,
     ) -> None:
         from program.acp.client import ACPClient
 
@@ -248,13 +250,14 @@ class ACPAgentTool(Tool):
             logger.exception('ACP task failed | agent=%s', config.name)
             content = f"Agent '{config.name}' failed with error: {exc}"
 
-        await self._deliver(content, channel, chat_id)
+        await self._deliver(content, channel, chat_id, caller_agent)
 
     async def _deliver(
         self,
         content: str,
         channel: str | None,
         chat_id: str | None,
+        caller_agent: Agent | None,
     ) -> None:
         if channel and chat_id and self._bus is not None:
             from program.bus.types import IncomingMessage, TextPart
@@ -262,6 +265,8 @@ class ACPAgentTool(Tool):
                 channel=channel,
                 chat_id=chat_id,
                 parts=[TextPart(content=content)],
+                user_id='acp_agent',
+                metadata={'source': 'acp_agent', 'target_agent': caller_agent},
             )
             await self._bus.publish_incoming(msg)
         elif self._agent is not None:

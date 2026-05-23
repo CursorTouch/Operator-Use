@@ -237,7 +237,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     async def _on_stdio_message(msg) -> None:
         from program.bus.types import text_from_parts
         from program.agent.types import PromptOptions
-        agent = runtime.current_session
+        agent = msg.metadata.get('target_agent') or runtime.current_session
         if agent is None:
             return
         await _stdio_queue.put((agent, text_from_parts(msg.parts), PromptOptions(source='subagent')))
