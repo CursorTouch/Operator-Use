@@ -50,7 +50,7 @@ async def _on_message_receive(event) -> object:
     if stt and stt.enabled is False:
         return None
 
-    model_id = (stt.model if stt else None)
+    model_id = (stt.model if stt and stt.model else "whisper-1")
     provider = stt.provider if stt else None
     language = stt.language if stt else None
 

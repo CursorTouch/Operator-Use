@@ -72,4 +72,13 @@ models = [
     Model(id="magistral-medium-latest", name="Magistral Medium 1.2", provider="mistral", cost=Cost(input=2.0,  output=5.0),  thinking=True, context_window=131_072, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="devstral-latest",         name="Devstral 2",           provider="mistral", cost=Cost(input=0.40, output=2.0),                 context_window=262_144, input=_TEXT,       output=_TEXT),
     Model(id="codestral-latest",        name="Codestral",            provider="mistral", cost=Cost(input=0.30, output=0.90),                context_window=262_144, input=_TEXT,       output=_TEXT),
+    # Ollama
+    Model(id="deepseek-v4-pro:cloud",    name="DeepSeek V4 Pro Cloud", provider="ollama", cost=Cost(), thinking=True, context_window=1_000_000, input=_TEXT,       output=_TEXT),
+    Model(id="deepseek-v4-flash:cloud",  name="DeepSeek V4 Flash Cloud", provider="ollama", cost=Cost(), thinking=True, context_window=1_000_000, input=_TEXT,       output=_TEXT),
+    Model(id="deepseek-v3.2:cloud",      name="DeepSeek V3.2 Cloud",  provider="ollama", cost=Cost(), thinking=True, context_window=160_000,   input=_TEXT,       output=_TEXT),
+    Model(id="gemma4:31b-cloud",         name="Gemma 4 31B Cloud",    provider="ollama", cost=Cost(), thinking=True, context_window=256_000,   input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="glm-5.1:cloud",            name="GLM 5.1 Cloud",        provider="ollama", cost=Cost(), thinking=True, context_window=198_000,   input=_TEXT,       output=_TEXT),
+    Model(id="minimax-m2.7:cloud",       name="MiniMax M2.7 Cloud",   provider="ollama", cost=Cost(), thinking=True, context_window=200_000,   input=_TEXT,       output=_TEXT),
+    Model(id="kimi-k2.6:cloud",          name="Kimi K2.6 Cloud",      provider="ollama", cost=Cost(), thinking=True, context_window=256_000,   input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="qwen3.5:397b-cloud",       name="Qwen 3.5 397B Cloud",  provider="ollama", cost=Cost(), thinking=True, context_window=256_000,   input=_TEXT_IMAGE, output=_TEXT),
 ]

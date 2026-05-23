@@ -46,7 +46,7 @@ async def _on_message_send(event) -> object:
     if enabled is None and not event.is_voice:
         return None
 
-    model_id = (tts.model if tts else None)
+    model_id = (tts.model if tts and tts.model else "tts-1")
     provider = tts.provider if tts else None
     voice = (tts.voice if tts else None)
     speed = (tts.speed if tts else None)
