@@ -135,6 +135,10 @@ class Agent(ExtensionContext):
     def shutdown(self) -> None:
         self._engine.abort()
 
+    async def steer(self, text: str) -> None:
+        msg = UserMessage.text(text)
+        await self._engine.steer(msg)
+
     def get_context_usage(self) -> ContextUsage | None:
         if not self._context_tokens:
             return None
