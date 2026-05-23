@@ -13,6 +13,7 @@ from pathlib import Path
 import click
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.application import run_in_terminal
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from program.runtime import Runtime, RuntimeConfig
@@ -43,6 +44,19 @@ def _red(s: str) -> str:    return f"\033[1;31m{s}\033[0m"
 def _out(text: str = '', end: str = '\r\n') -> None:
     sys.stdout.write(text.replace('\n', '\r\n') + end)
     sys.stdout.flush()
+
+
+def _terminal_write(text: str = '', end: str = '') -> None:
+    def _write() -> None:
+        sys.stdout.write(text.replace('\n', '\r\n') + end)
+        sys.stdout.flush()
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _write()
+    else:
+        asyncio.ensure_future(run_in_terminal(_write), loop=loop)
 
 
 # ── Event renderer ────────────────────────────────────────────────────────────
@@ -76,24 +90,22 @@ def _render_event(event) -> None:
                     continue
                 if kind == 'thinking':
                     if _streaming_role != 'thinking':
-                        _out(f"\n{_grey('[Thinking]')} ", end='')
+                        _terminal_write(f"\n{_grey('[Thinking]')} ")
                         _streaming_role = 'thinking'
                         _partial_lines += 1
-                    sys.stdout.write(_grey(content.replace('\n', '\r\n')))
-                    sys.stdout.flush()
+                    _terminal_write(_grey(content))
                     _partial_lines += content.count('\n')
                 elif kind == 'text':
                     if _streaming_role != 'assistant':
-                        _out(f"\n{_blue('[Assistant]')} ", end='')
+                        _terminal_write(f"\n{_blue('[Assistant]')} ")
                         _streaming_role = 'assistant'
                         _partial_lines += 1
-                    sys.stdout.write(content.replace('\n', '\r\n'))
-                    sys.stdout.flush()
+                    _terminal_write(content)
                     _partial_lines += content.count('\n')
 
         case MessageEndEvent(message=msg) if msg is not None and msg.role == Role.ASSISTANT:
             if _streaming_role is not None:
-                _out()
+                _terminal_write(end='\r\n')
             _streaming_role = None
             _partial_lines = 0  # turn completed cleanly — nothing to erase
 
@@ -106,14 +118,13 @@ def _render_event(event) -> None:
             if not text:
                 return
             if _streaming_role != 'tool_stream':
-                _out(f"{_grey('[Tool ⋯]')} ", end='')
+                _terminal_write(f"{_grey('[Tool ⋯]')} ")
                 _streaming_role = 'tool_stream'
-            sys.stdout.write(text.replace('\n', '\r\n'))
-            sys.stdout.flush()
+            _terminal_write(text)
 
         case ToolExecutionEndEvent(tool_result=res):
             if _streaming_role == 'tool_stream':
-                _out()
+                _terminal_write(end='\r\n')
                 _streaming_role = None
             content = str(res.content)
             if len(content) > 500:
