@@ -125,6 +125,58 @@ Examples:
 - `MISTRAL_API_KEY`
 - `GOOGLE_API_KEY`
 
+## CLI Commands (`operator auth`)
+
+The `operator` command-line tool provides a unified `auth` CLI suite to manage provider credentials (both API keys and interactive OAuth logins).
+
+### List all providers / status
+
+```bash
+operator auth
+```
+or
+```bash
+operator auth list
+```
+Displays a list of all registered providers (both OAuth and API-key), along with their current authentication status and configuration source.
+
+To view detailed status for a single provider:
+```bash
+operator auth list <provider-id>
+```
+or
+```bash
+operator auth status <provider-id>
+```
+
+### Authenticate a provider
+
+To set an API key for a key-based provider:
+```bash
+operator auth set <provider-id> --api-key <key>
+```
+Example:
+```bash
+operator auth set openai --api-key sk-...
+```
+
+To initiate the OAuth login flow for an OAuth provider:
+```bash
+operator auth set <provider-id> --oauth
+```
+Example:
+```bash
+operator auth set claude --oauth
+```
+This launches a browser window to authenticate with the provider and guides you through the process in the terminal.
+
+### Revoke/remove credentials
+
+To remove stored credentials (either deleting an API key or logging out of an OAuth session):
+```bash
+operator auth unset <provider-id>
+```
+
 ## Error handling
 
 Storage errors are non-fatal. `AuthManager._load()` catches exceptions from the file lock and records them. If the initial load fails, `self.data` is empty and `self._load_error` is set. Subsequent `_persist_provider_change()` calls are no-ops when `_load_error` is set, so the in-memory state is not silently lost to disk when the storage is broken.

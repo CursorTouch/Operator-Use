@@ -91,8 +91,13 @@ The `handler` receives the `CommandRegistry` (which carries a `registry.runtime`
 | `/logout [provider]` | — | Log out from an OAuth provider. Lists logged-in providers if no argument given. |
 | `/auth` | — | Show authentication status for all providers (OAuth and API-key). |
 | `/compact [instructions]` | — | Run compaction immediately. Optional custom instructions override the default summarization prompt. |
+| `/cron [id]` | — | List scheduled cron jobs. Pass an ID prefix or name for details. |
 | `/new` | `/clear` | Start a new session (discards the current session history). |
 | `/reload` | — | Reload all resources (tools, skills, commands, extensions) while keeping the active session history intact. |
+| `/skills` | — | List all available skills. |
+| `/start` | — | Introduce the agent and display welcome/help instructions. |
+| `/steer <guidance>` | — | Inject guidance after the next tool call without interrupting the current turn. |
+| `/stop` | `/cancel` | Immediately cancel the current agent operation and halt execution. |
 | `/help` | `/?` | List all available commands with descriptions and aliases. |
 
 ### /login
@@ -129,6 +134,26 @@ What gets refreshed:
 - `CommandRegistry` — rebuilt with reloaded commands and re-registered extension commands
 
 Use `/reload` when you have edited a tool, skill, hook, or extension file and want the running agent to pick up the changes without losing the current conversation.
+
+### /skills
+
+Lists all available skills discovered by `ResourceLoader`, grouped by their source (Global `~/.program/agent/skills/` vs Project `.program/agent/skills/`), along with their descriptions and loaded diagnostics/warnings if any.
+
+### /start
+
+Introduces the agent, prints a welcome message, and provides quick starting instructions to guide the user.
+
+### /steer
+
+Injects specific instructions or guidance (e.g. `"/steer keep search results concise"`) to the running agent turn after the next tool call completes. Useful for steering an active turn without having to interrupt/cancel it.
+
+### /stop (/cancel)
+
+Sends an abort signal to the running engine. The agent will halt execution immediately at the next safe checkpoint (e.g., before executing the next tool or LLM inference step).
+
+### /cron
+
+Lists all scheduled cron jobs in the system, grouped by active vs. disabled status. Pass a job ID prefix or name (e.g., `/cron my-job`) to view full details for a specific cron job (message, next run, last run status, last error, and creation timestamps).
 
 ## Extension commands
 
