@@ -172,7 +172,7 @@ class TextEndEvent:
 @dataclass
 class ThinkingStartEvent:
     type: LLMEventType = field(default=LLMEventType.ThinkingStart, init=False)
-    thinking: "ThinkingContent"
+    thinking: Optional["ThinkingContent"] = None
 
 
 @dataclass
