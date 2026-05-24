@@ -176,7 +176,7 @@ The builtin **TTS hook** (`program/builtins/hooks/tts.py`) handles this: it synt
 
 ### StdioChannel
 
-Terminal REPL with ANSI colour output. Used by `main.py` for the interactive CLI. Sends `IncomingMessage` when the user presses Enter; renders streaming chunks in real time.
+Terminal REPL with ANSI colour output. Used by `program.console.main:cli` for the interactive CLI. Sends `IncomingMessage` when the user presses Enter; renders streaming chunks in real time.
 
 ### WebSocketChannel / WebSocketServer
 
