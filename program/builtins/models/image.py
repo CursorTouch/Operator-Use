@@ -40,6 +40,4 @@ models = [
     Model(id="sourceful/riverflow-v2-turbo", name="Riverflow V2 Turbo", provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
     Model(id="sourceful/riverflow-v2-max",   name="Riverflow V2 Max",   provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
     Model(id="sourceful/riverflow-v2-pro",   name="Riverflow V2 Pro",   provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
-    # OpenRouter Auto
-    Model(id="openrouter/auto", name="OpenRouter Auto", provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_TEXT_IMAGE_OUT),
 ]

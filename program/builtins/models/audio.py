@@ -19,6 +19,12 @@ models = [
     Model(id="gemini-2.5-flash-preview-tts", name="Gemini 2.5 Flash TTS", provider="google", cost=Cost(input=0.50,  output=10.0), input=_TEXT, output=_AUDIO, api="gemini-audio"),
     Model(id="gemini-2.5-pro-preview-tts",   name="Gemini 2.5 Pro TTS",   provider="google", cost=Cost(input=2.00,  output=16.0), input=_TEXT, output=_AUDIO, api="gemini-audio"),
     Model(id="gemini-3.1-flash-tts-preview", name="Gemini 3.1 Flash TTS", provider="google", cost=Cost(input=0.10,  output=1.00), input=_TEXT, output=_AUDIO, api="gemini-audio"),
+    # OpenRouter speech models
+    Model(id="openai/gpt-audio",          name="GPT Audio",         provider="openrouter", cost=Cost(input=2.50, output=10.00), input=_TEXT, output=_AUDIO, api="openai-audio"),
+    Model(id="openai/gpt-audio-mini",     name="GPT Audio Mini",    provider="openrouter", cost=Cost(input=0.60, output=2.40),  input=_TEXT, output=_AUDIO, api="openai-audio"),
+    Model(id="openai/gpt-4o-audio-preview", name="GPT-4o Audio",    provider="openrouter", cost=Cost(input=2.50, output=10.00), input=_TEXT, output=_AUDIO, api="openai-audio"),
+    Model(id="google/lyria-3-pro-preview", name="Lyria 3 Pro Preview", provider="openrouter", cost=Cost(), input=_TEXT, output=_AUDIO, api="openai-audio"),
+    Model(id="google/lyria-3-clip-preview", name="Lyria 3 Clip Preview", provider="openrouter", cost=Cost(), input=_TEXT, output=_AUDIO, api="openai-audio"),
     # Sarvam AI
     Model(id="bulbul:v3",    name="Bulbul v3",    provider="sarvam", cost=Cost(), input=_TEXT,  output=_AUDIO, api="sarvam-audio"),
     Model(id="saarika:v2.5", name="Saarika v2.5", provider="sarvam", cost=Cost(), input=_AUDIO, output=_TEXT,  api="sarvam-audio"),
