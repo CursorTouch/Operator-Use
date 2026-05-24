@@ -65,6 +65,9 @@ models = [
     Model(id="llama-3.3-70b-versatile",                   name="Llama 3.3 70B",         provider="groq", cost=Cost(input=0.59,  output=0.79),               context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
     Model(id="llama-3.1-8b-instant",                      name="Llama 3.1 8B Instant",  provider="groq", cost=Cost(input=0.05,  output=0.08),               context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
     Model(id="meta-llama/llama-4-scout-17b-16e-instruct", name="Llama 4 Scout 17Bx16E", provider="groq", cost=Cost(input=0.11,  output=0.34),               context_window=131_072, max_tokens=8192, input=_TEXT_IMAGE, output=_TEXT),
+    # xAI
+    Model(id="grok-4.3",       name="Grok 4.3",       provider="xai", cost=Cost(input=1.25, output=2.50, cache_read=0.20), thinking=True, context_window=1_000_000, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="grok-build-0.1", name="Grok Build 0.1", provider="xai", cost=Cost(input=1.00, output=2.00, cache_read=0.20), thinking=True, context_window=256_000,   input=_TEXT_IMAGE, output=_TEXT),
     # Mistral
     Model(id="mistral-large-latest",    name="Mistral Large 3",      provider="mistral", cost=Cost(input=0.50, output=1.50),                context_window=262_144, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="mistral-medium-latest",   name="Mistral Medium 3.5",   provider="mistral", cost=Cost(input=0.40, output=2.0),                 context_window=131_072, input=_TEXT_IMAGE, output=_TEXT),

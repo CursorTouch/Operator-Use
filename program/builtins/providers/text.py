@@ -13,6 +13,7 @@ api_providers = [
     APIProvider(id="google",    name="Google",    api="gemini_generate",    options=LLMOptions()),
     APIProvider(id="nvidia",    name="NVIDIA",    api="openai_completions", options=LLMOptions(base_url="https://integrate.api.nvidia.com/v1")),
     APIProvider(id="groq",      name="Groq",      api="openai_completions", options=LLMOptions(base_url="https://api.groq.com/openai/v1")),
+    APIProvider(id="xai",       name="xAI",       api="openai_responses",   options=LLMOptions(base_url="https://api.x.ai/v1")),
     APIProvider(id="mistral",   name="Mistral",   api="mistral_chat",       options=LLMOptions()),
     APIProvider(id="ollama",    name="Ollama",    api="ollama_chat",        options=LLMOptions(base_url="http://localhost:11434")),
 ]
