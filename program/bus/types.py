@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Sequence
 
 
 class StreamPhase(str, Enum):
@@ -36,10 +36,10 @@ class FilePart:
 ContentPart = TextPart | ImagePart | AudioPart | FilePart
 
 
-def text_from_parts(parts: list[ContentPart]) -> str:
+def text_from_parts(parts: Sequence[ContentPart]) -> str:
     return "\n".join(p.content for p in parts if isinstance(p, TextPart))
 
-def media_paths_from_parts(parts: list[ContentPart]) -> list[str]:
+def media_paths_from_parts(parts: Sequence[ContentPart]) -> list[str]:
     result = []
     for p in parts:
         if isinstance(p, AudioPart): result.append(p.audio)

@@ -38,6 +38,14 @@ from program.hooks.types import (
     ResourcesDiscoverEvent,
     SavePointEvent,
     SettledEvent,
+    GatewayStartupEvent,
+    GatewayStopEvent,
+    ChannelConnectEvent,
+    ChannelDisconnectEvent,
+    MessageReceiveEvent,
+    MessageSendEvent,
+    MessageCancelEvent,
+    GatewayErrorEvent,
     # Union
     HookEvent,
     # Result types
@@ -52,6 +60,8 @@ from program.hooks.types import (
     SessionBeforeCompactResult,
     SessionBeforeTreeResult,
     InputEventResult,
+    MessageReceiveResult,
+    MessageSendResult,
 )
 
 __all__ = [
@@ -94,6 +104,14 @@ __all__ = [
     'ResourcesDiscoverEvent',
     'SavePointEvent',
     'SettledEvent',
+    'GatewayStartupEvent',
+    'GatewayStopEvent',
+    'ChannelConnectEvent',
+    'ChannelDisconnectEvent',
+    'MessageReceiveEvent',
+    'MessageSendEvent',
+    'MessageCancelEvent',
+    'GatewayErrorEvent',
     # Union
     'HookEvent',
     # Result types
@@ -108,4 +126,6 @@ __all__ = [
     'SessionBeforeCompactResult',
     'SessionBeforeTreeResult',
     'InputEventResult',
+    'MessageReceiveResult',
+    'MessageSendResult',
 ]

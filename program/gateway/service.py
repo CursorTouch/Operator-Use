@@ -53,6 +53,7 @@ class Gateway:
         self._channels: dict[str, BaseChannel] = {}
         self._sessions: dict[str, _SessionEntry] = {}
         self._direct_handlers: dict[str, Callable[[IncomingMessage], Awaitable[None]]] = {}
+        self._handler_tasks: set[asyncio.Task] = set()
         self._incoming_loop_task: asyncio.Task | None = None
         self._outgoing_loop_task: asyncio.Task | None = None
         self.hooks = Hooks()
@@ -97,12 +98,33 @@ class Gateway:
         await asyncio.gather(self._incoming_loop_task, self._outgoing_loop_task)
 
     async def stop(self) -> None:
-        """Cancel all processing loop tasks."""
+        """Cancel processing loops and any in-flight agent session tasks."""
+        tasks: list[asyncio.Task] = []
+        current = asyncio.current_task()
+
         for attr in ('_incoming_loop_task', '_outgoing_loop_task'):
             task = getattr(self, attr, None)
             if task is not None:
-                task.cancel()
+                if task is not current and not task.done():
+                    task.cancel()
+                    tasks.append(task)
                 setattr(self, attr, None)
+
+        for task in list(self._handler_tasks):
+            if task is current or task.done():
+                continue
+            task.cancel()
+            tasks.append(task)
+
+        for entry in self._sessions.values():
+            if entry.task is None or entry.task is current or entry.task.done():
+                continue
+            entry.agent.shutdown()
+            entry.task.cancel()
+            tasks.append(entry.task)
+
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     # ── Incoming message loop ─────────────────────────────────────────────────
 
@@ -111,7 +133,9 @@ class Gateway:
         while True:
             try:
                 msg = await self._bus.consume_incoming()
-                asyncio.create_task(self._handle_incoming(msg))
+                task = asyncio.create_task(self._handle_incoming(msg))
+                self._handler_tasks.add(task)
+                task.add_done_callback(self._handler_tasks.discard)
             except asyncio.CancelledError:
                 break
             except Exception:

@@ -3,7 +3,17 @@ from __future__ import annotations
 
 import pytest
 
-from program.hooks.types import SubagentStartEvent, SubagentEndEvent, HookEvent
+from program.hooks.types import (
+    ChannelConnectEvent,
+    ChannelDisconnectEvent,
+    GatewayErrorEvent,
+    MessageCancelEvent,
+    MessageReceiveEvent,
+    MessageSendEvent,
+    SubagentStartEvent,
+    SubagentEndEvent,
+    HookEvent,
+)
 from program.subagent.types import SubagentStatus
 from program.bus.types import (
     IncomingMessage, OutgoingMessage, TextPart, AudioPart, ImagePart, FilePart,
@@ -73,6 +83,21 @@ class TestSubagentEndEvent:
         from program.hooks.types import HookEvent
         args = typing.get_args(HookEvent)
         assert SubagentEndEvent in args
+
+
+# ── Gateway hook events ───────────────────────────────────────────────────────
+
+class TestGatewayHookEvents:
+    def test_gateway_transport_events_are_hook_events(self):
+        import typing
+
+        args = typing.get_args(HookEvent)
+        assert ChannelConnectEvent in args
+        assert ChannelDisconnectEvent in args
+        assert MessageReceiveEvent in args
+        assert MessageSendEvent in args
+        assert MessageCancelEvent in args
+        assert GatewayErrorEvent in args
 
 
 # ── Bus ContentPart types ─────────────────────────────────────────────────────

@@ -71,39 +71,51 @@ class Engine:
         return unsubscribe
 
     async def steer(self, message: BaseMessage) -> None:
-        await self.state.steering_queue.enqueue(message)
-        if self._hooks:
-            await self._hooks.emit(QueueUpdateEvent(
-                queue='steering',
-                message=message,
-                messages=self.state.steering_queue.snapshot(),
-            ))
+        if self.state.steering_queue:    
+            await self.state.steering_queue.enqueue(message)
+            if self._hooks:
+                await self._hooks.emit(QueueUpdateEvent(
+                    queue='steering',
+                    message=message,
+                    messages=self.state.steering_queue.snapshot(),
+                ))
 
     async def follow_up(self, message: BaseMessage) -> None:
-        await self.state.follow_up_queue.enqueue(message)
-        if self._hooks:
-            await self._hooks.emit(QueueUpdateEvent(
-                queue='followup',
-                message=message,
-                messages=self.state.follow_up_queue.snapshot(),
+        if self.state.follow_up_queue:
+            await self.state.follow_up_queue.enqueue(message)
+            if self._hooks:
+                await self._hooks.emit(QueueUpdateEvent(
+                    queue='followup',
+                    message=message,
+                    messages=self.state.follow_up_queue.snapshot(),
             ))
 
     def clear_steering(self) -> None:
-        self.state.steering_queue.clear()
+        if self.state.steering_queue:
+            self.state.steering_queue.clear()
 
     def clear_follow_up(self) -> None:
-        self.state.follow_up_queue.clear()
+        if self.state.follow_up_queue:
+            self.state.follow_up_queue.clear()
 
     def clear_all_queues(self) -> None:
-        self.state.steering_queue.clear()
-        self.state.follow_up_queue.clear()
+        if self.state.steering_queue:
+            self.state.steering_queue.clear()
+        if self.state.follow_up_queue:
+            self.state.follow_up_queue.clear()
 
     def has_pending_messages(self) -> bool:
-        return not self.state.steering_queue.is_empty() or not self.state.follow_up_queue.is_empty()
+        if self.state.steering_queue:
+            return not self.state.steering_queue.is_empty()
+        if self.state.follow_up_queue:
+            return not self.state.follow_up_queue.is_empty()
+        return False
 
     def reset(self) -> None:
-        self.state.follow_up_queue.clear()
-        self.state.steering_queue.clear()
+        if self.state.follow_up_queue:
+            self.state.follow_up_queue.clear()
+        if self.state.steering_queue:
+            self.state.steering_queue.clear()
         self.state.error_message = None
         self.state.pending_tool_calls.clear()
         self.state.is_streaming = False
@@ -411,6 +423,8 @@ class Engine:
                         else:
                             await emit(TurnEndEvent(message=message, tool_results=tool_results))
                             break
+                    case _:
+                        pass
 
                 await emit(TurnEndEvent(message=message, tool_results=tool_results))
 
@@ -438,8 +452,10 @@ class Engine:
         self.state.system_prompt = ctx.system_prompt
         self.state.tools = ctx.tools
         self._tools = {t.name: t for t in ctx.tools}
-        await self._loop(list(ctx.messages), self.process_events, self._signal)
-        self.state.is_streaming = False
+        try:
+            await self._loop(list(ctx.messages), self.process_events, self._signal)
+        finally:
+            self.state.is_streaming = False
 
     async def run_continue(self) -> None:
         if self.state.is_streaming:
@@ -450,7 +466,7 @@ class Engine:
 
         last_message = self.state.messages[-1]
         if last_message.role == Role.ASSISTANT:
-            if not self.state.steering_queue.is_empty():
+            if self.state.steering_queue and not self.state.steering_queue.is_empty():
                 steering_messages = await self.state.steering_queue.dequeue()
                 from program.agent.types import AgentContext
                 await self.run(AgentContext(
@@ -459,7 +475,7 @@ class Engine:
                 ))
                 return
 
-            if not self.state.follow_up_queue.is_empty():
+            if self.state.follow_up_queue and not self.state.follow_up_queue.is_empty():
                 follow_up_messages = await self.state.follow_up_queue.dequeue()
                 from program.agent.types import AgentContext
                 await self.run(AgentContext(
@@ -475,5 +491,7 @@ class Engine:
     async def _loop_continue(self) -> None:
         self._signal = asyncio.Event()
         self.state.is_streaming = True
-        await self._loop(self.state.messages, self.process_events, self._signal)
-        self.state.is_streaming = False
+        try:
+            await self._loop(self.state.messages, self.process_events, self._signal)
+        finally:
+            self.state.is_streaming = False

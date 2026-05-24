@@ -6,12 +6,13 @@ import os
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
 from program.compaction.compact import Compaction
 from program.compaction.types import CompactionSettings, CompactionPreparation
+from program.agent.types import AgentContext
 from program.engine.service import Engine
 from program.engine.types import AgentEvent, Options
 from program.hooks.service import Hooks
@@ -123,7 +124,11 @@ def make_tool(
 async def collect_events(engine: Engine, messages=None) -> list[AgentEvent]:
     events: list[AgentEvent] = []
     await engine.subscribe(lambda e: events.append(e))
-    await engine.run(messages or [UserMessage.text("go")])
+    await engine.run(AgentContext(
+        system_prompt=engine.system_prompt or "",
+        messages=messages or [UserMessage.text("go")],
+        tools=engine.tools,
+    ))
     return events
 
 
@@ -136,7 +141,7 @@ def make_agent(llm, tools=None, hooks=None, compaction_settings=None):
     from program.agent.service import Agent
     from program.agent.types import AgentConfig
     from program.extension.runtime import ExtensionRuntime
-    from program.extension.types import LoadExtensionsResult
+    from program.extension.types import ExtensionContext, LoadExtensionsResult
     from program.resource.types import BaseResourceLoader
 
     class _FakeLoader(BaseResourceLoader):
@@ -148,11 +153,10 @@ def make_agent(llm, tools=None, hooks=None, compaction_settings=None):
         def get_context_files(self): return []
         def get_system_prompt(self): return None
         def get_append_system_prompt(self): return []
-        def extend_resources(self, p): pass
+        def get_subagent_profiles(self): return []
+        def extend_resources(self, paths): pass
         def get_diagnostics(self, runtime=None): return []
         async def reload(self): pass
-
-    class _Null: pass
 
     h = hooks or Hooks()
     sm = SessionManager.in_memory()
@@ -164,7 +168,7 @@ def make_agent(llm, tools=None, hooks=None, compaction_settings=None):
         engine=engine,
         session_manager=sm,
         resource_loader=_FakeLoader(),
-        extension_runtime=ExtensionRuntime(load_result, _Null(), h),
+        extension_runtime=ExtensionRuntime(load_result, cast(ExtensionContext, None), h),
         compaction=Compaction(llm=llm, settings=cs),
         config=config,
     )

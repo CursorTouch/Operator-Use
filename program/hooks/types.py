@@ -331,52 +331,6 @@ class QueueUpdateEvent:
 
 
 # ============================================================================
-# Union of all hook events
-# ============================================================================
-
-HookEvent = (
-    SessionStartEvent
-    | SessionBeforeSwitchEvent
-    | SessionBeforeForkEvent
-    | SessionBeforeCompactEvent
-    | SessionCompactEvent
-    | SessionShutdownEvent
-    | SessionBeforeTreeEvent
-    | SessionTreeEvent
-    | ContextEvent
-    | BeforeAgentStartEvent
-    | AgentStartEvent
-    | AgentEndEvent
-    | AgentErrorEvent
-    | SubagentStartEvent
-    | SubagentEndEvent
-    | TurnStartEvent
-    | TurnEndEvent
-    | MessageStartEvent
-    | MessageUpdateEvent
-    | MessageEndEvent
-    | ToolExecutionFailureEvent
-    | ToolExecutionStartEvent
-    | ToolExecutionUpdateEvent
-    | ToolExecutionEndEvent
-    | ToolCallEvent
-    | ToolResultEvent
-    | ModelSelectEvent
-    | ThinkingLevelSelectEvent
-    | InputEvent
-    | UserBashEvent
-    | ResourcesDiscoverEvent
-    | SavePointEvent
-    | SettledEvent
-    | GatewayStartupEvent
-    | GatewayStopEvent
-    | BeforeProviderRequestEvent
-    | AfterProviderResponseEvent
-    | QueueUpdateEvent
-)
-
-
-# ============================================================================
 # Hook result types (returned by handlers to influence behaviour)
 # ============================================================================
 
@@ -515,6 +469,58 @@ class GatewayErrorEvent:
     type: Literal['gateway:error'] = field(default='gateway:error', init=False)
     channel_id: str = ''
     error: str = ''
+
+
+# ============================================================================
+# Union of all hook events
+# ============================================================================
+
+HookEvent = (
+    SessionStartEvent
+    | SessionBeforeSwitchEvent
+    | SessionBeforeForkEvent
+    | SessionBeforeCompactEvent
+    | SessionCompactEvent
+    | SessionShutdownEvent
+    | SessionBeforeTreeEvent
+    | SessionTreeEvent
+    | ContextEvent
+    | BeforeAgentStartEvent
+    | AgentStartEvent
+    | AgentEndEvent
+    | AgentErrorEvent
+    | SubagentStartEvent
+    | SubagentEndEvent
+    | TurnStartEvent
+    | TurnEndEvent
+    | MessageStartEvent
+    | MessageUpdateEvent
+    | MessageEndEvent
+    | ToolExecutionFailureEvent
+    | ToolExecutionStartEvent
+    | ToolExecutionUpdateEvent
+    | ToolExecutionEndEvent
+    | ToolCallEvent
+    | ToolResultEvent
+    | ModelSelectEvent
+    | ThinkingLevelSelectEvent
+    | InputEvent
+    | UserBashEvent
+    | ResourcesDiscoverEvent
+    | SavePointEvent
+    | SettledEvent
+    | GatewayStartupEvent
+    | GatewayStopEvent
+    | ChannelConnectEvent
+    | ChannelDisconnectEvent
+    | MessageReceiveEvent
+    | MessageSendEvent
+    | MessageCancelEvent
+    | GatewayErrorEvent
+    | BeforeProviderRequestEvent
+    | AfterProviderResponseEvent
+    | QueueUpdateEvent
+)
 
 
 # ============================================================================
