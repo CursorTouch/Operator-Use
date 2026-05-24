@@ -1,4 +1,5 @@
 from __future__ import annotations
+import builtins
 import os
 import json
 from pathlib import Path
@@ -10,8 +11,28 @@ from program.auth.types import AuthCredential, AuthStatus, OAuthCredential, APIC
 from program.auth.storage import AuthStorage, FileAuthStorage, InMemoryAuthStorage
 
 
+def _env_api_key_names(provider: str) -> list[str]:
+    canonical = f"{provider.upper()}_API_KEY"
+    candidates = [canonical]
+    normalized = f"{provider.upper().replace('-', '_')}_API_KEY"
+    if normalized != canonical:
+        candidates.append(normalized)
+    if provider == "kilocode":
+        candidates.append("KILO_API_KEY")
+    return candidates
+
+
+def _get_env_api_key_entry(provider: str) -> tuple[str, str] | None:
+    for name in _env_api_key_names(provider):
+        value = os.environ.get(name)
+        if value:
+            return name, value
+    return None
+
+
 def _get_env_api_key(provider: str) -> str | None:
-    return os.environ.get(f"{provider.upper()}_API_KEY")
+    entry = _get_env_api_key_entry(provider)
+    return entry[1] if entry else None
 
 
 class ProviderAuthManager:
@@ -28,7 +49,7 @@ class ProviderAuthManager:
         self.storage = storage
         self.runtime_overrides: dict[str, str] = {}
         self._load_error: Exception | None = None
-        self._errors: list[Exception] = []
+        self._errors: builtins.list[Exception] = []
         self.data: dict[str, AuthCredential] = self._load()
 
     @staticmethod
@@ -123,8 +144,8 @@ class ProviderAuthManager:
     def has(self, provider: str) -> bool:
         return provider in self.data
 
-    def list(self) -> list[str]:
-        return list(self.data.keys())
+    def list(self) -> builtins.list[str]:
+        return builtins.list(self.data.keys())
 
     def set(self, provider: str, credential: AuthCredential) -> None:
         self.data[provider] = credential
@@ -145,13 +166,14 @@ class ProviderAuthManager:
             return AuthStatus(configured=True, source="stored")
         if provider in self.runtime_overrides:
             return AuthStatus(configured=True, source="runtime", label="--api-key")
-        env_key = f"{provider.upper()}_API_KEY"
-        if os.environ.get(env_key):
+        env_entry = _get_env_api_key_entry(provider)
+        if env_entry:
+            env_key, _ = env_entry
             return AuthStatus(configured=True, source="env", label=env_key)
         return AuthStatus(configured=False)
 
-    def drain_errors(self) -> list[Exception]:
-        drained = list(self._errors)
+    def drain_errors(self) -> builtins.list[Exception]:
+        drained = builtins.list(self._errors)
         self._errors.clear()
         return drained
 
@@ -183,13 +205,13 @@ class ProviderAuthManager:
         if not oauth_provider:
             return None
 
-        async def refresh_fn(current: str | None) -> LockResult:
+        async def refresh_fn(current: str | None) -> LockResult[OAuthCredential | None]:
             current_data = self._parse_storage_data(current)
             credential = current_data.get(provider)
             if not isinstance(credential, OAuthCredential):
-                return LockResult(result=None)
+                return LockResult[OAuthCredential | None](result=None)
             if not oauth_provider.is_expired(credential=credential):
-                return LockResult(result=credential)
+                return LockResult[OAuthCredential | None](result=credential)
             try:
                 refreshed = await oauth_provider.refresh_token(credential=credential)
                 if credential.extra:
@@ -199,10 +221,10 @@ class ProviderAuthManager:
                 current_data[provider] = refreshed
                 self.data = current_data
                 serialized = {k: self._serialize_credential(v) for k, v in current_data.items()}
-                return LockResult(result=refreshed, next=json.dumps(serialized, indent=2))
+                return LockResult[OAuthCredential | None](result=refreshed, next=json.dumps(serialized, indent=2))
             except Exception as e:
                 self._record_error(e)
-                return LockResult(result=None)
+                return LockResult[OAuthCredential | None](result=None)
 
         result = await self.storage.with_lock_async(refresh_fn)
         return result.result

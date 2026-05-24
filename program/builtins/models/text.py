@@ -73,6 +73,36 @@ models = [
     # xAI
     Model(id="grok-4.3",       name="Grok 4.3",       provider="xai", cost=Cost(input=1.25, output=2.50, cache_read=0.20), thinking=True, context_window=1_000_000, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="grok-build-0.1", name="Grok Build 0.1", provider="xai", cost=Cost(input=1.00, output=2.00, cache_read=0.20), thinking=True, context_window=256_000,   input=_TEXT_IMAGE, output=_TEXT),
+    # AWS Bedrock
+    Model(id="openai.gpt-oss-120b",        name="GPT-OSS 120B",        provider="bedrock", cost=Cost(), thinking=True, context_window=131_072, input=_TEXT,       output=_TEXT),
+    Model(id="openai.gpt-oss-20b",         name="GPT-OSS 20B",         provider="bedrock", cost=Cost(), thinking=True, context_window=131_072, input=_TEXT,       output=_TEXT),
+    Model(id="anthropic.claude-opus-4-7",  name="Claude Opus 4.7",     provider="bedrock", cost=Cost(), thinking=True, context_window=200_000, input=_TEXT_IMAGE, output=_TEXT, api="anthropic_messages", base_url="https://bedrock-mantle.us-east-1.api.aws/anthropic"),
+    Model(id="anthropic.claude-sonnet-4-6", name="Claude Sonnet 4.6",  provider="bedrock", cost=Cost(), thinking=True, context_window=200_000, input=_TEXT_IMAGE, output=_TEXT, api="anthropic_messages", base_url="https://bedrock-mantle.us-east-1.api.aws/anthropic"),
+    # Kimi / Moonshot
+    Model(id="kimi-k2.6",                name="Kimi K2.6",             provider="kimi", cost=Cost(input=0.95, output=4.0, cache_read=0.16), thinking=True, context_window=256_000, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="kimi-k2.5",                name="Kimi K2.5",             provider="kimi", cost=Cost(), thinking=True, context_window=256_000, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="kimi-k2-thinking",         name="Kimi K2 Thinking",      provider="kimi", cost=Cost(), thinking=True, context_window=256_000, input=_TEXT,       output=_TEXT),
+    Model(id="moonshot-v1-128k",         name="Moonshot v1 128K",      provider="kimi", cost=Cost(),                context_window=128_000, input=_TEXT,       output=_TEXT),
+    Model(id="moonshot-v1-128k-vision-preview", name="Moonshot v1 128K Vision", provider="kimi", cost=Cost(),       context_window=128_000, input=_TEXT_IMAGE, output=_TEXT),
+    # MiniMax
+    Model(id="MiniMax-M2.7",           name="MiniMax M2.7",            provider="minimax", cost=Cost(), thinking=True, context_window=204_800, max_tokens=196_608, input=_TEXT, output=_TEXT),
+    Model(id="MiniMax-M2.7-highspeed", name="MiniMax M2.7 Highspeed",  provider="minimax", cost=Cost(), thinking=True, context_window=204_800, max_tokens=196_608, input=_TEXT, output=_TEXT),
+    Model(id="MiniMax-M2.5",           name="MiniMax M2.5",            provider="minimax", cost=Cost(), thinking=True, context_window=204_800, max_tokens=196_608, input=_TEXT, output=_TEXT),
+    Model(id="MiniMax-M2.1",           name="MiniMax M2.1",            provider="minimax", cost=Cost(), thinking=True, context_window=204_800, max_tokens=196_608, input=_TEXT, output=_TEXT),
+    # DeepSeek
+    Model(id="deepseek-v4-pro",      name="DeepSeek V4 Pro",           provider="deepseek", cost=Cost(), thinking=True, context_window=1_000_000, input=_TEXT, output=_TEXT),
+    Model(id="deepseek-v4-flash",    name="DeepSeek V4 Flash",         provider="deepseek", cost=Cost(), thinking=True, context_window=1_000_000, input=_TEXT, output=_TEXT),
+    Model(id="deepseek-chat",        name="DeepSeek Chat",             provider="deepseek", cost=Cost(),               context_window=1_000_000, input=_TEXT, output=_TEXT),
+    Model(id="deepseek-reasoner",    name="DeepSeek Reasoner",         provider="deepseek", cost=Cost(), thinking=True, context_window=1_000_000, input=_TEXT, output=_TEXT),
+    # Kilo Code Gateway
+    Model(id="kilo-auto/frontier",           name="Kilo Auto Frontier", provider="kilocode", cost=Cost(), thinking=True, context_window=200_000, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="kilo-auto/balanced",           name="Kilo Auto Balanced", provider="kilocode", cost=Cost(), thinking=True, context_window=256_000, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="kilo-auto/free",               name="Kilo Auto Free",     provider="kilocode", cost=Cost(), thinking=True, context_window=128_000, input=_TEXT,       output=_TEXT),
+    Model(id="kilo-auto/small",              name="Kilo Auto Small",    provider="kilocode", cost=Cost(),               context_window=128_000, input=_TEXT,       output=_TEXT),
+    Model(id="anthropic/claude-sonnet-4.6",  name="Claude Sonnet 4.6",  provider="kilocode", cost=Cost(), thinking=True, context_window=200_000, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="deepseek/deepseek-v3.2",       name="DeepSeek V3.2",      provider="kilocode", cost=Cost(), thinking=True, context_window=131_072, input=_TEXT,       output=_TEXT),
+    Model(id="moonshotai/kimi-k2.5",         name="Kimi K2.5",          provider="kilocode", cost=Cost(), thinking=True, context_window=256_000, input=_TEXT,       output=_TEXT),
+    Model(id="minimax/minimax-m2.7",         name="MiniMax M2.7",       provider="kilocode", cost=Cost(), thinking=True, context_window=204_800, input=_TEXT,       output=_TEXT),
     # Mistral
     Model(id="mistral-large-latest",    name="Mistral Large 3",      provider="mistral", cost=Cost(input=0.50, output=1.50),                context_window=262_144, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="mistral-medium-latest",   name="Mistral Medium 3.5",   provider="mistral", cost=Cost(input=0.40, output=2.0),                 context_window=131_072, input=_TEXT_IMAGE, output=_TEXT),

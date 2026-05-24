@@ -16,6 +16,11 @@ api_providers = [
     APIProvider(id="openrouter",name="OpenRouter",api="openai_completions", options=LLMOptions(base_url="https://openrouter.ai/api/v1")),
     APIProvider(id="perplexity",name="Perplexity",api="openai_responses",   options=LLMOptions(base_url="https://api.perplexity.ai/v1")),
     APIProvider(id="xai",       name="xAI",       api="openai_responses",   options=LLMOptions(base_url="https://api.x.ai/v1")),
+    APIProvider(id="bedrock",   name="AWS Bedrock", api="openai_responses", options=LLMOptions(base_url="https://bedrock-mantle.us-east-1.api.aws/v1")),
+    APIProvider(id="kimi",      name="Kimi / Moonshot", api="openai_completions", options=LLMOptions(base_url="https://api.moonshot.ai/v1")),
+    APIProvider(id="minimax",   name="MiniMax",   api="anthropic_messages", options=LLMOptions(base_url="https://api.minimax.io/anthropic")),
+    APIProvider(id="deepseek",  name="DeepSeek",  api="openai_completions", options=LLMOptions(base_url="https://api.deepseek.com")),
+    APIProvider(id="kilocode",  name="Kilo Code", api="openai_completions", options=LLMOptions(base_url="https://api.kilo.ai/api/gateway")),
     APIProvider(id="mistral",   name="Mistral",   api="mistral_chat",       options=LLMOptions()),
     APIProvider(id="ollama",    name="Ollama",    api="ollama_chat",        options=LLMOptions(base_url="http://localhost:11434")),
 ]

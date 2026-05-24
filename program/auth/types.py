@@ -1,6 +1,6 @@
 from program.inference.types import AuthType
 from dataclasses import dataclass, field
-from typing import TypeVar, Optional, Literal
+from typing import Generic, TypeVar, Optional, Literal
 
 
 @dataclass
@@ -32,6 +32,6 @@ T = TypeVar('T')
 
 
 @dataclass
-class LockResult:
+class LockResult(Generic[T]):
     result: T
     next: str | None = None

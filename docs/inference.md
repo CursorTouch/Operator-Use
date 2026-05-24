@@ -41,7 +41,7 @@ Each API is a class in `program/inference/api/text/` that wraps one HTTP endpoin
 |---|---|
 | `anthropic_messages.py` | Anthropic Messages API |
 | `anthropic_claude_code.py` | Anthropic via Claude Code OAuth |
-| `openai_completions.py` | OpenAI Chat Completions (and compatible: Groq, NVIDIA, Ollama, etc.) |
+| `openai_completions.py` | OpenAI Chat Completions (and compatible: Groq, NVIDIA, Ollama, Kimi, DeepSeek, Kilo Code, etc.) |
 | `openai_responses.py` | OpenAI Responses API |
 | `openai_codex_responses.py` | OpenAI Codex |
 | `gemini_generate.py` | Google Gemini |
@@ -435,6 +435,28 @@ Type aliases: `TextModel`, `ImageModel`, `AudioModel`, `VideoModel` — all are 
 **APIProvider** — key-based auth. The provider's `LLMOptions` carries the base URL; the API key is resolved at call time via `AuthManager`.
 
 **OAuthProvider** — OAuth token auth. At construction, `LLM` loads credentials from `AuthManager` and derives a temporary API key from the stored `OAuthCredential`.
+
+Built-in key-based text providers include:
+
+| Provider ID | API implementation | Base URL / API surface |
+|---|---|---|
+| `openai` | `openai_responses` | OpenAI Responses API |
+| `anthropic` | `anthropic_messages` | Anthropic Messages API |
+| `google` | `gemini_generate` | Google Gemini API |
+| `nvidia` | `openai_completions` | NVIDIA OpenAI-compatible API |
+| `groq` | `openai_completions` | Groq OpenAI-compatible API |
+| `openrouter` | `openai_completions` | OpenRouter OpenAI-compatible API |
+| `perplexity` | `openai_responses` | Perplexity OpenAI-compatible Responses API |
+| `xai` | `openai_responses` | xAI OpenAI-compatible Responses API |
+| `bedrock` | `openai_responses`; selected Claude models override to `anthropic_messages` | Amazon Bedrock Mantle OpenAI-compatible Responses/Chat Completions and Anthropic-compatible Messages APIs. Default region is `us-east-1`; override `LLMOptions.base_url` for another region. |
+| `kimi` | `openai_completions` | Kimi / Moonshot OpenAI-compatible Chat Completions API |
+| `minimax` | `anthropic_messages` | MiniMax Anthropic-compatible Messages API. MiniMax also exposes OpenAI-compatible Chat Completions. |
+| `deepseek` | `openai_completions` | DeepSeek OpenAI-compatible API. DeepSeek also exposes an Anthropic-compatible API. |
+| `kilocode` | `openai_completions` | Kilo Code Gateway OpenAI-compatible API |
+| `mistral` | `mistral_chat` | Mistral API |
+| `ollama` | `ollama_chat` | Local Ollama API |
+
+API keys are read from `<PROVIDER_ID>_API_KEY` by default. Hyphenated provider IDs also accept underscore-normalized env vars. `kilocode` also accepts Kilo's documented `KILO_API_KEY` alias.
 
 ### Image providers
 

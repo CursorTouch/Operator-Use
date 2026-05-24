@@ -1,20 +1,22 @@
 from abc import ABC, abstractmethod
 from program.auth.types import LockResult
 from filelock import FileLock
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, TypeVar
 from pathlib import Path
+
+T = TypeVar("T")
 
 
 class AuthStorage(ABC):
     """Abstract storage backend for auth credentials."""
 
     @abstractmethod
-    def with_lock(self, fn: Callable[[str | None], LockResult]) -> LockResult:
+    def with_lock(self, fn: Callable[[str | None], LockResult[T]]) -> LockResult[T]:
         """Execute fn with exclusive access to storage."""
         pass
 
     @abstractmethod
-    async def with_lock_async(self, fn: Callable[[str | None], Awaitable[LockResult]]) -> LockResult:
+    async def with_lock_async(self, fn: Callable[[str | None], Awaitable[LockResult[T]]]) -> LockResult[T]:
         """Execute async fn with exclusive access to storage."""
         pass
 
@@ -36,7 +38,7 @@ class FileAuthStorage(AuthStorage):
             self.store_path.write_text("{}", encoding="utf-8")
             self.store_path.chmod(0o600)
 
-    def with_lock(self, fn: Callable[[str | None], LockResult]) -> LockResult:
+    def with_lock(self, fn: Callable[[str | None], LockResult[T]]) -> LockResult[T]:
         with FileLock(self.lock_path):
             current = self.store_path.read_text(encoding="utf-8") if self.store_path.exists() else None
             result = fn(current)
@@ -45,7 +47,7 @@ class FileAuthStorage(AuthStorage):
                 self.store_path.chmod(0o600)
             return result
 
-    async def with_lock_async(self, fn: Callable[[str | None], Awaitable[LockResult]]) -> LockResult:
+    async def with_lock_async(self, fn: Callable[[str | None], Awaitable[LockResult[T]]]) -> LockResult[T]:
         with FileLock(self.lock_path):
             current = self.store_path.read_text(encoding="utf-8") if self.store_path.exists() else None
             result = await fn(current)
@@ -61,13 +63,13 @@ class InMemoryAuthStorage(AuthStorage):
     def __init__(self):
         self._value: str | None = None
 
-    def with_lock(self, fn: Callable[[str | None], LockResult]) -> LockResult:
+    def with_lock(self, fn: Callable[[str | None], LockResult[T]]) -> LockResult[T]:
         result = fn(self._value)
         if result.next is not None:
             self._value = result.next
         return result
 
-    async def with_lock_async(self, fn: Callable[[str | None], Awaitable[LockResult]]) -> LockResult:
+    async def with_lock_async(self, fn: Callable[[str | None], Awaitable[LockResult[T]]]) -> LockResult[T]:
         result = await fn(self._value)
         if result.next is not None:
             self._value = result.next
