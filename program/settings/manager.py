@@ -344,6 +344,12 @@ class SettingsManager:
         self._mark_modified("default_provider")
         self._save()
 
+    def unset_default_provider(self):
+        """Unset the default LLM provider and persist to global settings."""
+        self.global_settings.default_provider = None
+        self._mark_modified("default_provider")
+        self._save()
+
     def get_default_model(self) -> Optional[str]:
         """Return the default model ID, or None if unset."""
         return self.settings.default_model
@@ -354,6 +360,12 @@ class SettingsManager:
         self._mark_modified("default_model")
         self._save()
 
+    def unset_default_model(self):
+        """Unset the default model ID and persist to global settings."""
+        self.global_settings.default_model = None
+        self._mark_modified("default_model")
+        self._save()
+
     def set_default_model_and_provider(self, provider: str, model_id: str):
         """Set both the default provider and model in a single write."""
         self.global_settings.default_provider = provider
@@ -361,6 +373,40 @@ class SettingsManager:
         self._mark_modified("default_provider")
         self._mark_modified("default_model")
         self._save()
+
+    def set_default_model_settings(
+        self,
+        model: str | None,
+        provider: str | None,
+    ):
+        """Set default model/provider values when provided and persist them."""
+        if model is not None and provider is not None:
+            self.set_default_model_and_provider(provider, model)
+        elif model is not None:
+            self.set_default_model(model)
+        elif provider is not None:
+            self.set_default_provider(provider)
+
+    def unset_default_model_and_provider(self):
+        """Unset both the default provider and model in a single write."""
+        self.global_settings.default_provider = None
+        self.global_settings.default_model = None
+        self._mark_modified("default_provider")
+        self._mark_modified("default_model")
+        self._save()
+
+    def unset_default_model_settings(
+        self,
+        model: bool,
+        provider: bool,
+    ):
+        """Unset default model/provider values when requested and persist them."""
+        if model and provider:
+            self.unset_default_model_and_provider()
+        elif model:
+            self.unset_default_model()
+        elif provider:
+            self.unset_default_provider()
 
     def get_default_thinking_level(self) -> Optional[ThinkingLevel]:
         """Return the default thinking level, or None if unset."""

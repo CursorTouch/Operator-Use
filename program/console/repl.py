@@ -357,7 +357,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
 
 @click.command('repl')
 @click.option('--cwd', default=None, type=click.Path(exists=True, file_okay=False), help='Working directory')
-@click.option('--model', default=None, help='Model ID (e.g. claude-sonnet-4-6)')
+@click.option('--model', default=None, help='Model ID (runtime override)')
 @click.option('--provider', default=None, help='Provider override')
 @click.option(
     '--sandbox',

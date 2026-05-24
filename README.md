@@ -38,6 +38,8 @@ await runtime.user_input("explain this codebase")
 # CLI
 operator --cwd /my/project
 operator --model claude-opus-4-7 --cwd /my/project
+operator set --model claude-opus-4-7 --provider anthropic
+operator unset --model --provider
 operator --repl   # interactive Python REPL
 ```
 
