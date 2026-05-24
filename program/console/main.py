@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import asyncio
-import signal
 from pathlib import Path
 
 import click
@@ -9,39 +6,7 @@ import click
 from program.console.repl import repl
 from program.console.acp import acp
 from program.console.auth import auth
-
-
-async def _run_gateway(cwd: Path, model_id: str | None, provider: str | None, resume: bool = False, system_prompt: str | None = None) -> None:
-    from program.runtime import Runtime, RuntimeConfig
-    from program.gateway.manager import GatewayManager
-    config = RuntimeConfig(
-        cwd=cwd,
-        model_id=model_id or 'claude-sonnet-4-6',
-        provider=provider,
-        resume=resume,
-        system_prompt=system_prompt,
-    )
-    runtime = await Runtime.create(config)
-    gateway_manager = GatewayManager(runtime)
-    gateway_manager.start()
-    await asyncio.sleep(0.5)  # let channel tasks register before printing
-    channel_ids = list(gateway_manager.gateway._channels.keys())
-    channels_str = ', '.join(channel_ids) if channel_ids else 'none'
-    click.echo(f"Agent running in {cwd}  (model: {config.model_id})")
-    click.echo(f"Channels: {channels_str}")
-    click.echo("Press Ctrl-C to stop.\n")
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    loop.add_signal_handler(signal.SIGINT, stop.set)
-    loop.add_signal_handler(signal.SIGTERM, stop.set)
-    try:
-        await stop.wait()
-    finally:
-        loop.remove_signal_handler(signal.SIGINT)
-        loop.remove_signal_handler(signal.SIGTERM)
-    click.echo("\nShutting down...")
-    await gateway_manager.astop()
-    await runtime.ashutdown()
+from program.console.gateway import GatewayOptions, gateway, run_gateway_foreground
 
 
 @click.group(invoke_without_command=True)
@@ -68,7 +33,13 @@ def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | 
             ctx.invoke(repl, cwd=cwd, model=model, provider=provider, resume=resume, system_prompt=system_prompt)
         else:
             try:
-                asyncio.run(_run_gateway(cwd=cwd_path, model_id=model, provider=provider, resume=resume, system_prompt=system_prompt))
+                asyncio.run(run_gateway_foreground(GatewayOptions(
+                    cwd=cwd_path,
+                    model=model,
+                    provider=provider,
+                    resume=resume,
+                    system_prompt=system_prompt,
+                )))
             except KeyboardInterrupt:
                 pass
 
@@ -120,5 +91,10 @@ def unset_defaults(cwd: str | None, unset_model: bool, unset_provider: bool) -> 
 cli.add_command(repl)
 cli.add_command(acp)
 cli.add_command(auth)
+cli.add_command(gateway)
 cli.add_command(set_defaults)
 cli.add_command(unset_defaults)
+
+
+if __name__ == "__main__":
+    cli()

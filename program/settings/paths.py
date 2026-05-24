@@ -152,3 +152,19 @@ def get_temp_dir(cwd: Path | None = None) -> Path:
     return get_config_dir(cwd) / 'temp'
 
 
+def get_gateway_dir() -> Path:
+    """Gateway service metadata, pid files, and logs — always ~/.program/gateway/."""
+    return get_config_dir() / 'gateway'
+
+
+def get_gateway_pid_path() -> Path:
+    return get_gateway_dir() / 'gateway.pid'
+
+
+def get_gateway_stdout_path() -> Path:
+    return get_gateway_dir() / 'gateway.out.log'
+
+
+def get_gateway_stderr_path() -> Path:
+    return get_gateway_dir() / 'gateway.err.log'
+
