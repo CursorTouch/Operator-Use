@@ -5,7 +5,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Awaitable
 
-from program.bus.service import Bus
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart
 from program.commands.types import parse_command
 from program.gateway.types import BaseChannel
@@ -41,15 +40,14 @@ class Gateway:
     streams agent events back to the originating channel via the Bus.
 
     Usage:
-        bus = Bus()
-        gateway = Gateway(bus, runtime)
+        gateway = Gateway(runtime)
         gateway.register(channel)
         await gateway.start()
     """
 
-    def __init__(self, bus: Bus, runtime: Runtime) -> None:
-        self._bus = bus
+    def __init__(self, runtime: Runtime) -> None:
         self._runtime = runtime
+        self._bus = runtime.bus
         self._channels: dict[str, BaseChannel] = {}
         self._sessions: dict[str, _SessionEntry] = {}
         self._direct_handlers: dict[str, Callable[[IncomingMessage], Awaitable[None]]] = {}
@@ -250,11 +248,7 @@ class Gateway:
         if session_key not in self._sessions:
             # `unified_session` (default True) shares the REPL agent across all channels.
             # When False, each channel:chat_id pair gets its own isolated agent.
-            settings = self._runtime._context.settings_manager
-            unified = True
-            if settings is not None and settings.settings.unified_session is not None:
-                unified = settings.settings.unified_session
-            if unified:
+            if self._runtime.unified_session_enabled:
                 agent = self._runtime.current_session
                 if agent is None:
                     raise RuntimeError("No active session available.")

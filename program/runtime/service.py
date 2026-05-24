@@ -5,9 +5,9 @@ from pathlib import Path
 from program.runtime.types import RuntimeConfig, RuntimeContext
 from program.agent.service import Agent
 from program.agent.types import PromptOptions
+from program.bus.service import Bus
 from program.cron.types import CronJob
 from program.commands.registry import CommandRegistry
-from program.gateway.manager import GatewayManager
 from program.subagent.manager import SubagentManager
 from program.commands.types import parse_command
 from program.extension.types import (
@@ -32,9 +32,11 @@ class Runtime:
         self,
         context: RuntimeContext,
         config: RuntimeConfig,
+        bus: Bus | None = None,
     ) -> None:
         self._context = context
         self._config = config
+        self.bus = bus or Bus()
         self.commands = CommandRegistry(
             runtime=self,
             discovered=self._context.resource_loader.get_commands(),
@@ -51,19 +53,23 @@ class Runtime:
             context.cron.on_job = self._handle_cron_job
             context.cron.start()
 
-        # Start gateway channels (skipped when gateway=False, e.g. acp serve)
-        self.gateway_manager = GatewayManager(self, context.settings_manager, context.auth_manager)
-        if config.gateway:
-            self.gateway_manager.start()
+        self.subagent_manager = self._create_subagent_manager(context)
+        # Expose MCPManager for use in create_session_agent() and shutdown.
+        self.mcp_manager = context.mcp_manager
+        self._configure_context(context)
 
-        self.subagent_manager = SubagentManager(
+    def _create_subagent_manager(self, context: RuntimeContext) -> SubagentManager:
+        return SubagentManager(
             llm=context.llm,
             tools=context.engine.tools,
-            bus=self.gateway_manager._bus,
+            bus=self.bus,
             settings=context.subagent_settings,
             hooks=context.hooks,
             profiles=context.resource_loader.get_subagent_profiles(),
         )
+
+    def _configure_context(self, context: RuntimeContext) -> None:
+        """Attach runtime-owned services to the active engine/tool context."""
         context.engine.tool_context = ToolContext(
             llm=context.llm,
             engine=context.engine,
@@ -73,7 +79,7 @@ class Runtime:
             extension_runtime=context.extension_runtime,
             hooks=context.hooks,
             subagent_manager=self.subagent_manager,
-            bus=self.gateway_manager._bus,
+            bus=self.bus,
             cron=context.cron,
             mcp_manager=context.mcp_manager,
             process_manager=context.process_manager,
@@ -82,8 +88,6 @@ class Runtime:
             acp_auth=context.acp_auth,
             acp_manager=context.acp_manager,
         )
-        # Expose MCPManager for use in create_session_agent() and shutdown.
-        self.mcp_manager = context.mcp_manager
 
     # -------------------------------------------------------------------------
     # Factory
@@ -110,6 +114,21 @@ class Runtime:
     @property
     def session_manager(self):
         return self._context.session_manager
+
+    @property
+    def settings_manager(self):
+        return self._context.settings_manager
+
+    @property
+    def auth_manager(self):
+        return self._context.auth_manager
+
+    @property
+    def unified_session_enabled(self) -> bool:
+        settings = self._context.settings_manager
+        if settings is not None and settings.settings.unified_session is not None:
+            return settings.settings.unified_session
+        return True
 
     # -------------------------------------------------------------------------
     # Core input entry point
@@ -174,6 +193,7 @@ class Runtime:
 
         # Refresh named subagent profiles.
         self.subagent_manager.update_profiles(resource_loader.get_subagent_profiles())
+        self._configure_context(self._context)
 
     async def new_session(self) -> None:
         """Shut down the current session and start a fresh one."""
@@ -189,6 +209,9 @@ class Runtime:
         )
         if self._context.agent is not None:
             self._context.agent._runtime = self
+        self.mcp_manager = self._context.mcp_manager
+        self.subagent_manager = self._create_subagent_manager(self._context)
+        self._configure_context(self._context)
         await self._emit_session_start('new')
 
     async def resume_session(self, session_file: Path) -> None:
@@ -213,6 +236,9 @@ class Runtime:
         )
         if self._context.agent is not None:
             self._context.agent._runtime = self
+        self.mcp_manager = self._context.mcp_manager
+        self.subagent_manager = self._create_subagent_manager(self._context)
+        self._configure_context(self._context)
         await self._emit_session_start('resume')
 
     async def fork_session(self, from_entry_id: str) -> None:
@@ -282,7 +308,7 @@ class Runtime:
                 registry=list(main_acp._registry.values()),  # type: ignore[attr-defined]
                 session_manager=main_acp._session_manager,   # type: ignore[attr-defined]
                 auth_manager=main_acp._auth,                 # type: ignore[attr-defined]
-                bus=self.gateway_manager._bus,
+                bus=self.bus,
                 agent=None,
                 settings_manager=main_acp._settings_manager,  # type: ignore[attr-defined]
             ))
@@ -308,7 +334,7 @@ class Runtime:
             extension_runtime=real_ext,
             hooks=hooks,
             subagent_manager=self.subagent_manager,
-            bus=self.gateway_manager._bus,
+            bus=self.bus,
             cron=self._context.cron,
             mcp_manager=self.mcp_manager,
             process_manager=self._context.process_manager,
@@ -321,27 +347,19 @@ class Runtime:
         return agent
 
     def shutdown(self) -> None:
-        """Stop background services (cron, gateway channels, MCP). Call when exiting the REPL."""
+        """Stop runtime-owned background services. Call when exiting the REPL."""
         if self._context.cron is not None:
             self._context.cron.stop()
-        self.gateway_manager.stop()
         if self.mcp_manager is not None:
             import asyncio
             asyncio.get_event_loop().create_task(self.mcp_manager.disconnect_all())
 
     async def ashutdown(self) -> None:
-        """Await full teardown so channel backends shut down cleanly.
-
-        Preferred over the sync ``shutdown()`` when called from a running event
-        loop (REPL, console): it awaits channel disconnects to completion so
-        library backends don't emit CancelledError tracebacks when the loop
-        closes immediately after.
-        """
+        """Await full teardown of runtime-owned services."""
         if self._context.cron is not None:
             self._context.cron.stop()
         if self._context.process_manager is not None:
             await self._context.process_manager.close()
-        await self.gateway_manager.astop()
         if self.mcp_manager is not None:
             try:
                 await self.mcp_manager.disconnect_all()
@@ -362,18 +380,17 @@ class Runtime:
         chat_id = job.payload.chat_id
 
         from program.bus.types import IncomingMessage, OutgoingMessage, TextPart
-        bus = self.gateway_manager._bus
         target_channel = channel_id or 'stdio'
         target_chat_id = chat_id or 'cli'
 
         if job.payload.deliver:
-            await bus.publish_outgoing(OutgoingMessage(
+            await self.bus.publish_outgoing(OutgoingMessage(
                 channel=target_channel,
                 chat_id=target_chat_id,
                 parts=[TextPart(content=job.payload.message)],
             ))
         else:
-            await bus.publish_incoming(IncomingMessage(
+            await self.bus.publish_incoming(IncomingMessage(
                 channel=target_channel,
                 chat_id=target_chat_id,
                 parts=[TextPart(content=job.payload.message)],

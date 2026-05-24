@@ -65,9 +65,6 @@ class RuntimeConfig(BaseModel):
     # Sandbox
     sandbox: str | None = None  # 'strict' | 'enforce' | 'warn' | None (off)
 
-    # Gateway
-    gateway: bool = True  # set False to skip channel startup (e.g. acp serve)
-
     # Compaction
     compaction_enabled: bool = True
     compaction_reserve_tokens: int = 16384
@@ -266,7 +263,7 @@ class RuntimeContext:
             registry=settings_manager.get_acp_agents(),
             session_manager=acp_manager,
             auth_manager=acp_auth,
-            bus=None,   # bus not yet available; Runtime.create() re-wires after gateway starts
+            bus=None,   # Runtime attaches the shared bus through ToolContext.
             agent=None,
             settings_manager=settings_manager,
         ))

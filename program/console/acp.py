@@ -59,7 +59,6 @@ async def _run_serve(cwd: str | None, model_id: str | None, provider: str | None
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
         sandbox=sandbox if sandbox != 'off' else None,
-        gateway=False,
     )
     runtime = await Runtime.create(config)
     await serve_stdio(runtime)
@@ -111,7 +110,6 @@ async def _run_serve_http(
         cwd=cwd_path,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
-        gateway=False,
     )
     runtime = await Runtime.create(config)
     await _serve_http(runtime, host=host, port=port)
@@ -166,7 +164,6 @@ async def _run_serve_webrtc(
         cwd=cwd_path,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
-        gateway=False,
     )
     runtime = await Runtime.create(config)
     await _serve_webrtc(runtime, room=room, signal_url=signal_url or DEFAULT_SIGNAL_URL)

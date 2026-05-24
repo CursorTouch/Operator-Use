@@ -13,6 +13,7 @@ from program.console.auth import auth
 
 async def _run_gateway(cwd: Path, model_id: str | None, provider: str | None, resume: bool = False, system_prompt: str | None = None) -> None:
     from program.runtime import Runtime, RuntimeConfig
+    from program.gateway.manager import GatewayManager
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
@@ -21,8 +22,10 @@ async def _run_gateway(cwd: Path, model_id: str | None, provider: str | None, re
         system_prompt=system_prompt,
     )
     runtime = await Runtime.create(config)
+    gateway_manager = GatewayManager(runtime)
+    gateway_manager.start()
     await asyncio.sleep(0.5)  # let channel tasks register before printing
-    channel_ids = list(runtime.gateway_manager.gateway._channels.keys()) if runtime.gateway_manager else []
+    channel_ids = list(gateway_manager.gateway._channels.keys())
     channels_str = ', '.join(channel_ids) if channel_ids else 'none'
     click.echo(f"Agent running in {cwd}  (model: {config.model_id})")
     click.echo(f"Channels: {channels_str}")
@@ -37,6 +40,7 @@ async def _run_gateway(cwd: Path, model_id: str | None, provider: str | None, re
         loop.remove_signal_handler(signal.SIGINT)
         loop.remove_signal_handler(signal.SIGTERM)
     click.echo("\nShutting down...")
+    await gateway_manager.astop()
     await runtime.ashutdown()
 
 

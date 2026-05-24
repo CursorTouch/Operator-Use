@@ -4,57 +4,49 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from program.bus.service import Bus
 from program.gateway.service import Gateway
 from program.hooks.types import GatewayStartupEvent, GatewayStopEvent
 
 if TYPE_CHECKING:
     from program.runtime.service import Runtime
-    from program.settings.manager import SettingsManager
-    from program.auth.channels import ChannelAuthManager as AuthManager
 
 logger = logging.getLogger(__name__)
 
 
 class GatewayManager:
     """
-    Owns the Gateway, Bus, and all channel lifecycles.
+    Owns the Gateway and all channel lifecycles.
 
-    Created in Runtime.__init__() after the Runtime itself exists.
-    start() spins up the gateway processing loops and each enabled channel as
-    asyncio Tasks; stop() cancels them all.
+    Created by application entrypoints after the Runtime exists. start() spins
+    up the gateway processing loops and each enabled channel as asyncio Tasks;
+    stop() cancels them all.
 
     Channels that are disabled or missing required tokens are silently skipped
     with a log warning so a misconfigured channel never crashes the agent.
 
-    Usage (handled automatically by Runtime):
-        gm = GatewayManager(runtime, settings_manager, auth_manager)
+    Usage:
+        gm = GatewayManager(runtime)
         gm.start()
         ...
         gm.stop()
     """
 
-    def __init__(
-        self,
-        runtime: Runtime,
-        settings_manager: SettingsManager | None,
-        auth_manager: AuthManager | None,
-    ) -> None:
+    def __init__(self, runtime: Runtime) -> None:
         self._runtime = runtime
-        self._settings = settings_manager
-        self._auth = auth_manager
-        self._bus = Bus()
-        self.gateway = Gateway(self._bus, runtime)
+        self._settings = runtime.settings_manager
+        self._auth = runtime.auth_manager
+        self.gateway = Gateway(runtime)
         self._tasks: list[asyncio.Task] = []
+        self._gateway_task: asyncio.Task | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self) -> None:
         """Start gateway processing loops and all enabled channels as background asyncio tasks."""
-        # Start the gateway event loops
-        asyncio.get_event_loop().create_task(
-            self.gateway.start(), name='gateway:main'
-        )
+        if self._gateway_task is None or self._gateway_task.done():
+            self._gateway_task = asyncio.create_task(
+                self.gateway.start(), name='gateway:main'
+            )
 
         if self._settings is None or self._auth is None:
             return
@@ -116,6 +108,9 @@ class GatewayManager:
         for task in self._tasks:
             task.cancel()
         self._tasks.clear()
+        if self._gateway_task is not None:
+            self._gateway_task.cancel()
+            self._gateway_task = None
 
     async def astop(self) -> None:
         """Await full channel teardown before the event loop closes.
@@ -141,6 +136,12 @@ class GatewayManager:
                 pass
         self._tasks.clear()
         await self.gateway.stop()
+        if self._gateway_task is not None:
+            try:
+                await self._gateway_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._gateway_task = None
 
     # ── Internal task helpers ─────────────────────────────────────────────────
 

@@ -222,6 +222,9 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     print("Type /help for commands. Esc = cancel agent, Ctrl-C twice or /quit = exit.\n")
 
     runtime = await Runtime.create(config)
+    from program.gateway.manager import GatewayManager
+    gateway_manager = GatewayManager(runtime)
+    gateway_manager.start()
     subscribed_session, unsubscribe_renderer = _bind_renderer(runtime, None, None)
 
     # Mark this task as the 'stdio' CLI session so subagents know to route
@@ -264,7 +267,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
             except Exception:
                 pass
 
-    runtime.gateway_manager.gateway.register_direct_handler('stdio', _on_stdio_message)
+    gateway_manager.gateway.register_direct_handler('stdio', _on_stdio_message)
     stdio_consumer_task = asyncio.create_task(_stdio_consumer(), name='repl:stdio_consumer')
 
     cancel: asyncio.Event = asyncio.Event()
@@ -350,6 +353,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
         pass
     if unsubscribe_renderer is not None:
         unsubscribe_renderer()
+    await gateway_manager.astop()
     await runtime.ashutdown()
 
 
