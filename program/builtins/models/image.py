@@ -35,7 +35,7 @@ models = [
     Model(id="openai/gpt-5.4-image-2",  name="GPT-5.4 Image 2",  provider="openrouter", cost=Cost(input=8.00,  output=15.00), input=_TEXT_IMAGE, output=_TEXT_IMAGE_OUT),
     # ByteDance
     Model(id="bytedance/seedream-4.5", name="Seedream 4.5", provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
-    # Sourceful Riverflow
+    # Sourceful Riverflow via OpenRouter
     Model(id="sourceful/riverflow-v2",       name="Riverflow V2",       provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
     Model(id="sourceful/riverflow-v2-turbo", name="Riverflow V2 Turbo", provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
     Model(id="sourceful/riverflow-v2-max",   name="Riverflow V2 Max",   provider="openrouter", cost=Cost(), input=_TEXT_IMAGE, output=_IMAGE),
