@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field, model_validator
 
 from program.subagent.manager import _session_channel, _session_chat_id, _session_message_id
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
     from program.bus.service import Bus
@@ -117,8 +117,10 @@ class SendTool(Tool):
         invocation: ToolInvocation,
         tool_execution_update_callback=None,
         signal=None,
+        context: ToolContext | None = None,
     ) -> ToolResult:
-        if self._bus is None:
+        bus = self._bus or (context.bus if context else None)
+        if bus is None:
             return ToolResult.error(id=invocation.id, content='send: bus is not available.')
 
         channel = _session_channel.get()
@@ -135,11 +137,11 @@ class SendTool(Tool):
 
         match action:
             case SendAction.file:
-                return await self._send_file(invocation, channel, chat_id, params)
+                return await self._send_file(invocation, channel, chat_id, params, bus)
             case SendAction.intermediate:
-                return await self._send_intermediate(invocation, channel, chat_id, params)
+                return await self._send_intermediate(invocation, channel, chat_id, params, bus)
             case SendAction.react:
-                return await self._send_react(invocation, channel, chat_id, params)
+                return await self._send_react(invocation, channel, chat_id, params, bus)
             case _:
                 return ToolResult.error(id=invocation.id, content=f"send: unknown action '{action}'.")
 
@@ -149,6 +151,7 @@ class SendTool(Tool):
         channel: str,
         chat_id: str,
         params: dict,
+        bus,
     ) -> ToolResult:
         from program.bus.types import OutgoingMessage, FilePart, TextPart
 
@@ -173,7 +176,7 @@ class SendTool(Tool):
             if target_id:
                 metadata['reply_to'] = target_id
 
-        await self._bus.publish_outgoing(OutgoingMessage(channel=channel, chat_id=chat_id, parts=parts, metadata=metadata))  # type: ignore[union-attr]
+        await bus.publish_outgoing(OutgoingMessage(channel=channel, chat_id=chat_id, parts=parts, metadata=metadata))
         return ToolResult.ok(
             id=invocation.id,
             content=f'File sent: {path.name}' + (f' — {caption}' if caption else ''),
@@ -185,6 +188,7 @@ class SendTool(Tool):
         channel: str,
         chat_id: str,
         params: dict,
+        bus,
     ) -> ToolResult:
         from program.bus.types import OutgoingMessage, TextPart
 
@@ -197,7 +201,7 @@ class SendTool(Tool):
             if target_id:
                 metadata['reply_to'] = target_id
 
-        await self._bus.publish_outgoing(OutgoingMessage(channel=channel, chat_id=chat_id, parts=[TextPart(text)], metadata=metadata))  # type: ignore[union-attr]
+        await bus.publish_outgoing(OutgoingMessage(channel=channel, chat_id=chat_id, parts=[TextPart(text)], metadata=metadata))
         return ToolResult.ok(id=invocation.id, content='Intermediate message sent.')
 
     async def _send_react(
@@ -206,6 +210,7 @@ class SendTool(Tool):
         channel: str,
         chat_id: str,
         params: dict,
+        bus,
     ) -> ToolResult:
         from program.bus.types import OutgoingMessage
 
@@ -218,7 +223,7 @@ class SendTool(Tool):
                 content='send react: no message_id available — provide message_id or ensure this is triggered by a channel message.',
             )
 
-        await self._bus.publish_outgoing(OutgoingMessage(  # type: ignore[union-attr]
+        await bus.publish_outgoing(OutgoingMessage(
             channel=channel,
             chat_id=chat_id,
             metadata={'kind': 'react', 'message_id': target_id, 'emoji': emoji},

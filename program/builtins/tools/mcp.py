@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
     from program.engine.service import Engine
@@ -66,8 +66,11 @@ class MCPTool(Tool):
         invocation: ToolInvocation,
         tool_execution_update_callback=None,
         signal=None,
+        context: ToolContext | None = None,
     ) -> ToolResult:
-        if self._manager is None:
+        manager = self._manager or (context.mcp_manager if context else None)
+        engine = self._engine or (context.engine if context else None)
+        if manager is None:
             return ToolResult.error(
                 id=invocation.id,
                 content='MCP is not configured. Add mcpServers to settings.json to enable it.',
@@ -78,7 +81,7 @@ class MCPTool(Tool):
 
         match action:
             case 'list':
-                servers = self._manager.list_servers()
+                servers = manager.list_servers()
                 if not servers:
                     return ToolResult.ok(
                         id=invocation.id,
@@ -94,13 +97,13 @@ class MCPTool(Tool):
                 return ToolResult.ok(id=invocation.id, content='\n'.join(lines))
 
             case 'connect':
-                if self._manager.is_connected(self._agent_id, server_name):
+                if manager.is_connected(self._agent_id, server_name):
                     return ToolResult.error(
                         id=invocation.id,
                         content=f"Already connected to {server_name!r}.",
                     )
                 try:
-                    tools = await self._manager.connect(self._agent_id, server_name)
+                    tools = await manager.connect(self._agent_id, server_name)
                 except ValueError as exc:
                     return ToolResult.error(id=invocation.id, content=str(exc))
                 except Exception as exc:
@@ -109,10 +112,10 @@ class MCPTool(Tool):
 
                 registered, skipped = [], []
                 for t in tools:
-                    if t.name in self._engine._tools:
+                    if engine is None or t.name in engine._tools:
                         skipped.append(t.name)
                     else:
-                        self._engine.add_tool(t)
+                        engine.add_tool(t)
                         registered.append(t.name)
 
                 lines = [f"Connected to {server_name!r}. Loaded {len(registered)} tool(s):"]
@@ -123,19 +126,20 @@ class MCPTool(Tool):
                 return ToolResult.ok(id=invocation.id, content='\n'.join(lines))
 
             case 'disconnect':
-                if not self._manager.is_connected(self._agent_id, server_name):
+                if not manager.is_connected(self._agent_id, server_name):
                     return ToolResult.error(
                         id=invocation.id,
                         content=f"Not connected to {server_name!r}.",
                     )
                 try:
-                    tool_names = await self._manager.disconnect(self._agent_id, server_name)
+                    tool_names = await manager.disconnect(self._agent_id, server_name)
                 except Exception as exc:
                     logger.exception('Failed to disconnect from MCP server %r', server_name)
                     return ToolResult.error(id=invocation.id, content=f"Failed to disconnect from {server_name!r}: {exc}")
 
                 for name in tool_names:
-                    self._engine.remove_tool(name)
+                    if engine is not None:
+                        engine.remove_tool(name)
 
                 lines = [f"Disconnected from {server_name!r}. Removed {len(tool_names)} tool(s):"]
                 for name in tool_names:

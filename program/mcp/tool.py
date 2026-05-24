@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional, Type
 
 from pydantic import BaseModel
 
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
     from fastmcp import Client
@@ -59,6 +59,7 @@ class MCPTool(Tool):
         invocation: ToolInvocation,
         tool_execution_update_callback=None,
         signal: Optional[Any] = None,
+        context: ToolContext | None = None,
     ) -> ToolResult:
         # Strip internal kwargs (keys starting with '_') before forwarding.
         schema_props: set[str] = set()

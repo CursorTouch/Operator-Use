@@ -21,6 +21,27 @@ from program.message.types import UserMessage, ToolCallContent, Role
 from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 
+class TestToolContext:
+    @pytest.mark.asyncio
+    async def test_tool_receives_engine_context(self):
+        seen = {}
+
+        class ContextTool(Tool):
+            async def execute(self, invocation, context=None, **kwargs):
+                seen["context"] = context
+                return ToolResult.ok(invocation.id, "ok")
+
+        llm = FakeLLM(tool_call_seq("t1", "ctx"), text_seq())
+        tool = ContextTool(name="ctx", description="x", schema=AnyParams, kind=ToolKind.Read)
+        engine = Engine(llm=llm, tools=[tool])
+
+        await engine.run([UserMessage.text("go")])
+
+        assert seen["context"] is engine.tool_context
+        assert seen["context"].llm is llm
+        assert seen["context"].engine is engine
+
+
 class TestParallelExecution:
     @pytest.mark.asyncio
     async def test_parallel_tools_run_concurrently(self):

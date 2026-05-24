@@ -67,11 +67,6 @@ def get_sessions_dir() -> Path:
     return get_agent_dir() / "sessions"
 
 
-def get_gateway_sessions_dir() -> Path:
-    """Storage for gateway (channel) sessions and the channel:chat_id index."""
-    return get_agent_dir() / "gateway_sessions"
-
-
 def get_packages_dir(cwd: Path | None = None) -> Path:
     return get_agent_dir(cwd) / "packages"
 

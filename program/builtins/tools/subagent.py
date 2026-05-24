@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, Field
 
 from program.subagent.types import SubagentStatus
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
     from program.subagent.manager import SubagentManager
@@ -91,8 +91,10 @@ class SubagentTool(Tool):
         invocation: ToolInvocation,
         tool_execution_update_callback=None,
         signal=None,
+        context: ToolContext | None = None,
     ) -> ToolResult:
-        if self._manager is None:
+        manager = self._manager or (context.subagent_manager if context else None)
+        if manager is None:
             return ToolResult.error(id=invocation.id, content='SubagentManager is not available.')
 
         params = invocation.params
@@ -106,7 +108,7 @@ class SubagentTool(Tool):
 
                 profile = params.get('profile') or ''
                 if not profile:
-                    available = ', '.join(p.name for p in self._manager.list_profiles()) or 'none'
+                    available = ', '.join(p.name for p in manager.list_profiles()) or 'none'
                     return ToolResult.error(
                         id=invocation.id,
                         content=f"'profile' is required for action='create'. Available profiles: {available}",
@@ -116,7 +118,7 @@ class SubagentTool(Tool):
                 depends_on = params.get('depends_on')
 
                 try:
-                    task_id = await self._manager.invoke(
+                    task_id = await manager.invoke(
                         task, label=label, depends_on=depends_on, profile=profile,
                     )
                 except ValueError as exc:
@@ -132,7 +134,7 @@ class SubagentTool(Tool):
                 return ToolResult(id=invocation.id, content=msg, terminate=True)
 
             case 'list':
-                records = self._manager.list_all()
+                records = manager.list_all()
                 if not records:
                     return ToolResult.ok(id=invocation.id, content='No subagents have been created yet.')
 
@@ -156,7 +158,7 @@ class SubagentTool(Tool):
                 task_id = params.get('task_id')
                 if not task_id:
                     return ToolResult.error(id=invocation.id, content="'task_id' is required for action='status'.")
-                record = self._manager.get_record(task_id)
+                record = manager.get_record(task_id)
                 if not record:
                     return ToolResult.error(id=invocation.id, content=f"No subagent found with task_id='{task_id}'.")
 
@@ -182,9 +184,9 @@ class SubagentTool(Tool):
                 task_id = params.get('task_id')
                 if not task_id:
                     return ToolResult.error(id=invocation.id, content="'task_id' is required for action='cancel'.")
-                if self._manager.cancel(task_id):
+                if manager.cancel(task_id):
                     return ToolResult.ok(id=invocation.id, content=f'Subagent {task_id} cancelled.')
-                record = self._manager.get_record(task_id)
+                record = manager.get_record(task_id)
                 if record:
                     return ToolResult.error(
                         id=invocation.id,
@@ -193,7 +195,7 @@ class SubagentTool(Tool):
                 return ToolResult.error(id=invocation.id, content=f"No subagent found with task_id='{task_id}'.")
 
             case 'profiles':
-                profiles = self._manager.list_profiles()
+                profiles = manager.list_profiles()
                 if not profiles:
                     return ToolResult.ok(id=invocation.id, content='No subagent profiles are available.')
                 lines = [f'Available subagent profiles ({len(profiles)}):']

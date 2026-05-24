@@ -16,7 +16,7 @@ from program.inference.types import (
     ErrorEvent, EndEvent, TextDeltaEvent, TextEndEvent,
     ThinkingDeltaEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
 )
-from program.tool.types import ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import ToolContext, ToolExecutionMode, ToolInvocation, ToolResult
 from program.message.types import AssistantMessage, ToolCallContent, Role, Usage
 
 if TYPE_CHECKING:
@@ -50,6 +50,7 @@ class Engine:
         self.options = options or Options()
         self._hooks = hooks
         self._tools: dict[str, Tool] = {t.name: t for t in (tools or [])}
+        self.tool_context = ToolContext(llm=llm, engine=self, hooks=hooks)
         self.state = AgentState(
             llm=llm,
             tools=tools,
@@ -214,6 +215,7 @@ class Engine:
                 invocation=invocation,
                 tool_execution_update_callback=on_update,
                 signal=signal,
+                context=self.tool_context,
             )
             if self.options.after_tool_call is not None:
                 raw = await self.options.after_tool_call(invocation, raw, signal) or raw

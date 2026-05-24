@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from program.tool.types import (
     Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult,
-    ToolExecutionUpdateCallback, AbortSignal,
+    ToolExecutionUpdateCallback, AbortSignal, ToolContext,
 )
 
 if TYPE_CHECKING:
@@ -107,39 +107,53 @@ class ACPAgentTool(Tool):
 
     # ── Tool entry point ──────────────────────────────────────────────────────
 
-    async def execute(self, invocation: ToolInvocation, tool_execution_update_callback: ToolExecutionUpdateCallback | None = None, signal: AbortSignal | None = None) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback: ToolExecutionUpdateCallback | None = None,
+        signal: AbortSignal | None = None,
+        context: ToolContext | None = None,
+    ) -> ToolResult:
         params = _ACPSchema.model_validate(invocation.params)
 
-        if params.action == 'agents':
-            return ToolResult.ok(invocation.id, self._list_agents())
+        match params.action:
+            case 'agents':
+                return ToolResult.ok(invocation.id, self._list_agents())
 
-        if params.action == 'sessions':
-            return ToolResult.ok(invocation.id, self._list_sessions())
+            case 'sessions':
+                return ToolResult.ok(invocation.id, self._list_sessions())
 
-        # action == 'run'
-        name = params.agent
-        config = self._registry.get(name)  # type: ignore[arg-type]
-        if config is None:
-            known = ', '.join(self._registry) or '(none configured)'
-            return ToolResult.error(
-                invocation.id,
-                f"Agent '{name}' is not in the registry. Registered agents: {known}",
-            )
+            case 'run':
+                name = params.agent
+                config = self._registry.get(name)  # type: ignore[arg-type]
+                if config is None:
+                    known = ', '.join(self._registry) or '(none configured)'
+                    return ToolResult.error(
+                        invocation.id,
+                        f"Agent '{name}' is not in the registry. Registered agents: {known}",
+                    )
 
-        # Capture channel/chat_id from contextvar before spawning
-        from program.subagent.manager import _session_channel, _session_chat_id
-        channel = _session_channel.get()
-        chat_id = _session_chat_id.get()
-        caller_agent = self._agent
+                # Capture channel/chat_id from contextvar before spawning
+                from program.subagent.manager import _session_channel, _session_chat_id
+                channel = _session_channel.get()
+                chat_id = _session_chat_id.get()
+                caller_agent = self._agent or (context.agent if context else None)
+                bus = self._bus or (context.bus if context else None)
 
-        asyncio.create_task(
-            self._run_task(config, params.task, channel, chat_id, caller_agent)  # type: ignore[arg-type]
-        )
-        return ToolResult.ok(
-            invocation.id,
-            f"Task dispatched to '{name}'. "
-            "The result will arrive as a follow-up message when the agent finishes.",
-        )
+                asyncio.create_task(
+                    self._run_task(config, params.task, channel, chat_id, caller_agent, bus)  # type: ignore[arg-type]
+                )
+                return ToolResult.ok(
+                    invocation.id,
+                    f"Task dispatched to '{name}'. "
+                    "The result will arrive as a follow-up message when the agent finishes.",
+                )
+
+            case _:
+                return ToolResult.error(
+                    invocation.id,
+                    f"Unknown action '{params.action}'.",
+                )
 
     # ── List helpers ──────────────────────────────────────────────────────────
 
@@ -178,61 +192,63 @@ class ACPAgentTool(Tool):
         channel: str | None,
         chat_id: str | None,
         caller_agent: Agent | None,
+        bus: Bus | None,
     ) -> None:
         from program.acp.client import ACPClient
 
         logger.info('ACP task start | agent=%s transport=%s', config.name, config.transport)
         result_text: str
         try:
-            if config.transport == 'stdio':
-                if not config.command:
-                    raise ValueError(f"ACP agent '{config.name}' requires a command for stdio transport")
-                args = list(config.args)
-                if config.name in _BUILTIN_AGENTS and self._settings_manager is not None:
-                    provider = self._settings_manager.get_default_provider()
-                    model = self._settings_manager.get_default_model()
-                    if not provider:
-                        # No explicit default — prefer anthropic-claude-code, then first authenticated.
-                        try:
-                            import json as _json
-                            from program.settings.paths import get_providers_auth_path
-                            _p = get_providers_auth_path()
-                            if _p.exists():
-                                _creds = _json.loads(_p.read_text())
-                                if _creds:
-                                    provider = 'anthropic-claude-code' if 'anthropic-claude-code' in _creds else next(iter(_creds))
-                        except Exception:
-                            pass
-                    if not model and provider:
-                        # Pick the first registered model for this provider.
-                        try:
-                            from program.inference.model.registry import ModelRegistry
-                            _reg = ModelRegistry.from_llm_builtins()
-                            for _candidates in _reg._models.values():
-                                for _m in (_candidates if isinstance(_candidates, list) else [_candidates]):
-                                    if getattr(_m, 'provider', None) == provider:
-                                        model = _m.id
+            match config.transport:
+                case 'stdio':
+                    if not config.command:
+                        raise ValueError(f"ACP agent '{config.name}' requires a command for stdio transport")
+                    args = list(config.args)
+                    if config.name in _BUILTIN_AGENTS and self._settings_manager is not None:
+                        provider = self._settings_manager.get_default_provider()
+                        model = self._settings_manager.get_default_model()
+                        if not provider:
+                            # No explicit default — prefer anthropic-claude-code, then first authenticated.
+                            try:
+                                import json as _json
+                                from program.settings.paths import get_providers_auth_path
+                                _p = get_providers_auth_path()
+                                if _p.exists():
+                                    _creds = _json.loads(_p.read_text())
+                                    if _creds:
+                                        provider = 'anthropic-claude-code' if 'anthropic-claude-code' in _creds else next(iter(_creds))
+                            except Exception:
+                                pass
+                        if not model and provider:
+                            # Pick the first registered model for this provider.
+                            try:
+                                from program.inference.model.registry import ModelRegistry
+                                _reg = ModelRegistry.from_llm_builtins()
+                                for _candidates in _reg._models.values():
+                                    for _m in (_candidates if isinstance(_candidates, list) else [_candidates]):
+                                        if getattr(_m, 'provider', None) == provider:
+                                            model = _m.id
+                                            break
+                                    if model:
                                         break
-                                if model:
-                                    break
-                        except Exception:
-                            pass
-                    if provider:
-                        args += ['--provider', provider]
-                    if model:
-                        args += ['--model', model]
-                client = ACPClient.stdio(config.command, *args)
-            elif config.transport == 'http':
-                if not config.url:
-                    raise ValueError(f"ACP agent '{config.name}' requires a url for http transport")
-                token = self._auth.get_token(config.name)
-                client = ACPClient.http(config.url, token=token)
-            elif config.transport == 'webrtc':
-                if not config.url:
-                    raise ValueError(f"ACP agent '{config.name}' requires a room in url for webrtc transport")
-                client = ACPClient.webrtc(config.url)
-            else:
-                raise ValueError(f"Unknown ACP transport {config.transport!r} for agent '{config.name}'")
+                            except Exception:
+                                pass
+                        if provider:
+                            args += ['--provider', provider]
+                        if model:
+                            args += ['--model', model]
+                    client = ACPClient.stdio(config.command, *args)
+                case 'http':
+                    if not config.url:
+                        raise ValueError(f"ACP agent '{config.name}' requires a url for http transport")
+                    token = self._auth.get_token(config.name)
+                    client = ACPClient.http(config.url, token=token)
+                case 'webrtc':
+                    if not config.url:
+                        raise ValueError(f"ACP agent '{config.name}' requires a room in url for webrtc transport")
+                    client = ACPClient.webrtc(config.url)
+                case _:
+                    raise ValueError(f"Unknown ACP transport {config.transport!r} for agent '{config.name}'")
 
             async with client as c:
                 async with c.session() as session_id:
@@ -250,7 +266,7 @@ class ACPAgentTool(Tool):
             logger.exception('ACP task failed | agent=%s', config.name)
             content = f"Agent '{config.name}' failed with error: {exc}"
 
-        await self._deliver(content, channel, chat_id, caller_agent)
+        await self._deliver(content, channel, chat_id, caller_agent, bus)
 
     async def _deliver(
         self,
@@ -258,8 +274,9 @@ class ACPAgentTool(Tool):
         channel: str | None,
         chat_id: str | None,
         caller_agent: Agent | None,
+        bus: Bus | None,
     ) -> None:
-        if channel and chat_id and self._bus is not None:
+        if channel and chat_id and bus is not None:
             from program.bus.types import IncomingMessage, TextPart
             msg = IncomingMessage(
                 channel=channel,
@@ -268,7 +285,7 @@ class ACPAgentTool(Tool):
                 user_id='acp_agent',
                 metadata={'source': 'acp_agent', 'target_agent': caller_agent},
             )
-            await self._bus.publish_incoming(msg)
-        elif self._agent is not None:
+            await bus.publish_incoming(msg)
+        elif caller_agent is not None:
             from program.agent.types import PromptOptions
-            await self._agent.invoke(content, PromptOptions(source='subagent'))
+            await caller_agent.invoke(content, PromptOptions(source='subagent'))

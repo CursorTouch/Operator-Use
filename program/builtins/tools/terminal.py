@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 from pydantic import BaseModel, Field
 from program.tool.types import (
     Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult,
-    ToolExecutionUpdateCallback, AbortSignal,
+    ToolExecutionUpdateCallback, AbortSignal, ToolContext,
 )
 
 if TYPE_CHECKING:
@@ -124,6 +124,7 @@ class TerminalTool(Tool):
         invocation: ToolInvocation,
         tool_execution_update_callback: Optional[ToolExecutionUpdateCallback] = None,
         signal: Optional[AbortSignal] = None,
+        context: ToolContext | None = None,
         **kwargs,
     ) -> ToolResult:
         params = invocation.params
@@ -147,10 +148,11 @@ class TerminalTool(Tool):
             cwd = str(profile_root)
 
         if detached:
-            if self._manager is None:
+            manager = self._manager or (context.process_manager if context else None)
+            if manager is None:
                 return ToolResult.error(id=invocation.id, content="detached=True requires the process manager (not available in this context).")
             desc = (cmd[:80] + '...') if len(cmd) > 80 else cmd
-            record = await self._manager.create(command=cmd, description=desc, cwd=cwd)
+            record = await manager.create(command=cmd, description=desc, cwd=cwd)
             return ToolResult.ok(
                 id=invocation.id,
                 content=f"Background process started as `{record.id}`.\nUse the process tool to read output or stop it.",

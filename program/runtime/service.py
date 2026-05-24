@@ -14,6 +14,7 @@ from program.extension.types import (
     SessionStartEvent, SessionShutdownEvent, SessionBeforeSwitchEvent,
     SessionBeforeSwitchResult, SessionBeforeForkEvent, SessionBeforeForkResult,
 )
+from program.tool.types import ToolContext
 
 
 class Runtime:
@@ -63,27 +64,26 @@ class Runtime:
             hooks=context.hooks,
             profiles=context.resource_loader.get_subagent_profiles(),
         )
-        # Look up the tool instance from the engine. The resource loader registers each
-        # builtin under a synthetic module name (`_tool_<stem>`), so the class object in
-        # the engine is distinct from the one we'd get via a package import — `isinstance`
-        # would always be False. Duck-type on the attribute we need to wire instead.
-        _subagent_tool = context.engine._tools.get('subagent')
-        if _subagent_tool is not None and hasattr(_subagent_tool, '_manager'):
-            _subagent_tool._manager = self.subagent_manager
-
-        # Wire bus into the send tool.
-        _send_tool = context.engine._tools.get('send')
-        if _send_tool is not None and hasattr(_send_tool, '_bus'):
-            _send_tool._bus = self.gateway_manager._bus
-
+        context.engine.tool_context = ToolContext(
+            llm=context.llm,
+            engine=context.engine,
+            agent=context.agent,
+            session_manager=context.session_manager,
+            resource_loader=context.resource_loader,
+            extension_runtime=context.extension_runtime,
+            hooks=context.hooks,
+            subagent_manager=self.subagent_manager,
+            bus=self.gateway_manager._bus,
+            cron=context.cron,
+            mcp_manager=context.mcp_manager,
+            process_manager=context.process_manager,
+            settings_manager=context.settings_manager,
+            auth_manager=context.auth_manager,
+            acp_auth=context.acp_auth,
+            acp_manager=context.acp_manager,
+        )
         # Expose MCPManager for use in create_session_agent() and shutdown.
         self.mcp_manager = context.mcp_manager
-
-        # Wire bus + agent into the ACP agent tool now that the gateway is up.
-        acp_tool = context.engine._tools.get('acp_agent')
-        if acp_tool is not None and hasattr(acp_tool, '_bus') and hasattr(acp_tool, '_agent'):
-            acp_tool._bus = self.gateway_manager._bus
-            acp_tool._agent = context.agent
 
     # -------------------------------------------------------------------------
     # Factory
@@ -299,6 +299,24 @@ class Runtime:
         real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
         agent._extensions = real_ext
         agent._runtime = self
+        engine.tool_context = ToolContext(
+            llm=self._context.llm,
+            engine=engine,
+            agent=agent,
+            session_manager=session_manager,
+            resource_loader=self._context.resource_loader,
+            extension_runtime=real_ext,
+            hooks=hooks,
+            subagent_manager=self.subagent_manager,
+            bus=self.gateway_manager._bus,
+            cron=self._context.cron,
+            mcp_manager=self.mcp_manager,
+            process_manager=self._context.process_manager,
+            settings_manager=self._context.settings_manager,
+            auth_manager=self._context.auth_manager,
+            acp_auth=self._context.acp_auth,
+            acp_manager=self._context.acp_manager,
+        )
 
         return agent
 

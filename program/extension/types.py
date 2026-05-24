@@ -7,7 +7,7 @@ from typing import Any, Awaitable, Callable, TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from program.tool.types import Tool, ToolKind, ToolInvocation, ToolExecutionMode, ToolResult, ToolExecutionUpdateCallback, AbortSignal
+from program.tool.types import Tool, ToolContext, ToolKind, ToolInvocation, ToolExecutionMode, ToolResult, ToolExecutionUpdateCallback, AbortSignal
 from program.skill.types import SourceInfo, ResourceDiagnostic
 from program.bus.service import EventBus
 
@@ -178,6 +178,7 @@ class ExtensionTool(Tool):
         invocation: ToolInvocation,
         tool_execution_update_callback: ToolExecutionUpdateCallback | None = None,
         signal: AbortSignal | None = None,
+        context: ToolContext | None = None,
     ) -> ToolResult:
         params = self._definition.parameters.model_validate(invocation.params)
         return await self._definition.execute(params, invocation, self._ctx)

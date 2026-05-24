@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
     from program.process.manager import ProcessManager
@@ -81,80 +81,82 @@ class ProcessTool(Tool):
         invocation: ToolInvocation,
         tool_execution_update_callback=None,
         signal=None,
+        context: ToolContext | None = None,
     ) -> ToolResult:
-        if self._manager is None:
+        manager = self._manager or (context.process_manager if context else None)
+        if manager is None:
             return ToolResult.error(invocation.id, 'Process manager is not available.')
 
         import json
         from program.process.types import ProcessStatus
 
-        manager = self._manager
         params = invocation.params
         action = params.get('action')
 
         try:
-            if action == 'start':
-                command = params.get('command')
-                description = params.get('description')
-                if not command:
-                    return ToolResult.error(invocation.id, "'command' is required for action='start'.")
-                if not description:
-                    return ToolResult.error(invocation.id, "'description' is required for action='start'.")
-                record = await manager.create(
-                    command=command,
-                    description=description,
-                    cwd=params.get('cwd'),
-                )
-                return ToolResult.ok(
-                    invocation.id,
-                    f"Process started.\n{json.dumps(_format_record(record), indent=2)}",
-                )
+            match action:
+                case 'start':
+                    command = params.get('command')
+                    description = params.get('description')
+                    if not command:
+                        return ToolResult.error(invocation.id, "'command' is required for action='start'.")
+                    if not description:
+                        return ToolResult.error(invocation.id, "'description' is required for action='start'.")
+                    record = await manager.create(
+                        command=command,
+                        description=description,
+                        cwd=params.get('cwd'),
+                    )
+                    return ToolResult.ok(
+                        invocation.id,
+                        f"Process started.\n{json.dumps(_format_record(record), indent=2)}",
+                    )
 
-            elif action == 'list':
-                status_filter = params.get('status_filter')
-                status = ProcessStatus(status_filter) if status_filter else None
-                records = manager.list(status=status)
-                if not records:
-                    msg = f"No processes" + (f" with status='{status_filter}'." if status_filter else ".")
-                    return ToolResult.ok(invocation.id, msg)
-                return ToolResult.ok(
-                    invocation.id,
-                    json.dumps([_format_record(r) for r in records], indent=2),
-                )
+                case 'list':
+                    status_filter = params.get('status_filter')
+                    status = ProcessStatus(status_filter) if status_filter else None
+                    records = manager.list(status=status)
+                    if not records:
+                        msg = f"No processes" + (f" with status='{status_filter}'." if status_filter else ".")
+                        return ToolResult.ok(invocation.id, msg)
+                    return ToolResult.ok(
+                        invocation.id,
+                        json.dumps([_format_record(r) for r in records], indent=2),
+                    )
 
-            elif action == 'get':
-                process_id = params.get('process_id')
-                if not process_id:
-                    return ToolResult.error(invocation.id, "'process_id' is required for action='get'.")
-                record = manager.get(process_id)
-                if record is None:
-                    return ToolResult.error(invocation.id, f"No process found with id='{process_id}'.")
-                return ToolResult.ok(
-                    invocation.id,
-                    json.dumps(_format_record(record), indent=2),
-                )
+                case 'get':
+                    process_id = params.get('process_id')
+                    if not process_id:
+                        return ToolResult.error(invocation.id, "'process_id' is required for action='get'.")
+                    record = manager.get(process_id)
+                    if record is None:
+                        return ToolResult.error(invocation.id, f"No process found with id='{process_id}'.")
+                    return ToolResult.ok(
+                        invocation.id,
+                        json.dumps(_format_record(record), indent=2),
+                    )
 
-            elif action == 'stop':
-                process_id = params.get('process_id')
-                if not process_id:
-                    return ToolResult.error(invocation.id, "'process_id' is required for action='stop'.")
-                record = await manager.stop(process_id)
-                return ToolResult.ok(
-                    invocation.id,
-                    f"Process '{process_id}' stopped.\n{json.dumps(_format_record(record), indent=2)}",
-                )
+                case 'stop':
+                    process_id = params.get('process_id')
+                    if not process_id:
+                        return ToolResult.error(invocation.id, "'process_id' is required for action='stop'.")
+                    record = await manager.stop(process_id)
+                    return ToolResult.ok(
+                        invocation.id,
+                        f"Process '{process_id}' stopped.\n{json.dumps(_format_record(record), indent=2)}",
+                    )
 
-            elif action == 'output':
-                process_id = params.get('process_id')
-                if not process_id:
-                    return ToolResult.error(invocation.id, "'process_id' is required for action='output'.")
-                output = manager.read_output(process_id, max_bytes=params.get('max_bytes', 12000))
-                if not output:
-                    return ToolResult.ok(invocation.id, f"No output yet for process '{process_id}'.")
-                return ToolResult.ok(invocation.id, output)
+                case 'output':
+                    process_id = params.get('process_id')
+                    if not process_id:
+                        return ToolResult.error(invocation.id, "'process_id' is required for action='output'.")
+                    output = manager.read_output(process_id, max_bytes=params.get('max_bytes', 12000))
+                    if not output:
+                        return ToolResult.ok(invocation.id, f"No output yet for process '{process_id}'.")
+                    return ToolResult.ok(invocation.id, output)
 
-            else:
-                return ToolResult.error(invocation.id, f"Unknown action '{action}'.")
+                case _:
+                    return ToolResult.error(invocation.id, f"Unknown action '{action}'.")
 
         except KeyError as e:
             return ToolResult.error(invocation.id, str(e))

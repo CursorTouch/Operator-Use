@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
     from program.cron.scheduler import Cron
@@ -122,146 +122,149 @@ class CronTool(Tool):
         invocation: ToolInvocation,
         tool_execution_update_callback=None,
         signal=None,
+        context: ToolContext | None = None,
     ) -> ToolResult:
-        if self._cron is None:
+        cron = self._cron or (context.cron if context else None)
+        if cron is None:
             return ToolResult.error(id=invocation.id, content='Cron service is not available.')
 
         from program.cron.types import CronPayload, CronSchedule
 
-        cron = self._cron
         params = invocation.params
         action = params.get('action')
 
         try:
-            if action == 'list':
-                jobs = cron.list_jobs()
-                if not jobs:
-                    return ToolResult.ok(id=invocation.id, content='No cron jobs scheduled.')
-                return ToolResult.ok(
-                    id=invocation.id,
-                    content=json.dumps([_format_job(j) for j in jobs], indent=2),
-                )
-
-            elif action == 'add':
-                name = params.get('name')
-                schedule_mode = params.get('schedule_mode')
-                message = params.get('message')
-
-                if not name:
-                    return ToolResult.error(id=invocation.id, content="'name' is required for action='add'.")
-                if not schedule_mode:
-                    return ToolResult.error(id=invocation.id, content="'schedule_mode' is required for action='add'.")
-                if not message:
-                    return ToolResult.error(id=invocation.id, content="'message' is required for action='add'.")
-
-                if schedule_mode == 'every':
-                    interval_ms = params.get('interval_ms')
-                    if not interval_ms or interval_ms <= 0:
-                        return ToolResult.error(
-                            id=invocation.id,
-                            content="'interval_ms' must be a positive integer when schedule_mode='every'.",
-                        )
-                    schedule = CronSchedule(mode='every', interval_ms=interval_ms)
-                else:
-                    expr = params.get('expr')
-                    if not expr:
-                        return ToolResult.error(
-                            id=invocation.id,
-                            content="'expr' is required when schedule_mode='cron'.",
-                        )
-                    schedule = CronSchedule(mode='cron', expr=expr, tz=params.get('tz') or 'UTC')
-
-                job = cron.add_job(
-                    name=name,
-                    schedule=schedule,
-                    payload=CronPayload(
-                        message=message,
-                        channel_id=params.get('channel_id'),
-                        chat_id=params.get('chat_id'),
-                        deliver=params.get('deliver') or False,
-                    ),
-                    delete_after_run=params.get('delete_after_run', False),
-                )
-                return ToolResult.ok(
-                    id=invocation.id,
-                    content=f"Cron job created.\n{json.dumps(_format_job(job), indent=2)}",
-                )
-
-            elif action == 'update':
-                job_id = params.get('job_id')
-                if not job_id:
-                    return ToolResult.error(id=invocation.id, content="'job_id' is required for action='update'.")
-
-                schedule = None
-                schedule_mode = params.get('schedule_mode')
-                if schedule_mode == 'every':
-                    interval_ms = params.get('interval_ms')
-                    if not interval_ms:
-                        return ToolResult.error(
-                            id=invocation.id,
-                            content="'interval_ms' is required when updating schedule_mode='every'.",
-                        )
-                    schedule = CronSchedule(mode='every', interval_ms=interval_ms)
-                elif schedule_mode == 'cron':
-                    expr = params.get('expr')
-                    if not expr:
-                        return ToolResult.error(
-                            id=invocation.id,
-                            content="'expr' is required when updating schedule_mode='cron'.",
-                        )
-                    schedule = CronSchedule(mode='cron', expr=expr, tz=params.get('tz') or 'UTC')
-
-                message = params.get('message')
-                deliver = params.get('deliver')
-                if message or deliver is not None:
-                    payload = CronPayload(
-                        message=message or '',
-                        channel_id=params.get('channel_id'),
-                        chat_id=params.get('chat_id'),
-                        deliver=deliver or False,
+            match action:
+                case 'list':
+                    jobs = cron.list_jobs()
+                    if not jobs:
+                        return ToolResult.ok(id=invocation.id, content='No cron jobs scheduled.')
+                    return ToolResult.ok(
+                        id=invocation.id,
+                        content=json.dumps([_format_job(j) for j in jobs], indent=2),
                     )
-                else:
-                    payload = None
 
-                updated = cron.update_job(
-                    job_id,
-                    name=params.get('name'),
-                    schedule=schedule,
-                    payload=payload,
-                )
-                if updated is None:
-                    return ToolResult.error(id=invocation.id, content=f"No job found with id='{job_id}'.")
-                return ToolResult.ok(
-                    id=invocation.id,
-                    content=f"Cron job updated.\n{json.dumps(_format_job(updated), indent=2)}",
-                )
+                case 'add':
+                    name = params.get('name')
+                    schedule_mode = params.get('schedule_mode')
+                    message = params.get('message')
 
-            elif action == 'remove':
-                job_id = params.get('job_id')
-                if not job_id:
-                    return ToolResult.error(id=invocation.id, content="'job_id' is required for action='remove'.")
-                if not cron.remove_job(job_id):
-                    return ToolResult.error(id=invocation.id, content=f"No job found with id='{job_id}'.")
-                return ToolResult.ok(id=invocation.id, content=f"Cron job '{job_id}' removed.")
+                    if not name:
+                        return ToolResult.error(id=invocation.id, content="'name' is required for action='add'.")
+                    if not schedule_mode:
+                        return ToolResult.error(id=invocation.id, content="'schedule_mode' is required for action='add'.")
+                    if not message:
+                        return ToolResult.error(id=invocation.id, content="'message' is required for action='add'.")
 
-            elif action == 'enable':
-                job_id = params.get('job_id')
-                if not job_id:
-                    return ToolResult.error(id=invocation.id, content="'job_id' is required for action='enable'.")
-                if cron.enable_job(job_id) is None:
-                    return ToolResult.error(id=invocation.id, content=f"No job found with id='{job_id}'.")
-                return ToolResult.ok(id=invocation.id, content=f"Cron job '{job_id}' enabled.")
+                    if schedule_mode == 'every':
+                        interval_ms = params.get('interval_ms')
+                        if not interval_ms or interval_ms <= 0:
+                            return ToolResult.error(
+                                id=invocation.id,
+                                content="'interval_ms' must be a positive integer when schedule_mode='every'.",
+                            )
+                        schedule = CronSchedule(mode='every', interval_ms=interval_ms)
+                    else:
+                        expr = params.get('expr')
+                        if not expr:
+                            return ToolResult.error(
+                                id=invocation.id,
+                                content="'expr' is required when schedule_mode='cron'.",
+                            )
+                        schedule = CronSchedule(mode='cron', expr=expr, tz=params.get('tz') or 'UTC')
 
-            elif action == 'disable':
-                job_id = params.get('job_id')
-                if not job_id:
-                    return ToolResult.error(id=invocation.id, content="'job_id' is required for action='disable'.")
-                if cron.disable_job(job_id) is None:
-                    return ToolResult.error(id=invocation.id, content=f"No job found with id='{job_id}'.")
-                return ToolResult.ok(id=invocation.id, content=f"Cron job '{job_id}' disabled.")
+                    job = cron.add_job(
+                        name=name,
+                        schedule=schedule,
+                        payload=CronPayload(
+                            message=message,
+                            channel_id=params.get('channel_id'),
+                            chat_id=params.get('chat_id'),
+                            deliver=params.get('deliver') or False,
+                        ),
+                        delete_after_run=params.get('delete_after_run', False),
+                    )
+                    return ToolResult.ok(
+                        id=invocation.id,
+                        content=f"Cron job created.\n{json.dumps(_format_job(job), indent=2)}",
+                    )
 
-            else:
-                return ToolResult.error(id=invocation.id, content=f"Unknown action '{action}'.")
+                case 'update':
+                    job_id = params.get('job_id')
+                    if not job_id:
+                        return ToolResult.error(id=invocation.id, content="'job_id' is required for action='update'.")
+
+                    schedule = None
+                    schedule_mode = params.get('schedule_mode')
+                    match schedule_mode:
+                        case 'every':
+                            interval_ms = params.get('interval_ms')
+                            if not interval_ms:
+                                return ToolResult.error(
+                                    id=invocation.id,
+                                    content="'interval_ms' is required when updating schedule_mode='every'.",
+                                )
+                            schedule = CronSchedule(mode='every', interval_ms=interval_ms)
+                        case 'cron':
+                            expr = params.get('expr')
+                            if not expr:
+                                return ToolResult.error(
+                                    id=invocation.id,
+                                    content="'expr' is required when updating schedule_mode='cron'.",
+                                )
+                            schedule = CronSchedule(mode='cron', expr=expr, tz=params.get('tz') or 'UTC')
+
+                    message = params.get('message')
+                    deliver = params.get('deliver')
+                    if message or deliver is not None:
+                        payload = CronPayload(
+                            message=message or '',
+                            channel_id=params.get('channel_id'),
+                            chat_id=params.get('chat_id'),
+                            deliver=deliver or False,
+                        )
+                    else:
+                        payload = None
+
+                    updated = cron.update_job(
+                        job_id,
+                        name=params.get('name'),
+                        schedule=schedule,
+                        payload=payload,
+                    )
+                    if updated is None:
+                        return ToolResult.error(id=invocation.id, content=f"No job found with id='{job_id}'.")
+                    return ToolResult.ok(
+                        id=invocation.id,
+                        content=f"Cron job updated.\n{json.dumps(_format_job(updated), indent=2)}",
+                    )
+
+                case 'remove':
+                    job_id = params.get('job_id')
+                    if not job_id:
+                        return ToolResult.error(id=invocation.id, content="'job_id' is required for action='remove'.")
+                    if not cron.remove_job(job_id):
+                        return ToolResult.error(id=invocation.id, content=f"No job found with id='{job_id}'.")
+                    return ToolResult.ok(id=invocation.id, content=f"Cron job '{job_id}' removed.")
+
+                case 'enable':
+                    job_id = params.get('job_id')
+                    if not job_id:
+                        return ToolResult.error(id=invocation.id, content="'job_id' is required for action='enable'.")
+                    if cron.enable_job(job_id) is None:
+                        return ToolResult.error(id=invocation.id, content=f"No job found with id='{job_id}'.")
+                    return ToolResult.ok(id=invocation.id, content=f"Cron job '{job_id}' enabled.")
+
+                case 'disable':
+                    job_id = params.get('job_id')
+                    if not job_id:
+                        return ToolResult.error(id=invocation.id, content="'job_id' is required for action='disable'.")
+                    if cron.disable_job(job_id) is None:
+                        return ToolResult.error(id=invocation.id, content=f"No job found with id='{job_id}'.")
+                    return ToolResult.ok(id=invocation.id, content=f"Cron job '{job_id}' disabled.")
+
+                case _:
+                    return ToolResult.error(id=invocation.id, content=f"Unknown action '{action}'.")
 
         except Exception as e:
             return ToolResult.error(id=invocation.id, content=f"Cron operation failed: {e}")

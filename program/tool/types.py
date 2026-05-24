@@ -74,6 +74,27 @@ ToolExecutionUpdateCallback = Callable[[ToolResult], Awaitable[None]]
 AbortSignal = asyncio.Event
 
 
+@dataclass
+class ToolContext:
+    """Runtime services available to tools during execution."""
+    llm: Any | None = None
+    engine: Any | None = None
+    agent: Any | None = None
+    session_manager: Any | None = None
+    resource_loader: Any | None = None
+    extension_runtime: Any | None = None
+    hooks: Any | None = None
+    subagent_manager: Any | None = None
+    bus: Any | None = None
+    cron: Any | None = None
+    mcp_manager: Any | None = None
+    process_manager: Any | None = None
+    settings_manager: Any | None = None
+    auth_manager: Any | None = None
+    acp_auth: Any | None = None
+    acp_manager: Any | None = None
+
+
 class Tool(ABC):
     def __init__(
         self,
@@ -115,5 +136,11 @@ class Tool(ABC):
         return signal is not None and signal.is_set()
 
     @abstractmethod
-    async def execute(self, invocation: ToolInvocation, tool_execution_update_callback: Optional[ToolExecutionUpdateCallback] = None, signal: Optional[AbortSignal] = None) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback: Optional[ToolExecutionUpdateCallback] = None,
+        signal: Optional[AbortSignal] = None,
+        context: Optional[ToolContext] = None,
+    ) -> ToolResult:
         ...

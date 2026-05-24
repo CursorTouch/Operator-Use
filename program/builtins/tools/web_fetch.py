@@ -1,6 +1,6 @@
 import asyncio
 from pydantic import BaseModel, Field
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 from program.message.types import UserMessage, TextContent, SystemMessage
 from ddgs import DDGS
 
@@ -58,11 +58,12 @@ class WebFetchTool(Tool):
             pass
         return text
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(self, invocation: ToolInvocation, context: ToolContext | None = None, **kwargs) -> ToolResult:
         params = invocation.params
         url = params.get("url")
         prompt = params.get("prompt")
         timeout = params.get("timeout", 10)
+        llm = self._llm or (context.llm if context else None)
 
         if not url:
             return ToolResult.error(id=invocation.id, content="Parameter 'url' is required.")
@@ -80,8 +81,8 @@ class WebFetchTool(Tool):
             if not text:
                 return ToolResult.error(id=invocation.id, content=f"No content returned from {url}")
 
-            if prompt and self._llm:
-                text = await self._extract_relevant(text, prompt, self._llm)
+            if prompt and llm:
+                text = await self._extract_relevant(text, prompt, llm)
 
             if len(text) > MAX_TOOL_OUTPUT_LENGTH:
                 text = text[:MAX_TOOL_OUTPUT_LENGTH] + "..."
