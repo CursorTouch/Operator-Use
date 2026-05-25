@@ -92,9 +92,9 @@ class ToolContext:
     computer: Any | None = None
     process_manager: Any | None = None
     settings_manager: Any | None = None
-    auth_manager: Any | None = None
-    acp_auth: Any | None = None
-    acp_manager: Any | None = None
+    auth_channel_manager: Any | None = None
+    acp_auth_manager: Any | None = None
+    acp_session_manager: Any | None = None
 
 
 class Tool(ABC):

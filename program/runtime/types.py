@@ -95,12 +95,12 @@ class RuntimeContext:
         settings_manager: SettingsManager | None,
         cron: Cron | None = None,
         hooks: Hooks | None = None,
-        auth_manager: ChannelAuthManager | None = None,
+        auth_channel_manager: ChannelAuthManager | None = None,
         subagent_settings: SubagentSettings | None = None,
         mcp_manager: MCPManager | None = None,
         memory_manager: MemoryManager | None = None,
-        acp_auth: ACPAuthManager | None = None,
-        acp_manager: ACPSessionManager | None = None,
+        acp_auth_manager: ACPAuthManager | None = None,
+        acp_session_manager: ACPSessionManager | None = None,
         process_manager: ProcessManager | None = None,
     ) -> None:
         self.agent = agent
@@ -113,12 +113,12 @@ class RuntimeContext:
         self.settings_manager = settings_manager
         self.cron = cron
         self.hooks: Hooks = hooks or extension_runtime._hooks
-        self.auth_manager = auth_manager
+        self.auth_channel_manager = auth_channel_manager
         self.subagent_settings = subagent_settings or SubagentSettings()
         self.mcp_manager: MCPManager | None = mcp_manager
         self.memory_manager: MemoryManager | None = memory_manager
-        self.acp_auth: ACPAuthManager | None = acp_auth
-        self.acp_manager: ACPSessionManager | None = acp_manager
+        self.acp_auth_manager: ACPAuthManager | None = acp_auth_manager
+        self.acp_session_manager: ACPSessionManager | None = acp_session_manager
         self.process_manager: ProcessManager | None = process_manager
 
     @classmethod
@@ -210,9 +210,9 @@ class RuntimeContext:
             )
 
         # ── Auth ─────────────────────────────────────────────────────────────
-        auth_manager = ChannelAuthManager(get_channels_auth_path())
-        acp_auth = ACPAuthManager(get_acp_auth_path())
-        acp_manager = ACPSessionManager(get_acp_sessions_dir())
+        auth_channel_manager = ChannelAuthManager(get_channels_auth_path())
+        acp_auth_manager = ACPAuthManager(get_acp_auth_path())
+        acp_session_manager = ACPSessionManager(get_acp_sessions_dir())
 
         # ── Cron ─────────────────────────────────────────────────────────────
         cron: Cron | None = None
@@ -290,8 +290,8 @@ class RuntimeContext:
         from program.builtins.tools.acp_agent import ACPAgentTool
         engine.add_tool(ACPAgentTool(
             registry=settings_manager.get_acp_agents(),
-            session_manager=acp_manager,
-            auth_manager=acp_auth,
+            session_manager=acp_session_manager,
+            auth_manager=acp_auth_manager,
             bus=None,   # Runtime attaches the shared bus through ToolContext.
             agent=None,
             settings_manager=settings_manager,
@@ -332,12 +332,12 @@ class RuntimeContext:
             settings_manager=settings_manager,
             cron=cron,
             hooks=hooks,
-            auth_manager=auth_manager,
+            auth_channel_manager=auth_channel_manager,
             subagent_settings=SubagentSettings(),
             mcp_manager=mcp_manager,
             memory_manager=memory_manager,
-            acp_auth=acp_auth,
-            acp_manager=acp_manager,
+            acp_auth_manager=acp_auth_manager,
+            acp_session_manager=acp_session_manager,
             process_manager=process_manager,
         )
 

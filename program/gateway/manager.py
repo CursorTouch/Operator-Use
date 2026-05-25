@@ -34,7 +34,7 @@ class GatewayManager:
     def __init__(self, runtime: Runtime) -> None:
         self._runtime = runtime
         self._settings = runtime.settings_manager
-        self._auth = runtime.auth_manager
+        self._channel_auth = runtime.auth_channel_manager
         self.gateway = Gateway(runtime)
         self._tasks: list[asyncio.Task] = []
         self._gateway_task: asyncio.Task | None = None
@@ -48,11 +48,11 @@ class GatewayManager:
                 self.gateway.start(), name='gateway:main'
             )
 
-        if self._settings is None or self._auth is None:
+        if self._settings is None or self._channel_auth is None:
             return
 
         cfg = self._settings.get_channels_settings()
-        auth = self._auth
+        auth = self._channel_auth
 
         if cfg.websocket.enabled:
             self._start_task('websocket', self._run_websocket(cfg.websocket))

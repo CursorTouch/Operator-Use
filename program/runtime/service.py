@@ -85,9 +85,9 @@ class Runtime:
             memory_manager=context.memory_manager,
             process_manager=context.process_manager,
             settings_manager=context.settings_manager,
-            auth_manager=context.auth_manager,
-            acp_auth=context.acp_auth,
-            acp_manager=context.acp_manager,
+            auth_channel_manager=context.auth_channel_manager,
+            acp_auth_manager=context.acp_auth_manager,
+            acp_session_manager=context.acp_session_manager,
         )
 
     # -------------------------------------------------------------------------
@@ -121,8 +121,8 @@ class Runtime:
         return self._context.settings_manager
 
     @property
-    def auth_manager(self):
-        return self._context.auth_manager
+    def auth_channel_manager(self):
+        return self._context.auth_channel_manager
 
     @property
     def unified_session_enabled(self) -> bool:
@@ -341,9 +341,9 @@ class Runtime:
             memory_manager=self._context.memory_manager,
             process_manager=self._context.process_manager,
             settings_manager=self._context.settings_manager,
-            auth_manager=self._context.auth_manager,
-            acp_auth=self._context.acp_auth,
-            acp_manager=self._context.acp_manager,
+            auth_channel_manager=self._context.auth_channel_manager,
+            acp_auth_manager=self._context.acp_auth_manager,
+            acp_session_manager=self._context.acp_session_manager,
         )
 
         return agent
