@@ -389,6 +389,7 @@ Key fields:
 | [docs/packages.md](docs/packages.md) | Packages — installing, bundling, and loading extension/skill packages |
 | [docs/compaction.md](docs/compaction.md) | Compaction — budget checks, cut-point selection, split-turn handling |
 | [docs/inference.md](docs/inference.md) | Inference layer — LLM, model registry, provider/auth, multi-provider APIs |
+| [docs/memory.md](docs/memory.md) | Memory — provider/API registries, local file memory, runtime integration plan |
 | [docs/gateway.md](docs/gateway.md) | Gateway — channel types, message bus, stream phases, routing |
 | [docs/rpc.md](docs/rpc.md) | RPC server — JSONL protocol, command/event shapes |
 | [docs/skill.md](docs/skill.md) | Skills — SKILL.md format, discovery order, validation, name collision handling |

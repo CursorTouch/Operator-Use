@@ -6,4 +6,8 @@ __pycache__
 .*
 experiments
 memory
+!program/memory/
+!program/memory/**
+program/memory/**/__pycache__/
+program/memory/**/*.pyc
 *.ipynb

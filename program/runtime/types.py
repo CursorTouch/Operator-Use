@@ -27,6 +27,8 @@ from program.auth.acp import ACPAuthManager
 from program.subagent.manager import SubagentManager
 from program.subagent.types import SubagentSettings
 from program.mcp.manager import MCPManager
+from program.memory.manager import MemoryManager
+from program.memory.types import MemoryOptions, MemoryRuntimeContext
 from program.acp.manager import ACPSessionManager
 from program.process.manager import ProcessManager
 from program.settings.paths import (
@@ -96,6 +98,7 @@ class RuntimeContext:
         auth_manager: ChannelAuthManager | None = None,
         subagent_settings: SubagentSettings | None = None,
         mcp_manager: MCPManager | None = None,
+        memory_manager: MemoryManager | None = None,
         acp_auth: ACPAuthManager | None = None,
         acp_manager: ACPSessionManager | None = None,
         process_manager: ProcessManager | None = None,
@@ -113,6 +116,7 @@ class RuntimeContext:
         self.auth_manager = auth_manager
         self.subagent_settings = subagent_settings or SubagentSettings()
         self.mcp_manager: MCPManager | None = mcp_manager
+        self.memory_manager: MemoryManager | None = memory_manager
         self.acp_auth: ACPAuthManager | None = acp_auth
         self.acp_manager: ACPSessionManager | None = acp_manager
         self.process_manager: ProcessManager | None = process_manager
@@ -240,6 +244,31 @@ class RuntimeContext:
         mcp_configs = settings_manager.get_mcp_servers()
         mcp_manager: MCPManager | None = MCPManager(mcp_configs) if mcp_configs else None
 
+        # ── Memory ────────────────────────────────────────────────────────────
+        memory_settings = settings_manager.get_memory_settings()
+        memory_enabled = True if memory_settings.enabled is None else memory_settings.enabled
+        memory_manager: MemoryManager | None = None
+        if memory_enabled:
+            provider_id = memory_settings.provider
+            memory_manager = MemoryManager(provider_id=provider_id)
+            memory_options = memory_manager.providers.get(provider_id).options if provider_id and memory_manager.providers.get(provider_id) else None
+            if memory_options is not None:
+                if memory_settings.max_prompt_chars is not None:
+                    memory_options.max_prompt_chars = memory_settings.max_prompt_chars
+                if memory_settings.sync_turns is not None:
+                    memory_options.sync_turns = memory_settings.sync_turns
+                if memory_settings.prefetch is not None:
+                    memory_options.prefetch = memory_settings.prefetch
+            try:
+                memory_manager.initialize(MemoryRuntimeContext(
+                    cwd=cwd,
+                    session_id=session_manager.session_id or "",
+                    project_memory_dir=get_config_dir(cwd) / "memory",
+                    global_memory_dir=get_config_dir() / "memory",
+                ))
+            except ImportError:
+                memory_manager = None
+
         # ── Agent loop ────────────────────────────────────────────────────────
         engine = Engine(
             llm=llm,
@@ -306,6 +335,7 @@ class RuntimeContext:
             auth_manager=auth_manager,
             subagent_settings=SubagentSettings(),
             mcp_manager=mcp_manager,
+            memory_manager=memory_manager,
             acp_auth=acp_auth,
             acp_manager=acp_manager,
             process_manager=process_manager,

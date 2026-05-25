@@ -88,6 +88,7 @@ class ToolContext:
     bus: Any | None = None
     cron: Any | None = None
     mcp_manager: Any | None = None
+    memory_manager: Any | None = None
     process_manager: Any | None = None
     settings_manager: Any | None = None
     auth_manager: Any | None = None

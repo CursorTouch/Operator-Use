@@ -11,7 +11,7 @@ from program.settings.types import (
     Settings, SCOPE, SettingsError,
     CompactionSettings, BranchSummarySettings,
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
-    ImageSettings, STTSettings, TTSSettings, ExtensionEntry,
+    ImageSettings, STTSettings, TTSSettings, MemorySettings, ExtensionEntry,
 )
 from program.gateway.channels.types import (
     ChannelsSettings,
@@ -29,6 +29,7 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
     'image': ImageSettings,
     'stt': STTSettings,
     'tts': TTSSettings,
+    'memory': MemorySettings,
 }
 
 # Pydantic BaseModel fields — use model_validate() instead of **kwargs
@@ -837,3 +838,17 @@ class SettingsManager:
     def get_tts_settings(self) -> TTSSettings:
         """Return the resolved TTS settings, with empty defaults when unset."""
         return self.settings.tts or TTSSettings()
+
+    # ── Memory ────────────────────────────────────────────────────────────────
+
+    def get_memory_settings(self) -> MemorySettings:
+        """Return resolved memory settings, with defaults when unset."""
+        return self.settings.memory or MemorySettings()
+
+    def set_memory_settings(self, **kwargs) -> None:
+        current = self.global_settings.memory or MemorySettings()
+        values = asdict(current)
+        values.update(kwargs)
+        self.global_settings.memory = MemorySettings(**values)
+        self._mark_modified('memory')
+        self._save()

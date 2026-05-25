@@ -1,0 +1,75 @@
+# Memory
+
+The memory layer provides persistent, cross-session context that is separate from static knowledge documents and raw session history.
+
+## Shape
+
+Memory mirrors the inference registry pattern:
+
+```text
+program/memory/
+  api/          # backend behavior implementations
+  provider/     # provider metadata and provider registry
+  manager.py    # active-provider orchestration
+  types.py      # shared config/runtime dataclasses
+```
+
+Memory providers are declared in `program/builtins/providers/memory.py`.
+
+| Provider | API | Notes |
+|---|---|---|
+| `mem0` | `Mem0MemoryAPI` | Optional Mem0 SDK adapter |
+| `supermemory` | `SupermemoryAPI` | Optional Supermemory SDK adapter |
+
+## Settings
+
+```json
+{
+  "memory": {
+    "enabled": true,
+    "provider": null,
+    "max_prompt_chars": 6000,
+    "sync_turns": true,
+    "prefetch": true
+  }
+}
+```
+
+Unset fields use defaults. `provider` selects one active external memory provider at a time; `null` disables provider-backed memory.
+
+External providers are imported lazily. Install optional dependencies before selecting them:
+
+```bash
+uv pip install ".[memory]"
+```
+
+Environment variables:
+
+| Provider | Env var |
+|---|---|
+| `mem0` | `MEM0_API_KEY` |
+| `supermemory` | `SUPERMEMORY_API_KEY` |
+
+## Why One Provider
+
+This follows the useful part of Hermes Agent's design: built-in local prompt memory stays simple and inspectable, while one optional external provider can add deeper recall without bloating prompts and tool lists with multiple competing backends.
+
+## Tool
+
+The built-in `memory` tool is provider-agnostic. It exposes one schema with an `action` field:
+
+| Action | Required field | Purpose |
+|---|---|---|
+| `search` | `query` | Retrieve relevant long-term memories from the active provider |
+| `remember` | `content` | Store a durable fact through the active provider |
+| `forget` | `memory_id` | Remove a provider memory by ID when supported |
+
+The tool talks only to `MemoryManager`; provider-specific APIs stay inside the adapter.
+
+## Next Integration Points
+
+The first slices add the provider/API surface and common tool. Runtime integration should still wire:
+
+- `MemoryManager.prefetch(user_text)` before each turn
+- `MemoryManager.sync_turn(user, assistant)` after each completed response
+- `on_pre_compact()` before compaction discards old context

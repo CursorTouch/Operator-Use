@@ -78,6 +78,54 @@ class TestRetrySettings:
         await asyncio.sleep(0)
 
 
+class TestMemorySettings:
+    @pytest.mark.asyncio
+    async def test_memory_defaults_when_unset(self):
+        sm = _sm()
+
+        memory = sm.get_memory_settings()
+
+        assert memory.enabled is None
+        assert memory.provider is None
+        assert memory.max_prompt_chars is None
+        assert memory.sync_turns is None
+        assert memory.prefetch is None
+        await asyncio.sleep(0)
+
+    @pytest.mark.asyncio
+    async def test_memory_settings_from_dict(self):
+        sm = _sm({
+            "memory": {
+                "enabled": True,
+                "provider": "mem0",
+                "max_prompt_chars": 4000,
+                "sync_turns": False,
+                "prefetch": True,
+            }
+        })
+
+        memory = sm.get_memory_settings()
+
+        assert memory.enabled is True
+        assert memory.provider == "mem0"
+        assert memory.max_prompt_chars == 4000
+        assert memory.sync_turns is False
+        assert memory.prefetch is True
+        await asyncio.sleep(0)
+
+    @pytest.mark.asyncio
+    async def test_set_memory_settings(self):
+        sm = _sm()
+
+        sm.set_memory_settings(enabled=True, provider="mem0", max_prompt_chars=3000)
+        memory = sm.get_memory_settings()
+
+        assert memory.enabled is True
+        assert memory.provider == "mem0"
+        assert memory.max_prompt_chars == 3000
+        await asyncio.sleep(0)
+
+
 class TestSteeringAndFollowup:
     @pytest.mark.asyncio
     async def test_steering_mode(self):
@@ -307,5 +355,3 @@ class TestChannelSettings:
         assert tw.streaming is False
         assert tw.streaming_latency == 0.9
         await asyncio.sleep(0)
-
-

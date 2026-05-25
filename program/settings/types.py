@@ -98,6 +98,15 @@ class TTSSettings:
 
 
 @dataclass
+class MemorySettings:
+    enabled: Optional[bool] = None
+    provider: Optional[str] = None       # active memory provider id, e.g. "local_file"
+    max_prompt_chars: Optional[int] = None
+    sync_turns: Optional[bool] = None
+    prefetch: Optional[bool] = None
+
+
+@dataclass
 class Settings:
     # Model / provider
     default_provider: Optional[str] = None
@@ -148,3 +157,6 @@ class Settings:
     # Audio I/O
     stt: Optional[STTSettings] = None
     tts: Optional[TTSSettings] = None
+
+    # Memory
+    memory: Optional[MemorySettings] = None

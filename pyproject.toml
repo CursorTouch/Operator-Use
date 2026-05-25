@@ -51,6 +51,7 @@ telegram = ["python-telegram-bot>=20.0"]
 discord  = ["discord.py>=2.0"]
 slack    = ["slack-bolt>=1.0"]
 twitch   = ["twitchio>=2.0"]
+memory   = ["mem0ai>=0.1.0", "supermemory>=0.3.0"]
 channels = [
     "python-telegram-bot>=20.0",
     "discord.py>=2.0",
