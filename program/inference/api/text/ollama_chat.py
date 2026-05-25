@@ -11,6 +11,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallEndEvent,
+    normalize_structured_response_format,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -76,6 +77,11 @@ def _messages_to_ollama(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     return result
 
 
+def _format(response_format: Any | None) -> dict[str, Any] | None:
+    structured = normalize_structured_response_format(response_format)
+    return structured.schema if structured is not None else None
+
+
 class OllamaChatAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
@@ -117,6 +123,9 @@ class OllamaChatAPI(BaseAPI):
                 "think": think,
                 "options": self._inference_options(),
             }
+            response_format = _format(context.response_format)
+            if response_format is not None:
+                payload["format"] = response_format
 
             tools = context.tools or None
             if tools:

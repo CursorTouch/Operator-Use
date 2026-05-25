@@ -11,6 +11,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
+    normalize_structured_response_format,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -91,6 +92,20 @@ def _messages_to_input(
     return instructions, input_items
 
 
+def _text_format(response_format: Any | None) -> dict[str, Any] | None:
+    structured = normalize_structured_response_format(response_format)
+    if structured is None:
+        return None
+    return {
+        "format": {
+            "type": "json_schema",
+            "name": structured.name,
+            "schema": structured.schema,
+            "strict": structured.strict,
+        }
+    }
+
+
 class OpenAIResponsesAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
@@ -133,6 +148,9 @@ class OpenAIResponsesAPI(BaseAPI):
             self._client.api_key = self.options.api_key
         instructions, input_items = _messages_to_input(context.messages)
         params = self._build_params(model, instructions, input_items, tools=context.tools or None)
+        text_format = _text_format(context.response_format)
+        if text_format is not None:
+            params["text"] = text_format
 
         if self.options.on_payload:
             modified = self.options.on_payload(params)

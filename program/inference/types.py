@@ -5,6 +5,9 @@ from enum import Enum
 from typing import Any, Callable, Optional, TYPE_CHECKING
 import asyncio
 import time
+from copy import deepcopy
+
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from program.message.types import BaseMessage, TextContent, ThinkingContent, ToolCallContent, ImageContent
@@ -103,10 +106,50 @@ class LLMOptions:
 
 
 @dataclass
+class StructuredResponseFormat:
+    schema: dict[str, Any]
+    name: str = "response"
+    strict: bool = True
+
+
+StructuredResponseInput = StructuredResponseFormat | type[Any] | dict[str, Any]
+
+
+def normalize_structured_response_format(response_format: StructuredResponseInput | None) -> StructuredResponseFormat | None:
+    if response_format is None:
+        return None
+
+    if isinstance(response_format, StructuredResponseFormat):
+        return response_format
+
+    if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+        return StructuredResponseFormat(
+            name=response_format.__name__,
+            schema=response_format.model_json_schema(),
+        )
+
+    if isinstance(response_format, dict):
+        schema = deepcopy(response_format)
+        if isinstance(schema.get("format"), dict):
+            schema = deepcopy(schema["format"])
+        if isinstance(schema.get("json_schema"), dict):
+            schema = deepcopy(schema["json_schema"])
+        name = str(schema.get("name") or schema.get("title") or "response")
+        strict = bool(schema.pop("strict", True))
+        if "schema" in schema and isinstance(schema["schema"], dict):
+            name = str(schema.pop("name", name))
+            schema = deepcopy(schema["schema"])
+        return StructuredResponseFormat(name=name, schema=schema, strict=strict)
+
+    raise TypeError("response_format must be a Pydantic model class, JSON schema dict, or StructuredResponseFormat")
+
+
+@dataclass
 class LLMContext:
     messages: list["BaseMessage"]
     tools: list["Tool"] = field(default_factory=list)
     system_prompt: Optional[str] = None
+    response_format: Optional[StructuredResponseInput] = None
 
 
 def _default_text_event_data():

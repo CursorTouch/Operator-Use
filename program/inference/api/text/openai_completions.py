@@ -11,6 +11,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
+    normalize_structured_response_format,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -120,6 +121,20 @@ def _messages_to_chat(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     return result
 
 
+def _response_format(response_format: Any | None) -> dict[str, Any] | None:
+    structured = normalize_structured_response_format(response_format)
+    if structured is None:
+        return None
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": structured.name,
+            "schema": structured.schema,
+            "strict": structured.strict,
+        },
+    }
+
+
 class OpenAICompletionsAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
@@ -165,6 +180,9 @@ class OpenAICompletionsAPI(BaseAPI):
         if context.system_prompt:
             chat_messages = [{"role": "system", "content": context.system_prompt}] + chat_messages
         params = self._build_params(model, chat_messages, tools=context.tools or None)
+        response_format = _response_format(context.response_format)
+        if response_format is not None:
+            params["response_format"] = response_format
 
         if self.options.on_payload:
             modified = self.options.on_payload(params)

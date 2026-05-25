@@ -12,6 +12,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
+    normalize_structured_response_format,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -83,17 +84,30 @@ def _messages_to_gemini(
     return system, contents
 
 
+def _response_schema(response_format: Any | None) -> dict[str, Any] | None:
+    structured = normalize_structured_response_format(response_format)
+    return structured.schema if structured is not None else None
+
+
 class GeminiGenerateAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
         self._client = genai.Client(api_key=options.api_key)
 
-    def _build_config(self, tools: Optional[list[Tool]] = None) -> genai_types.GenerateContentConfig:
+    def _build_config(
+        self,
+        tools: Optional[list[Tool]] = None,
+        response_format: Any | None = None,
+    ) -> genai_types.GenerateContentConfig:
         params: dict[str, Any] = {
             "temperature": self.options.temperature,
         }
         if self.options.max_tokens is not None:
             params["max_output_tokens"] = self.options.max_tokens
+        schema = _response_schema(response_format)
+        if schema is not None:
+            params["response_mime_type"] = "application/json"
+            params["response_schema"] = schema
 
         budget = None
         if self.options.thinking_level is not None:
@@ -123,7 +137,10 @@ class GeminiGenerateAPI(BaseAPI):
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
         system, contents = _messages_to_gemini(context.messages)
-        config = self._build_config(tools=context.tools or None)
+        config = self._build_config(
+            tools=context.tools or None,
+            response_format=context.response_format,
+        )
         effective_system = context.system_prompt or system
         if effective_system:
             config.system_instruction = effective_system

@@ -23,6 +23,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
+    normalize_structured_response_format,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -240,6 +241,11 @@ def _messages_to_contents(
     return system, contents
 
 
+def _response_schema(response_format: Any | None) -> dict[str, Any] | None:
+    structured = normalize_structured_response_format(response_format)
+    return structured.schema if structured is not None else None
+
+
 _PROVIDER_ID = "google-antigravity"
 _EXTRA_PROJECT_KEY = "project_id"
 
@@ -308,12 +314,17 @@ class GoogleAntigravityAPI(BaseAPI):
         system: str | None,
         contents: list[dict[str, Any]],
         tools: Optional[list[Tool]] = None,
+        response_format: Any | None = None,
     ) -> dict[str, Any]:
         generation_config: dict[str, Any] = {}
         if self.options.temperature is not None:
             generation_config["temperature"] = self.options.temperature
         if self.options.max_tokens is not None:
             generation_config["maxOutputTokens"] = self.options.max_tokens
+        schema = _response_schema(response_format)
+        if schema is not None:
+            generation_config["responseMimeType"] = "application/json"
+            generation_config["responseSchema"] = schema
         if self.options.thinking_level is not None:
             from program.inference.types import ThinkingBudgets
             budgets = self.options.thinking_budgets or ThinkingBudgets()
@@ -339,7 +350,14 @@ class GoogleAntigravityAPI(BaseAPI):
         system, contents = _messages_to_contents(context.messages)
         if context.system_prompt:
             system = context.system_prompt
-        body = self._build_request_body(model, project, system, contents, tools=context.tools or None)
+        body = self._build_request_body(
+            model,
+            project,
+            system,
+            contents,
+            tools=context.tools or None,
+            response_format=context.response_format,
+        )
         headers = _antigravity_headers(self.options.api_key or "")
 
         if self.options.on_payload:

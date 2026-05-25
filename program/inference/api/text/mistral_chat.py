@@ -14,6 +14,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
+    normalize_structured_response_format,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -103,6 +104,20 @@ def _messages_to_mistral(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     return result
 
 
+def _response_format(response_format: Any | None) -> dict[str, Any] | None:
+    structured = normalize_structured_response_format(response_format)
+    if structured is None:
+        return None
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": structured.name,
+            "schema": structured.schema,
+            "strict": structured.strict,
+        },
+    }
+
+
 class MistralChatAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
@@ -157,6 +172,9 @@ class MistralChatAPI(BaseAPI):
             }
             if reasoning_effort is not None:
                 kwargs["reasoning_effort"] = reasoning_effort
+            response_format = _response_format(context.response_format)
+            if response_format is not None:
+                kwargs["response_format"] = response_format
 
             tools = context.tools or None
             if tools:

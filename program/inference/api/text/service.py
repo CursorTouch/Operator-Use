@@ -95,7 +95,11 @@ class LLM:
             self.api.options.api_key = api_key
 
         messages = self._resolve_messages(context)
-        api_context = LLMContext(messages=messages, tools=context.tools)
+        api_context = LLMContext(
+            messages=messages,
+            tools=context.tools,
+            response_format=context.response_format,
+        )
 
         try:
             async for event in self.api.stream(api_context, model=self.model):
@@ -119,7 +123,11 @@ class LLM:
             self.api.options.thinking_level = thinking_level
         try:
             messages = self._resolve_messages(context)
-            api_context = LLMContext(messages=messages, tools=context.tools)
+            api_context = LLMContext(
+                messages=messages,
+                tools=context.tools,
+                response_format=context.response_format,
+            )
             return await self.api.invoke(api_context, model=self.model)
         except Exception as e:
             from program.inference.types import ErrorEvent, StopReason

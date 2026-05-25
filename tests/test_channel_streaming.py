@@ -48,6 +48,11 @@ class TestSlackStreaming:
             ch._handler = None
             ch._live_tasks = {}
             ch._live_ts_map = {}
+            ch._retry_ts_map = {}
+            ch._tool_ts_map = {}
+            ch._prev_tool_ts = {}
+            ch._thinking_buffers = {}
+            ch._thinking_tasks = {}
         return ch
 
     @pytest.mark.asyncio
@@ -154,6 +159,11 @@ class TestTelegramStreaming:
         ch._typing_tasks = {}
         ch._live_tasks = {}
         ch._live_msg_ids = {}
+        ch._retry_msg_ids = {}
+        ch._tool_msg_ids = {}
+        ch._prev_tool_msg_ids = {}
+        ch._thinking_buffers = {}
+        ch._thinking_tasks = {}
         return ch
 
     def _mock_app(self):
@@ -233,6 +243,11 @@ class TestDiscordStreaming:
         ch._typing_tasks = {}
         ch._live_tasks = {}
         ch._live_messages = {}
+        ch._retry_messages = {}
+        ch._tool_messages = {}
+        ch._prev_tool_messages = {}
+        ch._thinking_buffers = {}
+        ch._thinking_tasks = {}
         return ch
 
     @pytest.mark.asyncio

@@ -11,6 +11,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
+    normalize_structured_response_format,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -89,6 +90,18 @@ def _messages_to_anthropic(
     return system, result
 
 
+def _output_config(response_format: Any | None) -> dict[str, Any] | None:
+    structured = normalize_structured_response_format(response_format)
+    if structured is None:
+        return None
+    return {
+        "format": {
+            "type": "json_schema",
+            "schema": structured.schema,
+        }
+    }
+
+
 class AnthropicClaudeCodeAPI(BaseAPI):
     """Anthropic Messages API using OAuth Bearer token auth (Claude Pro/Max)."""
 
@@ -137,6 +150,9 @@ class AnthropicClaudeCodeAPI(BaseAPI):
         if context.system_prompt:
             system = context.system_prompt
         params = self._build_params(model, system, anthropic_messages, tools=context.tools or None)
+        output_config = _output_config(context.response_format)
+        if output_config is not None:
+            params["output_config"] = output_config
 
         if self.options.on_payload:
             modified = self.options.on_payload(params)

@@ -19,6 +19,7 @@ from program.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
+    normalize_structured_response_format,
 )
 from program.message.types import (
     BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -142,6 +143,20 @@ def _messages_to_input(messages: list[BaseMessage]) -> tuple[str, list[dict[str,
                         })
 
     return instructions, input_items
+
+
+def _text_format(response_format: Any | None) -> dict[str, Any] | None:
+    structured = normalize_structured_response_format(response_format)
+    if structured is None:
+        return None
+    return {
+        "format": {
+            "type": "json_schema",
+            "name": structured.name,
+            "schema": structured.schema,
+            "strict": structured.strict,
+        }
+    }
 
 
 # ── Request building ──────────────────────────────────────────────────────────
@@ -447,6 +462,9 @@ class OpenAICodexResponsesAPI(BaseAPI):
         account_id = _extract_account_id(token)
         instructions, input_items = _messages_to_input(context.messages)
         body = _build_body(model, instructions, input_items, self.options, tools=context.tools or None)
+        text_format = _text_format(context.response_format)
+        if text_format is not None:
+            body["text"] = {**body.get("text", {}), **text_format}
 
         if self.options.on_payload:
             modified = self.options.on_payload(body)
