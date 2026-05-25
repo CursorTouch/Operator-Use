@@ -14,7 +14,7 @@ class OAuthCredential:
 
 @dataclass
 class APICredential:
-    type: AuthType = field(default_factory=lambda: AuthType.APIKey, init=False)
+    type: AuthType = field(default_factory=lambda: AuthType.ApiKey, init=False)
     key: str = ""
 
 

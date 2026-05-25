@@ -32,6 +32,11 @@ dependencies = [
     "prompt-toolkit>=3.0.52",
     "python-telegram-bot>=20.0",
     "aiortc>=1.14.0",
+    "comtypes>=1.4.15; sys_platform == 'win32'",
+    "pywin32>=311; sys_platform == 'win32'",
+    "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
 ]
 
 [project.scripts]
