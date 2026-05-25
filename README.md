@@ -199,6 +199,7 @@ Skills are discovered at four levels: builtins → global user → project → e
 | `glob` | Read | Match file patterns |
 | `grep` | Read | Search text in files |
 | `terminal` | Execute | Run shell commands with streaming output |
+| `computer` | Execute | Control the local desktop with action-based click, type, snapshot, app, and input operations |
 | `process` | Execute | Start and manage long-running background processes |
 | `web_fetch` | Web | Fetch and parse a web page |
 | `web_search` | Web | Search the web |

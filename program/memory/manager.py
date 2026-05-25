@@ -9,8 +9,8 @@ from program.memory.types import MemoryRuntimeContext
 class MemoryManager:
     """Owns the optional active external memory provider.
 
-    This keeps one external provider active at a time, matching the Hermes
-    pattern and avoiding prompt/tool bloat from multiple backends.
+    This keeps one external provider active at a time and avoids prompt/tool
+    bloat from multiple competing backends.
     """
 
     def __init__(
@@ -49,6 +49,10 @@ class MemoryManager:
             return ""
         return await self.api.prefetch(query, session_id=session_id)
 
+    def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
+        if self.api is not None:
+            self.api.queue_prefetch(query, session_id=session_id)
+
     def search(self, query: str, *, limit: int = 5):
         if self.api is None:
             return []
@@ -67,6 +71,25 @@ class MemoryManager:
     async def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
         if self.api is not None:
             await self.api.sync_turn(user_content, assistant_content, session_id=session_id)
+
+    async def on_session_end(self, messages: list[dict]) -> None:
+        if self.api is not None:
+            await self.api.on_session_end(messages)
+
+    async def on_pre_compact(self, messages: list[dict]) -> str:
+        if self.api is None:
+            return ""
+        return await self.api.on_pre_compact(messages)
+
+    async def on_memory_write(
+        self,
+        action: str,
+        target: str,
+        content: str,
+        metadata: dict | None = None,
+    ) -> None:
+        if self.api is not None:
+            await self.api.on_memory_write(action, target, content, metadata)
 
     async def shutdown(self) -> None:
         if self.api is not None:

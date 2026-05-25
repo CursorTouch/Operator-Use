@@ -35,7 +35,7 @@ class PromptTemplate:
         today = date.today().isoformat()
         cwd = self.cwd.replace("\\", "/")
         global_temp = Path.home() / ".program" / "temp"
-        project_temp = Path(self.cwd) / ".program" / "temp"
+        project_temp = f"{cwd}/.program/temp"
         footer = (
             f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
             f"\nGlobal temp directory: {global_temp} (scratch space shared across projects)"

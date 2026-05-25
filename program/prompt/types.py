@@ -2,13 +2,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from program.resource.types import ContextFile
 from program.skill.types import Skill
 from program.tool.types import Tool
-
-
-class ContextFile(BaseModel):
-    path: str
-    content: str
 
 
 class SystemPromptOptions(BaseModel):

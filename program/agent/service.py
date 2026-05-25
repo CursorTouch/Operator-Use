@@ -4,7 +4,7 @@ import asyncio
 import inspect
 import traceback
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from program.agent.types import AgentConfig, AgentContext, PromptOptions, RetryStartEvent, RetryEndEvent
 from program.extension.types import (
@@ -297,7 +297,7 @@ class Agent(ExtensionContext):
             skills=skills,
         ).build()
 
-    def _register_message_handler(self, persisted_ids: list[str]) -> callable:
+    def _register_message_handler(self, persisted_ids: list[str]) -> Callable:
         """Register a message_end hook that persists messages and tracks token usage."""
         async def _on_message_end(event: MessageEndEvent) -> None:
             message = event.message

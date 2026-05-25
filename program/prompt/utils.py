@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from program.prompt.types import ContextFile
-
 if TYPE_CHECKING:
+    from program.resource.types import ContextFile
     from program.skill.types import Skill
 
 

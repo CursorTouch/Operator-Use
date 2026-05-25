@@ -197,7 +197,7 @@ Load errors are non-fatal: `LoadToolsResult.errors` accumulates `ToolError` obje
 
 All path functions are defined in `program/settings/paths.py`.
 
-Drop a `.py` file exporting `tool = MyTool()` into any of those directories and it is picked up automatically on the next reload. The built-in tools (`read`, `write`, `edit`, `grep`, `glob`, `ls`, `terminal`, `web_fetch`, `web_search`, `memory`) live in `program/builtins/tools/`.
+Drop a `.py` file exporting `tool = MyTool()` into any of those directories and it is picked up automatically on the next reload. The built-in tools (`read`, `write`, `edit`, `grep`, `glob`, `ls`, `terminal`, `computer`, `web_fetch`, `web_search`, `memory`) live in `program/builtins/tools/`.
 
 ## Extension tools
 

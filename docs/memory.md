@@ -52,7 +52,7 @@ Environment variables:
 
 ## Why One Provider
 
-This follows the useful part of Hermes Agent's design: built-in local prompt memory stays simple and inspectable, while one optional external provider can add deeper recall without bloating prompts and tool lists with multiple competing backends.
+Memory keeps one active backend behind a shared API, so deeper recall does not bloat prompts and tool lists with multiple competing provider surfaces.
 
 ## Tool
 
@@ -65,6 +65,20 @@ The built-in `memory` tool is provider-agnostic. It exposes one schema with an `
 | `forget` | `memory_id` | Remove a provider memory by ID when supported |
 
 The tool talks only to `MemoryManager`; provider-specific APIs stay inside the adapter.
+
+## Hooks
+
+Memory providers can implement lifecycle hooks. `MemoryManager` forwards these hooks when an active provider exists:
+
+| Hook | Intended call site | Purpose |
+|---|---|---|
+| `prefetch(query)` | Before a model/API turn | Return recalled context for the current turn |
+| `queue_prefetch(query)` | After a turn | Warm retrieval for the next turn |
+| `sync_turn(user, assistant)` | After a completed turn | Persist or extract useful turn memory |
+| `on_session_end(messages)` | Session shutdown/end | Final extraction or flush |
+| `on_pre_compact(messages)` | Before compaction | Preserve insights before context is discarded |
+| `on_memory_write(action, target, content)` | When the `memory` tool writes | Mirror explicit writes into provider storage |
+| `shutdown()` | Runtime shutdown | Close provider resources |
 
 ## Next Integration Points
 
