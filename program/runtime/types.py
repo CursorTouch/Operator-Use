@@ -135,7 +135,7 @@ class RuntimeContext:
             settings_manager = SettingsManager.create(cwd, config_dir)
 
         # ── LLM ───────────────────────────────────────────────────────────────
-        model_id = config.model_id or settings_manager.get_default_model()
+        model_id = config.model_id or settings_manager.get_default_model() or RuntimeConfig.model_fields["model_id"].default
         provider = config.provider or settings_manager.get_default_provider()
         llm = LLM(model_id=model_id, provider=provider)
 
@@ -251,7 +251,8 @@ class RuntimeContext:
         if memory_enabled:
             provider_id = memory_settings.provider
             memory_manager = MemoryManager(provider_id=provider_id)
-            memory_options = memory_manager.providers.get(provider_id).options if provider_id and memory_manager.providers.get(provider_id) else None
+            memory_provider = memory_manager.providers.get(provider_id) if provider_id else None
+            memory_options = memory_provider.options if memory_provider is not None else None
             if memory_options is not None:
                 if memory_settings.max_prompt_chars is not None:
                     memory_options.max_prompt_chars = memory_settings.max_prompt_chars

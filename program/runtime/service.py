@@ -301,17 +301,16 @@ class Runtime:
                 agent_id=str(id(engine)),
             ))
 
-        # Add ACP agent tool if the main engine has one (shares registry/store/auth).
+        # Add ACP agent tool if ACP services are available.
         from program.builtins.tools.acp_agent import ACPAgentTool
-        main_acp = self._context.engine._tools.get('acp_agent')
-        if main_acp is not None and isinstance(main_acp, ACPAgentTool):
+        if self._context.acp_session_manager is not None and self._context.acp_auth_manager is not None:
             engine.add_tool(ACPAgentTool(
-                registry=list(main_acp._registry.values()),  # type: ignore[attr-defined]
-                session_manager=main_acp._session_manager,   # type: ignore[attr-defined]
-                auth_manager=main_acp._auth,                 # type: ignore[attr-defined]
+                registry=self._context.settings_manager.get_acp_agents() if self._context.settings_manager else [],
+                session_manager=self._context.acp_session_manager,
+                auth_manager=self._context.acp_auth_manager,
                 bus=self.bus,
                 agent=None,
-                settings_manager=main_acp._settings_manager,  # type: ignore[attr-defined]
+                settings_manager=self._context.settings_manager,
             ))
 
         agent = Agent(
