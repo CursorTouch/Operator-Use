@@ -160,12 +160,24 @@ class Desktop:
             logger.error(f"Error parsing start menu apps: {e}")
             return {}
 
-    def execute_command(self, command: str, timeout: int = 10) -> tuple[str, int]:
+    def execute_command(
+        self,
+        command: str,
+        mode: Literal["powershell", "cmd"] = "powershell",
+        timeout: int = 10,
+    ) -> tuple[str, int]:
         try:
-            utf8_command = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " + command
-            encoded = base64.b64encode(utf8_command.encode("utf-16le")).decode("ascii")
+            if mode == "powershell":
+                utf8_command = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " + command
+                encoded = base64.b64encode(utf8_command.encode("utf-16le")).decode("ascii")
+                command_args = ["powershell", "-NoProfile", "-EncodedCommand", encoded]
+            elif mode == "cmd":
+                command_args = ["cmd", "/c", command]
+            else:
+                return ('Invalid mode. Use "powershell" or "cmd".', 1)
+
             result = subprocess.run(
-                ["powershell", "-NoProfile", "-EncodedCommand", encoded],
+                command_args,
                 capture_output=True,
                 timeout=timeout,
                 cwd=os.path.expanduser(path="~"),

@@ -168,23 +168,26 @@ class Gateway:
         for r in results:
             if not isinstance(r, MessageReceiveResult):
                 continue
-            if r.action == 'reject':
-                if r.reason:
-                    ch = self._channels.get(msg.channel)
-                    if ch is not None:
-                        reject_msg = OutgoingMessage(
-                            channel=msg.channel,
-                            chat_id=msg.chat_id,
-                            parts=[TextPart(r.reason)],
-                        )
-                        await ch.send(reject_msg)
-                logger.info("Gateway: message from %r rejected by hook", msg.channel)
-                return
-            if r.action == 'transform':
-                if r.parts is not None:
-                    parts = r.parts
-                if r.text is not None:
-                    text = r.text
+            match r.action:
+                case 'reject':
+                    if r.reason:
+                        ch = self._channels.get(msg.channel)
+                        if ch is not None:
+                            reject_msg = OutgoingMessage(
+                                channel=msg.channel,
+                                chat_id=msg.chat_id,
+                                parts=[TextPart(r.reason)],
+                            )
+                            await ch.send(reject_msg)
+                    logger.info("Gateway: message from %r rejected by hook", msg.channel)
+                    return
+                case 'transform':
+                    if r.parts is not None:
+                        parts = r.parts
+                    if r.text is not None:
+                        text = r.text
+                case 'continue':
+                    pass
 
         # Re-extract text from parts in case STT hook replaced AudioPart with TextPart
         if any(r for r in results if isinstance(r, MessageReceiveResult) and r.action == 'transform' and r.parts is not None):
