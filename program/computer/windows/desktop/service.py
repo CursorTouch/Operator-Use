@@ -24,7 +24,7 @@ import program.computer.windows.uia as uia
 from program.computer.windows.desktop.config import KEY_ALIASES
 from program.computer.windows.desktop.utils import escape_text_for_sendkeys
 from program.computer.windows.desktop.views import Browser, DesktopState, Size, Status, Window
-from program.computer.windows.tree.service import Tree
+from program.computer.windows.tree import Tree
 from program.computer.windows.tree.views import BoundingBox, TreeElementNode, TreeState
 from program.computer.windows.vdm.core import get_all_desktops, get_current_desktop, is_window_on_current_desktop
 
@@ -396,7 +396,7 @@ class Desktop:
         bounding_rectangle = element_handle.BoundingRectangle
         return bounding_rectangle.xcenter(), bounding_rectangle.ycenter()
 
-    def click(self, loc: tuple[int, int], button: str = "left", clicks: int = 2):
+    def click(self, loc: tuple[int, int], button: str = "left", clicks: int = 1):
         x, y = loc
         if clicks == 0:
             uia.SetCursorPos(x, y)
@@ -418,9 +418,9 @@ class Desktop:
         self,
         loc: tuple[int, int],
         text: str,
-        caret_position: Literal["start", "end", "none"] = "none",
-        clear: Literal["true", "false"] = "false",
-        press_enter: Literal["true", "false"] = "false",
+        caret_position: Literal["start", "end", "idle"] = "idle",
+        clear: bool = False,
+        press_enter: bool = False,
     ):
         x, y = loc
         uia.Click(x, y)
@@ -428,25 +428,25 @@ class Desktop:
             uia.SendKeys("{Home}", waitTime=0.05)
         elif caret_position == "end":
             uia.SendKeys("{End}", waitTime=0.05)
-        if clear == "true":
+        if clear:
             sleep(0.5)
             uia.SendKeys("{Ctrl}a", waitTime=0.05)
             uia.SendKeys("{Back}", waitTime=0.05)
         escaped_text = escape_text_for_sendkeys(text)
         uia.SendKeys(escaped_text, interval=0.01, waitTime=0.05)
-        if press_enter == "true":
+        if press_enter:
             uia.SendKeys("{Enter}", waitTime=0.05)
 
     def scroll(
         self,
-        loc: tuple[int, int] = None,
-        type: Literal["horizontal", "vertical"] = "vertical",
+        loc: tuple[int, int] | None = None,
+        orientation: Literal["horizontal", "vertical"] = "vertical",
         direction: Literal["up", "down", "left", "right"] = "down",
         wheel_times: int = 1,
     ) -> str | None:
         if loc:
             self.move(loc)
-        match type:
+        match orientation:
             case "vertical":
                 match direction:
                     case "up":
@@ -464,7 +464,7 @@ class Desktop:
                     case _:
                         return 'Invalid direction. Use "left" or "right".'
             case _:
-                return 'Invalid type. Use "horizontal" or "vertical".'
+                return 'Invalid orientation. Use "horizontal" or "vertical".'
         return None
 
     def drag(self, loc: tuple[int, int]):
@@ -506,13 +506,16 @@ class Desktop:
     def multi_edit(self, elements: list[tuple[int, int, str] | tuple[int, str]]):
         for element in elements:
             x, y, text = element
-            self.type((x, y), text=text, clear="true")
+            self.type((x, y), text=text, clear=True)
 
     def scrape(self, url: str) -> str:
         response = requests.get(url, timeout=10)
         html = response.text
         content = markdownify(html=html)
         return content
+
+    def wait(self, duration: int) -> None:
+        sleep(duration)
 
     def is_window_visible(self, window: uia.Control) -> bool:
         is_minimized = self.get_window_status(window) != Status.MINIMIZED

@@ -115,43 +115,47 @@ class Desktop:
         self,
         mode: Literal['launch', 'resize', 'move', 'switch'] = 'launch',
         name: Optional[str] = None,
-        window_loc: Optional[Tuple[int, int]] = None,
-        window_size: Optional[Tuple[int, int]] = None,
+        loc: Optional[Tuple[int, int]] = None,
+        size: Optional[Tuple[int, int]] = None,
     ) -> str:
         """Manage applications: launch, resize, move, or switch focus."""
-        if mode == 'launch':
-            if not name:
-                return "App name or bundle ID required for launch."
-            ok = ax.LaunchApplication(name)
-            return f"Launched {name}." if ok else f"Failed to launch {name}."
-        if mode == 'switch':
-            if not name:
-                return "App name or bundle ID required for switch."
-            app = ax.GetRunningApplicationByName(name) or ax.GetRunningApplicationByBundleId(name)
-            if not app:
-                return f"Application '{name}' not found."
-            ax.ActivateApplication(app.PID)
-            time.sleep(0.2)
-            return f"Switched to {name}."
-        if mode == 'resize':
-            app = ax.GetFrontmostApplication()
-            if not app or not app.MainWindow:
-                return "No frontmost window to resize."
-            win = app.MainWindow
-            if not window_size:
-                return "window_size required for resize mode."
-            win.Resize(float(window_size[0]), float(window_size[1]))
-            return "Window resized."
-        if mode == 'move':
-            app = ax.GetFrontmostApplication()
-            if not app or not app.MainWindow:
-                return "No frontmost window to move."
-            win = app.MainWindow
-            if not window_loc:
-                return "window_loc required for move mode."
-            win.MoveWindowTo(float(window_loc[0]), float(window_loc[1]))
-            return "Window moved."
-        return f"Unknown mode: {mode}"
+        match mode:
+            case 'launch':
+                if not name:
+                    return "App name or bundle ID required for launch."
+                ok = ax.LaunchApplication(name)
+                return f"Launched {name}." if ok else f"Failed to launch {name}."
+            case 'switch':
+                if not name:
+                    return "App name or bundle ID required for switch."
+                app = ax.GetRunningApplicationByName(name) or ax.GetRunningApplicationByBundleId(name)
+                if not app:
+                    return f"Application '{name}' not found."
+                if app.PID is None:
+                    return f"Application '{name}' has no process ID."
+                ax.ActivateApplication(app.PID)
+                time.sleep(0.2)
+                return f"Switched to {name}."
+            case 'resize':
+                app = ax.GetFrontmostApplication()
+                if not app or not app.MainWindow:
+                    return "No frontmost window to resize."
+                win = app.MainWindow
+                if not size:
+                    return "size required for resize mode."
+                win.Resize(float(size[0]), float(size[1]))
+                return "Window resized."
+            case 'move':
+                app = ax.GetFrontmostApplication()
+                if not app or not app.MainWindow:
+                    return "No frontmost window to move."
+                win = app.MainWindow
+                if not loc:
+                    return "loc required for move mode."
+                win.MoveWindowTo(float(loc[0]), float(loc[1]))
+                return "Window moved."
+            case _:
+                return f"Unknown mode: {mode}"
 
     def execute_command(
         self,
@@ -237,9 +241,9 @@ class Desktop:
 
     def scroll(
         self,
-        loc: Optional[Tuple[int, int]],
-        scroll_type: Literal['horizontal', 'vertical'],
-        direction: Literal['up', 'down', 'left', 'right'],
+        loc: Optional[Tuple[int, int]] = None,
+        orientation: Literal['horizontal', 'vertical'] = 'vertical',
+        direction: Literal['up', 'down', 'left', 'right'] = 'down',
         wheel_times: int = 1,
     ) -> Optional[str]:
         """Scroll at coordinates or current mouse position."""
@@ -248,16 +252,18 @@ class Desktop:
             time.sleep(0.05)
         mult = 1 if direction in ('down', 'right') else -1
         for _ in range(wheel_times):
-            if scroll_type == 'vertical':
+            if orientation == 'vertical':
                 if direction in ('up', 'down'):
                     ax.WheelUp(1) if mult < 0 else ax.WheelDown(1)
                 else:
                     return "Use direction 'up' or 'down' for vertical scroll."
-            else:
+            elif orientation == 'horizontal':
                 if direction in ('left', 'right'):
                     ax.WheelLeft(1) if mult < 0 else ax.WheelRight(1)
                 else:
                     return "Use direction 'left' or 'right' for horizontal scroll."
+            else:
+                return 'Invalid orientation. Use "horizontal" or "vertical".'
             time.sleep(0.05)
         return None
 
