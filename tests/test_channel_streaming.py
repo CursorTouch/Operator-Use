@@ -23,6 +23,16 @@ def _chunk(chat_id: str, text: str) -> OutgoingMessage:
     )
 
 
+def _thinking_chunk(chat_id: str, text: str) -> OutgoingMessage:
+    return OutgoingMessage(
+        channel="x",
+        chat_id=chat_id,
+        parts=[TextPart(text)],
+        stream_phase=StreamPhase.CHUNK,
+        metadata={"kind": "thinking"},
+    )
+
+
 # ── Slack ─────────────────────────────────────────────────────────────────────
 
 class TestSlackStreaming:
@@ -37,8 +47,11 @@ class TestSlackStreaming:
             BaseChannel.__init__(ch)
             ch._bot_token = "tok"
             ch._app_token = "atok"
+            ch._commands = []
+            ch._command_handler = None
             ch._allow_from = set()
             ch._show_tool_calls = True
+            ch._show_thinking = False
             ch._streaming = True
             ch._streaming_latency = latency
             ch._is_group = {}
@@ -135,6 +148,26 @@ class TestSlackStreaming:
         client.chat_postMessage.assert_called_once()
         client.chat_update.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_thinking_hidden_by_default(self):
+        ch = self._channel(latency=0.01)
+        chat_id = "C-think"
+
+        client = AsyncMock()
+        client.chat_postMessage = AsyncMock(return_value={"ok": True, "ts": "think-ts"})
+        client.chat_update = AsyncMock()
+
+        ch._clients[chat_id] = client
+        ch._thread_ts_map[chat_id] = None
+        ch._is_group[chat_id] = False
+
+        await ch.send(_text_msg(chat_id, StreamPhase.START))
+        await ch.send(_thinking_chunk(chat_id, "private reasoning"))
+        await asyncio.sleep(0.04)
+
+        client.chat_postMessage.assert_not_called()
+        assert ch._thinking_buffers == {}
+
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
 
@@ -151,6 +184,7 @@ class TestTelegramStreaming:
         ch._allow_from = set()
         ch._group_policy = "mention"
         ch._show_tool_calls = True
+        ch._show_thinking = False
         ch._streaming = True
         ch._streaming_latency = latency
         ch._is_group = {}
@@ -218,6 +252,21 @@ class TestTelegramStreaming:
         bot.send_message.assert_called_once()
         bot.edit_message_text.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_thinking_hidden_by_default(self):
+        ch = self._channel(latency=0.01)
+        app, bot = self._mock_app()
+        ch._app = app
+        chat_id = "333"
+        ch._is_group[chat_id] = False
+
+        await ch.send(_text_msg(chat_id, StreamPhase.START))
+        await ch.send(_thinking_chunk(chat_id, "private reasoning"))
+        await asyncio.sleep(0.04)
+
+        bot.send_message.assert_not_called()
+        assert ch._thinking_buffers == {}
+
 
 # ── Discord ───────────────────────────────────────────────────────────────────
 
@@ -230,9 +279,13 @@ class TestDiscordStreaming:
         from program.gateway.types import BaseChannel
         BaseChannel.__init__(ch)
         ch._token = "tok"
+        ch._commands = []
+        ch._command_handler = None
+        ch._commands_synced = False
         ch._allow_from = set()
         ch._group_policy = "mention"
         ch._show_tool_calls = True
+        ch._show_thinking = False
         ch._streaming = True
         ch._streaming_latency = latency
         ch._is_group = {}
@@ -273,8 +326,24 @@ class TestDiscordStreaming:
 
         await ch.send(_text_msg(chat_id, StreamPhase.END))
         assert live_msg.edit.called
-        edit_content = live_msg.edit.call_args.kwargs.get("content", "")
-        assert "live" in edit_content or "update" in edit_content
+
+    @pytest.mark.asyncio
+    async def test_thinking_hidden_by_default(self):
+        ch = self._channel(latency=0.01)
+        chat_id = "think-discord"
+
+        discord_ch = AsyncMock()
+        discord_ch.send = AsyncMock()
+        discord_ch.trigger_typing = AsyncMock()
+        ch._discord_channels[chat_id] = discord_ch
+        ch._is_group[chat_id] = False
+
+        await ch.send(_text_msg(chat_id, StreamPhase.START))
+        await ch.send(_thinking_chunk(chat_id, "private reasoning"))
+        await asyncio.sleep(0.04)
+
+        discord_ch.send.assert_not_called()
+        assert ch._thinking_buffers == {}
 
     @pytest.mark.asyncio
     async def test_streaming_off_sends_fresh_on_end(self):

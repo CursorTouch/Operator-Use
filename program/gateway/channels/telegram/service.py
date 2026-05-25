@@ -33,6 +33,7 @@ class TelegramChannel(BaseChannel):
         allow_from: list[str] | None = None,
         group_policy: str = "mention",
         show_tool_calls: bool = True,
+        show_thinking: bool = False,
         streaming: bool = True,
         streaming_latency: float = 1.0,
     ) -> None:
@@ -42,6 +43,7 @@ class TelegramChannel(BaseChannel):
         self._allow_from = set(allow_from or [])
         self._group_policy = group_policy
         self._show_tool_calls = show_tool_calls
+        self._show_thinking = show_thinking
         self._streaming = streaming
         self._streaming_latency = streaming_latency
         self._is_group: dict[str, bool] = {}  # chat_id → True if group/supergroup/channel
@@ -328,6 +330,8 @@ class TelegramChannel(BaseChannel):
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
             if kind == 'thinking':
+                if not self._show_thinking:
+                    return
                 # Accumulate thinking text and stream it into the shared rolling-status slot.
                 chunk = text_from_parts(msg.parts)
                 self._thinking_buffers[chat_id] = self._thinking_buffers.get(chat_id, "") + chunk

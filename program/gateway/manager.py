@@ -171,6 +171,7 @@ class GatewayManager:
             allow_from=tcfg.allow_from,
             group_policy=tcfg.group_policy,
             show_tool_calls=tcfg.show_tool_calls,
+            show_thinking=tcfg.show_thinking,
             streaming=tcfg.streaming,
             streaming_latency=tcfg.streaming_latency,
         )
@@ -179,11 +180,15 @@ class GatewayManager:
 
     async def _run_discord(self, bot_token: str, dcfg) -> None:
         from program.gateway.channels.discord import DiscordChannel
+        cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
         ch = DiscordChannel(
             token=bot_token,
+            commands=cmds,
+            command_handler=self.gateway.dispatch_command,
             allow_from=dcfg.allow_from,
             group_policy=dcfg.group_policy,
             show_tool_calls=dcfg.show_tool_calls,
+            show_thinking=dcfg.show_thinking,
             streaming=dcfg.streaming,
             streaming_latency=dcfg.streaming_latency,
         )
@@ -192,11 +197,15 @@ class GatewayManager:
 
     async def _run_slack(self, bot_token: str, app_token: str, scfg) -> None:
         from program.gateway.channels.slack import SlackChannel
+        cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
         ch = SlackChannel(
             bot_token=bot_token,
             app_token=app_token,
+            commands=cmds,
+            command_handler=self.gateway.dispatch_command,
             allow_from=scfg.allow_from,
             show_tool_calls=scfg.show_tool_calls,
+            show_thinking=scfg.show_thinking,
             streaming=scfg.streaming,
             streaming_latency=scfg.streaming_latency,
         )

@@ -53,7 +53,7 @@ The gateway routes messages between the agent and multiple channels concurrently
 | WebSocket | `websocket` | Client or server mode |
 | Telegram | `telegram` | Bot API |
 | Discord | `discord` | Bot with slash-command sync |
-| Slack | `slack` | Socket Mode (`xoxb-` + `xapp-`) |
+| Slack | `slack` | Socket Mode (`xoxb-` + `xapp-`), slash-command listeners |
 | Twitch | `twitch` | Chat integration |
 | Email | `email` | SMTP/IMAP |
 

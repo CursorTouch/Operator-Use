@@ -283,18 +283,22 @@ class Gateway:
 
     async def _run_command(self, channel_id: str, chat_id: str, parsed) -> None:
         """Dispatch a slash command and send its printed output back to the channel."""
-        import contextlib
-        import io
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            await self._runtime.commands.dispatch(parsed)
-        output = buf.getvalue().strip()
+        output = await self.dispatch_command(parsed)
         if output:
             await self._bus.publish_outgoing(OutgoingMessage(
                 channel=channel_id,
                 chat_id=chat_id,
                 parts=[TextPart(output)],
             ))
+
+    async def dispatch_command(self, parsed) -> str:
+        """Dispatch a slash command and return the text it printed."""
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            await self._runtime.commands.dispatch(parsed)
+        return buf.getvalue().strip()
 
     # ── Session runner ────────────────────────────────────────────────────────
 

@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from program.gateway.types import BaseChannel
 from program.gateway.channels.shutdown import quiet_library_logging
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
+from program.commands.types import CommandParseResult
 from program.gateway.channels.slack.utils import (
     _MEDIA_DIR, _MENTION_RE,
     is_audio_file, audio_ext_from_file, download_slack_file,
@@ -48,8 +50,11 @@ class SlackChannel(BaseChannel):
         self,
         bot_token: str,
         app_token: str,
+        commands: list[tuple[str, str]] | None = None,
+        command_handler: Callable[[CommandParseResult], Awaitable[str]] | None = None,
         allow_from: list[str] | None = None,
         show_tool_calls: bool = True,
+        show_thinking: bool = False,
         streaming: bool = True,
         streaming_latency: float = 1.0,
     ) -> None:
@@ -58,8 +63,11 @@ class SlackChannel(BaseChannel):
             raise ImportError('slack-bolt>=1.0 is required for SlackChannel.')
         self._bot_token = bot_token
         self._app_token = app_token
+        self._commands = commands or []
+        self._command_handler = command_handler
         self._allow_from = set(allow_from or [])
         self._show_tool_calls = show_tool_calls
+        self._show_thinking = show_thinking
         self._streaming = streaming
         self._streaming_latency = streaming_latency
         self._is_group: dict[str, bool] = {}  # chat_id → True if channel (not DM)
@@ -95,6 +103,7 @@ class SlackChannel(BaseChannel):
     async def connect(self) -> None:
         """Create AsyncApp, register handlers, start SocketModeHandler. Runs until cancelled."""
         app = AsyncApp(token=self._bot_token)
+        self._register_slash_commands(app)
 
         @app.event("app_mention")
         async def handle_mention(event: dict, client: AsyncWebClient) -> None:
@@ -158,6 +167,7 @@ class SlackChannel(BaseChannel):
             ))
 
         self._handler = AsyncSocketModeHandler(app, self._app_token)
+        assert self._handler is not None
         await self._handler.start_async()
         logger.info("Slack bot started (Socket Mode)")
 
@@ -167,6 +177,49 @@ class SlackChannel(BaseChannel):
             pass
         finally:
             await self.disconnect()
+
+    _COMMAND_NAME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
+
+    def _valid_commands(self) -> list[str]:
+        return [
+            name
+            for name, _desc in self._commands
+            if self._COMMAND_NAME_RE.fullmatch(name)
+        ]
+
+    def _register_slash_commands(self, app) -> None:
+        if self._command_handler is None:
+            return
+
+        for name in self._valid_commands():
+            def _make_handler(command_name: str):
+                async def _handle_command(ack, respond, command) -> None:
+                    await ack()
+
+                    user_id = command.get("user_id", "")
+                    if self._allow_from and user_id not in self._allow_from:
+                        await respond("You are not allowed to use this bot.")
+                        return
+
+                    raw_args = command.get("text", "").strip()
+                    parsed = CommandParseResult(
+                        name=command_name,
+                        args=raw_args.split() if raw_args else [],
+                        raw=f"/{command_name} {raw_args}".strip(),
+                    )
+                    try:
+                        output = await self._command_handler(parsed) if self._command_handler is not None else ""
+                    except Exception:
+                        logger.exception("SlackChannel: slash command failed: /%s", command_name)
+                        output = f"Command failed: /{command_name}"
+
+                    if output:
+                        for chunk in split_message(markdown_to_slack_mrkdwn(output)):
+                            await respond(chunk)
+
+                return _handle_command
+
+            app.command(f"/{name}")(_make_handler(name))
 
     async def disconnect(self) -> None:
         """Close the Socket Mode handler."""
@@ -296,6 +349,8 @@ class SlackChannel(BaseChannel):
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
             if kind == 'thinking':
+                if not self._show_thinking:
+                    return
                 chunk = text_from_parts(msg.parts)
                 self._thinking_buffers[chat_id] = self._thinking_buffers.get(chat_id, "") + chunk
                 if chat_id not in self._thinking_tasks:

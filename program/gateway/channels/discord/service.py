@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from program.gateway.types import BaseChannel
 from program.gateway.channels.shutdown import quiet_library_logging
 from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
+from program.commands.types import CommandParseResult
 from program.gateway.channels.discord.utils import _MEDIA_DIR, is_audio_attachment, split_message
 
 logger = logging.getLogger(__name__)
@@ -37,9 +39,12 @@ class DiscordChannel(BaseChannel):
     def __init__(
         self,
         token: str,
+        commands: list[tuple[str, str]] | None = None,
+        command_handler: Callable[[CommandParseResult], Awaitable[str]] | None = None,
         allow_from: list[str] | None = None,
         group_policy: str = "mention",
         show_tool_calls: bool = True,
+        show_thinking: bool = False,
         streaming: bool = True,
         streaming_latency: float = 1.0,
     ) -> None:
@@ -47,9 +52,13 @@ class DiscordChannel(BaseChannel):
         if not _DISCORD_AVAILABLE:
             raise ImportError('discord.py>=2.0 is required for DiscordChannel.')
         self._token = token
+        self._commands = commands or []
+        self._command_handler = command_handler
+        self._commands_synced = False
         self._allow_from = set(allow_from or [])
         self._group_policy = group_policy
         self._show_tool_calls = show_tool_calls
+        self._show_thinking = show_thinking
         self._streaming = streaming
         self._streaming_latency = streaming_latency
         self._is_group: dict[str, bool] = {}  # chat_id → True if guild channel (not DM)
@@ -76,10 +85,21 @@ class DiscordChannel(BaseChannel):
         intents.message_content = True
         self._client = discord.Client(intents=intents)
         client = self._client
+        assert client is not None
+        tree = discord.app_commands.CommandTree(client)
+        self._register_application_commands(tree)
 
         @client.event
         async def on_ready() -> None:
             logger.info("Discord bot logged in as %s", client.user)
+            if self._commands_synced:
+                return
+            try:
+                synced = await tree.sync()
+                self._commands_synced = True
+                logger.info("Discord application commands synced: %d", len(synced))
+            except Exception:
+                logger.exception("DiscordChannel: failed to sync application commands")
 
         @client.event
         async def on_message(message: discord.Message) -> None:
@@ -142,6 +162,64 @@ class DiscordChannel(BaseChannel):
             pass
         finally:
             await self.disconnect()
+
+    _COMMAND_NAME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
+
+    def _valid_commands(self) -> list[tuple[str, str]]:
+        return [
+            (name, (desc or name)[:100])
+            for name, desc in self._commands
+            if self._COMMAND_NAME_RE.fullmatch(name)
+        ]
+
+    def _register_application_commands(self, tree) -> None:
+        if self._command_handler is None:
+            return
+
+        for name, description in self._valid_commands():
+            def _make_callback(command_name: str):
+                async def _callback(interaction: discord.Interaction, args: str = "") -> None:
+                    user_id = str(interaction.user.id) if getattr(interaction, "user", None) is not None else ""
+                    if self._allow_from and user_id not in self._allow_from:
+                        await interaction.response.send_message("You are not allowed to use this bot.", ephemeral=True)
+                        return
+
+                    await interaction.response.defer(thinking=True)
+                    parsed = CommandParseResult(
+                        name=command_name,
+                        args=args.split() if args else [],
+                        raw=f"/{command_name} {args}".strip(),
+                    )
+                    try:
+                        output = await self._command_handler(parsed) if self._command_handler is not None else ""
+                    except Exception:
+                        logger.exception("DiscordChannel: slash command failed: /%s", command_name)
+                        output = f"Command failed: /{command_name}"
+
+                    if output:
+                        for chunk in split_message(output):
+                            await interaction.followup.send(chunk)
+                    else:
+                        try:
+                            await interaction.delete_original_response()
+                        except Exception:
+                            pass
+
+                _callback.__annotations__ = {
+                    "interaction": discord.Interaction,
+                    "args": str,
+                    "return": None,
+                }
+                return discord.app_commands.describe(
+                    args="Arguments for this Operator command."
+                )(_callback)
+
+            command = discord.app_commands.Command(
+                name=name,
+                description=description,
+                callback=_make_callback(name),
+            )
+            tree.add_command(command)
 
     async def disconnect(self) -> None:
         """Close the Discord client."""
@@ -275,6 +353,8 @@ class DiscordChannel(BaseChannel):
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
             if kind == 'thinking':
+                if not self._show_thinking:
+                    return
                 chunk = text_from_parts(msg.parts)
                 self._thinking_buffers[chat_id] = self._thinking_buffers.get(chat_id, "") + chunk
                 if chat_id not in self._thinking_tasks:

@@ -219,17 +219,19 @@ Polls via PTB (python-telegram-bot ≥ 20.0). Handles text, voice messages, and 
 
 **Markdown pipe tables** are automatically wrapped in fenced code blocks before HTML conversion so they render as monospace in Telegram (which does not support native table markup).
 
+`show_thinking` defaults to `false` for Telegram, Discord, and Slack. Set it to `true` per channel to stream model thinking text into the same rolling status message used before tool calls.
+
 ### DiscordChannel
 
-Uses discord.py ≥ 2.0. Responds to DMs and @mentions. Handles text and audio attachments. Shows a typing indicator while the agent works.
+Uses discord.py ≥ 2.0. Responds to DMs and @mentions. Handles text and audio attachments. Shows a typing indicator while the agent works. On startup, syncs Operator slash commands as Discord application commands and routes command invocations through the same runtime command registry used by the REPL and Telegram.
 
-**Setup:** Set `DISCORD_BOT_TOKEN` env var or `auth/channels.json`. Enable `message_content` intent in the Discord Developer Portal. Enable the channel in settings.
+**Setup:** Set `DISCORD_BOT_TOKEN` env var or `auth/channels.json`. Enable `message_content` intent in the Discord Developer Portal. Invite the bot with the `applications.commands` scope so slash commands are visible. Enable the channel in settings.
 
 ### SlackChannel
 
-Uses slack-bolt ≥ 1.0 via Socket Mode. Handles `app_mention` events and DMs. `chat_id` format: `"slack_channel_id:thread_ts"` if in a thread, else just `"slack_channel_id"`.
+Uses slack-bolt ≥ 1.0 via Socket Mode. Handles `app_mention` events and DMs. Also registers Socket Mode listeners for Operator slash commands and routes them through the runtime command registry when Slack sends the command payload. `chat_id` format: `"slack_channel_id:thread_ts"` if in a thread, else just `"slack_channel_id"`.
 
-**Setup:** Set `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` env vars or `auth/channels.json`. Enable Socket Mode in Slack App settings. Enable the channel in settings.
+**Setup:** Set `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` env vars or `auth/channels.json`. Enable Socket Mode in Slack App settings. Add the slash commands you want in the Slack app configuration; Slack does not expose a Bot-API-style command-menu sync like Telegram. Enable the channel in settings.
 
 ### TwitchChannel
 
@@ -252,9 +254,9 @@ All channels are configured in `settings.json` under the `channels` key:
 ```json
 {
   "channels": {
-    "telegram":  { "enabled": false },
-    "discord":   { "enabled": false },
-    "slack":     { "enabled": false },
+    "telegram":  { "enabled": false, "show_thinking": false },
+    "discord":   { "enabled": false, "show_thinking": false },
+    "slack":     { "enabled": false, "show_thinking": false },
     "twitch":    { "enabled": false, "channel_name": "", "nick": "", "prefix": "!", "allow_from": [] },
     "email":     { "enabled": false, "imap_host": "", "imap_port": 993, "smtp_host": "", "smtp_port": 587, "poll_interval": 30, "allow_from": [] },
     "websocket": { "enabled": false, "host": "127.0.0.1", "port": 8765 }
