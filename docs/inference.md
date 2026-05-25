@@ -27,7 +27,7 @@ Resolution order at construction:
 1. Look up the model in `ModelRegistry` (by `model_id`, optionally filtered by `provider`).
 2. Look up the provider in `ProviderRegistry`.
 3. Resolve the API class: from `model.api`, then `provider.api`, then `LLMAPIRegistry`.
-4. If the provider is an `OAuthProvider`: load credentials from `AuthManager`. If missing, raise immediately.
+4. If the provider is an `OAuthProvider`: load credentials from `ProviderAuthManager`. If missing, raise immediately.
 5. Merge provider base options with any caller-supplied `LLMOptions`.
 6. Set `max_tokens` from the model definition if the API options leave it unset.
 
@@ -432,9 +432,9 @@ Type aliases: `TextModel`, `ImageModel`, `AudioModel`, `VideoModel` — all are 
 
 `ProviderRegistry` holds `APIProvider` and `OAuthProvider` definitions used by `LLM`.
 
-**APIProvider** — key-based auth. The provider's `LLMOptions` carries the base URL; the API key is resolved at call time via `AuthManager`.
+**APIProvider** — key-based auth. The provider's `LLMOptions` carries the base URL; the API key is resolved at call time via `ProviderAuthManager`.
 
-**OAuthProvider** — OAuth token auth. At construction, `LLM` loads credentials from `AuthManager` and derives a temporary API key from the stored `OAuthCredential`.
+**OAuthProvider** — OAuth token auth. At construction, `LLM` loads credentials from `ProviderAuthManager` and derives a temporary API key from the stored `OAuthCredential`.
 
 Built-in key-based text providers include:
 
@@ -505,14 +505,14 @@ Each file exports a `providers` list (and for LLM: `api_providers`, `oauth_provi
 
 ## Auth
 
-`AuthManager` persists credentials to `auth.json` in the config directory. It supports:
+`ProviderAuthManager` persists credentials to `auth.json` in the config directory. It supports:
 
 - `OAuthCredential` — access token, refresh token, expiry
 - `APICredential` — plain API key string
 
-All four service classes (`LLM`, `ImageLLM`, `AudioText`, `VideoLLM`) share the same `AuthManager` backed by the same credential store. `AudioText._auth_store` is initialized with the LLM `ProviderRegistry` so that stored `openai` and `groq` credentials (saved via the LLM auth flow) are automatically available for audio calls too.
+All four service classes (`LLM`, `ImageLLM`, `AudioText`, `VideoLLM`) share the same `ProviderAuthManager` backed by the same credential store. `AudioText._auth_store` is initialized with the LLM `ProviderRegistry` so that stored `openai` and `groq` credentials (saved via the LLM auth flow) are automatically available for audio calls too.
 
-API key resolution order (for `AuthManager.get_api_key(provider)`):
+API key resolution order (for `ProviderAuthManager.get_api_key(provider)`):
 
 1. Runtime override — `auth_store.set_runtime_api_key("openai", key)`
 2. Stored `APICredential` in `auth.json`

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import fields
 from typing import Optional
 
-from program.auth.manager import AuthManager
+from program.auth.providers import ProviderAuthManager
 from program.inference.api.video.registry import VideoAPIRegistry
 from program.inference.model.registry import ModelRegistry
 from program.inference.provider.registry import ProviderRegistry, VideoProviderRegistry
@@ -14,7 +14,7 @@ class VideoLLM:
     _models    = ModelRegistry.from_video_builtins()
     _providers = VideoProviderRegistry.from_builtins()
     _apis      = VideoAPIRegistry.from_builtins()
-    _auth_store = AuthManager.create(ProviderRegistry.from_builtins())
+    _auth_store = ProviderAuthManager.create(ProviderRegistry.from_builtins())
 
     def __init__(
         self,

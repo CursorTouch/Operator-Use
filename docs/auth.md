@@ -1,6 +1,6 @@
 # Auth
 
-`AuthManager` stores and retrieves credentials for all LLM providers. It supports two credential types — OAuth tokens and plain API keys — and three credential sources: stored in `auth.json`, set at runtime, or read from environment variables.
+`ProviderAuthManager` stores and retrieves credentials for all LLM providers. It supports two credential types — OAuth tokens and plain API keys — and three credential sources: stored in `auth.json`, set at runtime, or read from environment variables.
 
 ## Credential types
 
@@ -50,11 +50,11 @@ All reads and writes go through a `FileLock` to prevent race conditions between 
 | `FileAuthStorage` | Production — persists to disk with `FileLock` |
 | `InMemoryAuthStorage` | Testing — no disk I/O, no locking |
 
-`AuthManager.create(registry)` creates a `FileAuthStorage` at the default path. `AuthManager.in_memory(registry, initial)` creates an in-memory store pre-seeded with initial data.
+`ProviderAuthManager.create(registry)` creates a `FileAuthStorage` at the default path. `ProviderAuthManager.in_memory(registry, initial)` creates an in-memory store pre-seeded with initial data.
 
 ## Credential resolution
 
-`AuthManager.get_api_key(provider)` resolves a usable API key in priority order:
+`ProviderAuthManager.get_api_key(provider)` resolves a usable API key in priority order:
 
 1. **Runtime override** — set via `set_runtime_api_key(provider, key)`. Takes priority over everything else. Not persisted.
 2. **Stored API key** — `APICredential` from `auth.json`.
@@ -100,9 +100,9 @@ await auth_manager.logout(provider_id)
 
 **logout**: Calls `OAuthProvider.logout(credential)` to revoke the token server-side if supported. Then removes the credential from in-memory storage and persists the deletion.
 
-## AuthManager is shared across LLM instances
+## ProviderAuthManager is shared across LLM instances
 
-`LLM._auth_store` is a class-level `AuthManager`. All `LLM` instances share it. A credential stored by `/login` is immediately visible to any LLM constructed afterward.
+`LLM._auth_store` is a class-level `ProviderAuthManager`. All `LLM` instances share it. A credential stored by `/login` is immediately visible to any LLM constructed afterward.
 
 ## OAuthLoginCallbacks
 
@@ -179,7 +179,7 @@ operator auth unset <provider-id>
 
 ## Error handling
 
-Storage errors are non-fatal. `AuthManager._load()` catches exceptions from the file lock and records them. If the initial load fails, `self.data` is empty and `self._load_error` is set. Subsequent `_persist_provider_change()` calls are no-ops when `_load_error` is set, so the in-memory state is not silently lost to disk when the storage is broken.
+Storage errors are non-fatal. `ProviderAuthManager._load()` catches exceptions from the file lock and records them. If the initial load fails, `self.data` is empty and `self._load_error` is set. Subsequent `_persist_provider_change()` calls are no-ops when `_load_error` is set, so the in-memory state is not silently lost to disk when the storage is broken.
 
 `drain_errors()` returns and clears the accumulated error list, allowing the caller to surface any storage failures.
 
@@ -242,6 +242,6 @@ auth.set_email(username="bot@example.com", password="...")
 
 ## Related documents
 
-- [inference.md](./inference.md) — How `LLM` uses `AuthManager` at construction time
+- [inference.md](./inference.md) — How `LLM` uses `ProviderAuthManager` at construction time
 - [commands.md](./commands.md) — `/login`, `/logout`, `/auth` commands
 - [gateway.md](./gateway.md) — How channel credentials are used at channel startup

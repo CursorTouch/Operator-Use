@@ -1,4 +1,4 @@
-"""Tests for OAuth provider logic and AuthManager with OAuth credentials."""
+"""Tests for OAuth provider logic and ProviderAuthManager with OAuth credentials."""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,7 @@ import base64
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from program.auth.manager import AuthManager
+from program.auth.providers import ProviderAuthManager
 from program.auth.storage import InMemoryAuthStorage
 from program.auth.types import OAuthCredential, APICredential, AuthType
 from program.inference.provider.registry import ProviderRegistry
@@ -62,8 +62,8 @@ def make_registry(*providers) -> ProviderRegistry:
     return registry
 
 
-def make_manager(registry: ProviderRegistry, initial: dict = {}) -> AuthManager:
-    return AuthManager.in_memory(registry, initial)
+def make_manager(registry: ProviderRegistry, initial: dict = {}) -> ProviderAuthManager:
+    return ProviderAuthManager.in_memory(registry, initial)
 
 
 # ── OAuthProvider base: is_expired / ensure_fresh ─────────────────────────────
@@ -290,9 +290,9 @@ class TestOpenAIParseTokenResponse:
             openai_parse_token({"access_token": "only"})
 
 
-# ── AuthManager with OAuth credentials ────────────────────────────────────────
+# ── ProviderAuthManager with OAuth credentials ────────────────────────────────
 
-class TestAuthManagerOAuth:
+class TestProviderAuthManagerOAuth:
     def setup_method(self):
         self.provider = AnthropicClaudeCodeOAuthProvider()
         self.registry = make_registry(self.provider)
@@ -404,19 +404,19 @@ class TestAuthManagerOAuth:
         assert manager.has("anthropic-claude-code") is False
 
 
-# ── AuthManager persistence (InMemoryStorage round-trip) ──────────────────────
+# ── ProviderAuthManager persistence (InMemoryStorage round-trip) ──────────────
 
-class TestAuthManagerPersistence:
+class TestProviderAuthManagerPersistence:
     def test_credential_persisted_and_reloadable(self):
         registry = make_registry(AnthropicClaudeCodeOAuthProvider())
         storage = InMemoryAuthStorage()
-        manager = AuthManager.from_storage(registry, storage)
+        manager = ProviderAuthManager.from_storage(registry, storage)
 
         cred = fresh_credential(access="persisted-token")
         manager.set("anthropic-claude-code", cred)
 
         # New manager instance from same storage
-        manager2 = AuthManager.from_storage(registry, storage)
+        manager2 = ProviderAuthManager.from_storage(registry, storage)
         stored = manager2.get("anthropic-claude-code")
         assert isinstance(stored, OAuthCredential)
         assert stored.access == "persisted-token"
@@ -424,12 +424,12 @@ class TestAuthManagerPersistence:
     def test_remove_is_persisted(self):
         registry = make_registry(AnthropicClaudeCodeOAuthProvider())
         storage = InMemoryAuthStorage()
-        manager = AuthManager.from_storage(registry, storage)
+        manager = ProviderAuthManager.from_storage(registry, storage)
 
         manager.set("anthropic-claude-code", fresh_credential())
         manager.remove("anthropic-claude-code")
 
-        manager2 = AuthManager.from_storage(registry, storage)
+        manager2 = ProviderAuthManager.from_storage(registry, storage)
         assert manager2.has("anthropic-claude-code") is False
 
     def test_list_returns_all_stored_providers(self):

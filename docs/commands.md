@@ -104,11 +104,11 @@ The `handler` receives the `CommandRegistry` (which carries a `registry.runtime`
 
 Enumerates OAuth providers from `LLM._providers.get_oauth_providers()`. Shows a numbered list with current login status. Accepts a provider ID directly as an argument to skip the prompt.
 
-The login flow calls `AuthManager.login(provider_id, callbacks)`. The `callbacks` object receives the authorization URL (opened in the browser), a device code prompt if needed, and a completion signal. After the OAuth exchange, credentials are persisted to `auth.json`.
+The login flow calls `ProviderAuthManager.login(provider_id, callbacks)`. The `callbacks` object receives the authorization URL (opened in the browser), a device code prompt if needed, and a completion signal. After the OAuth exchange, credentials are persisted to `auth.json`.
 
 ### /logout
 
-Lists currently logged-in OAuth providers. Calls `AuthManager.logout(provider_id)`, which revokes the token server-side (if the provider supports it) and removes the stored credential.
+Lists currently logged-in OAuth providers. Calls `ProviderAuthManager.logout(provider_id)`, which revokes the token server-side (if the provider supports it) and removes the stored credential.
 
 ### /auth
 
@@ -181,5 +181,5 @@ Every command handler receives `registry: CommandRegistry`. The active `Runtime`
 ## Related documents
 
 - [agent.md](./agent.md) — `run_compaction()`, `new_session()`, `fork()` called by commands
-- [auth.md](./auth.md) — `AuthManager.login()` / `logout()` called by `/login` and `/logout`
+- [auth.md](./auth.md) — `ProviderAuthManager.login()` / `logout()` called by `/login` and `/logout`
 - [extensions.md](./extensions.md) — Extension command registration

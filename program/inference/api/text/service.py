@@ -5,7 +5,7 @@ from program.inference.model.registry import ModelRegistry
 from program.inference.api.text.registry import LLMAPIRegistry
 from program.inference.provider.registry import ProviderRegistry
 from program.inference.provider.types import APIProvider, OAuthProvider
-from program.auth.manager import AuthManager
+from program.auth.providers import ProviderAuthManager
 from program.auth.types import OAuthCredential
 from program.inference.types import LLMContext, LLMEvent, LLMOptions
 from program.message.types import BaseMessage, SystemMessage
@@ -20,7 +20,7 @@ class LLM:
     _apis = LLMAPIRegistry.from_builtins()
     _models = ModelRegistry.from_llm_builtins()
     _providers = ProviderRegistry.from_builtins()
-    _auth_store = AuthManager.create(_providers)
+    _auth_store = ProviderAuthManager.create(_providers)
 
     def __init__(
         self,
