@@ -84,7 +84,7 @@ class Agent(ExtensionContext):
         self._context_window: int = config.context_window
         self._compact_requested: bool = False
         self._compact_options: CompactOptions | None = None
-        self._runtime: "Runtime" | None = None
+        self._runtime: Runtime | None = None
 
         self._phase: str = "idle"
         self._engine.options.before_tool_call = self._before_tool_call

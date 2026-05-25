@@ -86,6 +86,7 @@ class TestAgentRetry:
             def get_system_prompt(self): return None
             def get_append_system_prompt(self): return []
             def extend_resources(self, p): pass
+            def get_subagent_profiles(self): return []
             def get_diagnostics(self, runtime=None): return []
             async def reload(self): pass
 
@@ -150,6 +151,7 @@ class TestAgentRetry:
             def get_system_prompt(self): return None
             def get_append_system_prompt(self): return []
             def extend_resources(self, paths): pass
+            def get_subagent_profiles(self): return []
             def get_diagnostics(self, runtime=None): return []
             async def reload(self): pass
 
@@ -213,6 +215,7 @@ class TestAgentRetry:
             def get_system_prompt(self): return None
             def get_append_system_prompt(self): return []
             def extend_resources(self, p): pass
+            def get_subagent_profiles(self): return []
             def get_diagnostics(self, runtime=None): return []
             async def reload(self): pass
 
@@ -267,8 +270,9 @@ class TestPromptOptions:
     @pytest.mark.asyncio
     async def test_source_field_accepted(self):
         agent, _ = make_agent(FakeLLM(text_seq()))
-        opts = PromptOptions(source="rpc")
-        await agent.invoke("hello", opts)  # should not raise
+        for source in ("rpc", "cron", "subagent"):
+            opts = PromptOptions(source=source)
+            await agent.invoke("hello", opts)  # should not raise
 
     @pytest.mark.asyncio
     async def test_compaction_custom_instructions_accepted(self):
