@@ -9,6 +9,7 @@ from program.bus.service import Bus
 from program.cron.types import CronJob
 from program.commands.registry import CommandRegistry
 from program.subagent.manager import SubagentManager
+from program.workflow.manager import WorkflowManager
 from program.commands.types import parse_command
 from program.extension.types import (
     SessionStartEvent, SessionShutdownEvent, SessionBeforeSwitchEvent,
@@ -59,9 +60,18 @@ class Runtime:
         if ext_profiles:
             merged = context.resource_loader.get_subagent_profiles() + ext_profiles
             self.subagent_manager.update_profiles(merged)
+        self.workflow_manager = self._create_workflow_manager(context)
         # Expose MCPManager for use in create_session_agent() and shutdown.
         self.mcp_manager = context.mcp_manager
         self._configure_context(context)
+
+    def _create_workflow_manager(self, context: RuntimeContext) -> WorkflowManager:
+        return WorkflowManager(
+            llm=context.llm,
+            tools=context.engine.tools,
+            bus=self.bus,
+            cwd=context.session_manager.cwd if context.session_manager else None,
+        )
 
     def _create_subagent_manager(self, context: RuntimeContext) -> SubagentManager:
         return SubagentManager(
@@ -84,6 +94,7 @@ class Runtime:
             extension_runtime=context.extension_runtime,
             hooks=context.hooks,
             subagent_manager=self.subagent_manager,
+            workflow_manager=self.workflow_manager,
             bus=self.bus,
             cron=context.cron,
             mcp_manager=context.mcp_manager,
@@ -199,6 +210,8 @@ class Runtime:
 
         # Refresh named subagent profiles.
         self.subagent_manager.update_profiles(resource_loader.get_subagent_profiles())
+        # Refresh workflow tool list so new tools are visible to agent() calls.
+        self.workflow_manager.update_tools(new_tools)
         self._configure_context(self._context)
 
     async def new_session(self) -> None:
@@ -217,6 +230,7 @@ class Runtime:
             self._context.agent._runtime = self
         self.mcp_manager = self._context.mcp_manager
         self.subagent_manager = self._create_subagent_manager(self._context)
+        self.workflow_manager = self._create_workflow_manager(self._context)
         self._configure_context(self._context)
         await self._emit_session_start('new')
 
@@ -244,6 +258,7 @@ class Runtime:
             self._context.agent._runtime = self
         self.mcp_manager = self._context.mcp_manager
         self.subagent_manager = self._create_subagent_manager(self._context)
+        self.workflow_manager = self._create_workflow_manager(self._context)
         self._configure_context(self._context)
         await self._emit_session_start('resume')
 
@@ -339,6 +354,7 @@ class Runtime:
             extension_runtime=real_ext,
             hooks=hooks,
             subagent_manager=self.subagent_manager,
+            workflow_manager=self.workflow_manager,
             bus=self.bus,
             cron=self._context.cron,
             mcp_manager=self.mcp_manager,

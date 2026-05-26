@@ -85,6 +85,7 @@ class ToolContext:
     extension_runtime: Any | None = None
     hooks: Any | None = None
     subagent_manager: Any | None = None
+    workflow_manager: Any | None = None
     bus: Any | None = None
     cron: Any | None = None
     mcp_manager: Any | None = None

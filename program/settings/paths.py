@@ -147,6 +147,16 @@ def get_subagents_dir(cwd: Path | None = None) -> Path:
     return get_agent_dir(cwd) / 'subagents'
 
 
+def get_workflows_dir(cwd: Path | None = None) -> Path:
+    """Workflow Python files — ~/.program/agent/workflows/ or <project>/.program/agent/workflows/."""
+    return get_agent_dir(cwd) / 'workflows'
+
+
+def get_workflow_runs_dir() -> Path:
+    """Per-run journals/artifacts — always ~/.program/agent/workflows/.runs/."""
+    return get_agent_dir() / 'workflows' / '.runs'
+
+
 def get_crons_path(cwd: Path | None = None) -> Path:
     """Path to crons.json. Project-level if cwd given, else global (~/.program/)."""
     return get_config_dir(cwd) / 'crons.json'

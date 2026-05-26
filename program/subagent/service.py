@@ -74,6 +74,23 @@ class Subagent:
         self._settings = settings
         self._hooks = hooks
 
+    async def run_single(
+        self,
+        task: str,
+        system_prompt: str | None = None,
+        tools: list[Tool] | None = None,
+        spawn_depth: int = 1,
+    ) -> str:
+        """Run an isolated single-task engine loop without record tracking or hooks."""
+        allowed = tools if tools is not None else [t for t in self._tools if t.name != 'subagent']
+        return await self._run_loop(
+            task=task,
+            system_prompt=system_prompt or _DEFAULT_SYSTEM_PROMPT,
+            tools=allowed,
+            max_iterations=self._settings.max_iterations,
+            spawn_depth=spawn_depth,
+        )
+
     async def run(self, record: SubagentRecord) -> None:
         logger.info('[%s] subagent "%s" started', record.task_id, record.label)
 
