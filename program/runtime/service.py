@@ -61,7 +61,7 @@ class Runtime:
             merged = context.resource_loader.get_subagent_profiles() + ext_profiles
             self.subagent_manager.update_profiles(merged)
         self.workflow_manager = self._create_workflow_manager(context)
-        # Expose MCPManager for use in create_session_agent() and shutdown.
+        # Expose MCPManager for use in create_session_agent() (gateway + ACP) and shutdown.
         self.mcp_manager = context.mcp_manager
         self._configure_context(context)
 
@@ -281,7 +281,7 @@ class Runtime:
 
     def create_session_agent(self) -> Agent:
         """
-        Create an isolated agent for an ACP session.
+        Create an isolated agent for a new session (gateway channel or ACP).
 
         Shares LLM, tools, and resources with the main runtime context but
         isolates conversation state (session manager, hooks, extension runtime).
