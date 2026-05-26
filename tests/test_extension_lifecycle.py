@@ -44,6 +44,7 @@ def _make_agent_with_ext(llm, ext, tools=None):
         def get_system_prompt(self): return None
         def get_append_system_prompt(self): return []
         def extend_resources(self, p): pass
+        def get_subagent_profiles(self): return []
         def get_diagnostics(self, runtime=None): return []
         async def reload(self): pass
 

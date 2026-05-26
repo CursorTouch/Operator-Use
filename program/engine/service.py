@@ -106,11 +106,9 @@ class Engine:
             self.state.follow_up_queue.clear()
 
     def has_pending_messages(self) -> bool:
-        if self.state.steering_queue:
-            return not self.state.steering_queue.is_empty()
-        if self.state.follow_up_queue:
-            return not self.state.follow_up_queue.is_empty()
-        return False
+        steering_has = self.state.steering_queue is not None and not self.state.steering_queue.is_empty()
+        followup_has = self.state.follow_up_queue is not None and not self.state.follow_up_queue.is_empty()
+        return steering_has or followup_has
 
     def reset(self) -> None:
         if self.state.follow_up_queue:
@@ -464,6 +462,15 @@ class Engine:
             raise RuntimeError("Agent is already processing. Wait for completion before continuing.")
 
         if not self.state.messages:
+            # Allow continue when there are queued follow-up messages even with no history
+            if self.state.follow_up_queue and not self.state.follow_up_queue.is_empty():
+                follow_up_messages = await self.state.follow_up_queue.dequeue()
+                from program.agent.types import AgentContext
+                await self.run(AgentContext(
+                    system_prompt=self.state.system_prompt or '',
+                    messages=follow_up_messages,
+                ))
+                return
             raise RuntimeError("No messages to continue from")
 
         last_message = self.state.messages[-1]
