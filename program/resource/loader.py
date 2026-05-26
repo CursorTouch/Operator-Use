@@ -17,13 +17,14 @@ from program.commands.types import SlashCommandInfo
 from program.hooks.loader import load_hooks, HookRegistration
 from program.package.loader import load_packages_from_settings
 from program.settings.paths import (
-    get_extensions_dir, get_skills_dir, get_tools_dir, get_commands_dir, get_hooks_dir,
+    get_config_dir,
+    get_extensions_dir, get_tools_dir, get_commands_dir, get_hooks_dir,
     get_system_prompt_path, get_append_system_prompt_path, get_knowledge_dir, get_temp_dir,
     get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
     get_builtins_extensions_dir, get_builtins_hooks_dir,
     get_builtins_subagents_dir, get_subagents_dir,
 )
-from program.skill.loader import load_skills
+from program.skill.loader import load_skills_cached
 from program.skill.types import Skill, LoadSkillsOptions
 from program.subagent.profile import SubagentProfile, load_profiles
 
@@ -193,11 +194,15 @@ class ResourceLoader(BaseResourceLoader):
             + list(self._extension_skill_paths)
             + getattr(self, "_package_skill_paths", [])
         )
-        result = load_skills(LoadSkillsOptions(
-            cwd=self._cwd,
-            skill_paths=all_skill_paths,
-            include_defaults=True,
-        ))
+        cache_dir = get_config_dir() / 'cache'
+        result = load_skills_cached(
+            LoadSkillsOptions(
+                cwd=self._cwd,
+                skill_paths=all_skill_paths,
+                include_defaults=True,
+            ),
+            cache_dir=cache_dir,
+        )
         self._skills = result.skills
         self._skill_diagnostics = result.diagnostics
 

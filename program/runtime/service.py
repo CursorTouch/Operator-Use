@@ -419,7 +419,6 @@ class Runtime:
     def _maybe_run_curator(self) -> None:
         try:
             from program.skill.curator import maybe_run_curator
-            from program.skill.usage import agent_created_report
             ctx = self._context
             sm = ctx.settings_manager
             curator_cfg = sm.settings.curator if sm else None
