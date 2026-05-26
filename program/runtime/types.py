@@ -338,6 +338,7 @@ class RuntimeContext:
             extension_runtime=extension_runtime,  # type: ignore[arg-type]
             compaction=compaction,
             config=agent_config,
+            memory_manager=memory_manager,
         )
 
         real_runtime = ExtensionRuntime(load_result, agent, hooks=hooks)

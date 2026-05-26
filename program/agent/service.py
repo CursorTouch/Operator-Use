@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from program.extension.runtime import ExtensionRuntime
     from program.compaction.compact import Compaction
     from program.runtime.service import Runtime
+    from program.memory.manager import MemoryManager
 
 
 # Substrings that mark an LLM error as permanent — it will fail identically on
@@ -44,6 +45,18 @@ _PERMANENT_ERROR_MARKERS = (
     "badrequesterror", "bad_request",
     "model not found", "does not exist", "unknown model",
 )
+
+
+def _extract_last_assistant_text(messages: list) -> str:
+    """Return the text content of the last assistant message, or empty string."""
+    for message in reversed(messages):
+        if getattr(message, 'role', None) and message.role == Role.ASSISTANT:
+            parts = []
+            for content in getattr(message, 'contents', []):
+                if hasattr(content, 'content') and isinstance(content.content, str):
+                    parts.append(content.content)
+            return " ".join(parts)
+    return ""
 
 
 def _is_permanent_error(error: str | None) -> bool:
@@ -72,6 +85,7 @@ class Agent(ExtensionContext):
         extension_runtime: ExtensionRuntime,
         compaction: Compaction,
         config: AgentConfig,
+        memory_manager: MemoryManager | None = None,
     ) -> None:
         self._engine = engine
         self._session_manager = session_manager
@@ -79,6 +93,7 @@ class Agent(ExtensionContext):
         self._extensions = extension_runtime
         self._compaction = compaction
         self._config = config
+        self._memory_manager = memory_manager
         self._system_prompt: str = ""
         self._context_tokens: int = 0
         self._context_window: int = config.context_window
@@ -280,11 +295,13 @@ class Agent(ExtensionContext):
     # Internal helpers
     # -------------------------------------------------------------------------
 
-    def _rebuild_system_prompt(self) -> str:
+    def _rebuild_system_prompt(self, memory_context: str = "") -> str:
         skills, _ = self._resources.get_skills()
         context_files = self._resources.get_context_files()
         custom_prompt = self._resources.get_system_prompt()
         append_parts = self._resources.get_append_system_prompt()
+        if memory_context:
+            append_parts = [f"<memory>\n{memory_context}\n</memory>"] + list(append_parts)
         append_system_prompt = "\n\n".join(append_parts) if append_parts else None
 
         return PromptTemplate(
@@ -353,8 +370,15 @@ class Agent(ExtensionContext):
         # Notify extensions of incoming input
         await self._extensions.emit('input', InputEvent(text=user_input, source=opts.source))
 
+        # Fetch recalled context from memory before building the system prompt
+        memory_context = ""
+        if self._memory_manager:
+            memory_context = await self._memory_manager.prefetch(
+                user_input, session_id=self._session_manager.session_id or ""
+            )
+
         # Build system prompt and allow extensions to override it
-        self._system_prompt = self._rebuild_system_prompt()
+        self._system_prompt = self._rebuild_system_prompt(memory_context=memory_context)
         before_results = await self._extensions.emit(
             'before_agent_start',
             BeforeAgentStartEvent(prompt=user_input, system_prompt=self._system_prompt),
@@ -408,6 +432,20 @@ class Agent(ExtensionContext):
             await self._run_with_retry(ctx, user_entry_id)
         finally:
             self._phase = "idle"
+
+        # Persist the completed exchange to the memory provider
+        if self._memory_manager:
+            assistant_text = _extract_last_assistant_text(self._engine.state.messages)
+            await self._memory_manager.sync_turn(
+                user_input, assistant_text,
+                session_id=self._session_manager.session_id or "",
+            )
+            # Warm the cache for the next turn in the background so prefetch()
+            # can return instantly instead of blocking on an external lookup.
+            self._memory_manager.queue_prefetch(
+                assistant_text,
+                session_id=self._session_manager.session_id or "",
+            )
 
         # Session writes are now flushed — notify observers
         await self._extensions.emit('save_point', SavePointEvent())
@@ -538,6 +576,10 @@ class Agent(ExtensionContext):
             ci = custom_instructions
             if compact_opts and compact_opts.custom_instructions:
                 ci = compact_opts.custom_instructions
+
+            if self._memory_manager:
+                messages_raw = [m.model_dump() for m in path_entries]
+                await self._memory_manager.on_pre_compact(messages_raw)
 
             if compaction_result is None:
                 compaction_result = await self._compaction.compact(preparation, ci)

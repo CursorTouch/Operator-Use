@@ -371,6 +371,8 @@ class Runtime:
                 await self.mcp_manager.disconnect_all()
             except Exception:
                 pass
+        if self._context.memory_manager is not None:
+            await self._context.memory_manager.shutdown()
 
     # -------------------------------------------------------------------------
     # Cron
@@ -418,3 +420,12 @@ class Runtime:
             'session_shutdown',
             SessionShutdownEvent(reason=reason),  # type: ignore[arg-type]
         )
+        if self._context.memory_manager:
+            from program.session.types import MessageEntry
+            entries = self._context.session_manager.get_branch()
+            messages_raw = [
+                e.model_dump()
+                for e in entries
+                if isinstance(e, MessageEntry)
+            ]
+            await self._context.memory_manager.on_session_end(messages_raw)
