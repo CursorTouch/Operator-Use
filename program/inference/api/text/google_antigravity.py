@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any, Optional, TYPE_CHECKING
 
 import httpx
@@ -345,7 +345,7 @@ class GoogleAntigravityAPI(BaseAPI):
 
         return {"model": model.id, "project": project, "request": inner}
 
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         project = await self._ensure_project_id()
         system, contents = _messages_to_contents(context.messages)
         if context.system_prompt:

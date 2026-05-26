@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from program.auth.providers import ProviderAuthManager
 from program.auth.storage import InMemoryAuthStorage
 from program.auth.types import OAuthCredential, APICredential, AuthType
-from program.inference.provider.registry import ProviderRegistry
+from program.inference.provider.registry import TextProviderRegistry
 from program.inference.provider.oauth.anthropic_claude_code import (
     AnthropicClaudeCodeOAuthProvider,
     _parse_authorization_input as anthropic_parse_input,
@@ -55,14 +55,14 @@ def expired_credential(access: str = "old-access", refresh: str = "refresh-token
     )
 
 
-def make_registry(*providers) -> ProviderRegistry:
-    registry = ProviderRegistry()
+def make_registry(*providers) -> TextProviderRegistry:
+    registry = TextProviderRegistry()
     for p in providers:
         registry.register(p)
     return registry
 
 
-def make_manager(registry: ProviderRegistry, initial: dict = {}) -> ProviderAuthManager:
+def make_manager(registry: TextProviderRegistry, initial: dict = {}) -> ProviderAuthManager:
     return ProviderAuthManager.in_memory(registry, initial)
 
 

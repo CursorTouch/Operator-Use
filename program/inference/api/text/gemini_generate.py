@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from google import genai
 from google.genai import types as genai_types
@@ -135,7 +135,7 @@ class GeminiGenerateAPI(BaseAPI):
 
         return genai_types.GenerateContentConfig(**params)
 
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         system, contents = _messages_to_gemini(context.messages)
         config = self._build_config(
             tools=context.tools or None,

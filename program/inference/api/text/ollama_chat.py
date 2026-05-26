@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from ollama import AsyncClient
 from program.inference.api.text.base import BaseLLMAPI as BaseAPI
@@ -97,7 +97,7 @@ class OllamaChatAPI(BaseAPI):
             opts["num_predict"] = self.options.max_tokens
         return opts
 
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         ollama_messages = _messages_to_ollama(context.messages)
         if context.system_prompt:
             ollama_messages = [{"role": "system", "content": context.system_prompt}] + ollama_messages

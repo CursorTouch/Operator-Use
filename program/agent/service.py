@@ -275,13 +275,11 @@ class Agent(ExtensionContext):
     # Internal helpers
     # -------------------------------------------------------------------------
 
-    def _rebuild_system_prompt(self, memory_context: str = "") -> str:
+    def _rebuild_system_prompt(self) -> str:
         skills, _ = self._resources.get_skills()
         context_files = self._resources.get_context_files()
         custom_prompt = self._resources.get_system_prompt()
         append_parts = self._resources.get_append_system_prompt()
-        if memory_context:
-            append_parts = [f"<memory>\n{memory_context}\n</memory>"] + list(append_parts)
         append_system_prompt = "\n\n".join(append_parts) if append_parts else None
 
         return PromptTemplate(
@@ -358,7 +356,7 @@ class Agent(ExtensionContext):
             )
 
         # Build system prompt and allow extensions to override it
-        self._system_prompt = self._rebuild_system_prompt(memory_context=memory_context)
+        self._system_prompt = self._rebuild_system_prompt()
         before_results = await self._extensions.emit(
             'before_agent_start',
             BeforeAgentStartEvent(prompt=user_input, system_prompt=self._system_prompt),
@@ -388,9 +386,18 @@ class Agent(ExtensionContext):
         # the *context* only (mirrors the engine's run_continue() guard).
         base_messages = strip_unusable_trailing_assistant(base_messages)
 
-        # Persist the user message once (not retried)
+        # Persist the user message once (not retried) — clean, no memory embedded
         user_message = UserMessage(contents=[TextContent(content=user_input)])
         user_entry_id = self._session_manager.append_message(user_message, meta=opts.meta)
+
+        # Build a context-only user message with recalled memory prepended.
+        # This is never persisted — session history stays clean.
+        if memory_context:
+            user_message = UserMessage(contents=[
+                TextContent(content=f"<memory>\n{memory_context}\n</memory>\n\n{user_input}")
+            ])
+        else:
+            user_message = user_message
 
         # Assemble tools: base tools + extension tools (base names take priority)
         base_tool_names = {t.name for t in self._engine.tools}

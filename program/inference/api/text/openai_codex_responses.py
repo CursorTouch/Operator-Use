@@ -3,7 +3,7 @@ import asyncio
 import base64
 import json
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 
 import httpx
@@ -280,7 +280,7 @@ def _is_retryable(status: int, body: str) -> bool:
 
 # ── Event processing ──────────────────────────────────────────────────────────
 
-async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
+async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncGenerator[LLMEvent, None]:
     # The Responses API gives a function_call output item both an `id`
     # (e.g. "fc_...") and a `call_id` (e.g. "call_..."). The subsequent
     # function_call_arguments.delta/.done events reference the item by
@@ -408,7 +408,7 @@ class OpenAICodexResponsesAPI(BaseAPI):
         self,
         body: dict[str, Any],
         headers: dict[str, str],
-    ) -> AsyncIterator[LLMEvent]:
+    ) -> AsyncGenerator[LLMEvent, None]:
         body_bytes = json.dumps(body).encode()
         last_error: Exception | None = None
 
@@ -447,7 +447,7 @@ class OpenAICodexResponsesAPI(BaseAPI):
         self,
         body: dict[str, Any],
         headers: dict[str, str],
-    ) -> AsyncIterator[LLMEvent]:
+    ) -> AsyncGenerator[LLMEvent, None]:
         ws_headers = {k: v for k, v in headers.items() if k.lower() not in ("accept", "content-type")}
         async with websockets.asyncio.client.connect(
             self._ws_url,
@@ -457,7 +457,7 @@ class OpenAICodexResponsesAPI(BaseAPI):
             async for event in _process_events(_map_codex_events(_parse_ws(ws))):
                 yield event
 
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         token = self.options.api_key or ""
         account_id = _extract_account_id(token)
         instructions, input_items = _messages_to_input(context.messages)

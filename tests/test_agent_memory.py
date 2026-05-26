@@ -125,12 +125,18 @@ class TestMemoryPrefetch:
         assert mem.prefetch_calls[0]["query"] == "what is the capital of France?"
 
     @pytest.mark.asyncio
-    async def test_prefetch_result_injected_into_system_prompt(self):
+    async def test_prefetch_result_injected_into_context_only_user_message(self):
         mem = FakeMemory(prefetch_result="Paris is the capital")
-        agent, _ = make_agent_with_memory(FakeLLM(text_seq("hi")), mem)
+        llm = FakeLLM(text_seq("hi"))
+        agent, sm = make_agent_with_memory(llm, mem)
         await agent.invoke("capital question")
-        assert "<memory>" in agent.get_system_prompt()
-        assert "Paris is the capital" in agent.get_system_prompt()
+        assert "<memory>" not in agent.get_system_prompt()
+        sent_user = llm.contexts[0].messages[-1]
+        sent_text = sent_user.contents[0].content
+        assert "<memory>" in sent_text
+        assert "Paris is the capital" in sent_text
+        persisted_user = sm.build_session_context().messages[0]
+        assert persisted_user.contents[0].content == "capital question"
 
     @pytest.mark.asyncio
     async def test_empty_prefetch_produces_no_memory_block(self):

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from program.inference.model.types import Model
 from program.inference.types import LLMContext, LLMEvent, LLMOptions, Transport
 from program.message.types import BaseMessage
@@ -20,7 +20,7 @@ class BaseLLMAPI(ABC):
         return self.options.signal is not None and self.options.signal.is_set()
 
     @abstractmethod
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]: ...
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]: ...
 
     @abstractmethod
     async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]: ...

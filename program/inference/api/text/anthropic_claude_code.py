@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from anthropic import AsyncAnthropic
 from program.inference.api.text.base import BaseLLMAPI as BaseAPI
@@ -145,7 +145,7 @@ class AnthropicClaudeCodeAPI(BaseAPI):
             ]
         return params
 
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         system, anthropic_messages = _messages_to_anthropic(context.messages)
         if context.system_prompt:
             system = context.system_prompt

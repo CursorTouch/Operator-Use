@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from mistralai import Mistral
 from mistralai.models.thinkchunk import ThinkChunk
@@ -138,7 +138,7 @@ class MistralChatAPI(BaseAPI):
             self._client_key = self.options.api_key
             self._client = self._build_client()
 
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         self._sync_client()
         mistral_messages = _messages_to_mistral(context.messages)
         if context.system_prompt:

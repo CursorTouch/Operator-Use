@@ -1,5 +1,4 @@
 from __future__ import annotations
-from beartype.typing import List
 from program.inference.provider.types import APIProvider, OAuthProvider, ImageProvider, AudioProvider, VideoProvider, AuthType
 
 TextProvider = APIProvider | OAuthProvider
@@ -26,10 +25,10 @@ class TextProviderRegistry:
             return p.auth_type == AuthType.OAuth
         raise ValueError(f"Provider '{provider}' not found.")
 
-    def get_oauth_providers(self) -> List[OAuthProvider]:
+    def get_oauth_providers(self) -> list[OAuthProvider]:
         return [p for p in self._providers.values() if isinstance(p, OAuthProvider)]
 
-    def get_api_providers(self) -> List[APIProvider]:
+    def get_api_providers(self) -> list[APIProvider]:
         return [p for p in self._providers.values() if isinstance(p, APIProvider)]
 
     def get_oauth_provider(self, provider: str) -> OAuthProvider | None:
@@ -50,7 +49,6 @@ class TextProviderRegistry:
         for provider in providers:
             instance.register(provider)
         return instance
-
 
 class ImageProviderRegistry:
     def __init__(self) -> None:

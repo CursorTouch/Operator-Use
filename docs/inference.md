@@ -25,7 +25,7 @@ events = await llm.invoke(context, thinking_level=ThinkingLevel.Low)
 Resolution order at construction:
 
 1. Look up the model in `ModelRegistry` (by `model_id`, optionally filtered by `provider`).
-2. Look up the provider in `ProviderRegistry`.
+2. Look up the provider in `TextProviderRegistry`.
 3. Resolve the API class: from `model.api`, then `provider.api`, then `LLMAPIRegistry`.
 4. If the provider is an `OAuthProvider`: load credentials from `ProviderAuthManager`. If missing, raise immediately.
 5. Merge provider base options with any caller-supplied `LLMOptions`.
@@ -430,7 +430,7 @@ Type aliases: `TextModel`, `ImageModel`, `AudioModel`, `VideoModel` — all are 
 
 ### Text providers
 
-`ProviderRegistry` holds `APIProvider` and `OAuthProvider` definitions used by `LLM`.
+`TextProviderRegistry` holds `APIProvider` and `OAuthProvider` definitions used by `LLM`.
 
 **APIProvider** — key-based auth. The provider's `LLMOptions` carries the base URL; the API key is resolved at call time via `ProviderAuthManager`.
 
@@ -494,7 +494,7 @@ Built-in video providers live in `program/builtins/providers/video.py`.
 
 | Registry | Source file |
 |---|---|
-| `ProviderRegistry` (LLM) | `program/builtins/providers/text.py` |
+| `TextProviderRegistry` | `program/builtins/providers/text.py` |
 | `ImageProviderRegistry` | `program/builtins/providers/image.py` |
 | `AudioProviderRegistry` | `program/builtins/providers/audio.py` |
 | `VideoProviderRegistry` | `program/builtins/providers/video.py` |
@@ -510,7 +510,7 @@ Each file exports a `providers` list (and for LLM: `api_providers`, `oauth_provi
 - `OAuthCredential` — access token, refresh token, expiry
 - `APICredential` — plain API key string
 
-All four service classes (`LLM`, `ImageLLM`, `AudioText`, `VideoLLM`) share the same `ProviderAuthManager` backed by the same credential store. `AudioText._auth_store` is initialized with the LLM `ProviderRegistry` so that stored `openai` and `groq` credentials (saved via the LLM auth flow) are automatically available for audio calls too.
+Text/audio/video service classes share compatible provider-auth storage. `AudioLLM._auth_store` and `VideoLLM._auth_store` are initialized with the text `TextProviderRegistry` so credentials saved through the text provider auth flow are available to compatible audio/video providers too.
 
 API key resolution order (for `ProviderAuthManager.get_api_key(provider)`):
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from openai import AsyncOpenAI
 from program.inference.api.text.base import BaseLLMAPI as BaseAPI
@@ -146,7 +146,7 @@ class GitHubCopilotChatAPI(BaseAPI):
 
         return params
 
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         chat_messages = _messages_to_chat(context.messages)
         if context.system_prompt:
             chat_messages = [{"role": "system", "content": context.system_prompt}] + chat_messages

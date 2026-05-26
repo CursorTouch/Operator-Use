@@ -1,10 +1,10 @@
 from program.auth.providers import ProviderAuthManager
 from program.inference.model.registry import ModelRegistry
-from program.inference.provider.registry import ProviderRegistry
+from program.inference.provider.registry import TextProviderRegistry
 
 
 def test_new_text_providers_are_registered():
-    registry = ProviderRegistry.from_builtins()
+    registry = TextProviderRegistry.from_builtins()
 
     for provider_id in ("bedrock", "kimi", "minimax", "deepseek", "kilocode"):
         assert registry.get(provider_id) is not None
@@ -27,7 +27,7 @@ def test_new_provider_models_are_registered():
 
 
 async def test_kilocode_accepts_kilo_api_key_alias(monkeypatch):
-    registry = ProviderRegistry.from_builtins()
+    registry = TextProviderRegistry.from_builtins()
     manager = ProviderAuthManager.in_memory(registry)
 
     monkeypatch.setenv("KILO_API_KEY", "kilo-test-key")

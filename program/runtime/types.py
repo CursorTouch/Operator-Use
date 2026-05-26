@@ -16,7 +16,11 @@ from program.extension.loader import discover_and_load_extensions
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import LoadExtensionsResult
 from program.hooks.service import Hooks
+from program.auth.providers import ProviderAuthManager
 from program.inference.api.text.service import LLM
+from program.inference.api.text.registry import LLMAPIRegistry
+from program.inference.model.registry import ModelRegistry
+from program.inference.provider.registry import TextProviderRegistry
 from program.resource.loader import ResourceLoader
 from program.resource.types import ResourceLoaderOptions
 from program.session.manager import SessionManager
@@ -175,20 +179,82 @@ class RuntimeContext:
         load_result = resource_loader.get_extensions()
         extension_runtime = _DeferredExtensionRuntime(load_result)
 
-        # ── Apply extension provider registrations ────────────────────────────
-        # Extensions (including those from packages) may register custom inference
-        # and memory providers via api.register_provider() / api.register_memory_provider().
-        # Apply these to the class-level LLM registries before constructing LLM so
-        # that a user's configured provider is resolvable at LLM() construction time.
+        # ── Build inference registries ────────────────────────────────────────
+        # Each registry is built from builtins then extended with whatever
+        # extensions/packages registered. Registries are passed directly to
+        # service constructors instead of mutating class-level globals, so
+        # multiple runtimes in the same process don't stomp each other.
+        from program.inference.api.image.registry import ImageAPIRegistry
+        from program.inference.api.image.service import ImageLLM
+        from program.inference.provider.registry import ImageProviderRegistry, AudioProviderRegistry, VideoProviderRegistry
+        from program.inference.api.audio.registry import AudioAPIRegistry
+        from program.inference.api.audio.service import AudioLLM
+
+        text_providers = TextProviderRegistry.from_builtins()
+        text_apis = LLMAPIRegistry.from_builtins()
+        text_models = ModelRegistry.from_llm_builtins()
         for _provider in extension_runtime.get_providers():
-            LLM._providers.register(_provider)
+            text_providers.register(_provider)
         for _api_name, _api_cls in extension_runtime.get_text_apis().items():
-            LLM._apis.register(_api_name, _api_cls)
+            text_apis.register(_api_name, _api_cls)
+        text_auth = ProviderAuthManager.create(text_providers)
+
+        image_providers = ImageProviderRegistry.from_builtins()
+        image_apis = ImageAPIRegistry.from_builtins()
+        for _provider in extension_runtime.get_image_providers():
+            image_providers.register(_provider)
+        for _api_name, _api_cls in extension_runtime.get_image_apis().items():
+            image_apis.register(_api_name, _api_cls)
+
+        audio_providers = AudioProviderRegistry.from_builtins()
+        audio_apis = AudioAPIRegistry.from_builtins()
+        for _provider in extension_runtime.get_audio_providers():
+            audio_providers.register(_provider)
+        for _api_name, _api_cls in extension_runtime.get_audio_apis().items():
+            audio_apis.register(_api_name, _api_cls)
+        audio_auth = ProviderAuthManager.create(text_providers)
+
+        try:
+            from program.inference.api.video.registry import VideoAPIRegistry
+            from program.inference.api.video.service import VideoLLM
+        except ImportError:
+            VideoLLM = None  # type: ignore[assignment]
+            VideoAPIRegistry = None  # type: ignore[assignment]
+
+        video_providers = VideoProviderRegistry.from_builtins()
+        video_apis = VideoAPIRegistry.from_builtins() if VideoAPIRegistry is not None else None
+        if VideoLLM is not None:
+            for _provider in extension_runtime.get_video_providers():
+                video_providers.register(_provider)
+            if video_apis is not None:
+                for _api_name, _api_cls in extension_runtime.get_video_apis().items():
+                    video_apis.register(_api_name, _api_cls)
+        video_auth = ProviderAuthManager.create(text_providers)
+
+        # Keep class-level registries in sync so builtin hooks (stt, tts) that
+        # construct AudioLLM directly still pick up extension-registered providers.
+        ImageLLM._providers = image_providers
+        ImageLLM._apis = image_apis
+        AudioLLM._providers = audio_providers
+        AudioLLM._apis = audio_apis
+        AudioLLM._auth_store = audio_auth
+        if VideoLLM is not None:
+            VideoLLM._providers = video_providers
+            if video_apis is not None:
+                VideoLLM._apis = video_apis
+            VideoLLM._auth_store = video_auth
 
         # ── LLM ───────────────────────────────────────────────────────────────
         model_id = config.model_id or settings_manager.get_default_model() or RuntimeConfig.model_fields["model_id"].default
         provider = config.provider or settings_manager.get_default_provider()
-        llm = LLM(model_id=model_id, provider=provider)
+        llm = LLM(
+            model_id=model_id,
+            provider=provider,
+            models=text_models,
+            providers=text_providers,
+            apis=text_apis,
+            auth_store=text_auth,
+        )
 
         # ── Compaction ────────────────────────────────────────────────────────
         # Resolve compaction settings live from the SettingsManager so that

@@ -52,10 +52,16 @@ class FakeLLM:
         self._seqs = list(sequences)
         self._idx = 0
         self.call_count = 0
+        self.contexts: list[LLMContext] = []
         self.model = SimpleNamespace(name="fake", provider="fake")
         self.api = SimpleNamespace(options=SimpleNamespace())
 
     async def stream(self, context: LLMContext) -> AsyncIterator[LLMEvent]:
+        self.contexts.append(LLMContext(
+            messages=list(context.messages),
+            tools=list(context.tools),
+            response_format=context.response_format,
+        ))
         events = self._seqs[min(self._idx, len(self._seqs) - 1)]
         self._idx += 1
         self.call_count += 1
@@ -63,6 +69,11 @@ class FakeLLM:
             yield e
 
     async def invoke(self, context: LLMContext, thinking_level=None) -> list[LLMEvent]:
+        self.contexts.append(LLMContext(
+            messages=list(context.messages),
+            tools=list(context.tools),
+            response_format=context.response_format,
+        ))
         events = self._seqs[min(self._idx, len(self._seqs) - 1)]
         self._idx += 1
         self.call_count += 1

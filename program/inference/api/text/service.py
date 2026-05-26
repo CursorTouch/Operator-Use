@@ -1,5 +1,5 @@
 from __future__ import annotations
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import fields
 from program.inference.model.registry import ModelRegistry
 from program.inference.api.text.registry import LLMAPIRegistry
@@ -27,13 +27,23 @@ class LLM:
         model_id: str,
         provider: str | None = None,
         options: LLMOptions | None = None,
+        *,
+        models: Optional[ModelRegistry] = None,
+        providers: Optional[TextProviderRegistry] = None,
+        apis: Optional[LLMAPIRegistry] = None,
+        auth_store: Optional[ProviderAuthManager] = None,
     ) -> None:
-        model = self._models.get(model_id, provider=provider)
+        _models = models if models is not None else type(self)._models
+        _providers = providers if providers is not None else type(self)._providers
+        _apis = apis if apis is not None else type(self)._apis
+        self._auth_store = auth_store if auth_store is not None else type(self)._auth_store
+
+        model = _models.get(model_id, provider=provider)
         if model is None:
             raise ValueError(f"Model '{model_id}' not found.")
 
         provider = provider or model.provider
-        resolved_provider = self._providers.get(provider)
+        resolved_provider = _providers.get(provider)
         if resolved_provider is None:
             raise ValueError(f"Provider '{provider}' not found.")
 
@@ -42,7 +52,7 @@ class LLM:
         api_name_or_class = model.api or resolved_provider.api
         api_class = api_name_or_class
         if isinstance(api_class, str):
-            api_class = self._apis.get(api_class)
+            api_class = _apis.get(api_class)
             if api_class is None:
                 raise ValueError(f"API '{api_name_or_class}' not found in registry.")
 
@@ -89,7 +99,7 @@ class LLM:
                 messages = [SystemMessage.text(context.system_prompt)] + messages
         return messages
 
-    async def stream(self, context: LLMContext) -> AsyncIterator[LLMEvent]:
+    async def stream(self, context: LLMContext) -> AsyncGenerator[LLMEvent, None]:
         api_key = await self._auth_store.get_api_key(self.provider_id)
         if api_key:
             self.api.options.api_key = api_key

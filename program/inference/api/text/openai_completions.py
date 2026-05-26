@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from openai import AsyncOpenAI
 from program.inference.api.text.base import BaseLLMAPI as BaseAPI
@@ -173,7 +173,7 @@ class OpenAICompletionsAPI(BaseAPI):
 
         return params
 
-    async def stream(self, context: LLMContext, model: Model) -> AsyncIterator[LLMEvent]:  # type: ignore[override]
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         if self.options.api_key:
             self._client.api_key = self.options.api_key
         chat_messages = _messages_to_chat(context.messages)

@@ -21,17 +21,27 @@ class AudioLLM:
         model_id: str,
         provider: Optional[str] = None,
         options: Optional[AudioOptions] = None,
+        *,
+        models: Optional[ModelRegistry] = None,
+        providers: Optional[AudioProviderRegistry] = None,
+        apis: Optional[AudioAPIRegistry] = None,
+        auth_store: Optional[ProviderAuthManager] = None,
     ) -> None:
-        model = self._models.get(model_id, provider)
+        _models = models if models is not None else type(self)._models
+        _providers = providers if providers is not None else type(self)._providers
+        _apis = apis if apis is not None else type(self)._apis
+        self._auth_store = auth_store if auth_store is not None else type(self)._auth_store
+
+        model = _models.get(model_id, provider)
         if model is None:
             raise ValueError(f"Audio model '{model_id}' not found.")
 
-        prov = self._providers.get(model.provider)
+        prov = _providers.get(model.provider)
         if prov is None:
             raise ValueError(f"Audio provider '{model.provider}' not found.")
 
         api_name = model.api or prov.api
-        api_class = self._apis.get(api_name)
+        api_class = _apis.get(api_name)
         if api_class is None:
             raise ValueError(f"Audio API '{api_name}' not found in registry.")
 

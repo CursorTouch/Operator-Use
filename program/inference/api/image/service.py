@@ -20,17 +20,25 @@ class ImageLLM:
         model_id: str,
         api_key: Optional[str] = None,
         options: Optional[ImageOptions] = None,
+        *,
+        models: Optional[ModelRegistry] = None,
+        providers: Optional[ImageProviderRegistry] = None,
+        apis: Optional[ImageAPIRegistry] = None,
     ) -> None:
-        model = self._models.get(model_id)
+        _models = models if models is not None else type(self)._models
+        _providers = providers if providers is not None else type(self)._providers
+        _apis = apis if apis is not None else type(self)._apis
+
+        model = _models.get(model_id)
         if model is None:
             raise ValueError(f"Image model '{model_id}' not found.")
 
-        provider = self._providers.get(model.provider)
+        provider = _providers.get(model.provider)
         if provider is None:
             raise ValueError(f"Image provider '{model.provider}' not found.")
 
         api_name = model.api or provider.api
-        api_class = self._apis.get(api_name)
+        api_class = _apis.get(api_name)
         if api_class is None:
             raise ValueError(f"Image API '{api_name}' not found in registry.")
 
