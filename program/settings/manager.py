@@ -12,7 +12,7 @@ from program.settings.types import (
     CompactionSettings, BranchSummarySettings,
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
     ImageSettings, STTSettings, TTSSettings, MemorySettings, ExtensionEntry,
-    AuxiliarySettings, AuxiliaryTaskSettings,
+    AuxiliarySettings, AuxiliaryTaskSettings, CuratorSettings,
 )
 from program.gateway.channels.types import (
     ChannelsSettings,
@@ -31,6 +31,7 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
     'stt': STTSettings,
     'tts': TTSSettings,
     'memory': MemorySettings,
+    'curator': CuratorSettings,
 }
 
 # Pydantic BaseModel fields — use model_validate() instead of **kwargs

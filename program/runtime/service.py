@@ -414,6 +414,33 @@ class Runtime:
             'session_start',
             SessionStartEvent(reason=reason),  # type: ignore[arg-type]
         )
+        self._maybe_run_curator()
+
+    def _maybe_run_curator(self) -> None:
+        try:
+            from program.skill.curator import maybe_run_curator
+            from program.skill.usage import agent_created_report
+            ctx = self._context
+            sm = ctx.settings_manager
+            curator_cfg = sm.settings.curator if sm else None
+            if curator_cfg is not None and not curator_cfg.enabled:
+                return
+            tools_by_name = {t.name: t for t in ctx.resource_loader.get_tools()}
+            skill_manage = tools_by_name.get('skill_manage')
+            if skill_manage is None:
+                return
+            maybe_run_curator(
+                llm=ctx.llm,
+                skill_manage_tool=skill_manage,
+                skill_view_tool=tools_by_name.get('skill_view'),
+                interval_hours=curator_cfg.interval_hours if curator_cfg else 168,
+                paused=curator_cfg.paused if curator_cfg else False,
+                stale_after_days=curator_cfg.stale_after_days if curator_cfg else 30,
+                archive_after_days=curator_cfg.archive_after_days if curator_cfg else 90,
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).debug('curator check failed: %s', exc)
 
     async def _emit_session_shutdown(self, reason: str) -> None:
         await self._context.extension_runtime.emit(

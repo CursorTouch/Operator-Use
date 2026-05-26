@@ -119,6 +119,16 @@ class MemorySettings:
 
 
 @dataclass
+class CuratorSettings:
+    enabled: bool = True
+    interval_hours: int = 168        # 7 days
+    min_idle_hours: int = 2
+    stale_after_days: int = 30
+    archive_after_days: int = 90
+    paused: bool = False
+
+
+@dataclass
 class Settings:
     # Model / provider
     default_provider: Optional[str] = None
@@ -175,3 +185,6 @@ class Settings:
 
     # Memory
     memory: Optional[MemorySettings] = None
+
+    # Skill curator
+    curator: Optional[CuratorSettings] = None

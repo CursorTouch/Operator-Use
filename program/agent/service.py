@@ -24,6 +24,7 @@ from program.prompt.builder import PromptTemplate
 from program.compaction.strategy.utils import estimate_context_tokens, estimate_tokens
 from program.agent.utils import is_permanent_error
 from program.agent.goals import GoalManager, judge_goal_with_llm
+from program.skill.review import SkillReviewTracker, spawn_skill_review
 
 if TYPE_CHECKING:
     from program.engine.service import Engine
@@ -70,6 +71,7 @@ class Agent(ExtensionContext):
         self._compact_requested: bool = False
         self._compact_options: CompactOptions | None = None
         self._runtime: Runtime | None = None
+        self._skill_review = SkillReviewTracker()
         def _make_judge_llm():
             try:
                 from program.settings.manager import SettingsManager
@@ -238,6 +240,9 @@ class Agent(ExtensionContext):
         invocation: ToolInvocation,
         signal: object,
     ) -> ToolInvocation | ToolResultContent | None:
+        if invocation.name != 'skill_manage':
+            self._skill_review.on_tool_call()
+
         results = await self._extensions.emit(
             'tool_call',
             ToolCallEvent(
@@ -355,6 +360,22 @@ class Agent(ExtensionContext):
                 self._session_manager.entries.remove(entry)
         self._session_manager.leaf_id = parent_of_first
         persisted_ids.clear()
+
+    def _maybe_spawn_skill_review(self) -> None:
+        """Spawn a background thread to review the conversation and update skills."""
+        tools_by_name = {t.name: t for t in self._engine.state.tools}
+        skill_manage = tools_by_name.get('skill_manage')
+        if skill_manage is None:
+            return
+        messages = list(self._engine.state.messages)
+        if not messages:
+            return
+        spawn_skill_review(
+            llm=self._engine.llm,
+            messages=messages,
+            skill_manage_tool=skill_manage,
+            skill_view_tool=tools_by_name.get('skill_view'),
+        )
 
     def _active_todo_injection(self) -> str | None:
         for tool in self._engine.state.tools:
@@ -480,6 +501,11 @@ class Agent(ExtensionContext):
             'agent_end',
             AgentEndEvent(messages=self._engine.state.messages),
         )
+
+        # Trigger background skill review if threshold reached
+        if self._skill_review.should_review():
+            self._skill_review.reset()
+            self._maybe_spawn_skill_review()
 
         # Trigger compaction if requested or context budget exceeded
         if self._compact_requested or self._compaction.should_compact(

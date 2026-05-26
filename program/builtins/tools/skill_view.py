@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from program.skill import usage as skill_usage
 from program.tool.types import Tool, ToolContext, ToolExecutionMode, ToolInvocation, ToolKind, ToolResult
 
 
@@ -52,6 +53,7 @@ class SkillViewTool(Tool):
         except OSError as exc:
             return ToolResult.error(id=invocation.id, content=f'Cannot read skill file: {exc}')
 
+        skill_usage.record_view(name)
         return ToolResult.ok(id=invocation.id, content=content)
 
 
