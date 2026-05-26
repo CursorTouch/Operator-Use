@@ -73,7 +73,10 @@ class Subagent:
         for attempt in range(self._settings.max_retries + 1):
             try:
                 result = await asyncio.wait_for(
-                    self._run_loop(record.task, system_prompt, allowed_tools, max_iterations),
+                    self._run_loop(
+                        record.task, system_prompt, allowed_tools, max_iterations,
+                        spawn_depth=record.spawn_depth,
+                    ),
                     timeout=timeout,
                 )
                 record.status = SubagentStatus.completed
@@ -126,8 +129,10 @@ class Subagent:
         system_prompt: str,
         tools: list[Tool],
         max_iterations: int,
+        spawn_depth: int = 0,
     ) -> str:
         engine = Engine(llm=self._llm, tools=tools, options=Options())
+        engine.tool_context.spawn_depth = spawn_depth
 
         final_text = ''
         turns = 0

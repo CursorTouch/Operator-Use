@@ -32,11 +32,13 @@ class SubagentRecord:
     profile: str | None = None           # named profile used for this subagent
     system_prompt: str | None = None     # profile's system prompt (overrides default)
     tool_names: list[str] | None = None  # profile's allowed tools (None = all)
+    spawn_depth: int = 0                 # nesting depth (0 = spawned by main agent)
 
 
 class SubagentSettings(BaseModel):
     max_concurrent: int = 10
     max_iterations: int = 20
+    max_spawn_depth: int = 3
     timeout: float = 300.0
     system_prompt: str | None = None
     max_retries: int = 0

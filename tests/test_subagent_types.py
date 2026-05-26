@@ -52,6 +52,21 @@ class TestSubagentRecord:
         assert rec.chat_id is None
         assert rec.max_retries == 0
 
+    def test_spawn_depth_default_zero(self):
+        rec = SubagentRecord(
+            task_id='t3', label='l', task='t',
+            status=SubagentStatus.running, started_at=datetime.now(),
+        )
+        assert rec.spawn_depth == 0
+
+    def test_spawn_depth_set(self):
+        rec = SubagentRecord(
+            task_id='t4', label='l', task='t',
+            status=SubagentStatus.running, started_at=datetime.now(),
+            spawn_depth=2,
+        )
+        assert rec.spawn_depth == 2
+
 
 # ── SubagentSettings ──────────────────────────────────────────────────────────
 
@@ -60,6 +75,7 @@ class TestSubagentSettings:
         s = SubagentSettings()
         assert s.max_concurrent == 10
         assert s.max_iterations == 20
+        assert s.max_spawn_depth == 3
         assert s.timeout == 300.0
         assert s.system_prompt is None
         assert s.max_retries == 0
@@ -69,6 +85,61 @@ class TestSubagentSettings:
         assert s.max_concurrent == 5
         assert s.timeout == 60.0
         assert s.max_retries == 3
+
+    def test_custom_spawn_depth(self):
+        s = SubagentSettings(max_spawn_depth=5)
+        assert s.max_spawn_depth == 5
+
+
+class TestSpawnDepthEnforcement:
+    @pytest.mark.asyncio
+    async def test_depth_limit_blocks_spawn(self):
+        from program.builtins.tools.subagent import SubagentTool
+        from program.tool.types import ToolContext, ToolInvocation
+        from unittest.mock import AsyncMock, MagicMock
+
+        manager = MagicMock()
+        manager._settings = SubagentSettings(max_spawn_depth=2)
+        manager.list_profiles.return_value = [MagicMock(name='worker')]
+
+        tool = SubagentTool(manager=manager)
+        context = ToolContext(subagent_manager=manager, spawn_depth=2)
+        invocation = ToolInvocation(
+            id='inv1', name='subagent',
+            params={'action': 'create', 'task': 'do something', 'profile': 'worker'},
+        )
+        result = await tool.execute(invocation, context=context)
+        assert result.is_error
+        assert 'depth' in result.content.lower()
+
+    @pytest.mark.asyncio
+    async def test_depth_within_limit_proceeds(self):
+        from program.builtins.tools.subagent import SubagentTool
+        from program.tool.types import ToolContext, ToolInvocation
+        from unittest.mock import AsyncMock, MagicMock
+
+        manager = MagicMock()
+        manager._settings = SubagentSettings(max_spawn_depth=3)
+        manager.invoke = AsyncMock(return_value='sub_abc123')
+        manager.list_profiles.return_value = [MagicMock(name='worker')]
+
+        tool = SubagentTool(manager=manager)
+        context = ToolContext(subagent_manager=manager, spawn_depth=1)
+        invocation = ToolInvocation(
+            id='inv2', name='subagent',
+            params={'action': 'create', 'task': 'do something', 'profile': 'worker'},
+        )
+        result = await tool.execute(invocation, context=context)
+        assert not result.is_error
+        manager.invoke.assert_called_once()
+        _, kwargs = manager.invoke.call_args
+        assert kwargs.get('spawn_depth') == 2
+
+    @pytest.mark.asyncio
+    async def test_main_agent_depth_zero(self):
+        from program.tool.types import ToolContext
+        ctx = ToolContext()
+        assert ctx.spawn_depth == 0
 
 
 # ── TaskPool ──────────────────────────────────────────────────────────────────

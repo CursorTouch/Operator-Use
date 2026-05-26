@@ -86,6 +86,7 @@ class SubagentManager:
         label: str | None = None,
         depends_on: list[str] | None = None,
         profile: str | None = None,
+        spawn_depth: int = 0,
     ) -> str:
         """Spawn a background subagent. Returns task_id immediately.
 
@@ -124,6 +125,7 @@ class SubagentManager:
             profile=profile,
             system_prompt=resolved.system_prompt,
             tool_names=resolved.tools if resolved.tools else None,
+            spawn_depth=spawn_depth,
         )
         self._records[task_id] = record
 

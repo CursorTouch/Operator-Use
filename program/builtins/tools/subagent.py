@@ -117,9 +117,21 @@ class SubagentTool(Tool):
                 label = params.get('label')
                 depends_on = params.get('depends_on')
 
+                current_depth = context.spawn_depth if context else 0
+                max_depth = manager._settings.max_spawn_depth
+                if current_depth >= max_depth:
+                    return ToolResult.error(
+                        id=invocation.id,
+                        content=(
+                            f'Spawn depth limit reached (depth={current_depth}, max={max_depth}). '
+                            'Cannot spawn further subagents from this level.'
+                        ),
+                    )
+
                 try:
                     task_id = await manager.invoke(
                         task, label=label, depends_on=depends_on, profile=profile,
+                        spawn_depth=current_depth + 1,
                     )
                 except ValueError as exc:
                     return ToolResult.error(id=invocation.id, content=f'Cannot create subagent: {exc}')
@@ -168,6 +180,7 @@ class SubagentTool(Tool):
                     f'{icon} task_id : {record.task_id}',
                     f'   status  : {record.status}',
                     f'   label   : {record.label}',
+                    f'   depth   : {record.spawn_depth}',
                     f'   duration: {duration}',
                     f'   started : {record.started_at.isoformat(timespec="seconds")}',
                 ]
