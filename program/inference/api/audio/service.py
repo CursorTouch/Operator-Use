@@ -6,7 +6,7 @@ from typing import Optional
 from program.auth.providers import ProviderAuthManager
 from program.inference.api.audio.registry import AudioAPIRegistry
 from program.inference.model.registry import ModelRegistry
-from program.inference.provider.registry import AudioProviderRegistry, ProviderRegistry
+from program.inference.provider.registry import AudioProviderRegistry, TextProviderRegistry
 from program.inference.types import AudioOptions, STTContext, SynthesizedAudio, TTSContext, TranscribedAudio
 
 
@@ -14,7 +14,7 @@ class AudioLLM:
     _models = ModelRegistry.from_audio_builtins()
     _providers = AudioProviderRegistry.from_builtins()
     _apis = AudioAPIRegistry.from_builtins()
-    _auth_store = ProviderAuthManager.create(ProviderRegistry.from_builtins())
+    _auth_store = ProviderAuthManager.create(TextProviderRegistry.from_builtins())
 
     def __init__(
         self,

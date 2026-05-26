@@ -1,23 +1,24 @@
 from __future__ import annotations
+from beartype.typing import List
 from program.inference.provider.types import APIProvider, OAuthProvider, ImageProvider, AudioProvider, VideoProvider, AuthType
 
-LLMProvider = APIProvider | OAuthProvider
+TextProvider = APIProvider | OAuthProvider
 
 
-class ProviderRegistry:
+class TextProviderRegistry:
     def __init__(self) -> None:
-        self._providers: dict[str, LLMProvider] = {}
+        self._providers: dict[str, TextProvider] = {}
 
-    def register(self, provider: LLMProvider) -> None:
+    def register(self, provider: TextProvider) -> None:
         self._providers[provider.id] = provider
 
     def unregister(self, provider_id: str) -> None:
         self._providers.pop(provider_id, None)
 
-    def list(self) -> list[LLMProvider]:
+    def list(self) -> list[TextProvider]:
         return list(self._providers.values())
 
-    def get(self, provider_id: str) -> LLMProvider | None:
+    def get(self, provider_id: str) -> TextProvider | None:
         return self._providers.get(provider_id)
 
     def is_using_oauth(self, provider: str) -> bool:
@@ -25,10 +26,10 @@ class ProviderRegistry:
             return p.auth_type == AuthType.OAuth
         raise ValueError(f"Provider '{provider}' not found.")
 
-    def get_oauth_providers(self) -> list[OAuthProvider]:
+    def get_oauth_providers(self) -> List[OAuthProvider]:
         return [p for p in self._providers.values() if isinstance(p, OAuthProvider)]
 
-    def get_api_providers(self) -> list[APIProvider]:
+    def get_api_providers(self) -> List[APIProvider]:
         return [p for p in self._providers.values() if isinstance(p, APIProvider)]
 
     def get_oauth_provider(self, provider: str) -> OAuthProvider | None:
@@ -43,7 +44,7 @@ class ProviderRegistry:
         self._providers.clear()
 
     @classmethod
-    def from_builtins(cls) -> ProviderRegistry:
+    def from_builtins(cls) -> TextProviderRegistry:
         from program.builtins.providers.text import providers
         instance = cls()
         for provider in providers:

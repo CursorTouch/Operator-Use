@@ -21,12 +21,18 @@ An `Extension` object holds:
 ```python
 @dataclass
 class Extension:
-    path: str                                # source file path (for error attribution)
-    source_info: SourceInfo                  # path + source label
-    handlers: dict[str, list[Callable]]      # event_type → list of handlers
-    tools: dict[str, RegisteredTool]         # tool_name → registered tool
-    commands: dict[str, RegisteredCommand]   # command_name → slash command
-    config: dict                             # per-extension settings (from extension_list)
+    path: str                                    # source file path (for error attribution)
+    source_info: SourceInfo                      # path + source label
+    handlers: dict[str, list[Callable]]          # event_type → list of handlers
+    tools: dict[str, RegisteredTool]             # tool_name → registered tool
+    commands: dict[str, RegisteredCommand]       # command_name → slash command
+    config: dict                                 # per-extension settings (from extension_list)
+    # Provider registrations collected during factory execution
+    inference_providers: list[Any]               # APIProvider | OAuthProvider instances
+    inference_apis: dict[str, Any]               # LLM API classes keyed by name
+    memory_providers: list[Any]                  # MemoryProvider descriptors
+    memory_apis: dict[str, Any]                  # BaseMemoryAPI classes keyed by name
+    subagent_profiles: list[Any]                 # SubagentProfile instances
 ```
 
 ## Writing an extension
@@ -77,6 +83,11 @@ The factory may also be `async def extension(api)` for startup work such as fetc
 | `api.on(event, handler)` | Register an event handler |
 | `api.register_tool(ToolDefinition)` | Register a tool the LLM can call |
 | `api.register_command(name, handler, description?)` | Register a slash command |
+| `api.register_provider(provider)` | Register a custom inference provider (`APIProvider` or `OAuthProvider`) |
+| `api.register_llm_api(name, api_class)` | Register a custom `BaseLLMAPI` subclass under a string name |
+| `api.register_memory_provider(provider)` | Register a custom `MemoryProvider` descriptor |
+| `api.register_memory_api(name, api_class)` | Register a custom `BaseMemoryAPI` subclass under a string name |
+| `api.register_subagent_profile(profile)` | Register a `SubagentProfile` available to the subagent tool |
 
 `ctx` in event handlers is the `ExtensionContext` — the live `Agent` instance. See [agent.md](./agent.md) for what it exposes.
 
@@ -213,6 +224,81 @@ self.commands.register_from_extensions(
 ```
 
 Extension commands are dispatched by the Runtime alongside built-in slash commands.
+
+## Provider registration
+
+Extensions can register custom inference and memory providers so the rest of the system can select them by ID. Registration is collected during factory execution and applied by the Runtime before constructing any provider-dependent services.
+
+### Inference providers
+
+```python
+from program.inference.provider.types import APIProvider
+from program.inference.types import LLMOptions
+
+def extension(api):
+    api.register_provider(APIProvider(
+        id="my-llm",
+        name="My LLM",
+        api="my_llm_api",          # name under which the API class is registered
+        options=LLMOptions(base_url="http://localhost:8080"),
+    ))
+    api.register_llm_api("my_llm_api", MyLLMAPI)   # BaseLLMAPI subclass
+```
+
+`register_provider` appends to `Extension.inference_providers`. `register_llm_api` adds to `Extension.inference_apis`. At startup, `RuntimeContext.create()` applies them to the class-level `LLM._providers` and `LLM._apis` registries **before** constructing the `LLM` instance, so a user can set `"provider": "my-llm"` in settings and it resolves correctly.
+
+### Memory providers
+
+```python
+from program.memory.provider.types import MemoryProvider
+from program.memory.api.base import BaseMemoryAPI
+from program.memory.types import MemoryOptions
+
+class MyMemoryAPI(BaseMemoryAPI):
+    async def prefetch(self, query, *, session_id=""):
+        return "recalled context"
+
+def extension(api):
+    api.register_memory_provider(MemoryProvider(
+        id="my-memory",
+        name="My Memory",
+        api="my_memory_api",
+        options=MemoryOptions(),
+    ))
+    api.register_memory_api("my_memory_api", MyMemoryAPI)
+```
+
+`RuntimeContext.create()` seeds `MemoryProviderRegistry` and `MemoryAPIRegistry` from builtins, merges in extension registrations, then passes both to `MemoryManager`. A user can select the custom provider with `"memory": {"provider": "my-memory"}` in settings.
+
+### Subagent profiles
+
+```python
+from program.subagent.profile import SubagentProfile
+from pathlib import Path
+
+def extension(api):
+    api.register_subagent_profile(SubagentProfile(
+        name="researcher",
+        description="Deep research agent with web access.",
+        tools=["web_search", "web_fetch", "read"],
+        system_prompt="You are a focused research agent...",
+        file_path=Path(__file__),
+    ))
+```
+
+Profiles registered this way are merged into `SubagentManager` in `Runtime.__init__()` after file-discovered profiles are loaded. Extension profiles are additive — they do not shadow file-discovered profiles of the same name, which take precedence.
+
+### Runtime collector methods
+
+`ExtensionRuntime` exposes corresponding collector methods for the Runtime to call:
+
+| Method | Returns |
+|---|---|
+| `get_providers()` | `list` of inference providers from all extensions |
+| `get_llm_apis()` | `dict[name, class]` merged across all extensions (last-writer-wins) |
+| `get_memory_providers()` | `list` of memory provider descriptors from all extensions |
+| `get_memory_apis()` | `dict[name, class]` merged across all extensions (last-writer-wins) |
+| `get_subagent_profiles()` | `list` of `SubagentProfile` from all extensions |
 
 ## Engine event re-dispatch
 

@@ -123,36 +123,65 @@ class ExtensionRuntime:
         return commands
 
     def get_providers(self) -> list[Any]:
-        """Collect all custom inference providers registered by extensions."""
-        providers = []
-        for ext in self._extensions:
-            providers.extend(ext.inference_providers)
-        return providers
+        """Collect all custom text inference providers registered by extensions."""
+        return [rp.provider for ext in self._extensions for rp in ext.inference_providers]
 
-    def get_llm_apis(self) -> dict[str, Any]:
-        """Collect all custom LLM API classes registered by extensions (last-writer-wins)."""
+    def get_image_providers(self) -> list[Any]:
+        """Collect all custom image providers registered by extensions."""
+        return [rp.provider for ext in self._extensions for rp in ext.image_providers]
+
+    def get_audio_providers(self) -> list[Any]:
+        """Collect all custom audio providers registered by extensions."""
+        return [rp.provider for ext in self._extensions for rp in ext.audio_providers]
+
+    def get_video_providers(self) -> list[Any]:
+        """Collect all custom video providers registered by extensions."""
+        return [rp.provider for ext in self._extensions for rp in ext.video_providers]
+
+    def get_text_apis(self) -> dict[str, Any]:
+        """Collect all custom text LLM API classes registered by extensions (last-writer-wins)."""
         apis: dict[str, Any] = {}
         for ext in self._extensions:
-            apis.update(ext.inference_apis)
+            for name, ra in ext.inference_apis.items():
+                apis[name] = ra.api
+        return apis
+
+    def get_image_apis(self) -> dict[str, Any]:
+        """Collect all custom image API classes registered by extensions (last-writer-wins)."""
+        apis: dict[str, Any] = {}
+        for ext in self._extensions:
+            for name, ra in ext.image_apis.items():
+                apis[name] = ra.api
+        return apis
+
+    def get_audio_apis(self) -> dict[str, Any]:
+        """Collect all custom audio API classes registered by extensions (last-writer-wins)."""
+        apis: dict[str, Any] = {}
+        for ext in self._extensions:
+            for name, ra in ext.audio_apis.items():
+                apis[name] = ra.api
+        return apis
+
+    def get_video_apis(self) -> dict[str, Any]:
+        """Collect all custom video API classes registered by extensions (last-writer-wins)."""
+        apis: dict[str, Any] = {}
+        for ext in self._extensions:
+            for name, ra in ext.video_apis.items():
+                apis[name] = ra.api
         return apis
 
     def get_memory_providers(self) -> list[Any]:
         """Collect all custom memory providers registered by extensions."""
-        providers = []
-        for ext in self._extensions:
-            providers.extend(ext.memory_providers)
-        return providers
+        return [rmp.provider for ext in self._extensions for rmp in ext.memory_providers]
 
     def get_memory_apis(self) -> dict[str, Any]:
         """Collect all custom memory API classes registered by extensions (last-writer-wins)."""
         apis: dict[str, Any] = {}
         for ext in self._extensions:
-            apis.update(ext.memory_apis)
+            for name, rma in ext.memory_apis.items():
+                apis[name] = rma.api
         return apis
 
     def get_subagent_profiles(self) -> list[Any]:
         """Collect all subagent profiles registered by extensions."""
-        profiles = []
-        for ext in self._extensions:
-            profiles.extend(ext.subagent_profiles)
-        return profiles
+        return [rsp.profile for ext in self._extensions for rsp in ext.subagent_profiles]

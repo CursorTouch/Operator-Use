@@ -4,7 +4,7 @@ import os
 import json
 from pathlib import Path
 
-from program.inference.provider.registry import ProviderRegistry
+from program.inference.provider.registry import TextProviderRegistry
 from program.inference.provider.oauth import OAuthLoginCallbacks
 from program.settings.paths import get_providers_auth_path
 from program.auth.types import AuthCredential, AuthStatus, OAuthCredential, APICredential, AuthType, LockResult
@@ -44,7 +44,7 @@ class ProviderAuthManager:
     and environment variable fallback.
     """
 
-    def __init__(self, registry: ProviderRegistry, storage: AuthStorage):
+    def __init__(self, registry: TextProviderRegistry, storage: AuthStorage):
         self.registry = registry
         self.storage = storage
         self.runtime_overrides: dict[str, str] = {}
@@ -53,16 +53,16 @@ class ProviderAuthManager:
         self.data: dict[str, AuthCredential] = self._load()
 
     @staticmethod
-    def create(registry: ProviderRegistry, auth_path: Path | None = None) -> ProviderAuthManager:
+    def create(registry: TextProviderRegistry, auth_path: Path | None = None) -> ProviderAuthManager:
         path = auth_path or get_providers_auth_path()
         return ProviderAuthManager(registry, FileAuthStorage(path))
 
     @staticmethod
-    def from_storage(registry: ProviderRegistry, storage: AuthStorage) -> ProviderAuthManager:
+    def from_storage(registry: TextProviderRegistry, storage: AuthStorage) -> ProviderAuthManager:
         return ProviderAuthManager(registry, storage)
 
     @staticmethod
-    def in_memory(registry: ProviderRegistry, initial: dict = {}) -> ProviderAuthManager:
+    def in_memory(registry: TextProviderRegistry, initial: dict = {}) -> ProviderAuthManager:
         storage = InMemoryAuthStorage()
         storage.with_lock(lambda _: LockResult(result=None, next=json.dumps(initial, indent=2)))
         return ProviderAuthManager.from_storage(registry, storage)

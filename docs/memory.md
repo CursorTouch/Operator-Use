@@ -80,9 +80,43 @@ Memory providers can implement lifecycle hooks. `MemoryManager` forwards these h
 | `on_memory_write(action, target, content)` | When the `memory` tool writes | Mirror explicit writes into provider storage |
 | `shutdown()` | Runtime shutdown | Close provider resources |
 
+## Custom providers via extensions
+
+Extensions and packages can ship custom memory backends without modifying the core. Register a `MemoryProvider` descriptor and a `BaseMemoryAPI` subclass inside an extension factory:
+
+```python
+from program.memory.provider.types import MemoryProvider
+from program.memory.api.base import BaseMemoryAPI
+from program.memory.types import MemoryOptions, MemoryRuntimeContext
+
+class MyMemoryAPI(BaseMemoryAPI):
+    async def prefetch(self, query, *, session_id="") -> str:
+        return "recalled context for: " + query
+
+    async def sync_turn(self, user_content, assistant_content, *, session_id=""):
+        pass  # persist the turn
+
+def extension(api):
+    api.register_memory_provider(MemoryProvider(
+        id="my-memory",
+        name="My Memory",
+        api="my_memory_api",
+        options=MemoryOptions(),
+    ))
+    api.register_memory_api("my_memory_api", MyMemoryAPI)
+```
+
+At startup `RuntimeContext.create()` seeds `MemoryProviderRegistry` and `MemoryAPIRegistry` from builtins, merges in all extension registrations, then passes both to `MemoryManager`. A user selects the custom provider in `settings.json`:
+
+```json
+{ "memory": { "provider": "my-memory" } }
+```
+
+See [extensions.md — Provider registration](./extensions.md#provider-registration) for the full pattern including inference providers and subagent profiles.
+
 ## Next Integration Points
 
-The first slices add the provider/API surface and common tool. Runtime integration should still wire:
+Runtime integration should still wire:
 
 - `MemoryManager.prefetch(user_text)` before each turn
 - `MemoryManager.sync_turn(user, assistant)` after each completed response

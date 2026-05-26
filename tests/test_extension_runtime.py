@@ -1,11 +1,13 @@
 """Tests for ExtensionRuntime: emit, emit_parallel, tools, commands, errors."""
 import pytest
-from pathlib import Path
+from pathlib import Path  # noqa: F401 — used by _reg_profile helper
 
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import (
     Extension, ExtensionContext, ExtensionError, LoadExtensionsResult,
     ToolDefinition, RegisteredTool, RegisteredCommand, ContextUsage, CompactOptions,
+    RegisteredInferenceProvider, RegisteredTextAPI, RegisteredMemoryProvider,
+    RegisteredMemoryAPI, RegisteredSubagentProfile,
 )
 from program.skill.types import SourceInfo
 from program.tool.types import ToolResult
@@ -149,12 +151,47 @@ class TestHasHandlers:
 
 # ── get_tools / get_commands ──────────────────────────────────────────────────
 
+def _reg_provider(tag: str) -> RegisteredInferenceProvider:
+    """Minimal RegisteredInferenceProvider for testing — provider is a plain object tagged by id."""
+    class FakeProv:
+        id = tag
+    si = SourceInfo(path="test.py", source="local")
+    return RegisteredInferenceProvider(provider=FakeProv(), source_info=si)  # type: ignore[arg-type]
+
+
+def _reg_llm_api(name: str, cls: type) -> RegisteredTextAPI:
+    si = SourceInfo(path="test.py", source="local")
+    return RegisteredTextAPI(name=name, api=cls, source_info=si)  # type: ignore[arg-type]
+
+
+def _reg_mem_provider(tag: str) -> RegisteredMemoryProvider:
+    class FakeMem:
+        id = tag
+    si = SourceInfo(path="test.py", source="local")
+    return RegisteredMemoryProvider(provider=FakeMem(), source_info=si)  # type: ignore[arg-type]
+
+
+def _reg_mem_api(name: str, cls: type) -> RegisteredMemoryAPI:
+    si = SourceInfo(path="test.py", source="local")
+    return RegisteredMemoryAPI(name=name, api=cls, source_info=si)  # type: ignore[arg-type]
+
+
+def _reg_profile(name: str) -> RegisteredSubagentProfile:
+    from program.subagent.profile import SubagentProfile
+    si = SourceInfo(path="test.py", source="local")
+    profile = SubagentProfile(
+        name=name, description=f"{name} agent",
+        tools=[], system_prompt="", file_path=Path("."),
+    )
+    return RegisteredSubagentProfile(profile=profile, source_info=si)
+
+
 class TestGetProviderRegistrations:
     def test_get_providers_collects_from_all_extensions(self):
         ext1 = make_ext("e1.py")
         ext2 = make_ext("e2.py")
-        ext1.inference_providers = [object()]
-        ext2.inference_providers = [object(), object()]
+        ext1.inference_providers = [_reg_provider("p1")]
+        ext2.inference_providers = [_reg_provider("p2"), _reg_provider("p3")]
 
         rt = make_runtime(ext1, ext2)
         assert len(rt.get_providers()) == 3
@@ -163,29 +200,39 @@ class TestGetProviderRegistrations:
         rt = make_runtime(make_ext(), make_ext("e2.py"))
         assert rt.get_providers() == []
 
-    def test_get_llm_apis_merges_last_writer_wins(self):
+    def test_get_providers_unwraps_to_inner_provider(self):
+        ext = make_ext()
+        ext.inference_providers = [_reg_provider("unwrap-me")]
+        rt = make_runtime(ext)
+        provider = rt.get_providers()[0]
+        assert provider.id == "unwrap-me"
+
+    def test_get_text_apis_merges_last_writer_wins(self):
         class APIFirst: pass
         class APISecond: pass
 
         ext1 = make_ext("e1.py")
         ext2 = make_ext("e2.py")
-        ext1.inference_apis = {'my_api': APIFirst}
-        ext2.inference_apis = {'my_api': APISecond, 'other_api': APIFirst}
+        ext1.inference_apis = {'my_api': _reg_llm_api('my_api', APIFirst)}
+        ext2.inference_apis = {
+            'my_api': _reg_llm_api('my_api', APISecond),
+            'other_api': _reg_llm_api('other_api', APIFirst),
+        }
 
         rt = make_runtime(ext1, ext2)
-        apis = rt.get_llm_apis()
+        apis = rt.get_text_apis()
         assert apis['my_api'] is APISecond
         assert 'other_api' in apis
 
-    def test_get_llm_apis_empty_when_none_registered(self):
+    def test_get_text_apis_empty_when_none_registered(self):
         rt = make_runtime(make_ext())
-        assert rt.get_llm_apis() == {}
+        assert rt.get_text_apis() == {}
 
     def test_get_memory_providers_collects_from_all_extensions(self):
         ext1 = make_ext("e1.py")
         ext2 = make_ext("e2.py")
-        ext1.memory_providers = [object(), object()]
-        ext2.memory_providers = [object()]
+        ext1.memory_providers = [_reg_mem_provider("m1"), _reg_mem_provider("m2")]
+        ext2.memory_providers = [_reg_mem_provider("m3")]
 
         rt = make_runtime(ext1, ext2)
         assert len(rt.get_memory_providers()) == 3
@@ -194,14 +241,23 @@ class TestGetProviderRegistrations:
         rt = make_runtime(make_ext())
         assert rt.get_memory_providers() == []
 
+    def test_get_memory_providers_unwraps_to_inner_provider(self):
+        ext = make_ext()
+        ext.memory_providers = [_reg_mem_provider("unwrap-mem")]
+        rt = make_runtime(ext)
+        assert rt.get_memory_providers()[0].id == "unwrap-mem"
+
     def test_get_memory_apis_merges_last_writer_wins(self):
         class Impl1: pass
         class Impl2: pass
 
         ext1 = make_ext("e1.py")
         ext2 = make_ext("e2.py")
-        ext1.memory_apis = {'sqlite': Impl1}
-        ext2.memory_apis = {'sqlite': Impl2, 'redis': Impl1}
+        ext1.memory_apis = {'sqlite': _reg_mem_api('sqlite', Impl1)}
+        ext2.memory_apis = {
+            'sqlite': _reg_mem_api('sqlite', Impl2),
+            'redis': _reg_mem_api('redis', Impl1),
+        }
 
         rt = make_runtime(ext1, ext2)
         apis = rt.get_memory_apis()
@@ -213,18 +269,17 @@ class TestGetProviderRegistrations:
         assert rt.get_memory_apis() == {}
 
     def test_provider_order_preserved_across_extensions(self):
-        sentinel1 = object()
-        sentinel2 = object()
-        sentinel3 = object()
-
         ext1 = make_ext("e1.py")
         ext2 = make_ext("e2.py")
-        ext1.inference_providers = [sentinel1, sentinel2]
-        ext2.inference_providers = [sentinel3]
+        rp1 = _reg_provider("a")
+        rp2 = _reg_provider("b")
+        rp3 = _reg_provider("c")
+        ext1.inference_providers = [rp1, rp2]
+        ext2.inference_providers = [rp3]
 
         rt = make_runtime(ext1, ext2)
         providers = rt.get_providers()
-        assert providers == [sentinel1, sentinel2, sentinel3]
+        assert [p.id for p in providers] == ["a", "b", "c"]
 
 
 class TestGetToolsAndCommands:
@@ -255,24 +310,21 @@ class TestGetToolsAndCommands:
         assert 'do' in cmds
 
     def test_get_subagent_profiles_merges_all_extensions(self):
-        from program.subagent.profile import SubagentProfile
-        from pathlib import Path
-
-        def _profile(name):
-            return SubagentProfile(
-                name=name, description=f'{name} agent',
-                tools=[], system_prompt='', file_path=Path('x.py'),
-            )
-
         ext1 = make_ext("e1.py")
         ext2 = make_ext("e2.py")
-        ext1.subagent_profiles = [_profile('alpha')]
-        ext2.subagent_profiles = [_profile('beta'), _profile('gamma')]
+        ext1.subagent_profiles = [_reg_profile('alpha')]
+        ext2.subagent_profiles = [_reg_profile('beta'), _reg_profile('gamma')]
 
         rt = make_runtime(ext1, ext2)
         profiles = rt.get_subagent_profiles()
         names = [p.name for p in profiles]
         assert names == ['alpha', 'beta', 'gamma']
+
+    def test_get_subagent_profiles_unwraps_to_inner_profile(self):
+        ext = make_ext()
+        ext.subagent_profiles = [_reg_profile('unwrap-profile')]
+        rt = make_runtime(ext)
+        assert rt.get_subagent_profiles()[0].name == 'unwrap-profile'
 
     def test_get_subagent_profiles_empty_when_none_registered(self):
         rt = make_runtime(make_ext(), make_ext("e2.py"))

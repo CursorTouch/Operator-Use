@@ -6,7 +6,7 @@ from typing import Optional
 from program.auth.providers import ProviderAuthManager
 from program.inference.api.video.registry import VideoAPIRegistry
 from program.inference.model.registry import ModelRegistry
-from program.inference.provider.registry import ProviderRegistry, VideoProviderRegistry
+from program.inference.provider.registry import TextProviderRegistry, VideoProviderRegistry
 from program.inference.types import GeneratedVideo, VideoContext, VideoOptions
 
 
@@ -14,7 +14,7 @@ class VideoLLM:
     _models    = ModelRegistry.from_video_builtins()
     _providers = VideoProviderRegistry.from_builtins()
     _apis      = VideoAPIRegistry.from_builtins()
-    _auth_store = ProviderAuthManager.create(ProviderRegistry.from_builtins())
+    _auth_store = ProviderAuthManager.create(TextProviderRegistry.from_builtins())
 
     def __init__(
         self,

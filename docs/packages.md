@@ -17,6 +17,11 @@ my-package/
       SKILL.md
   prompts/
     custom.md
+  commands/
+    deploy.py
+  subagents/
+    researcher/
+      SUBAGENT.md
 ```
 
 **`operator.json`** — the package manifest:
@@ -29,11 +34,13 @@ my-package/
   "description": "A collection of useful extensions and skills.",
   "extensions": ["extensions"],
   "skills": ["skills"],
-  "prompts": ["prompts"]
+  "prompts": ["prompts"],
+  "commands": ["commands"],
+  "subagents": ["subagents"]
 }
 ```
 
-All fields except `extensions`, `skills`, and `prompts` are optional. If no `operator.json` is present, the package falls back to convention directories: `extensions/`, `skills/`, and `prompts/`.
+All fields except `name` are optional. If no `operator.json` is present, the package falls back to convention directories for all resource types.
 
 `PackageManifest` fields:
 
@@ -43,9 +50,11 @@ All fields except `extensions`, `skills`, and `prompts` are optional. If no `ope
 | `version` | `str` | — | Informational version string |
 | `author` | `str` | — | Package author |
 | `description` | `str` | — | Short description |
-| `extensions` | `list[str]` | `["extensions"]` | Dirs (relative to package root) containing extension `.py` files |
+| `extensions` | `list[str]` | `["extensions"]` | Dirs containing extension `.py` files |
 | `skills` | `list[str]` | `["skills"]` | Dirs containing `SKILL.md` skill directories |
 | `prompts` | `list[str]` | `["prompts"]` | Dirs containing `.md` prompt templates |
+| `commands` | `list[str]` | `["commands"]` | Dirs containing slash command `.py` files |
+| `subagents` | `list[str]` | `["subagents"]` | Dirs containing `SUBAGENT.md` profile directories |
 
 ## Installing packages
 
@@ -122,6 +131,8 @@ loaded.packages        # list[InstalledPackage]
 loaded.extension_dirs  # list[Path] — extension dirs from all packages
 loaded.skill_paths     # list[str]  — skill dirs from all packages
 loaded.prompt_dirs     # list[Path] — prompt dirs from all packages
+loaded.command_dirs    # list[Path] — slash command dirs from all packages
+loaded.subagent_dirs   # list[Path] — subagent profile dirs from all packages
 ```
 
 Missing packages (not yet installed or removed from disk) are silently skipped.
@@ -138,9 +149,55 @@ loader_opts = ResourceLoaderOptions(
 )
 ```
 
-`ResourceLoader._reload_extensions()` calls `load_packages_from_settings()` and appends the returned extension dirs to the scan list before calling `discover_and_load_extensions()`. `_reload_skills()` appends the package skill paths to the skill path list.
+`ResourceLoader` incorporates all package resource types on each `reload()`:
 
-This means package resources are loaded automatically on every `reload()` alongside built-in and user resources.
+| Package dir | ResourceLoader method | Effect |
+|---|---|---|
+| `extensions/` | `_reload_extensions()` | Appended to extension scan dirs |
+| `skills/` | `_reload_skills()` | Appended to skill paths |
+| `prompts/` | `_reload_context_files()` | Available as prompt templates |
+| `commands/` | `_reload_commands()` | Appended to slash command scan dirs |
+| `subagents/` | `_reload_subagent_profiles()` | Appended to subagent profile scan dirs |
+
+Package resources load automatically alongside built-in and user resources. Missing packages (not yet installed or removed from disk) are silently skipped.
+
+### Slash commands from packages
+
+Drop `.py` files exporting `command = SlashCommandInfo(...)` (or a `commands` list) into the package's `commands/` directory. They are discovered by `load_commands()` and registered into `CommandRegistry` alongside built-in commands.
+
+```python
+# my-package/commands/deploy.py
+from program.commands.types import SlashCommandInfo
+
+async def handle(registry, args):
+    print("deploying...")
+
+command = SlashCommandInfo(name="deploy", description="Deploy the project", handler=handle)
+```
+
+### Subagent profiles from packages
+
+Drop `SUBAGENT.md` files into subdirectories of the package's `subagents/` directory. The format is identical to built-in profiles:
+
+```
+my-package/subagents/researcher/SUBAGENT.md
+```
+
+```markdown
+---
+name: researcher
+description: Deep research agent with web access.
+tools: web_search, web_fetch, read
+---
+
+You are a focused research agent...
+```
+
+Profiles are discovered by `load_profiles()` and made available to the `subagent` tool alongside built-in profiles.
+
+### Custom providers from packages
+
+Packages register custom inference and memory providers through extension files that call `api.register_provider()`, `api.register_llm_api()`, `api.register_memory_provider()`, or `api.register_memory_api()`. See [extensions.md — Provider registration](./extensions.md#provider-registration) for the full pattern.
 
 ## Source spec formats
 
@@ -177,9 +234,11 @@ class PackageManifest:
     version: Optional[str]
     author: Optional[str]
     description: Optional[str]
-    extensions: list[str]
-    skills: list[str]
-    prompts: list[str]
+    extensions: list[str]   # default: ["extensions"]
+    skills: list[str]       # default: ["skills"]
+    prompts: list[str]      # default: ["prompts"]
+    commands: list[str]     # default: ["commands"]
+    subagents: list[str]    # default: ["subagents"]
 
 @dataclass
 class InstalledPackage:
@@ -190,6 +249,8 @@ class InstalledPackage:
     def extension_dirs(self) -> list[Path]: ...
     def skill_paths(self) -> list[str]: ...
     def prompt_dirs(self) -> list[Path]: ...
+    def command_dirs(self) -> list[Path]: ...
+    def subagent_dirs(self) -> list[Path]: ...
 
 @dataclass
 class LoadedPackages:
@@ -197,6 +258,8 @@ class LoadedPackages:
     extension_dirs: list[Path]
     skill_paths: list[str]
     prompt_dirs: list[Path]
+    command_dirs: list[Path]
+    subagent_dirs: list[Path]
 ```
 
 ## Settings manager API

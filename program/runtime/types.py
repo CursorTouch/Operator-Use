@@ -182,7 +182,7 @@ class RuntimeContext:
         # that a user's configured provider is resolvable at LLM() construction time.
         for _provider in extension_runtime.get_providers():
             LLM._providers.register(_provider)
-        for _api_name, _api_cls in extension_runtime.get_llm_apis().items():
+        for _api_name, _api_cls in extension_runtime.get_text_apis().items():
             LLM._apis.register(_api_name, _api_cls)
 
         # ── LLM ───────────────────────────────────────────────────────────────

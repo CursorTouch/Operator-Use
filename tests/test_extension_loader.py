@@ -205,22 +205,25 @@ def extension(api):
         assert ext is not None
         assert errors == []
         assert len(ext.inference_providers) == 1
-        assert ext.inference_providers[0].id == 'fake-llm'
+        assert ext.inference_providers[0].provider.id == 'fake-llm'
+        assert ext.inference_providers[0].source_info is not None
 
     @pytest.mark.asyncio
-    async def test_register_llm_api(self, tmp_path):
+    async def test_register_text_api(self, tmp_path):
         p = write_ext(tmp_path, "api_ext.py", """
 class MyLLMAPI:
     pass
 
 def extension(api):
-    api.register_llm_api('my_api', MyLLMAPI)
+    api.register_text_api('my_api', MyLLMAPI)
 """)
         ext, errors = await load_extension_from_file(p)
         assert ext is not None
         assert errors == []
         assert 'my_api' in ext.inference_apis
-        assert ext.inference_apis['my_api'].__name__ == 'MyLLMAPI'
+        assert ext.inference_apis['my_api'].api.__name__ == 'MyLLMAPI'
+        assert ext.inference_apis['my_api'].name == 'my_api'
+        assert ext.inference_apis['my_api'].source_info is not None
 
     @pytest.mark.asyncio
     async def test_register_memory_provider(self, tmp_path):
@@ -240,7 +243,8 @@ def extension(api):
         assert ext is not None
         assert errors == []
         assert len(ext.memory_providers) == 1
-        assert ext.memory_providers[0].id == 'my-mem'
+        assert ext.memory_providers[0].provider.id == 'my-mem'
+        assert ext.memory_providers[0].source_info is not None
 
     @pytest.mark.asyncio
     async def test_register_memory_api(self, tmp_path):
@@ -277,7 +281,7 @@ def extension(api):
         assert ext is not None
         assert errors == []
         assert len(ext.subagent_profiles) == 1
-        assert ext.subagent_profiles[0].name == 'researcher'
+        assert ext.subagent_profiles[0].profile.name == 'researcher'
 
     @pytest.mark.asyncio
     async def test_multiple_providers_from_one_extension(self, tmp_path):
@@ -297,7 +301,7 @@ def extension(api):
         ext, errors = await load_extension_from_file(p)
         assert ext is not None
         assert len(ext.memory_providers) == 3
-        assert [p.id for p in ext.memory_providers] == ['mem-0', 'mem-1', 'mem-2']
+        assert [p.provider.id for p in ext.memory_providers] == ['mem-0', 'mem-1', 'mem-2']
 
     @pytest.mark.asyncio
     async def test_provider_registration_survives_other_errors(self, tmp_path):

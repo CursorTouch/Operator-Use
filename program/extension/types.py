@@ -11,6 +11,17 @@ from program.tool.types import Tool, ToolContext, ToolKind, ToolInvocation, Tool
 from program.skill.types import SourceInfo, ResourceDiagnostic
 from program.bus.service import EventBus
 
+if TYPE_CHECKING:
+    from typing import Type
+    from program.inference.provider.types import APIProvider, OAuthProvider, ImageProvider, AudioProvider, VideoProvider
+    from program.inference.api.text.base import BaseLLMAPI
+    from program.inference.api.image.base import BaseImageAPI
+    from program.inference.api.audio.base import BaseAudioAPI
+    from program.inference.api.video.base import BaseVideoAPI
+    from program.memory.provider.types import MemoryProvider
+    from program.memory.api.base import BaseMemoryAPI
+    from program.subagent.profile import SubagentProfile
+
 # All hook event and result types live in program.hooks — re-exported here for backward compat
 from program.hooks.types import (
     SessionStartEvent, SessionBeforeSwitchEvent, SessionBeforeForkEvent,
@@ -193,7 +204,90 @@ class RegisteredCommand:
     name: str
     source_info: SourceInfo
     description: str | None = None
-    handler: Callable[..., Awaitable[None]] = field(default=lambda *a: None)
+    handler: Callable[..., Awaitable[None] | None] = field(default=lambda *a: None)
+
+
+# ============================================================================
+# Inference provider registration
+# ============================================================================
+
+@dataclass
+class RegisteredInferenceProvider:
+    provider: APIProvider | OAuthProvider
+    source_info: SourceInfo
+
+
+@dataclass
+class RegisteredImageProvider:
+    provider: ImageProvider
+    source_info: SourceInfo
+
+
+@dataclass
+class RegisteredAudioProvider:
+    provider: AudioProvider
+    source_info: SourceInfo
+
+
+@dataclass
+class RegisteredVideoProvider:
+    provider: VideoProvider
+    source_info: SourceInfo
+
+
+@dataclass
+class RegisteredTextAPI:
+    name: str
+    api: Type[BaseLLMAPI]
+    source_info: SourceInfo
+
+
+@dataclass
+class RegisteredImageAPI:
+    name: str
+    api: Type[BaseImageAPI]
+    source_info: SourceInfo
+
+
+@dataclass
+class RegisteredAudioAPI:
+    name: str
+    api: Type[BaseAudioAPI]
+    source_info: SourceInfo
+
+
+@dataclass
+class RegisteredVideoAPI:
+    name: str
+    api: Type[BaseVideoAPI]
+    source_info: SourceInfo
+
+
+# ============================================================================
+# Memory provider registration
+# ============================================================================
+
+@dataclass
+class RegisteredMemoryProvider:
+    provider: MemoryProvider
+    source_info: SourceInfo
+
+
+@dataclass
+class RegisteredMemoryAPI:
+    name: str
+    api: Type[BaseMemoryAPI]
+    source_info: SourceInfo
+
+
+# ============================================================================
+# Subagent profile registration
+# ============================================================================
+
+@dataclass
+class RegisteredSubagentProfile:
+    profile: SubagentProfile
+    source_info: SourceInfo
 
 
 # ============================================================================
@@ -224,12 +318,17 @@ class Extension:
     tools: dict[str, RegisteredTool] = field(default_factory=dict)
     commands: dict[str, RegisteredCommand] = field(default_factory=dict)
     config: dict = field(default_factory=dict)
-    # Provider registrations collected during factory execution
-    inference_providers: list[Any] = field(default_factory=list)  # APIProvider | OAuthProvider
-    inference_apis: dict[str, Any] = field(default_factory=dict)  # LLM API classes keyed by name
-    memory_providers: list[Any] = field(default_factory=list)     # MemoryProvider descriptors
-    memory_apis: dict[str, Any] = field(default_factory=dict)     # BaseMemoryAPI classes keyed by name
-    subagent_profiles: list[Any] = field(default_factory=list)    # SubagentProfile instances
+    inference_providers: list[RegisteredInferenceProvider] = field(default_factory=list)
+    image_providers: list[RegisteredImageProvider] = field(default_factory=list)
+    audio_providers: list[RegisteredAudioProvider] = field(default_factory=list)
+    video_providers: list[RegisteredVideoProvider] = field(default_factory=list)
+    inference_apis: dict[str, RegisteredTextAPI] = field(default_factory=dict)
+    image_apis: dict[str, RegisteredImageAPI] = field(default_factory=dict)
+    audio_apis: dict[str, RegisteredAudioAPI] = field(default_factory=dict)
+    video_apis: dict[str, RegisteredVideoAPI] = field(default_factory=dict)
+    memory_providers: list[RegisteredMemoryProvider] = field(default_factory=list)
+    memory_apis: dict[str, RegisteredMemoryAPI] = field(default_factory=dict)
+    subagent_profiles: list[RegisteredSubagentProfile] = field(default_factory=list)
 
 
 @dataclass
@@ -278,22 +377,79 @@ class ExtensionAPI:
             handler=handler,
         )
 
-    def register_provider(self, provider: Any) -> None:
-        """Register a custom inference provider (APIProvider or OAuthProvider)."""
-        self._extension.inference_providers.append(provider)
+    def register_provider(self, provider: APIProvider | OAuthProvider) -> None:
+        """Register a custom text inference provider (APIProvider or OAuthProvider)."""
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.inference_providers.append(
+            RegisteredInferenceProvider(provider=provider, source_info=source_info)
+        )
 
-    def register_llm_api(self, name: str, api: Any) -> None:
-        """Register a custom LLM API class under the given name."""
-        self._extension.inference_apis[name] = api
+    def register_image_provider(self, provider: ImageProvider) -> None:
+        """Register a custom image generation provider."""
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.image_providers.append(
+            RegisteredImageProvider(provider=provider, source_info=source_info)
+        )
 
-    def register_memory_provider(self, provider: Any) -> None:
+    def register_audio_provider(self, provider: AudioProvider) -> None:
+        """Register a custom audio (TTS/STT) provider."""
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.audio_providers.append(
+            RegisteredAudioProvider(provider=provider, source_info=source_info)
+        )
+
+    def register_video_provider(self, provider: VideoProvider) -> None:
+        """Register a custom video generation provider."""
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.video_providers.append(
+            RegisteredVideoProvider(provider=provider, source_info=source_info)
+        )
+
+    def register_text_api(self, name: str, api: Type[BaseLLMAPI]) -> None:
+        """Register a custom text LLM API class under the given name."""
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.inference_apis[name] = RegisteredTextAPI(
+            name=name, api=api, source_info=source_info
+        )
+
+    def register_image_api(self, name: str, api: Type[BaseImageAPI]) -> None:
+        """Register a custom image generation API class under the given name."""
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.image_apis[name] = RegisteredImageAPI(
+            name=name, api=api, source_info=source_info
+        )
+
+    def register_audio_api(self, name: str, api: Type[BaseAudioAPI]) -> None:
+        """Register a custom audio (TTS/STT) API class under the given name."""
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.audio_apis[name] = RegisteredAudioAPI(
+            name=name, api=api, source_info=source_info
+        )
+
+    def register_video_api(self, name: str, api: Type[BaseVideoAPI]) -> None:
+        """Register a custom video generation API class under the given name."""
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.video_apis[name] = RegisteredVideoAPI(
+            name=name, api=api, source_info=source_info
+        )
+
+    def register_memory_provider(self, provider: MemoryProvider) -> None:
         """Register a custom memory provider (MemoryProvider descriptor)."""
-        self._extension.memory_providers.append(provider)
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.memory_providers.append(
+            RegisteredMemoryProvider(provider=provider, source_info=source_info)
+        )
 
-    def register_memory_api(self, name: str, api: Any) -> None:
+    def register_memory_api(self, name: str, api: Type[BaseMemoryAPI]) -> None:
         """Register a custom memory API class (BaseMemoryAPI subclass) under the given name."""
-        self._extension.memory_apis[name] = api
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.memory_apis[name] = RegisteredMemoryAPI(
+            name=name, api=api, source_info=source_info
+        )
 
-    def register_subagent_profile(self, profile: Any) -> None:
+    def register_subagent_profile(self, profile: SubagentProfile) -> None:
         """Register a SubagentProfile so it is available to the subagent tool."""
-        self._extension.subagent_profiles.append(profile)
+        source_info = SourceInfo(path=self._extension.path, source='extension')
+        self._extension.subagent_profiles.append(
+            RegisteredSubagentProfile(profile=profile, source_info=source_info)
+        )
