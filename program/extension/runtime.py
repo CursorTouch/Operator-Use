@@ -121,3 +121,38 @@ class ExtensionRuntime:
         for ext in self._extensions:
             commands.update(ext.commands)
         return commands
+
+    def get_providers(self) -> list[Any]:
+        """Collect all custom inference providers registered by extensions."""
+        providers = []
+        for ext in self._extensions:
+            providers.extend(ext.inference_providers)
+        return providers
+
+    def get_llm_apis(self) -> dict[str, Any]:
+        """Collect all custom LLM API classes registered by extensions (last-writer-wins)."""
+        apis: dict[str, Any] = {}
+        for ext in self._extensions:
+            apis.update(ext.inference_apis)
+        return apis
+
+    def get_memory_providers(self) -> list[Any]:
+        """Collect all custom memory providers registered by extensions."""
+        providers = []
+        for ext in self._extensions:
+            providers.extend(ext.memory_providers)
+        return providers
+
+    def get_memory_apis(self) -> dict[str, Any]:
+        """Collect all custom memory API classes registered by extensions (last-writer-wins)."""
+        apis: dict[str, Any] = {}
+        for ext in self._extensions:
+            apis.update(ext.memory_apis)
+        return apis
+
+    def get_subagent_profiles(self) -> list[Any]:
+        """Collect all subagent profiles registered by extensions."""
+        profiles = []
+        for ext in self._extensions:
+            profiles.extend(ext.subagent_profiles)
+        return profiles

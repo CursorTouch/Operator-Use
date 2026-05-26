@@ -68,4 +68,12 @@ def load_packages_from_settings(
             if d.is_dir():
                 result.prompt_dirs.append(d)
 
+        for d in pkg.command_dirs():
+            if d.is_dir():
+                result.command_dirs.append(d)
+
+        for d in pkg.subagent_dirs():
+            if d.is_dir():
+                result.subagent_dirs.append(d)
+
     return result

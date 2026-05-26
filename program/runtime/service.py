@@ -54,6 +54,11 @@ class Runtime:
             context.cron.start()
 
         self.subagent_manager = self._create_subagent_manager(context)
+        # Merge subagent profiles registered by extensions on top of file-discovered ones.
+        ext_profiles = context.extension_runtime.get_subagent_profiles()
+        if ext_profiles:
+            merged = context.resource_loader.get_subagent_profiles() + ext_profiles
+            self.subagent_manager.update_profiles(merged)
         # Expose MCPManager for use in create_session_agent() and shutdown.
         self.mcp_manager = context.mcp_manager
         self._configure_context(context)

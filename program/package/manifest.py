@@ -9,6 +9,8 @@ MANIFEST_FILE = "operator.json"
 _CONVENTION_EXTENSIONS = ["extensions"]
 _CONVENTION_SKILLS = ["skills"]
 _CONVENTION_PROMPTS = ["prompts"]
+_CONVENTION_COMMANDS = ["commands"]
+_CONVENTION_SUBAGENTS = ["subagents"]
 
 
 def read_manifest(package_dir: Path) -> PackageManifest:
@@ -27,10 +29,14 @@ def read_manifest(package_dir: Path) -> PackageManifest:
             extensions=data.get("extensions", _CONVENTION_EXTENSIONS),
             skills=data.get("skills", _CONVENTION_SKILLS),
             prompts=data.get("prompts", _CONVENTION_PROMPTS),
+            commands=data.get("commands", _CONVENTION_COMMANDS),
+            subagents=data.get("subagents", _CONVENTION_SUBAGENTS),
         )
     return PackageManifest(
         name=package_dir.name,
         extensions=_CONVENTION_EXTENSIONS,
         skills=_CONVENTION_SKILLS,
         prompts=_CONVENTION_PROMPTS,
+        commands=_CONVENTION_COMMANDS,
+        subagents=_CONVENTION_SUBAGENTS,
     )

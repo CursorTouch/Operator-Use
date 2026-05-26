@@ -16,7 +16,8 @@ from program.package.loader import load_packages_from_settings, resolve_install_
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def make_package(tmp_path: Path, name: str = "my-pkg", manifest: dict | None = None,
-                 with_extensions: bool = True, with_skills: bool = True) -> Path:
+                 with_extensions: bool = True, with_skills: bool = True,
+                 with_commands: bool = False, with_subagents: bool = False) -> Path:
     pkg_dir = tmp_path / name
     pkg_dir.mkdir()
     if manifest is not None:
@@ -25,7 +26,22 @@ def make_package(tmp_path: Path, name: str = "my-pkg", manifest: dict | None = N
         (pkg_dir / "extensions").mkdir()
     if with_skills:
         (pkg_dir / "skills").mkdir()
+    if with_commands:
+        (pkg_dir / "commands").mkdir()
+    if with_subagents:
+        (pkg_dir / "subagents").mkdir()
     return pkg_dir
+
+
+def make_subagent_profile_file(directory: Path, name: str = "researcher") -> Path:
+    """Write a minimal SUBAGENT.md into directory/<name>/."""
+    profile_dir = directory / name
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "SUBAGENT.md").write_text(
+        f"---\nname: {name}\ndescription: A test agent\n---\nYou are a test agent.",
+        encoding="utf-8",
+    )
+    return profile_dir
 
 
 # ── read_manifest ─────────────────────────────────────────────────────────────
@@ -430,3 +446,172 @@ class TestResolveInstallPath:
         packages_dir = tmp_path / "packages"
         path = resolve_install_path("my-pkg", packages_dir, cwd=tmp_path)
         assert path == tmp_path / "my-pkg"
+
+
+# ── PackageManifest commands / subagents ──────────────────────────────────────
+
+class TestPackageManifestCommandsAndSubagents:
+    def test_default_commands_convention(self, tmp_path):
+        pkg = make_package(tmp_path)
+        m = read_manifest(pkg)
+        assert m.commands == ["commands"]
+
+    def test_default_subagents_convention(self, tmp_path):
+        pkg = make_package(tmp_path)
+        m = read_manifest(pkg)
+        assert m.subagents == ["subagents"]
+
+    def test_custom_commands_dir_from_manifest(self, tmp_path):
+        pkg = make_package(tmp_path, manifest={
+            "name": "pkg",
+            "commands": ["./my_commands", "./extra_cmds"],
+        })
+        m = read_manifest(pkg)
+        assert m.commands == ["./my_commands", "./extra_cmds"]
+
+    def test_custom_subagents_dir_from_manifest(self, tmp_path):
+        pkg = make_package(tmp_path, manifest={
+            "name": "pkg",
+            "subagents": ["./agents"],
+        })
+        m = read_manifest(pkg)
+        assert m.subagents == ["./agents"]
+
+    def test_commands_falls_back_to_convention_when_no_manifest(self, tmp_path):
+        pkg = make_package(tmp_path)  # no operator.json
+        m = read_manifest(pkg)
+        assert "commands" in m.commands[0]
+
+    def test_subagents_falls_back_to_convention_when_no_manifest(self, tmp_path):
+        pkg = make_package(tmp_path)
+        m = read_manifest(pkg)
+        assert "subagents" in m.subagents[0]
+
+
+# ── InstalledPackage command_dirs / subagent_dirs ─────────────────────────────
+
+class TestInstalledPackageCommandsAndSubagents:
+    def test_command_dirs_resolved_from_install_path(self, tmp_path):
+        pkg_dir = make_package(tmp_path, with_commands=True)
+        manifest = read_manifest(pkg_dir)
+        pkg = InstalledPackage(source=str(pkg_dir), install_path=pkg_dir, manifest=manifest)
+        dirs = pkg.command_dirs()
+        assert len(dirs) == 1
+        assert dirs[0] == pkg_dir / "commands"
+
+    def test_subagent_dirs_resolved_from_install_path(self, tmp_path):
+        pkg_dir = make_package(tmp_path, with_subagents=True)
+        manifest = read_manifest(pkg_dir)
+        pkg = InstalledPackage(source=str(pkg_dir), install_path=pkg_dir, manifest=manifest)
+        dirs = pkg.subagent_dirs()
+        assert len(dirs) == 1
+        assert dirs[0] == pkg_dir / "subagents"
+
+    def test_multiple_command_dirs_from_manifest(self, tmp_path):
+        pkg_dir = make_package(tmp_path, manifest={
+            "name": "pkg",
+            "commands": ["./cmds1", "./cmds2"],
+        })
+        manifest = read_manifest(pkg_dir)
+        pkg = InstalledPackage(source=str(pkg_dir), install_path=pkg_dir, manifest=manifest)
+        assert len(pkg.command_dirs()) == 2
+
+    def test_command_dirs_are_path_objects(self, tmp_path):
+        pkg_dir = make_package(tmp_path, with_commands=True)
+        manifest = read_manifest(pkg_dir)
+        pkg = InstalledPackage(source=str(pkg_dir), install_path=pkg_dir, manifest=manifest)
+        assert all(isinstance(d, Path) for d in pkg.command_dirs())
+
+    def test_subagent_dirs_are_path_objects(self, tmp_path):
+        pkg_dir = make_package(tmp_path, with_subagents=True)
+        manifest = read_manifest(pkg_dir)
+        pkg = InstalledPackage(source=str(pkg_dir), install_path=pkg_dir, manifest=manifest)
+        assert all(isinstance(d, Path) for d in pkg.subagent_dirs())
+
+
+# ── LoadedPackages command_dirs / subagent_dirs ───────────────────────────────
+
+class TestLoadedPackagesCommandsAndSubagents:
+    def test_loaded_packages_has_command_dirs_field(self):
+        lp = LoadedPackages()
+        assert hasattr(lp, 'command_dirs')
+        assert lp.command_dirs == []
+
+    def test_loaded_packages_has_subagent_dirs_field(self):
+        lp = LoadedPackages()
+        assert hasattr(lp, 'subagent_dirs')
+        assert lp.subagent_dirs == []
+
+    def test_load_packages_collects_command_dirs(self, tmp_path):
+        pkg = make_package(tmp_path, manifest={"name": "pkg"}, with_commands=True)
+        packages_dir = tmp_path / "packages"
+
+        loaded = load_packages_from_settings([str(pkg)], packages_dir)
+
+        assert len(loaded.command_dirs) == 1
+        assert loaded.command_dirs[0] == pkg / "commands"
+
+    def test_load_packages_collects_subagent_dirs(self, tmp_path):
+        pkg = make_package(tmp_path, manifest={"name": "pkg"}, with_subagents=True)
+        packages_dir = tmp_path / "packages"
+
+        loaded = load_packages_from_settings([str(pkg)], packages_dir)
+
+        assert len(loaded.subagent_dirs) == 1
+        assert loaded.subagent_dirs[0] == pkg / "subagents"
+
+    def test_command_and_subagent_dirs_empty_when_dirs_absent(self, tmp_path):
+        # Package exists but has no commands/ or subagents/ dirs
+        pkg = make_package(tmp_path, manifest={"name": "pkg"})
+        packages_dir = tmp_path / "packages"
+
+        loaded = load_packages_from_settings([str(pkg)], packages_dir)
+
+        assert loaded.command_dirs == []
+        assert loaded.subagent_dirs == []
+
+    def test_multiple_packages_accumulate_command_dirs(self, tmp_path):
+        pkg1 = make_package(tmp_path, name="p1", manifest={"name": "p1"}, with_commands=True)
+        pkg2 = make_package(tmp_path, name="p2", manifest={"name": "p2"}, with_commands=True)
+        packages_dir = tmp_path / "packages"
+
+        loaded = load_packages_from_settings([str(pkg1), str(pkg2)], packages_dir)
+
+        assert len(loaded.command_dirs) == 2
+
+    def test_subagent_profiles_loadable_from_package_subagents_dir(self, tmp_path):
+        """End-to-end: SUBAGENT.md files in a package's subagents/ dir are discoverable."""
+        from program.subagent.profile import load_profiles
+
+        pkg = make_package(tmp_path, manifest={"name": "pkg"}, with_subagents=True)
+        make_subagent_profile_file(pkg / "subagents", name="coder")
+        packages_dir = tmp_path / "packages"
+
+        loaded = load_packages_from_settings([str(pkg)], packages_dir)
+        assert len(loaded.subagent_dirs) == 1
+
+        result = load_profiles(loaded.subagent_dirs)
+        assert len(result.profiles) == 1
+        assert result.profiles[0].name == "coder"
+
+    def test_slash_commands_loadable_from_package_commands_dir(self, tmp_path):
+        """End-to-end: .py files in a package's commands/ dir are discoverable."""
+        from program.commands.loader import load_commands as load_cmds
+        from program.commands.types import SlashCommandInfo
+
+        pkg = make_package(tmp_path, manifest={"name": "pkg"}, with_commands=True)
+        cmd_file = pkg / "commands" / "greet.py"
+        cmd_file.write_text(
+            "from program.commands.types import SlashCommandInfo\n"
+            "async def handle(reg, args): pass\n"
+            "command = SlashCommandInfo(name='greet', description='Say hi', handler=handle)\n",
+            encoding="utf-8",
+        )
+        packages_dir = tmp_path / "packages"
+
+        loaded = load_packages_from_settings([str(pkg)], packages_dir)
+        assert len(loaded.command_dirs) == 1
+
+        result = load_cmds(loaded.command_dirs)
+        assert len(result.commands) == 1
+        assert result.commands[0].name == "greet"

@@ -87,6 +87,87 @@ class _FakeSupermemoryClient:
         self.add_calls.append(kwargs)
 
 
+def test_custom_memory_provider_registerable():
+    from program.memory.provider.types import MemoryProvider
+
+    registry = MemoryProviderRegistry.from_builtins()
+    custom = MemoryProvider(
+        id="custom-db",
+        name="Custom DB",
+        api="custom_db_api",
+        options=MemoryOptions(),
+    )
+    registry.register(custom)
+
+    assert registry.get("custom-db") is not None
+    assert registry.get("custom-db").name == "Custom DB"
+    # Builtins still intact
+    assert registry.get("mem0") is not None
+
+
+def test_custom_memory_api_registerable():
+    from program.memory.api.base import BaseMemoryAPI
+
+    class MyCustomAPI(BaseMemoryAPI):
+        async def prefetch(self, query, *, session_id=""):
+            return f"custom:{query}"
+
+    registry = MemoryAPIRegistry.from_builtins()
+    registry.register("custom_db_api", MyCustomAPI)
+
+    resolved = registry.get("custom_db_api")
+    assert resolved is MyCustomAPI
+    # Builtins still intact
+    assert registry.get("mem0") is Mem0MemoryAPI
+
+
+def test_memory_manager_uses_custom_registry(tmp_path):
+    from program.memory.provider.types import MemoryProvider
+    from program.memory.api.base import BaseMemoryAPI
+
+    class NullAPI(BaseMemoryAPI):
+        pass
+
+    provider_registry = MemoryProviderRegistry.from_builtins()
+    api_registry = MemoryAPIRegistry.from_builtins()
+
+    provider_registry.register(MemoryProvider(
+        id="null-mem",
+        name="Null Memory",
+        api="null_api",
+        options=MemoryOptions(),
+    ))
+    api_registry.register("null_api", NullAPI)
+
+    manager = MemoryManager(
+        provider_id="null-mem",
+        providers=provider_registry,
+        apis=api_registry,
+    )
+    api = manager.initialize(MemoryRuntimeContext())
+    assert isinstance(api, NullAPI)
+
+
+def test_memory_manager_rejects_unknown_provider_id():
+    manager = MemoryManager(provider_id="does-not-exist")
+    with pytest.raises(ValueError, match="not found"):
+        manager.initialize(MemoryRuntimeContext())
+
+
+def test_custom_provider_unregister():
+    from program.memory.provider.types import MemoryProvider
+
+    registry = MemoryProviderRegistry.from_builtins()
+    custom = MemoryProvider(id="temp", name="Temp", api="x", options=MemoryOptions())
+    registry.register(custom)
+    assert registry.get("temp") is not None
+
+    registry.unregister("temp")
+    assert registry.get("temp") is None
+    # Builtins unaffected
+    assert registry.get("mem0") is not None
+
+
 @pytest.mark.asyncio
 async def test_supermemory_prefetch_and_sync_turn_with_fake_client():
     client = _FakeSupermemoryClient()

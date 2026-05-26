@@ -88,6 +88,8 @@ class ResourceLoader(BaseResourceLoader):
         self._append_system_prompt: list[str] = []
         self._extension_skill_paths: list[str] = []
         self._subagent_profiles: list[SubagentProfile] = []
+        self._package_command_dirs: list[Path] = []
+        self._package_subagent_dirs: list[Path] = []
 
     # -------------------------------------------------------------------------
     # Public interface
@@ -165,9 +167,13 @@ class ResourceLoader(BaseResourceLoader):
         if self._package_sources and self._packages_dir:
             loaded = load_packages_from_settings(self._package_sources, self._packages_dir, self._cwd)
             self._package_skill_paths = loaded.skill_paths
+            self._package_command_dirs = loaded.command_dirs
+            self._package_subagent_dirs = loaded.subagent_dirs
             dirs.extend(loaded.extension_dirs)
         else:
             self._package_skill_paths: list[str] = []
+            self._package_command_dirs = []
+            self._package_subagent_dirs = []
 
         self._extensions_result = await discover_and_load_extensions(
             dirs, self._bus,
@@ -214,6 +220,7 @@ class ResourceLoader(BaseResourceLoader):
             dirs.append(project_cmds)
         if global_cmds.is_dir():
             dirs.append(global_cmds)
+        dirs.extend(self._package_command_dirs)
         self._commands = load_commands(dirs).commands
 
     def _reload_hooks(self) -> None:
@@ -240,6 +247,7 @@ class ResourceLoader(BaseResourceLoader):
             dirs.append(global_sub)
         if project_sub.is_dir():
             dirs.append(project_sub)
+        dirs.extend(self._package_subagent_dirs)
         self._subagent_profiles = load_profiles(dirs).profiles
 
     def _reload_system_prompt(self) -> None:

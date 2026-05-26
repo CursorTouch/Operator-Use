@@ -172,3 +172,146 @@ class TestDiscoverAndLoad:
         write_ext(dir2, "e2.py", "def extension(api): pass")
         result = await discover_and_load_extensions([dir1, dir2])
         assert len(result.extensions) == 2
+
+
+# ── provider / memory / subagent registration ─────────────────────────────────
+
+class TestProviderRegistration:
+    @pytest.mark.asyncio
+    async def test_register_inference_provider(self, tmp_path):
+        p = write_ext(tmp_path, "prov_ext.py", """
+from dataclasses import dataclass
+from program.inference.types import LLMOptions, AuthType, Transport
+
+@dataclass
+class FakeProvider:
+    id: str = 'fake-llm'
+    name: str = 'Fake LLM'
+    api: str = 'fake_api'
+    auth_type: object = None
+    supported_transports: list = None
+    options: object = None
+
+    def __post_init__(self):
+        from program.inference.types import AuthType, Transport, LLMOptions
+        self.auth_type = AuthType.ApiKey
+        self.supported_transports = [Transport.HTTP]
+        self.options = LLMOptions()
+
+def extension(api):
+    api.register_provider(FakeProvider())
+""")
+        ext, errors = await load_extension_from_file(p)
+        assert ext is not None
+        assert errors == []
+        assert len(ext.inference_providers) == 1
+        assert ext.inference_providers[0].id == 'fake-llm'
+
+    @pytest.mark.asyncio
+    async def test_register_llm_api(self, tmp_path):
+        p = write_ext(tmp_path, "api_ext.py", """
+class MyLLMAPI:
+    pass
+
+def extension(api):
+    api.register_llm_api('my_api', MyLLMAPI)
+""")
+        ext, errors = await load_extension_from_file(p)
+        assert ext is not None
+        assert errors == []
+        assert 'my_api' in ext.inference_apis
+        assert ext.inference_apis['my_api'].__name__ == 'MyLLMAPI'
+
+    @pytest.mark.asyncio
+    async def test_register_memory_provider(self, tmp_path):
+        p = write_ext(tmp_path, "mem_prov_ext.py", """
+from program.memory.provider.types import MemoryProvider
+from program.memory.types import MemoryOptions
+
+def extension(api):
+    api.register_memory_provider(MemoryProvider(
+        id='my-mem',
+        name='My Memory',
+        api='my_mem_api',
+        options=MemoryOptions(),
+    ))
+""")
+        ext, errors = await load_extension_from_file(p)
+        assert ext is not None
+        assert errors == []
+        assert len(ext.memory_providers) == 1
+        assert ext.memory_providers[0].id == 'my-mem'
+
+    @pytest.mark.asyncio
+    async def test_register_memory_api(self, tmp_path):
+        p = write_ext(tmp_path, "mem_api_ext.py", """
+from program.memory.api.base import BaseMemoryAPI
+
+class MyMemAPI(BaseMemoryAPI):
+    pass
+
+def extension(api):
+    api.register_memory_api('my_mem_api', MyMemAPI)
+""")
+        ext, errors = await load_extension_from_file(p)
+        assert ext is not None
+        assert errors == []
+        assert 'my_mem_api' in ext.memory_apis
+
+    @pytest.mark.asyncio
+    async def test_register_subagent_profile(self, tmp_path):
+        p = write_ext(tmp_path, "profile_ext.py", """
+from program.subagent.profile import SubagentProfile
+from pathlib import Path
+
+def extension(api):
+    api.register_subagent_profile(SubagentProfile(
+        name='researcher',
+        description='Deep research agent',
+        tools=['web_search', 'read'],
+        system_prompt='You research things.',
+        file_path=Path(__file__),
+    ))
+""")
+        ext, errors = await load_extension_from_file(p)
+        assert ext is not None
+        assert errors == []
+        assert len(ext.subagent_profiles) == 1
+        assert ext.subagent_profiles[0].name == 'researcher'
+
+    @pytest.mark.asyncio
+    async def test_multiple_providers_from_one_extension(self, tmp_path):
+        p = write_ext(tmp_path, "multi_prov.py", """
+from program.memory.provider.types import MemoryProvider
+from program.memory.types import MemoryOptions
+
+def extension(api):
+    for i in range(3):
+        api.register_memory_provider(MemoryProvider(
+            id=f'mem-{i}',
+            name=f'Memory {i}',
+            api='base_api',
+            options=MemoryOptions(),
+        ))
+""")
+        ext, errors = await load_extension_from_file(p)
+        assert ext is not None
+        assert len(ext.memory_providers) == 3
+        assert [p.id for p in ext.memory_providers] == ['mem-0', 'mem-1', 'mem-2']
+
+    @pytest.mark.asyncio
+    async def test_provider_registration_survives_other_errors(self, tmp_path):
+        """Provider registration in the factory should work even if a handler raises later."""
+        p = write_ext(tmp_path, "mixed.py", """
+from program.memory.provider.types import MemoryProvider
+from program.memory.types import MemoryOptions
+
+def extension(api):
+    api.register_memory_provider(MemoryProvider(
+        id='safe-mem', name='Safe', api='base', options=MemoryOptions(),
+    ))
+    api.on('session_start', lambda e, ctx: None)
+""")
+        ext, errors = await load_extension_from_file(p)
+        assert ext is not None
+        assert len(ext.memory_providers) == 1

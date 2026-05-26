@@ -14,6 +14,8 @@ class PackageManifest:
     extensions: list[str] = field(default_factory=lambda: ["extensions"])
     skills: list[str] = field(default_factory=lambda: ["skills"])
     prompts: list[str] = field(default_factory=lambda: ["prompts"])
+    commands: list[str] = field(default_factory=lambda: ["commands"])
+    subagents: list[str] = field(default_factory=lambda: ["subagents"])
 
 
 @dataclass
@@ -31,6 +33,12 @@ class InstalledPackage:
     def prompt_dirs(self) -> list[Path]:
         return [self.install_path / d for d in self.manifest.prompts]
 
+    def command_dirs(self) -> list[Path]:
+        return [self.install_path / d for d in self.manifest.commands]
+
+    def subagent_dirs(self) -> list[Path]:
+        return [self.install_path / d for d in self.manifest.subagents]
+
 
 @dataclass
 class LoadedPackages:
@@ -38,6 +46,8 @@ class LoadedPackages:
     extension_dirs: list[Path] = field(default_factory=list)
     skill_paths: list[str] = field(default_factory=list)
     prompt_dirs: list[Path] = field(default_factory=list)
+    command_dirs: list[Path] = field(default_factory=list)
+    subagent_dirs: list[Path] = field(default_factory=list)
 
 
 @dataclass

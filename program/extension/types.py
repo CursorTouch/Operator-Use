@@ -224,6 +224,12 @@ class Extension:
     tools: dict[str, RegisteredTool] = field(default_factory=dict)
     commands: dict[str, RegisteredCommand] = field(default_factory=dict)
     config: dict = field(default_factory=dict)
+    # Provider registrations collected during factory execution
+    inference_providers: list[Any] = field(default_factory=list)  # APIProvider | OAuthProvider
+    inference_apis: dict[str, Any] = field(default_factory=dict)  # LLM API classes keyed by name
+    memory_providers: list[Any] = field(default_factory=list)     # MemoryProvider descriptors
+    memory_apis: dict[str, Any] = field(default_factory=dict)     # BaseMemoryAPI classes keyed by name
+    subagent_profiles: list[Any] = field(default_factory=list)    # SubagentProfile instances
 
 
 @dataclass
@@ -271,3 +277,23 @@ class ExtensionAPI:
             description=description,
             handler=handler,
         )
+
+    def register_provider(self, provider: Any) -> None:
+        """Register a custom inference provider (APIProvider or OAuthProvider)."""
+        self._extension.inference_providers.append(provider)
+
+    def register_llm_api(self, name: str, api: Any) -> None:
+        """Register a custom LLM API class under the given name."""
+        self._extension.inference_apis[name] = api
+
+    def register_memory_provider(self, provider: Any) -> None:
+        """Register a custom memory provider (MemoryProvider descriptor)."""
+        self._extension.memory_providers.append(provider)
+
+    def register_memory_api(self, name: str, api: Any) -> None:
+        """Register a custom memory API class (BaseMemoryAPI subclass) under the given name."""
+        self._extension.memory_apis[name] = api
+
+    def register_subagent_profile(self, profile: Any) -> None:
+        """Register a SubagentProfile so it is available to the subagent tool."""
+        self._extension.subagent_profiles.append(profile)

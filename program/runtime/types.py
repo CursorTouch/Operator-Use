@@ -28,6 +28,8 @@ from program.subagent.manager import SubagentManager
 from program.subagent.types import SubagentSettings
 from program.mcp.manager import MCPManager
 from program.memory.manager import MemoryManager
+from program.memory.provider.registry import MemoryProviderRegistry
+from program.memory.api.registry import MemoryAPIRegistry
 from program.memory.types import MemoryOptions, MemoryRuntimeContext
 from program.acp.manager import ACPSessionManager
 from program.process.manager import ProcessManager
@@ -134,12 +136,8 @@ class RuntimeContext:
         if settings_manager is None:
             settings_manager = SettingsManager.create(cwd, config_dir)
 
-        # ── LLM ───────────────────────────────────────────────────────────────
-        model_id = config.model_id or settings_manager.get_default_model() or RuntimeConfig.model_fields["model_id"].default
-        provider = config.provider or settings_manager.get_default_provider()
-        llm = LLM(model_id=model_id, provider=provider)
-
         # ── Resource loader ───────────────────────────────────────────────────
+        # Extensions must load before LLM so they can register custom providers.
         ext_entries = settings_manager.get_extension_list()
         disabled_stems = {(e.name or Path(e.path).stem) for e in ext_entries if not e.enabled}
         entry_configs = {(e.name or Path(e.path).stem): (e.settings or {}) for e in ext_entries}
@@ -176,6 +174,21 @@ class RuntimeContext:
         # ── Extension runtime ─────────────────────────────────────────────────
         load_result = resource_loader.get_extensions()
         extension_runtime = _DeferredExtensionRuntime(load_result)
+
+        # ── Apply extension provider registrations ────────────────────────────
+        # Extensions (including those from packages) may register custom inference
+        # and memory providers via api.register_provider() / api.register_memory_provider().
+        # Apply these to the class-level LLM registries before constructing LLM so
+        # that a user's configured provider is resolvable at LLM() construction time.
+        for _provider in extension_runtime.get_providers():
+            LLM._providers.register(_provider)
+        for _api_name, _api_cls in extension_runtime.get_llm_apis().items():
+            LLM._apis.register(_api_name, _api_cls)
+
+        # ── LLM ───────────────────────────────────────────────────────────────
+        model_id = config.model_id or settings_manager.get_default_model() or RuntimeConfig.model_fields["model_id"].default
+        provider = config.provider or settings_manager.get_default_provider()
+        llm = LLM(model_id=model_id, provider=provider)
 
         # ── Compaction ────────────────────────────────────────────────────────
         # Resolve compaction settings live from the SettingsManager so that
@@ -250,7 +263,15 @@ class RuntimeContext:
         memory_manager: MemoryManager | None = None
         if memory_enabled:
             provider_id = memory_settings.provider
-            memory_manager = MemoryManager(provider_id=provider_id)
+            # Build registries seeded from builtins, then add any providers/APIs
+            # registered by extensions (including those bundled in packages).
+            _mem_providers = MemoryProviderRegistry.from_builtins()
+            _mem_apis = MemoryAPIRegistry.from_builtins()
+            for _mp in extension_runtime.get_memory_providers():
+                _mem_providers.register(_mp)
+            for _ma_name, _ma_cls in extension_runtime.get_memory_apis().items():
+                _mem_apis.register(_ma_name, _ma_cls)
+            memory_manager = MemoryManager(provider_id=provider_id, providers=_mem_providers, apis=_mem_apis)
             memory_provider = memory_manager.providers.get(provider_id) if provider_id else None
             memory_options = memory_provider.options if memory_provider is not None else None
             if memory_options is not None:
