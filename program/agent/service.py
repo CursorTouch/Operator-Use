@@ -22,6 +22,7 @@ from program.tool.types import ToolInvocation, ToolResult
 
 from program.prompt.builder import PromptTemplate
 from program.compaction.utils import estimate_context_tokens, estimate_tokens
+from program.agent.utils import is_permanent_error
 
 if TYPE_CHECKING:
     from program.engine.service import Engine
@@ -33,38 +34,6 @@ if TYPE_CHECKING:
     from program.memory.manager import MemoryManager
 
 
-# Substrings that mark an LLM error as permanent — it will fail identically on
-# every retry, so the agent should stop immediately rather than burn attempts.
-# Kept deliberately narrow: anything not matched is treated as transient.
-_PERMANENT_ERROR_MARKERS = (
-    "401", "403", "unauthorized", "forbidden",
-    "invalid api key", "invalid_api_key", "incorrect api key",
-    "authentication", "no api key", "api key not",
-    "permission denied", "permissiondenied",
-    "invalid request", "invalid_request_error", "bad request",
-    "badrequesterror", "bad_request",
-    "model not found", "does not exist", "unknown model",
-)
-
-
-def _extract_last_assistant_text(messages: list) -> str:
-    """Return the text content of the last assistant message, or empty string."""
-    for message in reversed(messages):
-        if getattr(message, 'role', None) and message.role == Role.ASSISTANT:
-            parts = []
-            for content in getattr(message, 'contents', []):
-                if hasattr(content, 'content') and isinstance(content.content, str):
-                    parts.append(content.content)
-            return " ".join(parts)
-    return ""
-
-
-def _is_permanent_error(error: str | None) -> bool:
-    """True if the error is non-retryable (auth, bad request, missing model)."""
-    if not error:
-        return False
-    low = error.lower()
-    return any(marker in low for marker in _PERMANENT_ERROR_MARKERS)
 
 
 class Agent(ExtensionContext):
@@ -137,6 +106,17 @@ class Agent(ExtensionContext):
     @property
     def signal(self) -> Any:
         return self._engine._signal
+
+    @property
+    def _last_assistant_text(self) -> str:
+        for message in reversed(self._engine.state.messages):
+            if getattr(message, 'role', None) and message.role == Role.ASSISTANT:
+                parts = [
+                    c.content for c in getattr(message, 'contents', [])
+                    if hasattr(c, 'content') and isinstance(c.content, str)
+                ]
+                return " ".join(parts)
+        return ""
 
     def is_idle(self) -> bool:
         return self._engine.is_idle
@@ -435,8 +415,8 @@ class Agent(ExtensionContext):
 
         # Persist the completed exchange to the memory provider
         if self._memory_manager:
-            assistant_text = _extract_last_assistant_text(self._engine.state.messages)
-            await self._memory_manager.sync_turn(
+            assistant_text = self._last_assistant_text
+            await self._memory_manager.on_turn_complete(
                 user_input, assistant_text,
                 session_id=self._session_manager.session_id or "",
             )
@@ -505,7 +485,7 @@ class Agent(ExtensionContext):
             # of burning the remaining attempts. Transient errors (rate limit,
             # overload, 5xx) are already auto-retried with the provider's
             # Retry-After by the underlying SDK; this loop is the outer cushion.
-            permanent = _is_permanent_error(error)
+            permanent = is_permanent_error(error)
 
             if not permanent and attempt < max_retries:
                 # Keep tool calls/results already persisted — the next attempt

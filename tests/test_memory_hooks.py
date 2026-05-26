@@ -18,8 +18,8 @@ class _HookAPI(BaseMemoryAPI):
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
         self.calls.append(("queue_prefetch", query, session_id))
 
-    async def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
-        self.calls.append(("sync_turn", user_content, assistant_content, session_id))
+    async def on_turn_complete(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
+        self.calls.append(("on_turn_complete", user_content, assistant_content, session_id))
 
     async def on_session_end(self, messages: list[dict]) -> None:
         self.calls.append(("on_session_end", messages))
@@ -43,7 +43,7 @@ async def test_memory_manager_forwards_lifecycle_hooks():
 
     recalled = await manager.prefetch("query", session_id="s1")
     manager.queue_prefetch("next", session_id="s1")
-    await manager.sync_turn("user", "assistant", session_id="s1")
+    await manager.on_turn_complete("user", "assistant", session_id="s1")
     await manager.on_session_end([{"role": "user", "content": "bye"}])
     compact = await manager.on_pre_compact([{"role": "assistant", "content": "summary"}])
     await manager.on_memory_write("remember", "target", "content", {"source": "test"})
@@ -54,7 +54,7 @@ async def test_memory_manager_forwards_lifecycle_hooks():
     assert api.calls == [
         ("prefetch", "query", "s1"),
         ("queue_prefetch", "next", "s1"),
-        ("sync_turn", "user", "assistant", "s1"),
+        ("on_turn_complete", "user", "assistant", "s1"),
         ("on_session_end", [{"role": "user", "content": "bye"}]),
         ("on_pre_compact", [{"role": "assistant", "content": "summary"}]),
         ("on_memory_write", "remember", "target", "content", {"source": "test"}),

@@ -52,13 +52,13 @@ class _FakeMem0Client:
 
 
 @pytest.mark.asyncio
-async def test_mem0_prefetch_and_sync_turn_with_fake_client():
+async def test_mem0_prefetch_and_on_turn_complete_with_fake_client():
     client = _FakeMem0Client()
     api = Mem0MemoryAPI(options=MemoryOptions(user_id="u1"), client=client)
     api.initialize(MemoryRuntimeContext(session_id="s1"))
 
     recalled = await api.prefetch("pytest")
-    await api.sync_turn("use pytest", "ok", session_id="s1")
+    await api.on_turn_complete("use pytest", "ok", session_id="s1")
 
     assert "Relevant Mem0 memories" in recalled
     assert "Remember pytest" in recalled
@@ -169,13 +169,13 @@ def test_custom_provider_unregister():
 
 
 @pytest.mark.asyncio
-async def test_supermemory_prefetch_and_sync_turn_with_fake_client():
+async def test_supermemory_prefetch_and_on_turn_complete_with_fake_client():
     client = _FakeSupermemoryClient()
     api = SupermemoryAPI(options=MemoryOptions(user_id="u1"), client=client)
     api.initialize(MemoryRuntimeContext(session_id="s1"))
 
     recalled = await api.prefetch("gateway")
-    await api.sync_turn("remember gateway", "stored", session_id="s1")
+    await api.on_turn_complete("remember gateway", "stored", session_id="s1")
 
     assert "Relevant Supermemory memories" in recalled
     assert "Stored gateway" in recalled

@@ -68,9 +68,9 @@ class MemoryManager:
             return False
         return await self.api.forget(memory_id)
 
-    async def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
+    async def on_turn_complete(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
         if self.api is not None:
-            await self.api.sync_turn(user_content, assistant_content, session_id=session_id)
+            await self.api.on_turn_complete(user_content, assistant_content, session_id=session_id)
 
     async def on_session_end(self, messages: list[dict]) -> None:
         if self.api is not None:

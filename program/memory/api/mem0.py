@@ -81,7 +81,7 @@ class Mem0MemoryAPI(BaseMemoryAPI):
                 return True
         return False
 
-    async def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
+    async def on_turn_complete(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
         if not self.options.sync_turns or self._client is None:
             return
         messages = [

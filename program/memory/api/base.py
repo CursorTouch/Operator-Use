@@ -27,7 +27,7 @@ class BaseMemoryAPI(ABC):
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
         return None
 
-    async def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
+    async def on_turn_complete(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
         return None
 
     def search(self, query: str, *, limit: int = 5) -> list[MemorySearchResult]:

@@ -31,7 +31,7 @@ class FakeMemory:
         self._prefetch_result = prefetch_result
         self.prefetch_calls: list[dict] = []
         self.queue_prefetch_calls: list[dict] = []
-        self.sync_turn_calls: list[dict] = []
+        self.on_turn_complete_calls: list[dict] = []
         self.on_pre_compact_calls: list[list] = []
         self.on_session_end_calls: list[list] = []
         self.shutdown_calls: int = 0
@@ -44,8 +44,8 @@ class FakeMemory:
     def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
         self.queue_prefetch_calls.append({"query": query, "session_id": session_id})
 
-    async def sync_turn(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
-        self.sync_turn_calls.append({
+    async def on_turn_complete(self, user_content: str, assistant_content: str, *, session_id: str = "") -> None:
+        self.on_turn_complete_calls.append({
             "user": user_content,
             "assistant": assistant_content,
             "session_id": session_id,
@@ -150,35 +150,35 @@ class TestMemoryPrefetch:
 
 
 # ---------------------------------------------------------------------------
-# Tests: sync_turn
+# Tests: on_turn_complete
 # ---------------------------------------------------------------------------
 
 class TestMemorySyncTurn:
     @pytest.mark.asyncio
-    async def test_sync_turn_called_after_successful_invoke(self):
+    async def test_on_turn_complete_called_after_successful_invoke(self):
         mem = FakeMemory()
         agent, _ = make_agent_with_memory(FakeLLM(text_seq("response text")), mem)
         await agent.invoke("user input")
-        assert len(mem.sync_turn_calls) == 1
+        assert len(mem.on_turn_complete_calls) == 1
 
     @pytest.mark.asyncio
-    async def test_sync_turn_receives_correct_user_input(self):
+    async def test_on_turn_complete_receives_correct_user_input(self):
         mem = FakeMemory()
         agent, _ = make_agent_with_memory(FakeLLM(text_seq("reply")), mem)
         await agent.invoke("my question")
-        assert mem.sync_turn_calls[0]["user"] == "my question"
+        assert mem.on_turn_complete_calls[0]["user"] == "my question"
 
     @pytest.mark.asyncio
-    async def test_sync_turn_receives_assistant_text(self):
+    async def test_on_turn_complete_receives_assistant_text(self):
         mem = FakeMemory()
         agent, _ = make_agent_with_memory(FakeLLM(text_seq("assistant reply")), mem)
         await agent.invoke("ping")
         # Assistant text should appear somewhere in the recorded value
-        assert "assistant reply" in mem.sync_turn_calls[0]["assistant"]
+        assert "assistant reply" in mem.on_turn_complete_calls[0]["assistant"]
 
     @pytest.mark.asyncio
-    async def test_sync_turn_not_called_after_error(self):
-        """If the agent fails (no retry), sync_turn must not be called."""
+    async def test_on_turn_complete_not_called_after_error(self):
+        """If the agent fails (no retry), on_turn_complete must not be called."""
         mem = FakeMemory()
         llm = FakeLLM(error_seq("boom"))
         hooks = Hooks()
@@ -200,17 +200,17 @@ class TestMemorySyncTurn:
         with pytest.raises(RuntimeError):
             await agent.invoke("fail")
 
-        assert len(mem.sync_turn_calls) == 0
+        assert len(mem.on_turn_complete_calls) == 0
 
     @pytest.mark.asyncio
-    async def test_sync_turn_called_per_invoke(self):
+    async def test_on_turn_complete_called_per_invoke(self):
         mem = FakeMemory()
         agent, _ = make_agent_with_memory(
             FakeLLM(text_seq("first"), text_seq("second")), mem
         )
         await agent.invoke("turn one")
         await agent.invoke("turn two")
-        assert len(mem.sync_turn_calls) == 2
+        assert len(mem.on_turn_complete_calls) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -364,10 +364,10 @@ class TestMemoryManagerNoProvider:
         m.queue_prefetch("anything")  # must not raise
 
     @pytest.mark.asyncio
-    async def test_sync_turn_is_a_no_op(self):
+    async def test_on_turn_complete_is_a_no_op(self):
         from program.memory.manager import MemoryManager
         m = MemoryManager()
-        await m.sync_turn("user", "assistant")  # must not raise
+        await m.on_turn_complete("user", "assistant")  # must not raise
 
     @pytest.mark.asyncio
     async def test_on_pre_compact_returns_empty_string(self):
