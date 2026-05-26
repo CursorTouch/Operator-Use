@@ -12,6 +12,7 @@ from program.settings.types import (
     CompactionSettings, BranchSummarySettings,
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
     ImageSettings, STTSettings, TTSSettings, MemorySettings, ExtensionEntry,
+    AuxiliarySettings, AuxiliaryTaskSettings,
 )
 from program.gateway.channels.types import (
     ChannelsSettings,
@@ -119,6 +120,14 @@ class SettingsManager:
                 valid_retry = {f.name for f in dc.fields(RetrySettings)}
                 retry_kwargs = {k: v for k, v in value.items() if k in valid_retry and k != 'provider'}
                 kwargs[key] = RetrySettings(**retry_kwargs, provider=provider)
+            elif key == 'auxiliary' and isinstance(value, dict):
+                valid_task = {f.name for f in dc.fields(AuxiliaryTaskSettings)}
+                valid_aux = {f.name for f in dc.fields(AuxiliarySettings)}
+                aux_kwargs: dict[str, Any] = {}
+                for slot, slot_val in value.items():
+                    if slot in valid_aux and isinstance(slot_val, dict):
+                        aux_kwargs[slot] = AuxiliaryTaskSettings(**{k: v for k, v in slot_val.items() if k in valid_task})
+                kwargs[key] = AuxiliarySettings(**aux_kwargs)
             else:
                 kwargs[key] = value
         return Settings(**kwargs)
@@ -471,9 +480,9 @@ class SettingsManager:
             "keep_recent_tokens": raw.get("keep_recent_tokens", 20000),
         }
 
-    def get_compaction_rolling_settings(self) -> dict:
-        """Return RollingCompaction settings merged with defaults."""
-        raw = self._get_strategy_raw("rolling")
+    def get_compaction_sliding_window_settings(self) -> dict:
+        """Return SlidingWindowCompaction settings merged with defaults."""
+        raw = self._get_strategy_raw("sliding_window")
         return {
             "enabled": raw.get("enabled", True),
             "trigger_percent": raw.get("trigger_percent", 0.5),
@@ -869,6 +878,15 @@ class SettingsManager:
     def get_tts_settings(self) -> TTSSettings:
         """Return the resolved TTS settings, with empty defaults when unset."""
         return self.settings.tts or TTSSettings()
+
+    # ── Auxiliary models ──────────────────────────────────────────────────────
+
+    def get_auxiliary_task(self, slot: str) -> AuxiliaryTaskSettings:
+        """Return model/provider for a named auxiliary task slot. Returns empty defaults when unset."""
+        aux = self.settings.auxiliary
+        if aux is None:
+            return AuxiliaryTaskSettings()
+        return getattr(aux, slot, None) or AuxiliaryTaskSettings()
 
     # ── Memory ────────────────────────────────────────────────────────────────
 

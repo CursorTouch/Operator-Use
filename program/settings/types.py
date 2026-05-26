@@ -38,7 +38,7 @@ class ExtensionEntry:
 @dataclass
 class CompactionSettings:
     enabled: Optional[bool] = None
-    strategy: Optional[str] = None          # active strategy: "summarization" | "rolling" | "lcm"
+    strategy: Optional[str] = None          # active strategy: "summarization" | "sliding_window" | "lcm"
     strategies: Optional[dict] = None       # per-strategy settings, keyed by strategy name
 
 
@@ -82,19 +82,30 @@ class ImageSettings:
 @dataclass
 class STTSettings:
     enabled: Optional[bool] = None       # None = auto (only when AudioPart present), True = always, False = off
-    model: Optional[str] = None          # audio model id, e.g. "whisper-1"
-    provider: Optional[str] = None       # override provider
     language: Optional[str] = None       # BCP-47 language hint, e.g. "en"
 
 
 @dataclass
 class TTSSettings:
     enabled: Optional[bool] = None       # None = only for voice-originated messages, True = always, False = off
-    model: Optional[str] = None          # audio model id, e.g. "tts-1"
-    provider: Optional[str] = None       # override provider
     voice: Optional[str] = None          # voice name, e.g. "alloy"
     speed: Optional[float] = None        # playback speed multiplier (default: 1.0)
     language: Optional[str] = None       # target language hint
+
+
+@dataclass
+class AuxiliaryTaskSettings:
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+
+@dataclass
+class AuxiliarySettings:
+    compaction: Optional[AuxiliaryTaskSettings] = None
+    branch_summary: Optional[AuxiliaryTaskSettings] = None
+    web_extract: Optional[AuxiliaryTaskSettings] = None
+    stt: Optional[AuxiliaryTaskSettings] = None
+    tts: Optional[AuxiliaryTaskSettings] = None
 
 
 @dataclass
@@ -157,6 +168,9 @@ class Settings:
     # Audio I/O
     stt: Optional[STTSettings] = None
     tts: Optional[TTSSettings] = None
+
+    # Auxiliary model routing (per-task model/provider overrides)
+    auxiliary: Optional[AuxiliarySettings] = None
 
     # Memory
     memory: Optional[MemorySettings] = None

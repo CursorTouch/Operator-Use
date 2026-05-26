@@ -44,14 +44,16 @@ async def _on_message_receive(event) -> object:
         from program.settings.manager import SettingsManager
         settings_mgr = SettingsManager.get_instance()
         stt = settings_mgr.get_stt_settings()
+        aux_stt = settings_mgr.get_auxiliary_task("stt")
     except Exception:
         stt = None
+        aux_stt = None
 
     if stt and stt.enabled is False:
         return None
 
-    model_id = (stt.model if stt and stt.model else "whisper-1")
-    provider = stt.provider if stt else None
+    model_id = (aux_stt.model if aux_stt and aux_stt.model else "whisper-1")
+    provider = aux_stt.provider if aux_stt else None
     language = stt.language if stt else None
 
     new_parts: list = []

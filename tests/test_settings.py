@@ -54,12 +54,12 @@ class TestCompactionSettings:
     async def test_compaction_strategy_settings(self):
         sm = _sm()
         sm.global_settings.compaction = CompactionSettings(
-            strategy="rolling",
-            strategies={"rolling": {"batch_tokens": 5000}},
+            strategy="sliding_window",
+            strategies={"sliding_window": {"batch_tokens": 5000}},
         )
         sm._save()
-        assert sm.get_compaction_strategy() == "rolling"
-        assert sm.get_compaction_rolling_settings()["batch_tokens"] == 5000
+        assert sm.get_compaction_strategy() == "sliding_window"
+        assert sm.get_compaction_sliding_window_settings()["batch_tokens"] == 5000
         await asyncio.sleep(0)
 
     def test_get_compaction_settings_returns_dict(self):
@@ -291,6 +291,90 @@ class TestOverridesAndFlush:
         cs = sm.get_compaction_settings()
         assert cs['enabled'] is True
         assert sm.get_compaction_summarization_settings()['keep_recent_tokens'] == 5000
+
+
+class TestAuxiliarySettings:
+    def test_unset_slot_returns_empty_defaults(self):
+        sm = _sm()
+        task = sm.get_auxiliary_task("compaction")
+        assert task.model is None
+        assert task.provider is None
+
+    def test_unknown_slot_returns_empty_defaults(self):
+        sm = _sm()
+        task = sm.get_auxiliary_task("nonexistent_slot")
+        assert task.model is None
+        assert task.provider is None
+
+    def test_compaction_slot_parsed(self):
+        sm = _sm({
+            "auxiliary": {
+                "compaction": {"provider": "openrouter", "model": "gemini-flash-2.5"}
+            }
+        })
+        task = sm.get_auxiliary_task("compaction")
+        assert task.provider == "openrouter"
+        assert task.model == "gemini-flash-2.5"
+
+    def test_stt_slot_parsed(self):
+        sm = _sm({
+            "auxiliary": {
+                "stt": {"provider": "openai", "model": "whisper-1"}
+            }
+        })
+        task = sm.get_auxiliary_task("stt")
+        assert task.provider == "openai"
+        assert task.model == "whisper-1"
+
+    def test_tts_slot_parsed(self):
+        sm = _sm({
+            "auxiliary": {
+                "tts": {"model": "tts-1-hd"}
+            }
+        })
+        task = sm.get_auxiliary_task("tts")
+        assert task.model == "tts-1-hd"
+        assert task.provider is None
+
+    def test_web_extract_slot_parsed(self):
+        sm = _sm({
+            "auxiliary": {
+                "web_extract": {"provider": "mistral", "model": "mistral-small-latest"}
+            }
+        })
+        task = sm.get_auxiliary_task("web_extract")
+        assert task.provider == "mistral"
+        assert task.model == "mistral-small-latest"
+
+    def test_multiple_slots_independent(self):
+        sm = _sm({
+            "auxiliary": {
+                "compaction": {"model": "gemini-flash-2.5"},
+                "stt": {"model": "whisper-1"},
+                "tts": {"model": "tts-1-hd"},
+            }
+        })
+        assert sm.get_auxiliary_task("compaction").model == "gemini-flash-2.5"
+        assert sm.get_auxiliary_task("stt").model == "whisper-1"
+        assert sm.get_auxiliary_task("tts").model == "tts-1-hd"
+        assert sm.get_auxiliary_task("web_extract").model is None
+
+    def test_stt_settings_no_longer_has_model_provider(self):
+        sm = _sm({"stt": {"enabled": True, "language": "en"}})
+        stt = sm.get_stt_settings()
+        assert stt.enabled is True
+        assert stt.language == "en"
+        assert not hasattr(stt, "model")
+        assert not hasattr(stt, "provider")
+
+    def test_tts_settings_no_longer_has_model_provider(self):
+        sm = _sm({"tts": {"enabled": True, "voice": "alloy", "speed": 1.2}})
+        tts = sm.get_tts_settings()
+        assert tts.enabled is True
+        assert tts.voice == "alloy"
+        assert tts.speed == 1.2
+        assert not hasattr(tts, "model")
+        assert not hasattr(tts, "provider")
 
 
 class TestChannelSettings:

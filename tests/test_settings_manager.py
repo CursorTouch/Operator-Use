@@ -340,7 +340,7 @@ class TestGetCompactionSettings:
         assert "strategy" in d
 
     def test_values_match_individual_getters(self):
-        sm = SettingsManager.in_memory({"compaction": {"enabled": False, "strategy": "rolling"}})
+        sm = SettingsManager.in_memory({"compaction": {"enabled": False, "strategy": "sliding_window"}})
         d = sm.get_compaction_settings()
         assert d["enabled"] == sm.get_compaction_enabled()
         assert d["strategy"] == sm.get_compaction_strategy()
@@ -351,12 +351,12 @@ class TestGetCompactionSettings:
                 "strategy": "lcm",
                 "strategies": {
                     "lcm": {"condense_threshold": 8, "max_depth": 5},
-                    "rolling": {"batch_tokens": 5000},
+                    "sliding_window": {"batch_tokens": 5000},
                 }
             }
         })
         ls = sm.get_compaction_lcm_settings()
         assert ls["condense_threshold"] == 8
         assert ls["max_depth"] == 5
-        rs = sm.get_compaction_rolling_settings()
+        rs = sm.get_compaction_sliding_window_settings()
         assert rs["batch_tokens"] == 5000

@@ -264,6 +264,17 @@ class RuntimeContext:
         # there still wins over the persisted setting.
         _global_enabled = config.compaction_enabled and settings_manager.get_compaction_enabled()
 
+        # Build a dedicated LLM for compaction if auxiliary.compaction is configured.
+        _aux_compaction = settings_manager.get_auxiliary_task("compaction")
+        compaction_llm = LLM(
+            model_id=_aux_compaction.model,
+            provider=_aux_compaction.provider,
+            models=text_models,
+            providers=text_providers,
+            apis=text_apis,
+            auth_store=text_auth,
+        ) if (_aux_compaction.model or _aux_compaction.provider) else llm
+
         def _resolve_summarization_settings() -> CompactionSettings:
             ss = settings_manager.get_compaction_summarization_settings()
             return CompactionSettings(
@@ -276,13 +287,13 @@ class RuntimeContext:
             compaction = config.compaction
         else:
             _strategy = settings_manager.get_compaction_strategy()
-            if _strategy == "rolling":
-                from program.compaction.strategy.rolling.service import RollingCompaction
-                from program.compaction.strategy.rolling.types import RollingCompactionSettings
-                _rs = settings_manager.get_compaction_rolling_settings()
-                compaction = RollingCompaction(
-                    llm=llm,
-                    settings=RollingCompactionSettings(
+            if _strategy == "sliding_window":
+                from program.compaction.strategy.sliding_window.service import SlidingWindowCompaction
+                from program.compaction.strategy.sliding_window.types import SlidingWindowCompactionSettings
+                _rs = settings_manager.get_compaction_sliding_window_settings()
+                compaction = SlidingWindowCompaction(
+                    llm=compaction_llm,
+                    settings=SlidingWindowCompactionSettings(
                         enabled=_global_enabled and _rs["enabled"],
                         trigger_percent=_rs["trigger_percent"],
                         batch_tokens=_rs["batch_tokens"],
@@ -295,7 +306,7 @@ class RuntimeContext:
                 from pathlib import Path as _Path
                 _ls = settings_manager.get_compaction_lcm_settings()
                 compaction = LCMCompaction(
-                    llm=llm,
+                    llm=compaction_llm,
                     settings=LCMSettings(
                         enabled=_global_enabled and _ls["enabled"],
                         reserve_tokens=_ls["reserve_tokens"],
@@ -307,7 +318,7 @@ class RuntimeContext:
                 )
             else:
                 compaction = SummarizationCompaction(
-                    llm=llm,
+                    llm=compaction_llm,
                     settings=_resolve_summarization_settings(),
                     settings_provider=_resolve_summarization_settings,
                 )

@@ -36,8 +36,10 @@ async def _on_message_send(event) -> object:
         from program.settings.manager import SettingsManager
         settings_mgr = SettingsManager.get_instance()
         tts = settings_mgr.get_tts_settings()
+        aux_tts = settings_mgr.get_auxiliary_task("tts")
     except Exception:
         tts = None
+        aux_tts = None
 
     enabled = tts.enabled if tts else None
     if enabled is False:
@@ -46,8 +48,8 @@ async def _on_message_send(event) -> object:
     if enabled is None and not event.is_voice:
         return None
 
-    model_id = (tts.model if tts and tts.model else "tts-1")
-    provider = tts.provider if tts else None
+    model_id = (aux_tts.model if aux_tts and aux_tts.model else "tts-1")
+    provider = aux_tts.provider if aux_tts else None
     voice = (tts.voice if tts else None)
     speed = (tts.speed if tts else None)
     language = tts.language if tts else None

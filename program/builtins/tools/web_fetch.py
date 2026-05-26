@@ -63,7 +63,17 @@ class WebFetchTool(Tool):
         url = params.get("url")
         prompt = params.get("prompt")
         timeout = params.get("timeout", 10)
-        llm = self._llm or (context.llm if context else None)
+        aux_llm = None
+        try:
+            from program.settings.manager import SettingsManager
+            _sm = SettingsManager.get_instance()
+            _aux = _sm.get_auxiliary_task("web_extract")
+            if _aux.model or _aux.provider:
+                from program.inference.api.text.service import LLM
+                aux_llm = LLM(model_id=_aux.model, provider=_aux.provider)
+        except Exception:
+            pass
+        llm = aux_llm or self._llm or (context.llm if context else None)
 
         if not url:
             return ToolResult.error(id=invocation.id, content="Parameter 'url' is required.")
