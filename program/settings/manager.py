@@ -433,12 +433,11 @@ class SettingsManager:
         """Return all resolved compaction settings with defaults applied."""
         return {
             "enabled": self.get_compaction_enabled(),
-            "reserve_tokens": self.get_compaction_reserve_tokens(),
-            "keep_recent_tokens": self.get_compaction_keep_recent_tokens(),
+            "strategy": self.get_compaction_strategy(),
         }
 
     def get_compaction_enabled(self) -> bool:
-        """Return whether compaction is enabled (default: True)."""
+        """Return whether compaction is globally enabled (default: True)."""
         c = self.settings.compaction
         if c is None or c.enabled is None:
             return True
@@ -452,15 +451,47 @@ class SettingsManager:
         self._mark_modified("compaction", "enabled")
         self._save()
 
-    def get_compaction_reserve_tokens(self) -> int:
-        """Return the token budget reserved for the compaction prompt and response (default: 16384)."""
+    def get_compaction_strategy(self) -> str:
+        """Return the active compaction strategy name (default: 'summarization')."""
         c = self.settings.compaction
-        return c.reserve_tokens if c and c.reserve_tokens is not None else 16384
+        return c.strategy if c and c.strategy else "summarization"
 
-    def get_compaction_keep_recent_tokens(self) -> int:
-        """Return the number of recent tokens to keep uncompacted (default: 20000)."""
+    def _get_strategy_raw(self, name: str) -> dict:
+        """Return the raw settings dict for a named strategy (empty dict if unset)."""
         c = self.settings.compaction
-        return c.keep_recent_tokens if c and c.keep_recent_tokens is not None else 20000
+        strategies: dict = (c.strategies or {}) if c else {}
+        return strategies.get(name) or {}
+
+    def get_compaction_summarization_settings(self) -> dict:
+        """Return SummarizationCompaction settings merged with defaults."""
+        raw = self._get_strategy_raw("summarization")
+        return {
+            "enabled": raw.get("enabled", True),
+            "reserve_tokens": raw.get("reserve_tokens", 16384),
+            "keep_recent_tokens": raw.get("keep_recent_tokens", 20000),
+        }
+
+    def get_compaction_rolling_settings(self) -> dict:
+        """Return RollingCompaction settings merged with defaults."""
+        raw = self._get_strategy_raw("rolling")
+        return {
+            "enabled": raw.get("enabled", True),
+            "trigger_percent": raw.get("trigger_percent", 0.5),
+            "batch_tokens": raw.get("batch_tokens", 10_000),
+            "keep_recent_tokens": raw.get("keep_recent_tokens", 20000),
+        }
+
+    def get_compaction_lcm_settings(self) -> dict:
+        """Return LCMCompaction settings merged with defaults."""
+        raw = self._get_strategy_raw("lcm")
+        return {
+            "enabled": raw.get("enabled", True),
+            "reserve_tokens": raw.get("reserve_tokens", 16384),
+            "keep_recent_tokens": raw.get("keep_recent_tokens", 20000),
+            "condense_threshold": raw.get("condense_threshold", 4),
+            "max_depth": raw.get("max_depth", 3),
+            "db_path": raw.get("db_path", None),
+        }
 
     def get_branch_summary_settings(self) -> dict:
         """Return all resolved branch summary settings with defaults applied."""

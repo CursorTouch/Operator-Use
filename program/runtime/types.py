@@ -75,9 +75,8 @@ class RuntimeConfig(BaseModel):
     sandbox: str | None = None  # 'strict' | 'enforce' | 'warn' | None (off)
 
     # Compaction
-    compaction_enabled: bool = True
-    compaction_reserve_tokens: int = 16384
-    compaction_keep_recent_tokens: int = 20000
+    compaction_enabled: bool = True  # master on/off; ANDed with the per-strategy enabled flag
+    compaction: Compaction | None = None  # supply a custom strategy (e.g. LCMCompaction)
 
 
 class RuntimeContext:
@@ -263,19 +262,55 @@ class RuntimeContext:
         # take effect on the next check instead of being frozen at startup.
         # The RuntimeConfig values act as overrides: an explicit False/non-default
         # there still wins over the persisted setting.
-        def _resolve_compaction_settings() -> CompactionSettings:
-            persisted = settings_manager.get_compaction_settings()
+        _global_enabled = config.compaction_enabled and settings_manager.get_compaction_enabled()
+
+        def _resolve_summarization_settings() -> CompactionSettings:
+            ss = settings_manager.get_compaction_summarization_settings()
             return CompactionSettings(
-                enabled=config.compaction_enabled and persisted["enabled"],
-                reserve_tokens=persisted["reserve_tokens"],
-                keep_recent_tokens=persisted["keep_recent_tokens"],
+                enabled=_global_enabled and ss["enabled"],
+                strategy="summarization",
             )
 
-        compaction = SummarizationCompaction(
-            llm=llm,
-            settings=_resolve_compaction_settings(),
-            settings_provider=_resolve_compaction_settings,
-        )
+        compaction: Compaction
+        if config.compaction is not None:
+            compaction = config.compaction
+        else:
+            _strategy = settings_manager.get_compaction_strategy()
+            if _strategy == "rolling":
+                from program.compaction.strategy.rolling.service import RollingCompaction
+                from program.compaction.strategy.rolling.types import RollingCompactionSettings
+                _rs = settings_manager.get_compaction_rolling_settings()
+                compaction = RollingCompaction(
+                    llm=llm,
+                    settings=RollingCompactionSettings(
+                        enabled=_global_enabled and _rs["enabled"],
+                        trigger_percent=_rs["trigger_percent"],
+                        batch_tokens=_rs["batch_tokens"],
+                        keep_recent_tokens=_rs["keep_recent_tokens"],
+                    ),
+                )
+            elif _strategy == "lcm":
+                from program.compaction.strategy.lcm.service import LCMCompaction
+                from program.compaction.strategy.lcm.types import LCMSettings
+                from pathlib import Path as _Path
+                _ls = settings_manager.get_compaction_lcm_settings()
+                compaction = LCMCompaction(
+                    llm=llm,
+                    settings=LCMSettings(
+                        enabled=_global_enabled and _ls["enabled"],
+                        reserve_tokens=_ls["reserve_tokens"],
+                        keep_recent_tokens=_ls["keep_recent_tokens"],
+                        condense_threshold=_ls["condense_threshold"],
+                        max_depth=_ls["max_depth"],
+                        db_path=_Path(_ls["db_path"]) if _ls["db_path"] else None,
+                    ),
+                )
+            else:
+                compaction = SummarizationCompaction(
+                    llm=llm,
+                    settings=_resolve_summarization_settings(),
+                    settings_provider=_resolve_summarization_settings,
+                )
 
         # ── Session manager ───────────────────────────────────────────────────
         session_dir = settings_manager.get_session_dir()
@@ -294,9 +329,15 @@ class RuntimeContext:
         acp_auth_manager = ACPAuthManager(get_acp_auth_path())
         acp_session_manager = ACPSessionManager(get_acp_sessions_dir())
 
+        # ── Compaction: inject session_id_provider and extra tools ───────────
+        if hasattr(compaction, '_session_id_provider') and compaction._session_id_provider is None:  # type: ignore[union-attr]
+            compaction._session_id_provider = lambda: session_manager.session_id or "default"  # type: ignore[union-attr]
+
         # ── Cron ─────────────────────────────────────────────────────────────
         cron: Cron | None = None
         all_tools = resource_loader.get_tools() + config.tools
+        if hasattr(compaction, 'get_tools'):
+            all_tools = all_tools + compaction.get_tools()  # type: ignore[union-attr]
         if settings_manager.get_cron_enabled():
             cron = Cron(store_path=get_crons_path(config_dir))
             # Wire cron into the tool instance from the resource loader — the loader

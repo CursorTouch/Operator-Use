@@ -53,12 +53,13 @@ class TestMergePrecedence:
 
     def test_nested_merge_field_by_field(self):
         sm = make_manager(
-            global_data={"compaction": {"enabled": False, "reserve_tokens": 8000}},
+            global_data={"compaction": {"enabled": False, "strategy": "summarization",
+                                        "strategies": {"summarization": {"reserve_tokens": 8000}}}},
             project_data={"compaction": {"enabled": True}},
         )
-        # project.enabled wins; global.reserve_tokens preserved
+        # project.enabled wins; global strategy settings preserved
         assert sm.get_compaction_enabled() is True
-        assert sm.get_compaction_reserve_tokens() == 8000
+        assert sm.get_compaction_summarization_settings()["reserve_tokens"] == 8000
 
     def test_none_project_fields_dont_override_global(self):
         sm = make_manager(
@@ -75,13 +76,17 @@ class TestDefaults:
         sm = SettingsManager.in_memory()
         assert sm.get_compaction_enabled() is True
 
-    def test_compaction_reserve_tokens_default(self):
+    def test_compaction_strategy_default(self):
         sm = SettingsManager.in_memory()
-        assert sm.get_compaction_reserve_tokens() == 16384
+        assert sm.get_compaction_strategy() == "summarization"
+
+    def test_compaction_summarization_reserve_tokens_default(self):
+        sm = SettingsManager.in_memory()
+        assert sm.get_compaction_summarization_settings()["reserve_tokens"] == 16384
 
     def test_compaction_keep_recent_tokens_default(self):
         sm = SettingsManager.in_memory()
-        assert sm.get_compaction_keep_recent_tokens() == 20000
+        assert sm.get_compaction_summarization_settings()["keep_recent_tokens"] == 20000
 
     def test_retry_enabled_default_true(self):
         sm = SettingsManager.in_memory()
@@ -302,10 +307,14 @@ class TestSettingsFromDict:
         assert s.default_provider is None
 
     def test_compaction_dict_parsed(self):
-        s = SettingsManager._settings_from_dict({"compaction": {"enabled": False, "reserve_tokens": 5000}})
+        s = SettingsManager._settings_from_dict({
+            "compaction": {"enabled": False, "strategy": "lcm",
+                           "strategies": {"lcm": {"condense_threshold": 6}}}
+        })
         assert s.compaction is not None
         assert s.compaction.enabled is False
-        assert s.compaction.reserve_tokens == 5000
+        assert s.compaction.strategy == "lcm"
+        assert s.compaction.strategies["lcm"]["condense_threshold"] == 6
 
     def test_retry_with_provider_parsed(self):
         s = SettingsManager._settings_from_dict({
@@ -328,12 +337,26 @@ class TestGetCompactionSettings:
         sm = SettingsManager.in_memory()
         d = sm.get_compaction_settings()
         assert "enabled" in d
-        assert "reserve_tokens" in d
-        assert "keep_recent_tokens" in d
+        assert "strategy" in d
 
     def test_values_match_individual_getters(self):
-        sm = SettingsManager.in_memory({"compaction": {"enabled": False, "reserve_tokens": 1000, "keep_recent_tokens": 2000}})
+        sm = SettingsManager.in_memory({"compaction": {"enabled": False, "strategy": "rolling"}})
         d = sm.get_compaction_settings()
         assert d["enabled"] == sm.get_compaction_enabled()
-        assert d["reserve_tokens"] == sm.get_compaction_reserve_tokens()
-        assert d["keep_recent_tokens"] == sm.get_compaction_keep_recent_tokens()
+        assert d["strategy"] == sm.get_compaction_strategy()
+
+    def test_strategy_settings_per_strategy(self):
+        sm = SettingsManager.in_memory({
+            "compaction": {
+                "strategy": "lcm",
+                "strategies": {
+                    "lcm": {"condense_threshold": 8, "max_depth": 5},
+                    "rolling": {"batch_tokens": 5000},
+                }
+            }
+        })
+        ls = sm.get_compaction_lcm_settings()
+        assert ls["condense_threshold"] == 8
+        assert ls["max_depth"] == 5
+        rs = sm.get_compaction_rolling_settings()
+        assert rs["batch_tokens"] == 5000

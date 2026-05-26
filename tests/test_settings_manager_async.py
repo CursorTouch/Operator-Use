@@ -140,7 +140,7 @@ class TestPersistenceRoundTrip:
 
         sm2 = SettingsManager.from_storage(storage)
         assert sm2.get_compaction_enabled() is False
-        assert sm2.get_compaction_reserve_tokens() == 8000  # untouched field preserved
+        assert sm2.get_compaction_strategy() == "summarization"  # untouched field preserved
 
     @pytest.mark.asyncio
     async def test_multiple_settings_all_persisted(self):

@@ -9,7 +9,7 @@ import pytest
 from program.settings.manager import SettingsManager
 from program.engine.types import SteeringMode, FollowupMode
 from program.inference.types import ThinkingLevel
-from program.compaction.strategy.types import CompactionSettings
+from program.settings.types import CompactionSettings
 
 
 def _sm(initial: dict | None = None) -> SettingsManager:
@@ -51,11 +51,15 @@ class TestCompactionSettings:
         await asyncio.sleep(0)
 
     @pytest.mark.asyncio
-    async def test_compaction_keep_recent_tokens(self):
+    async def test_compaction_strategy_settings(self):
         sm = _sm()
-        sm.global_settings.compaction = CompactionSettings(keep_recent_tokens=8000)
+        sm.global_settings.compaction = CompactionSettings(
+            strategy="rolling",
+            strategies={"rolling": {"batch_tokens": 5000}},
+        )
         sm._save()
-        assert sm.get_compaction_keep_recent_tokens() == 8000
+        assert sm.get_compaction_strategy() == "rolling"
+        assert sm.get_compaction_rolling_settings()["batch_tokens"] == 5000
         await asyncio.sleep(0)
 
     def test_get_compaction_settings_returns_dict(self):
@@ -63,8 +67,7 @@ class TestCompactionSettings:
         cs = sm.get_compaction_settings()
         assert isinstance(cs, dict)
         assert 'enabled' in cs
-        assert 'keep_recent_tokens' in cs
-        assert 'reserve_tokens' in cs
+        assert 'strategy' in cs
 
 
 class TestRetrySettings:
@@ -277,13 +280,17 @@ class TestOverridesAndFlush:
         data = {
             "default_model": "mistral-small-latest",
             "default_provider": "mistral",
-            "compaction": {"enabled": True, "keep_recent_tokens": 5000},
+            "compaction": {
+                "enabled": True,
+                "strategy": "summarization",
+                "strategies": {"summarization": {"keep_recent_tokens": 5000}},
+            },
         }
         sm = SettingsManager.in_memory(data)
         assert sm.get_default_model() == "mistral-small-latest"
         cs = sm.get_compaction_settings()
         assert cs['enabled'] is True
-        assert cs['keep_recent_tokens'] == 5000
+        assert sm.get_compaction_summarization_settings()['keep_recent_tokens'] == 5000
 
 
 class TestChannelSettings:

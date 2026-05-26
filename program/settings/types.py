@@ -38,8 +38,8 @@ class ExtensionEntry:
 @dataclass
 class CompactionSettings:
     enabled: Optional[bool] = None
-    reserve_tokens: Optional[int] = None
-    keep_recent_tokens: Optional[int] = None
+    strategy: Optional[str] = None          # active strategy: "summarization" | "rolling" | "lcm"
+    strategies: Optional[dict] = None       # per-strategy settings, keyed by strategy name
 
 
 @dataclass
