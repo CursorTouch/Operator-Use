@@ -334,6 +334,21 @@ class Agent(ExtensionContext):
         self._session_manager.leaf_id = parent_of_first
         persisted_ids.clear()
 
+    def _active_todo_injection(self) -> str | None:
+        for tool in self._engine.state.tools:
+            formatter = getattr(tool, 'format_for_injection', None)
+            if tool.name == 'todo' and callable(formatter):
+                injection = formatter()
+                if injection:
+                    return str(injection)
+        return None
+
+    def _hydrate_todo_store(self, messages: list[Any]) -> None:
+        for tool in self._engine.state.tools:
+            hydrator = getattr(tool, 'hydrate_from_messages', None)
+            if tool.name == 'todo' and callable(hydrator):
+                hydrator(messages)
+
     # -------------------------------------------------------------------------
     # Core turn entry point
     # -------------------------------------------------------------------------
@@ -368,6 +383,7 @@ class Agent(ExtensionContext):
         # Reconstruct message history from persisted session
         session_ctx = self._session_manager.build_session_context()
         base_messages = list(session_ctx.messages)
+        self._hydrate_todo_store(base_messages)
 
         # context hook — extensions can replace the messages sent to the LLM
         context_results = await self._extensions.emit(
@@ -570,6 +586,10 @@ class Agent(ExtensionContext):
 
             if compaction_result is None:
                 compaction_result = await self._compaction.compact(preparation, ci)
+
+            self._hydrate_todo_store(self._session_manager.build_session_context().messages)
+            if todo_injection := self._active_todo_injection():
+                compaction_result.summary = f"{compaction_result.summary}\n\n{todo_injection}"
 
             self._session_manager.append_compaction(
                 summary=compaction_result.summary,

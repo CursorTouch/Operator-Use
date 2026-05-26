@@ -6,6 +6,7 @@ from typing import AsyncIterator
 from pydantic import BaseModel
 
 from program.agent.service import Agent
+from program.builtins.tools.todo import TodoTool
 from program.runtime.types import RuntimeConfig
 from program.agent.types import AgentConfig, PromptOptions
 from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
@@ -129,6 +130,9 @@ class FakeResourceLoader(BaseResourceLoader):
         return self._system_prompt
 
     def get_append_system_prompt(self):
+        return []
+
+    def get_subagent_profiles(self):
         return []
 
     def extend_resources(self, paths: ResourceExtensionPaths) -> None:
@@ -337,6 +341,43 @@ class TestCompactionIntegration:
         if comp_entries:
             comp = sm.by_id[comp_entries[0].id]
             assert "Summarized history" in comp.summary
+
+    @pytest.mark.asyncio
+    async def test_compaction_entry_injects_active_todos(self):
+        todo_tool = TodoTool()
+        await todo_tool.execute(ToolInvocation(
+            id="todo-1",
+            name="todo",
+            params={
+                "todos": [
+                    {"id": "1", "content": "Done item", "status": "completed"},
+                    {"id": "2", "content": "Current item", "status": "in_progress"},
+                    {"id": "3", "content": "Future item", "status": "pending"},
+                ],
+            },
+        ))
+
+        llm = FakeLLM(text_seq("answer"), summary_seq("Summarized history"))
+        settings = CompactionSettings(enabled=True, keep_recent_tokens=1)
+        session, sm = make_session(llm, tools=[todo_tool], compaction_settings=settings)
+        session.compact()
+
+        for _ in range(5):
+            sm.append_message(UserMessage.text("msg"))
+            a = AssistantMessage()
+            a.contents = [TextContent(content="reply")]
+            sm.append_message(a)
+
+        await session.invoke("go")
+
+        comp_entries = [e for e in sm.get_entries()
+                        if isinstance(sm.by_id.get(e.id), CompactionEntry)]
+        assert comp_entries
+        comp = sm.by_id[comp_entries[0].id]
+        assert "Summarized history" in comp.summary
+        assert "Current item" in comp.summary
+        assert "Future item" in comp.summary
+        assert "Done item" not in comp.summary
 
     @pytest.mark.asyncio
     async def test_no_compaction_when_disabled(self):
