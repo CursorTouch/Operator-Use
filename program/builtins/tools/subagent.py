@@ -48,9 +48,19 @@ class SubAgentSchema(BaseModel):
         description=(
             'Named subagent profile to use (create action). '
             'Applies the profile\'s specialized system prompt and restricts tools to its allow-list. '
-            'Must match an existing profile name — use action="profiles" to see available options.'
+            'Must match an existing profile name — use action="profiles" to see available options. '
+            'Not required when fork=true.'
         ),
         default='',
+    )
+    fork: bool = Field(
+        default=False,
+        description=(
+            'When true, the subagent inherits the current conversation context instead of starting '
+            'fresh. It sees the full message history (compaction summary + recent messages) and '
+            'uses the same system prompt as the main agent. No profile is required. '
+            'Forks cannot spawn further forks. Use when the task needs full conversation context.'
+        ),
     )
 
 
@@ -106,39 +116,62 @@ class SubagentTool(Tool):
                 if not task:
                     return ToolResult.error(id=invocation.id, content="'task' is required for action='create'.")
 
+                fork = params.get('fork', False)
                 profile = params.get('profile') or ''
-                if not profile:
-                    available = ', '.join(p.name for p in manager.list_profiles()) or 'none'
-                    return ToolResult.error(
-                        id=invocation.id,
-                        content=f"'profile' is required for action='create'. Available profiles: {available}",
-                    )
-
                 label = params.get('label')
                 depends_on = params.get('depends_on')
 
                 current_depth = context.spawn_depth if context else 0
                 max_depth = manager._settings.max_spawn_depth
-                if current_depth >= max_depth:
-                    return ToolResult.error(
-                        id=invocation.id,
-                        content=(
-                            f'Spawn depth limit reached (depth={current_depth}, max={max_depth}). '
-                            'Cannot spawn further subagents from this level.'
-                        ),
-                    )
+
+                if fork:
+                    if current_depth > 0:
+                        return ToolResult.error(
+                            id=invocation.id,
+                            content='Forked subagents can only be spawned from the main agent (depth 0).',
+                        )
+                    if context is None or context.session_manager is None:
+                        return ToolResult.error(
+                            id=invocation.id,
+                            content='Fork requires access to session context, which is unavailable.',
+                        )
+                    session_ctx = context.session_manager.build_session_context()
+                    parent_messages = list(session_ctx.messages)
+                    parent_system_prompt = context.agent.get_system_prompt() if context.agent else None
+                else:
+                    if not profile:
+                        available = ', '.join(p.name for p in manager.list_profiles()) or 'none'
+                        return ToolResult.error(
+                            id=invocation.id,
+                            content=f"'profile' is required for action='create'. Available profiles: {available}",
+                        )
+                    if current_depth >= max_depth:
+                        return ToolResult.error(
+                            id=invocation.id,
+                            content=(
+                                f'Spawn depth limit reached (depth={current_depth}, max={max_depth}). '
+                                'Cannot spawn further subagents from this level.'
+                            ),
+                        )
+                    parent_messages = None
+                    parent_system_prompt = None
 
                 try:
                     task_id = await manager.invoke(
                         task, label=label, depends_on=depends_on, profile=profile,
                         spawn_depth=current_depth + 1,
+                        fork=fork,
+                        parent_messages=parent_messages,
+                        parent_system_prompt=parent_system_prompt,
                     )
                 except ValueError as exc:
                     return ToolResult.error(id=invocation.id, content=f'Cannot create subagent: {exc}')
 
                 display = label or task[:60]
                 msg = f"Subagent triggered — task_id={task_id}  label='{display}'"
-                if profile:
+                if fork:
+                    msg += '  (forked — inherits conversation context)'
+                elif profile:
                     msg += f"  profile='{profile}'"
                 if depends_on:
                     msg += f"\nWaiting on: {', '.join(depends_on)}"

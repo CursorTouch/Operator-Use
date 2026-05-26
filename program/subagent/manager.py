@@ -87,6 +87,9 @@ class SubagentManager:
         depends_on: list[str] | None = None,
         profile: str | None = None,
         spawn_depth: int = 0,
+        fork: bool = False,
+        parent_messages: list | None = None,
+        parent_system_prompt: str | None = None,
     ) -> str:
         """Spawn a background subagent. Returns task_id immediately.
 
@@ -97,13 +100,14 @@ class SubagentManager:
         channel = _session_channel.get()
         chat_id = _session_chat_id.get()
 
-        if not profile:
-            raise ValueError("A profile is required. Use list_profiles() to see available options.")
-        if profile not in self._profiles:
-            raise ValueError(
-                f"Unknown subagent profile '{profile}'. "
-                f"Available: {', '.join(self._profiles) or 'none'}"
-            )
+        if not fork:
+            if not profile:
+                raise ValueError("A profile is required. Use list_profiles() to see available options.")
+            if profile not in self._profiles:
+                raise ValueError(
+                    f"Unknown subagent profile '{profile}'. "
+                    f"Available: {', '.join(self._profiles) or 'none'}"
+                )
 
         task_id = f'sub_{uuid.uuid4().hex[:8]}'
         display_label = label or task[:50]
@@ -112,7 +116,7 @@ class SubagentManager:
         if depends_on:
             self._check_for_cycles(task_id, depends_on)
 
-        resolved = self._profiles[profile]
+        resolved = self._profiles.get(profile or '') if profile else None
         record = SubagentRecord(
             task_id=task_id,
             label=display_label,
@@ -123,9 +127,12 @@ class SubagentManager:
             chat_id=chat_id,
             depends_on=depends_on,
             profile=profile,
-            system_prompt=resolved.system_prompt,
-            tool_names=resolved.tools if resolved.tools else None,
+            system_prompt=parent_system_prompt if fork else (resolved.system_prompt if resolved else None),
+            tool_names=resolved.tools if resolved and resolved.tools else None,
             spawn_depth=spawn_depth,
+            fork=fork,
+            parent_messages=parent_messages,
+            parent_system_prompt=parent_system_prompt,
         )
         self._records[task_id] = record
 

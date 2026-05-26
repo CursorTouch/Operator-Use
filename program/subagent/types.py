@@ -33,6 +33,9 @@ class SubagentRecord:
     system_prompt: str | None = None     # profile's system prompt (overrides default)
     tool_names: list[str] | None = None  # profile's allowed tools (None = all)
     spawn_depth: int = 0                 # nesting depth (0 = spawned by main agent)
+    fork: bool = False                   # inherits parent conversation context
+    parent_messages: list | None = None  # effective parent history (fork only)
+    parent_system_prompt: str | None = None  # parent system prompt (fork only)
 
 
 class SubagentSettings(BaseModel):

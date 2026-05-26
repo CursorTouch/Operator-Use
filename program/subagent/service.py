@@ -16,7 +16,10 @@ from program.agent.types import AgentContext
 from program.engine.service import Engine
 from program.engine.types import Options
 from program.hooks.types import AgentEndEvent, AgentErrorEvent, SubagentEndEvent, SubagentStartEvent, TurnEndEvent
-from program.message.types import AssistantMessage, TextContent, UserMessage
+from program.message.types import (
+    AssistantMessage, CompactionSummaryMessage, TextContent,
+    ToolMessage, UserMessage,
+)
 from program.subagent.types import SubagentRecord, SubagentSettings, SubagentStatus
 
 if TYPE_CHECKING:
@@ -32,6 +35,28 @@ _DEFAULT_SYSTEM_PROMPT = (
     'complete summary of your findings or results. Do not address the user directly — '
     'your final response is relayed by the main agent.'
 )
+
+
+def _build_fork_messages(
+    parent_messages: list,
+    task: str,
+) -> list:
+    """Convert parent session messages into LLM-compatible messages for a forked subagent.
+
+    CompactionSummaryMessage is converted to a UserMessage so the fork sees the
+    summary text. BranchSummaryMessage and CustomMessage are dropped — they carry
+    no actionable content for the fork. Regular LLM messages pass through unchanged.
+    """
+    result = []
+    for msg in parent_messages:
+        if isinstance(msg, CompactionSummaryMessage):
+            result.append(UserMessage.text(
+                f'[Previous conversation summary]\n{msg.summary}'
+            ))
+        elif isinstance(msg, (UserMessage, AssistantMessage, ToolMessage)):
+            result.append(msg)
+    result.append(UserMessage.text(task))
+    return result
 
 
 class Subagent:
@@ -70,12 +95,17 @@ class Subagent:
 
         result = '(no result)'
 
+        fork_messages = None
+        if record.fork and record.parent_messages is not None:
+            fork_messages = _build_fork_messages(record.parent_messages, record.task)
+
         for attempt in range(self._settings.max_retries + 1):
             try:
                 result = await asyncio.wait_for(
                     self._run_loop(
                         record.task, system_prompt, allowed_tools, max_iterations,
                         spawn_depth=record.spawn_depth,
+                        fork_messages=fork_messages,
                     ),
                     timeout=timeout,
                 )
@@ -130,6 +160,7 @@ class Subagent:
         tools: list[Tool],
         max_iterations: int,
         spawn_depth: int = 0,
+        fork_messages: list | None = None,
     ) -> str:
         engine = Engine(llm=self._llm, tools=tools, options=Options())
         engine.tool_context.spawn_depth = spawn_depth
@@ -154,9 +185,14 @@ class Subagent:
 
         engine.options.on_event = on_event
 
+        if fork_messages is not None:
+            messages = fork_messages
+        else:
+            messages = [UserMessage(contents=[TextContent(content=task)])]
+
         ctx = AgentContext(
             system_prompt=system_prompt,
-            messages=[UserMessage(contents=[TextContent(content=task)])],
+            messages=messages,
             tools=tools,
         )
         await engine.run(ctx)
