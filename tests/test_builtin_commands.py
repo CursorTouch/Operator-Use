@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from program.builtins.commands.compact import _handle_compact, command as compact_command
 from program.builtins.commands.session import _handle_new, command as new_command
 from program.builtins.commands.help import _handle_help, command as help_command
+from program.builtins.commands.goal import _handle_goal
 from program.builtins.commands.auth import commands as auth_commands
 from program.commands.loader import load_commands_from_dir
 from program.commands.registry import CommandRegistry
@@ -150,15 +151,56 @@ class TestHandleHelp:
         assert "available" in out.lower() or "commands" in out.lower()
 
 
+# ── _handle_goal ──────────────────────────────────────────────────────────────
+
+class TestHandleGoal:
+    @pytest.mark.asyncio
+    async def test_status_prints_goal_status(self, capsys):
+        manager = MagicMock()
+        manager.status_line.return_value = "Goal active"
+        session = MagicMock(goal_manager=manager)
+        reg = make_registry(session=session)
+
+        await _handle_goal(reg, ["status"])
+
+        assert "Goal active" in capsys.readouterr().out
+
+    @pytest.mark.asyncio
+    async def test_set_goal_invokes_runtime(self):
+        state = MagicMock(goal="ship it", max_turns=20)
+        manager = MagicMock()
+        manager.set.return_value = state
+        session = MagicMock(goal_manager=manager)
+        rt = MagicMock(current_session=session)
+        rt.invoke = AsyncMock()
+        reg = make_registry(runtime=rt)
+
+        await _handle_goal(reg, ["ship", "it"])
+
+        manager.set.assert_called_once_with("ship it")
+        rt.invoke.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_clear_goal(self, capsys):
+        manager = MagicMock()
+        session = MagicMock(goal_manager=manager)
+        reg = make_registry(session=session)
+
+        await _handle_goal(reg, ["clear"])
+
+        manager.clear.assert_called_once()
+        assert "cleared" in capsys.readouterr().out.lower()
+
+
 # ── BUILTIN_COMMANDS list ─────────────────────────────────────────────────────
 
 class TestBuiltinCommandsList:
-    def test_has_twelve_builtins(self):
-        assert len(BUILTIN_COMMANDS) == 12
+    def test_has_thirteen_builtins(self):
+        assert len(BUILTIN_COMMANDS) == 13
 
     def test_names_present(self):
         names = {c.name for c in BUILTIN_COMMANDS}
-        assert names == {"login", "logout", "auth", "compact", "new", "help", "reload", "cron", "stop", "start", "skills", "steer"}
+        assert names == {"login", "logout", "auth", "compact", "goal", "new", "help", "reload", "cron", "stop", "start", "skills", "steer"}
 
     def test_new_has_clear_alias(self):
         new_cmd = next(c for c in BUILTIN_COMMANDS if c.name == "new")

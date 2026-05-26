@@ -106,6 +106,7 @@ class AuxiliarySettings:
     web_extract: Optional[AuxiliaryTaskSettings] = None
     stt: Optional[AuxiliaryTaskSettings] = None
     tts: Optional[AuxiliaryTaskSettings] = None
+    goal_judge: Optional[AuxiliaryTaskSettings] = None
 
 
 @dataclass

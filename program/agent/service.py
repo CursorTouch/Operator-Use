@@ -23,6 +23,7 @@ from program.tool.types import ToolInvocation, ToolResult
 from program.prompt.builder import PromptTemplate
 from program.compaction.strategy.utils import estimate_context_tokens, estimate_tokens
 from program.agent.utils import is_permanent_error
+from program.agent.goals import GoalManager, judge_goal_with_llm
 
 if TYPE_CHECKING:
     from program.engine.service import Engine
@@ -69,6 +70,23 @@ class Agent(ExtensionContext):
         self._compact_requested: bool = False
         self._compact_options: CompactOptions | None = None
         self._runtime: Runtime | None = None
+        def _make_judge_llm():
+            try:
+                from program.settings.manager import SettingsManager
+                _sm = SettingsManager.get_instance()
+                _aux = _sm.get_auxiliary_task("goal_judge")
+                if _aux.model or _aux.provider:
+                    from program.inference.api.text.service import LLM
+                    return LLM(model_id=_aux.model or engine.llm.model.id, provider=_aux.provider)
+            except Exception:
+                pass
+            return engine.llm
+
+        _judge_llm = _make_judge_llm()
+        self._goal_manager = GoalManager(
+            session_manager,
+            judge=lambda goal, response: judge_goal_with_llm(_judge_llm, goal, response),
+        )
 
         self._phase: str = "idle"
         self._engine.options.before_tool_call = self._before_tool_call
@@ -146,6 +164,10 @@ class Agent(ExtensionContext):
 
     def get_system_prompt(self) -> str:
         return self._system_prompt
+
+    @property
+    def goal_manager(self) -> GoalManager:
+        return self._goal_manager
 
     def compact(self, options: CompactOptions | None = None) -> None:
         """Request compaction after the current (or next) turn completes."""
@@ -465,9 +487,23 @@ class Agent(ExtensionContext):
         ):
             await self._run_compaction(opts.compaction_custom_instructions)
 
+        if await self._continue_goal_if_needed():
+            return
+
         # Agent is done with no more queued turns
         if not self._engine.has_pending_messages():
             await self._extensions.emit('settled', SettledEvent())
+
+    async def _continue_goal_if_needed(self) -> bool:
+        if not self._goal_manager.is_active():
+            return False
+
+        decision = await self._goal_manager.evaluate_after_turn(self._last_assistant_text)
+        continuation = decision.get("continuation_prompt")
+        if decision.get("should_continue") and isinstance(continuation, str) and continuation.strip():
+            await self.invoke(continuation, PromptOptions(source='goal'))
+            return True
+        return False
 
     async def _run_with_retry(self, ctx: AgentContext, user_entry_id: str) -> None:
         max_retries = self._config.retry_max_retries if self._config.retry_enabled else 0

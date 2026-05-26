@@ -34,9 +34,13 @@ def generate_timestamp() -> float:
     now = datetime.now()
     return now.timestamp()
 
-def get_default_session_dir(agent_dir: Path | None = None) -> Path:
+def get_default_session_dir(cwd: str | Path | None = None, agent_dir: Path | None = None) -> Path:
     base = agent_dir if agent_dir is not None else get_agent_dir()
     session_dir = base / "sessions"
+    if cwd is not None:
+        cwd_path = Path(cwd)
+        encoded = "_".join(part for part in cwd_path.parts if part not in ("", cwd_path.anchor))
+        session_dir = session_dir / (encoded or "root")
     session_dir.mkdir(parents=True, exist_ok=True)
     return session_dir
 
