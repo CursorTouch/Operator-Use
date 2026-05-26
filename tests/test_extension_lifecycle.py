@@ -43,6 +43,9 @@ def _make_agent_with_ext(llm, ext, tools=None):
         def get_context_files(self): return []
         def get_system_prompt(self): return None
         def get_append_system_prompt(self): return []
+        def get_soul_prompt(self): return None
+        def get_user_profile(self): return None
+        def get_agent_memory(self): return None
         def extend_resources(self, p): pass
         def get_subagent_profiles(self): return []
         def get_diagnostics(self, runtime=None): return []

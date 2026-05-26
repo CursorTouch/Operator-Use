@@ -23,6 +23,7 @@ from program.settings.paths import (
     get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
     get_builtins_extensions_dir, get_builtins_hooks_dir,
     get_builtins_subagents_dir, get_subagents_dir,
+    get_soul_path, get_user_profile_path, get_agent_memory_path,
 )
 from program.skill.loader import load_skills_cached
 from program.skill.types import Skill, LoadSkillsOptions
@@ -87,6 +88,9 @@ class ResourceLoader(BaseResourceLoader):
         self._context_files: list[ContextFile] = []
         self._system_prompt: str | None = None
         self._append_system_prompt: list[str] = []
+        self._soul_prompt: str | None = None
+        self._user_profile: str | None = None
+        self._agent_memory: str | None = None
         self._extension_skill_paths: list[str] = []
         self._subagent_profiles: list[SubagentProfile] = []
         self._package_command_dirs: list[Path] = []
@@ -120,6 +124,15 @@ class ResourceLoader(BaseResourceLoader):
     def get_append_system_prompt(self) -> list[str]:
         return self._append_system_prompt
 
+    def get_soul_prompt(self) -> str | None:
+        return self._soul_prompt
+
+    def get_user_profile(self) -> str | None:
+        return self._user_profile
+
+    def get_agent_memory(self) -> str | None:
+        return self._agent_memory
+
     def extend_resources(self, paths: ResourceExtensionPaths) -> None:
         """Called after resources_discover to add extension-provided skill paths."""
         new_paths = [p for p in paths.skill_paths if p not in self._extension_skill_paths]
@@ -145,6 +158,7 @@ class ResourceLoader(BaseResourceLoader):
         self._reload_hooks()
         self._reload_context_files()
         self._reload_system_prompt()
+        self._reload_identity_files()
         self._reload_subagent_profiles()
 
     # -------------------------------------------------------------------------
@@ -278,3 +292,8 @@ class ResourceLoader(BaseResourceLoader):
         # Ensure temp dirs exist so the agent can use them immediately
         get_temp_dir().mkdir(parents=True, exist_ok=True)
         get_temp_dir(self._cwd).mkdir(parents=True, exist_ok=True)
+
+    def _reload_identity_files(self) -> None:
+        self._soul_prompt = _read_optional_file(get_soul_path())
+        self._user_profile = _read_optional_file(get_user_profile_path())
+        self._agent_memory = _read_optional_file(get_agent_memory_path())

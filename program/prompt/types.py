@@ -17,3 +17,7 @@ class SystemPromptOptions(BaseModel):
     append_system_prompt: str | None = None
     context_files: list[ContextFile] = Field(default_factory=list)
     skills: list[Skill] = Field(default_factory=list)
+    soul_prompt: str | None = None
+    user_profile: str | None = None
+    agent_memory: str | None = None
+    channel: str | None = None

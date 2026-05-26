@@ -464,7 +464,7 @@ class Gateway:
 
         unsub = agent.hooks.subscribe(_on_event)
         try:
-            await agent.invoke(text, PromptOptions(source='interactive', meta=msg_meta))
+            await agent.invoke(text, PromptOptions(source='interactive', meta=msg_meta, channel=channel_id))
         except Exception as exc:
             logger.exception("Gateway: agent.invoke failed for session %r", session_key)
             err_msg = _last_error[0] or str(exc)

@@ -7,6 +7,53 @@ if TYPE_CHECKING:
     from program.skill.types import Skill
 
 
+# Per-channel formatting and behaviour hints injected into the system prompt
+# so the agent adapts its output to what each platform can actually render.
+_CHANNEL_HINTS: dict[str, str] = {
+    "stdio": (
+        "Platform: terminal / CLI. Full markdown is supported — use headers, "
+        "tables, fenced code blocks, and bold/italic freely. No message-length limit."
+    ),
+    "telegram": (
+        "Platform: Telegram. Use MarkdownV2 or plain text only — no HTML. "
+        "Avoid tables (they do not render). Max 4096 characters per message; "
+        "split long responses into multiple messages if needed. "
+        "Inline images and files are sent via the bot API, not markdown syntax."
+    ),
+    "discord": (
+        "Platform: Discord. Standard markdown is supported: **bold**, *italic*, "
+        "`inline code`, ```fenced code blocks```. No native table support. "
+        "Max 2000 characters per message — split if needed."
+    ),
+    "slack": (
+        "Platform: Slack. Uses mrkdwn, NOT standard markdown. "
+        "Bold: *text*, italic: _text_, code: `code`, code block: ```code```. "
+        "Avoid standard markdown headers (#) and HTML. Max 40 000 chars per message."
+    ),
+    "email": (
+        "Platform: Email. Use plain prose with clear paragraph breaks. "
+        "Avoid markdown syntax — it will appear as raw characters. "
+        "Keep responses concise; the user will see this as an email reply."
+    ),
+    "twitch": (
+        "Platform: Twitch chat. Plain text only — no markdown, no formatting. "
+        "Max 500 characters per message. Be very concise."
+    ),
+}
+
+
+def channel_hint(channel_id: str | None) -> str:
+    """Return the platform hint string for the given channel, or '' if unknown."""
+    if not channel_id:
+        return ""
+    # WebSocket sessions use dynamic IDs like "ws:connid" — normalise to "websocket"
+    key = "websocket" if channel_id.startswith("ws:") else channel_id.lower()
+    hint = _CHANNEL_HINTS.get(key, "")
+    if not hint:
+        return ""
+    return f"\n\n# Platform\n\n{hint}"
+
+
 def build_guidelines(extra: list[str]) -> str:
     lines = [f"- {g.strip()}" for g in extra if g.strip()]
     return "\n".join(lines)

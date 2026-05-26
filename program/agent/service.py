@@ -302,7 +302,7 @@ class Agent(ExtensionContext):
     # Internal helpers
     # -------------------------------------------------------------------------
 
-    def _rebuild_system_prompt(self) -> str:
+    def _rebuild_system_prompt(self, channel: str | None = None) -> str:
         skills, _ = self._resources.get_skills()
         context_files = self._resources.get_context_files()
         custom_prompt = self._resources.get_system_prompt()
@@ -317,6 +317,11 @@ class Agent(ExtensionContext):
             append_system_prompt=append_system_prompt,
             context_files=context_files,
             skills=skills,
+            soul_prompt=self._resources.get_soul_prompt(),
+            user_profile=self._resources.get_user_profile(),
+            agent_memory=self._resources.get_agent_memory(),
+            channel=channel,
+            session_id=self._session_manager.session_id,
         ).build()
 
     def _register_message_handler(self, persisted_ids: list[str]) -> Callable:
@@ -414,7 +419,7 @@ class Agent(ExtensionContext):
             )
 
         # Build system prompt and allow extensions to override it
-        self._system_prompt = self._rebuild_system_prompt()
+        self._system_prompt = self._rebuild_system_prompt(channel=opts.channel)
         before_results = await self._extensions.emit(
             'before_agent_start',
             BeforeAgentStartEvent(prompt=user_input, system_prompt=self._system_prompt),

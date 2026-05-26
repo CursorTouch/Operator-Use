@@ -46,6 +46,21 @@ def get_acp_auth_path() -> Path:
 
 
 
+def get_soul_path() -> Path:
+    """Agent identity/persona — always global: ~/.program/SOUL.md"""
+    return CONFIG_DIR_PATH / "SOUL.md"
+
+
+def get_user_profile_path() -> Path:
+    """User profile and preferences — always global: ~/.program/USER.md"""
+    return CONFIG_DIR_PATH / "USER.md"
+
+
+def get_agent_memory_path() -> Path:
+    """Persistent static memory snapshot — always global: ~/.program/MEMORY.md"""
+    return CONFIG_DIR_PATH / "MEMORY.md"
+
+
 def get_system_prompt_path(cwd: Path | None = None) -> Path:
     return get_config_dir(cwd) / "SYSTEM.md"
 

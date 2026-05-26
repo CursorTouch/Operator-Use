@@ -37,6 +37,7 @@ class PromptOptions(BaseModel):
     source: Literal['interactive', 'rpc', 'extension', 'cron', 'subagent', 'goal'] = 'interactive'
     compaction_custom_instructions: str | None = None
     meta: MessageMeta | None = None
+    channel: str | None = None
 
 
 @dataclass
