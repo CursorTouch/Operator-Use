@@ -9,8 +9,17 @@ from pydantic import BaseModel, Field
 from program.tool.types import Tool, ToolContext, ToolExecutionMode, ToolInvocation, ToolKind, ToolResult
 
 
-TodoStatus = Literal['pending', 'in_progress', 'completed', 'cancelled']
-VALID_STATUSES = {'pending', 'in_progress', 'completed', 'cancelled'}
+TodoStatus = Literal['pending', 'in_progress', 'completed', 'cancelled', 'blocked', 'skipped']
+VALID_STATUSES = {'pending', 'in_progress', 'completed', 'cancelled', 'blocked', 'skipped'}
+
+_STATUS_ICON = {
+    'pending':     '○',
+    'in_progress': '◉',
+    'completed':   '✓',
+    'cancelled':   '✗',
+    'blocked':     '⊘',
+    'skipped':     '—',
+}
 
 
 class TodoItemSchema(BaseModel):
@@ -73,22 +82,23 @@ class TodoStore:
         return [item.copy() for item in self._items]
 
     def format_for_injection(self) -> str | None:
+        active_statuses = {'pending', 'in_progress', 'blocked'}
         active_items = [
-            item
-            for item in self._items
-            if item['status'] in {'pending', 'in_progress'}
+            (i + 1, item)
+            for i, item in enumerate(self._items)
+            if item['status'] in active_statuses
         ]
         if not active_items:
             return None
 
-        markers = {
-            'in_progress': '[>]',
-            'pending': '[ ]',
-        }
-        lines = ['[Your active task list was preserved across context compaction]']
-        for item in active_items:
-            marker = markers.get(item['status'], '[?]')
-            lines.append(f"- {marker} {item['id']}. {item['content']} ({item['status']})")
+        done = sum(1 for item in self._items if item['status'] in {'completed', 'skipped'})
+        lines = [
+            '[Your active task list was preserved across context compaction]',
+            f'Progress: {done}/{len(self._items)} steps done',
+        ]
+        for step, item in active_items:
+            icon = _STATUS_ICON.get(item['status'], '?')
+            lines.append(f'  {step}. [{icon}] {item["content"]}  ({item["status"]})')
         return '\n'.join(lines)
 
     @staticmethod
@@ -110,13 +120,13 @@ class TodoStore:
 
 
 def _summary(items: list[dict[str, str]]) -> dict[str, int]:
-    return {
-        'total': len(items),
-        'pending': sum(1 for item in items if item['status'] == 'pending'),
-        'in_progress': sum(1 for item in items if item['status'] == 'in_progress'),
-        'completed': sum(1 for item in items if item['status'] == 'completed'),
-        'cancelled': sum(1 for item in items if item['status'] == 'cancelled'),
-    }
+    counts: dict[str, int] = {s: 0 for s in ('pending', 'in_progress', 'completed', 'cancelled', 'blocked', 'skipped')}
+    for item in items:
+        status = item['status']
+        if status in counts:
+            counts[status] += 1
+    done = counts['completed'] + counts['skipped']
+    return {'total': len(items), 'done': done, **counts}
 
 
 class TodoTool(Tool):
@@ -124,14 +134,15 @@ class TodoTool(Tool):
         super().__init__(
             name='todo',
             description=(
-                'Manage your task list for the current session. Use for complex tasks '
+                'Manage your ordered task list for the current session. Use for complex tasks '
                 'with 3+ steps or when the user provides multiple tasks. '
                 'Call with no parameters to read the current list. '
                 'Provide todos to create/update items. '
-                'List order is priority. Only one item should be in_progress at a time. '
+                'List order defines step order. Only one item should be in_progress at a time. '
+                'Statuses: pending, in_progress, completed, cancelled, blocked, skipped. '
                 'Mark items completed immediately when done. '
-                'If something fails, cancel it and add a revised item. '
-                'Always returns the full current list.'
+                'Use blocked when waiting on something external. '
+                'Always returns the full current list with progress summary.'
             ),
             schema=TodoSchema,
             kind=ToolKind.Read,

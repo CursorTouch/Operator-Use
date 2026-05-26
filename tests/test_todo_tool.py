@@ -48,13 +48,10 @@ class TestReadWrite:
         assert not r.is_error
         data = _json(r.content)
         assert [item['id'] for item in data['todos']] == ['1', '2']
-        assert data['summary'] == {
-            'total': 2,
-            'pending': 1,
-            'in_progress': 1,
-            'completed': 0,
-            'cancelled': 0,
-        }
+        assert data['summary']['total'] == 2
+        assert data['summary']['pending'] == 1
+        assert data['summary']['in_progress'] == 1
+        assert data['summary']['done'] == 0
 
     @pytest.mark.asyncio
     async def test_replace_dedupes_by_id_keep_last_occurrence(self):
@@ -124,6 +121,89 @@ class TestMerge:
 
         data = _json(r.content)
         assert data['todos'] == [{'id': '1', 'content': 'Keep', 'status': 'pending'}]
+
+
+class TestNewStatuses:
+    @pytest.mark.asyncio
+    async def test_blocked_and_skipped_accepted(self):
+        t = _tool()
+        r = await t.execute(_inv({
+            'todos': [
+                {'id': '1', 'content': 'A', 'status': 'blocked'},
+                {'id': '2', 'content': 'B', 'status': 'skipped'},
+            ],
+        }))
+        data = _json(r.content)
+        assert data['todos'][0]['status'] == 'blocked'
+        assert data['todos'][1]['status'] == 'skipped'
+
+    @pytest.mark.asyncio
+    async def test_summary_includes_blocked_skipped_and_done(self):
+        t = _tool()
+        r = await t.execute(_inv({
+            'todos': [
+                {'id': '1', 'content': 'A', 'status': 'completed'},
+                {'id': '2', 'content': 'B', 'status': 'skipped'},
+                {'id': '3', 'content': 'C', 'status': 'blocked'},
+                {'id': '4', 'content': 'D', 'status': 'pending'},
+            ],
+        }))
+        data = _json(r.content)
+        s = data['summary']
+        assert s['blocked'] == 1
+        assert s['skipped'] == 1
+        assert s['done'] == 2  # completed + skipped
+        assert s['total'] == 4
+
+    @pytest.mark.asyncio
+    async def test_step_numbers_in_injection(self):
+        t = _tool()
+        await t.execute(_inv({
+            'todos': [
+                {'id': '1', 'content': 'First', 'status': 'in_progress'},
+                {'id': '2', 'content': 'Second', 'status': 'pending'},
+            ],
+        }))
+        injection = t.format_for_injection()
+        assert '1.' in injection
+        assert '2.' in injection
+
+    @pytest.mark.asyncio
+    async def test_blocked_item_appears_in_injection(self):
+        t = _tool()
+        await t.execute(_inv({
+            'todos': [
+                {'id': '1', 'content': 'Waiting', 'status': 'blocked'},
+            ],
+        }))
+        injection = t.format_for_injection()
+        assert injection is not None
+        assert 'Waiting' in injection
+
+    @pytest.mark.asyncio
+    async def test_skipped_not_in_injection(self):
+        t = _tool()
+        await t.execute(_inv({
+            'todos': [
+                {'id': '1', 'content': 'Skipped step', 'status': 'skipped'},
+                {'id': '2', 'content': 'Active step', 'status': 'pending'},
+            ],
+        }))
+        injection = t.format_for_injection()
+        assert 'Skipped step' not in injection
+        assert 'Active step' in injection
+
+    @pytest.mark.asyncio
+    async def test_progress_counter_in_injection(self):
+        t = _tool()
+        await t.execute(_inv({
+            'todos': [
+                {'id': '1', 'content': 'Done', 'status': 'completed'},
+                {'id': '2', 'content': 'Active', 'status': 'pending'},
+            ],
+        }))
+        injection = t.format_for_injection()
+        assert '1/2 steps done' in injection
 
 
 class TestInjectionFormat:

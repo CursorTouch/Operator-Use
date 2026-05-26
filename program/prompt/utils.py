@@ -31,8 +31,16 @@ def escape_xml(text: str) -> str:
     )
 
 
-def format_skills_for_prompt(skills: list[Skill]) -> str:
-    visible = [s for s in skills if not s.disable_model_invocation]
+def format_skills_for_prompt(skills: list[Skill], available_tools: set[str] | None = None) -> str:
+    visible = [
+        s for s in skills
+        if not s.disable_model_invocation
+        and (
+            not s.requires_tools
+            or available_tools is None
+            or all(t in available_tools for t in s.requires_tools)
+        )
+    ]
     if not visible:
         return ''
 
@@ -40,9 +48,10 @@ def format_skills_for_prompt(skills: list[Skill]) -> str:
         '',
         '',
         'The following skills provide specialized instructions for specific tasks.',
-        "Use the read tool to load a skill's file when the task matches its description.",
+        'Before replying to any task, scan the skills below. If a skill matches or is even '
+        'partially relevant, you MUST load it with skill_view before proceeding.',
         'When a skill file references a relative path, resolve it against the skill directory '
-        '(parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.',
+        '(parent of SKILL.md) and use that absolute path in tool commands.',
         '',
         '<available_skills>',
     ]
@@ -51,7 +60,6 @@ def format_skills_for_prompt(skills: list[Skill]) -> str:
         lines.append('  <skill>')
         lines.append(f'    <name>{escape_xml(skill.name)}</name>')
         lines.append(f'    <description>{escape_xml(skill.description)}</description>')
-        lines.append(f'    <location>{escape_xml(str(skill.file_path))}</location>')
         lines.append('  </skill>')
 
     lines.append('</available_skills>')

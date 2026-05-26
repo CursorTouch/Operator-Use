@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from program.settings.paths import get_skills_dir
+from program.skill.cache import load_skill_index_cache, save_skill_index_cache
 from program.skill.types import (
     CollisionInfo, LoadSkillsOptions, LoadSkillsResult,
-    ResourceDiagnostic, Skill, SkillFrontmatter, SourceInfo,
+    ResourceDiagnostic, Skill, SourceInfo,
 )
 
 MAX_NAME_LENGTH = 64
@@ -121,6 +122,9 @@ def load_skill_from_file(
 
         disable = bool(front.get('disable-model-invocation', False))
 
+        raw_req = front.get('requires_tools', front.get('requires-tools', []))
+        requires_tools = [str(t).strip() for t in raw_req] if isinstance(raw_req, list) else []
+
         skill = Skill(
             name=name,
             description=description,
@@ -128,6 +132,7 @@ def load_skill_from_file(
             base_dir=skill_dir,
             source_info=_make_source_info(file_path, skill_dir, source),
             disable_model_invocation=disable,
+            requires_tools=requires_tools,
         )
         return skill, diagnostics
 
@@ -268,3 +273,24 @@ def load_skills(options: LoadSkillsOptions) -> LoadSkillsResult:
         skills=list(skill_map.values()),
         diagnostics=[*all_diagnostics, *collision_diagnostics],
     )
+
+
+def load_skills_cached(options: LoadSkillsOptions, cache_dir: Path) -> LoadSkillsResult:
+    """Load skills, using a disk cache keyed on SKILL.md mtimes."""
+    scan_dirs = [get_skills_dir(), get_skills_dir(options.cwd)]
+    cached = load_skill_index_cache(cache_dir, scan_dirs)
+    if cached is not None:
+        try:
+            skills = [Skill.model_validate(s) for s in cached]
+            return LoadSkillsResult(skills=skills)
+        except Exception:
+            pass
+
+    result = load_skills(options)
+    if result.skills:
+        save_skill_index_cache(
+            cache_dir,
+            scan_dirs,
+            [s.model_dump(mode='json') for s in result.skills],
+        )
+    return result

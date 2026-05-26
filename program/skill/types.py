@@ -29,6 +29,7 @@ class SkillFrontmatter(BaseModel):
     name: str | None = None
     description: str | None = None
     disable_model_invocation: bool = False
+    requires_tools: list[str] = Field(default_factory=list)
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -39,6 +40,7 @@ class Skill(BaseModel):
     base_dir: Path
     source_info: SourceInfo
     disable_model_invocation: bool = False
+    requires_tools: list[str] = Field(default_factory=list)
 
 
 # ============================================================================

@@ -42,11 +42,17 @@ class PromptTemplate:
             f"\nProject temp directory: {project_temp} (scratch space for this project)"
         )
 
-        has_read = any(t.name == "read" for t in self.tools)
+        tool_names = {t.name for t in self.tools}
+        has_read = "read" in tool_names
+        has_skill_view = "skill_view" in tool_names
 
         append_section = f"\n\n{self.append_system_prompt}" if self.append_system_prompt else ""
         context_section = context_files_section(self.context_files)
-        skills_section = format_skills_for_prompt(self.skills) if has_read and self.skills else ""
+        skills_section = (
+            format_skills_for_prompt(self.skills, available_tools=tool_names)
+            if (has_read or has_skill_view) and self.skills
+            else ""
+        )
 
         if self.custom_prompt:
             return self.custom_prompt + append_section + context_section + skills_section + footer
