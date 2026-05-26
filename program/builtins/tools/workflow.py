@@ -144,7 +144,7 @@ class WorkflowTool(Tool):
                 'when the workflow finishes.'
             ),
             schema=WorkflowSchema,
-            kind=ToolKind.Execute,
+            kind=ToolKind.Workflow,
             execution_mode=ToolExecutionMode.Sequential,
         )
         self._manager = manager

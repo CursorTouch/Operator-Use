@@ -112,7 +112,7 @@ class CronTool(Tool):
                 'or timed automations.'
             ),
             schema=CronSchema,
-            kind=ToolKind.Execute,
+            kind=ToolKind.Cron,
             execution_mode=ToolExecutionMode.Sequential,
         )
         self._cron = cron

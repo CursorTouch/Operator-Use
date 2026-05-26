@@ -91,7 +91,7 @@ class SubagentTool(Tool):
                 'when the subagent finishes. Do not poll with list or status after create.'
             ),
             schema=SubAgentSchema,
-            kind=ToolKind.Execute,
+            kind=ToolKind.Agent,
             execution_mode=ToolExecutionMode.Sequential,
         )
         self._manager = manager

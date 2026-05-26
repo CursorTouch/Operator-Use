@@ -26,6 +26,10 @@ class ToolKind(str, Enum):
     Write = "write"
     Execute = "execute"
     Web = "web"
+    Cron = "cron"
+    Agent = "agent"
+    Workflow = "workflow"
+    Plan = "plan"
     Unknown = "unknown"
 
 

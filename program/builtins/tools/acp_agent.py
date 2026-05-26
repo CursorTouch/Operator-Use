@@ -95,7 +95,7 @@ class ACPAgentTool(Tool):
                 'the current agent loop is NOT blocked.'
             ),
             schema=_ACPSchema,
-            kind=ToolKind.Execute,
+            kind=ToolKind.Agent,
             execution_mode=ToolExecutionMode.Sequential,
         )
         self._registry: dict[str, ACPAgentConfig] = {**_BUILTIN_AGENTS, **{a.name: a for a in registry}}
