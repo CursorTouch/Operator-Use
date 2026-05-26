@@ -3,12 +3,12 @@ import pytest
 from pathlib import Path
 from typing import AsyncIterator
 
-from program.compaction.branch_summarization import (
+from program.compaction.branch.summarization.service import (
     collect_entries_for_branch_summary,
     prepare_branch_entries,
     generate_branch_summary,
 )
-from program.compaction.types import (
+from program.compaction.branch.types import (
     BranchSummaryDetails, GenerateBranchSummaryOptions, BranchPreparation,
     CollectEntriesResult,
 )

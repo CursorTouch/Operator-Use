@@ -10,8 +10,8 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from program.compaction.compact import Compaction
-from program.compaction.types import CompactionSettings, CompactionPreparation
+from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from program.compaction.strategy.types import CompactionSettings, CompactionPreparation
 from program.agent.types import AgentContext
 from program.engine.service import Engine
 from program.engine.types import AgentEvent, Options

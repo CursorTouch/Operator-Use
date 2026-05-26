@@ -10,16 +10,17 @@ from program.message.types import (
 from program.session.types import (
     SessionEntry, MessageEntry, CustomMessageEntry, BranchEntry, CompactionEntry,
 )
-from program.compaction.prompts import (
-    SUMMARIZATION_SYSTEM_PROMPT,
+from program.compaction.strategy.summarization.prompts import SUMMARIZATION_SYSTEM_PROMPT
+from program.compaction.branch.summarization.prompts import (
     BRANCH_SUMMARY_PREAMBLE,
     BRANCH_SUMMARY_PROMPT,
 )
-from program.compaction.types import (
-    FileOperations, BranchPreparation, BranchSummaryDetails,
+from program.compaction.strategy.types import FileOperations
+from program.compaction.branch.types import (
+    BranchPreparation, BranchSummaryDetails,
     BranchSummaryResult, CollectEntriesResult, GenerateBranchSummaryOptions,
 )
-from program.compaction.utils import (
+from program.compaction.strategy.utils import (
     estimate_tokens, extract_file_ops_from_message,
     compute_file_lists, format_file_operations, serialize_conversation,
 )

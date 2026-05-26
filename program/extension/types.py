@@ -45,7 +45,7 @@ ExtensionEvent = HookEvent  # backward-compat alias
 
 if TYPE_CHECKING:
     from program.session.manager import SessionManager
-    from program.compaction.types import CompactionResult
+    from program.compaction.strategy.types import CompactionResult
     from program.message.types import AgentMessage
     from program.inference.types import ThinkingLevel
     from program.inference.model.types import Model

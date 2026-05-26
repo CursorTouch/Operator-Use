@@ -21,7 +21,7 @@ from program.message.utils import strip_unusable_trailing_assistant
 from program.tool.types import ToolInvocation, ToolResult
 
 from program.prompt.builder import PromptTemplate
-from program.compaction.utils import estimate_context_tokens, estimate_tokens
+from program.compaction.strategy.utils import estimate_context_tokens, estimate_tokens
 from program.agent.utils import is_permanent_error
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from program.session.manager import SessionManager
     from program.resource.types import BaseResourceLoader
     from program.extension.runtime import ExtensionRuntime
-    from program.compaction.compact import Compaction
+    from program.compaction.strategy.base import Compaction
     from program.runtime.service import Runtime
     from program.memory.manager import MemoryManager
 

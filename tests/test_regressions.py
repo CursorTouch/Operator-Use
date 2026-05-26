@@ -139,8 +139,8 @@ class TestReg001ToolMessageContentsCleared:
         from pathlib import Path
         from program.agent.service import Agent
         from program.agent.types import AgentConfig
-        from program.compaction.compact import Compaction
-        from program.compaction.types import CompactionSettings
+        from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+        from program.compaction.strategy.types import CompactionSettings
         from program.extension.runtime import ExtensionRuntime
         from program.extension.types import LoadExtensionsResult
         from program.resource.types import BaseResourceLoader, ResourceExtensionPaths

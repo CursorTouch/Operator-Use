@@ -10,8 +10,8 @@ from helpers import FakeLLM, text_seq, error_seq, make_agent
 
 from program.agent.service import Agent
 from program.agent.types import AgentConfig
-from program.compaction.compact import Compaction
-from program.compaction.types import CompactionSettings
+from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from program.compaction.strategy.types import CompactionSettings
 from program.engine.service import Engine
 from program.extension.runtime import ExtensionRuntime
 from program.extension.types import ExtensionContext, LoadExtensionsResult
@@ -282,7 +282,7 @@ class TestMemoryOnPreCompact:
     @pytest.mark.asyncio
     async def test_on_pre_compact_called_before_compaction(self):
         """on_pre_compact must fire when run_compaction() is invoked explicitly."""
-        from program.compaction.types import CompactionResult
+        from program.compaction.strategy.types import CompactionResult
         from unittest.mock import AsyncMock, patch
 
         mem = FakeMemory()

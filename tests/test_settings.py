@@ -9,7 +9,7 @@ import pytest
 from program.settings.manager import SettingsManager
 from program.engine.types import SteeringMode, FollowupMode
 from program.inference.types import ThinkingLevel
-from program.compaction.types import CompactionSettings
+from program.compaction.strategy.types import CompactionSettings
 
 
 def _sm(initial: dict | None = None) -> SettingsManager:

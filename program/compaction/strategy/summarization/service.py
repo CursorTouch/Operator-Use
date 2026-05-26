@@ -7,14 +7,15 @@ from program.inference.types import LLMContext, ThinkingLevel
 from program.message.types import AgentMessage, UserMessage, TextContent
 from program.session.types import SessionEntry, CompactionEntry
 
-from program.compaction.types import (
+from program.compaction.strategy.base import Compaction
+from program.compaction.strategy.types import (
     CompactionSettings, CompactionPreparation, CompactionResult, CompactionDetails,
 )
-from program.compaction.prompts import (
+from program.compaction.strategy.summarization.prompts import (
     SUMMARIZATION_SYSTEM_PROMPT, SUMMARIZATION_PROMPT,
     UPDATE_SUMMARIZATION_PROMPT, TURN_PREFIX_SUMMARIZATION_PROMPT,
 )
-from program.compaction.utils import (
+from program.compaction.strategy.utils import (
     estimate_context_tokens, find_cut_point,
     collect_messages_in_range, find_prev_compaction_index,
     resolve_boundary_start, build_file_ops_from_prev_compaction, accumulate_file_ops,
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     from program.inference.api.text.service import LLM
 
 
-class Compaction:
+class SummarizationCompaction(Compaction):
     def __init__(
         self,
         llm: LLM,

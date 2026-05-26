@@ -1,8 +1,8 @@
 """Tests for Compaction: should_compact threshold, prepare, and compact with fake LLM."""
 import pytest
 from typing import AsyncIterator
-from program.compaction.compact import Compaction
-from program.compaction.types import CompactionSettings, CompactionResult, CompactionPreparation
+from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from program.compaction.strategy.types import CompactionSettings, CompactionResult, CompactionPreparation
 from program.message.types import AgentMessage
 
 # CompactionPreparation uses AgentMessage as a TYPE_CHECKING-only forward ref;

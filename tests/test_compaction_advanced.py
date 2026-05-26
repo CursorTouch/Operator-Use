@@ -1,7 +1,7 @@
 """Advanced compaction tests: prepare with prior summary, split-turn, file ops, custom instructions."""
 import pytest
-from program.compaction.compact import Compaction
-from program.compaction.types import (
+from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from program.compaction.strategy.types import (
     CompactionSettings, CompactionPreparation, CompactionResult,
 )
 from program.message.types import AgentMessage, UserMessage, AssistantMessage, TextContent

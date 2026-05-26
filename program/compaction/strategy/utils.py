@@ -14,7 +14,7 @@ from program.session.types import (
     SessionEntry, MessageEntry, CompactionEntry, BranchEntry, CustomMessageEntry,
 )
 from program.tool.types import ToolKind
-from program.compaction.types import (
+from program.compaction.strategy.types import (
     FileOperations, CutPointResult, ContextUsageEstimate,
 )
 
@@ -351,7 +351,7 @@ def build_file_ops_from_prev_compaction(
     prev_compaction_index: int,
 ) -> FileOperations:
     """Seed a FileOperations from the saved details of the previous compaction."""
-    from program.compaction.types import CompactionDetails  # local to avoid circular at module level
+    from program.compaction.strategy.types import CompactionDetails  # local to avoid circular at module level
     file_ops = FileOperations()
     if prev_compaction_index < 0:
         return file_ops

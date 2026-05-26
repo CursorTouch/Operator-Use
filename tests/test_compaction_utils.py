@@ -1,6 +1,6 @@
 """Tests for compaction/utils.py: token estimation, file ops, cut points, serialization."""
 import pytest
-from program.compaction.utils import (
+from program.compaction.strategy.utils import (
     calculate_context_tokens,
     estimate_tokens,
     get_assistant_usage,
@@ -23,7 +23,7 @@ from program.compaction.utils import (
     serialize_conversation,
     _truncate_for_summary,
 )
-from program.compaction.types import FileOperations
+from program.compaction.strategy.types import FileOperations
 from program.message.types import (
     UserMessage, AssistantMessage, ToolMessage,
     TextContent, ThinkingContent, ToolCallContent, ToolResultContent,

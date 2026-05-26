@@ -30,8 +30,8 @@ def _make_agent_with_ext(llm, ext, tools=None):
     from program.agent.service import Agent
     from program.agent.types import AgentConfig
     from program.session.manager import SessionManager
-    from program.compaction.compact import Compaction
-    from program.compaction.types import CompactionSettings
+    from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+    from program.compaction.strategy.types import CompactionSettings
     from program.resource.types import BaseResourceLoader
 
     class FakeLoader(BaseResourceLoader):

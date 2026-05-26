@@ -8,8 +8,9 @@ from pydantic import BaseModel, Field
 from program.tool.types import Tool
 from program.agent.service import Agent
 from program.agent.types import AgentConfig
-from program.compaction.compact import Compaction
-from program.compaction.types import CompactionSettings
+from program.compaction.strategy.base import Compaction
+from program.compaction.strategy.summarization.service import SummarizationCompaction
+from program.compaction.strategy.types import CompactionSettings
 from program.engine.service import Engine
 from program.engine.types import Options
 from program.extension.loader import discover_and_load_extensions
@@ -270,7 +271,7 @@ class RuntimeContext:
                 keep_recent_tokens=persisted["keep_recent_tokens"],
             )
 
-        compaction = Compaction(
+        compaction = SummarizationCompaction(
             llm=llm,
             settings=_resolve_compaction_settings(),
             settings_provider=_resolve_compaction_settings,

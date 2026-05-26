@@ -7,8 +7,8 @@ from program.runtime.service import Runtime
 from program.runtime.types import RuntimeContext
 from program.agent.service import Agent
 from program.agent.types import AgentConfig
-from program.compaction.compact import Compaction
-from program.compaction.types import CompactionSettings
+from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from program.compaction.strategy.types import CompactionSettings
 from program.commands.registry import CommandRegistry
 from program.commands.types import SlashCommandInfo
 from program.engine.service import Engine

@@ -8,7 +8,7 @@ import pytest
 from helpers import FakeLLM, make_agent, text_seq, error_seq
 
 from program.agent.types import AgentConfig, PromptOptions
-from program.compaction.types import CompactionSettings
+from program.compaction.strategy.types import CompactionSettings
 from program.message.types import UserMessage
 
 
@@ -72,7 +72,7 @@ class TestAgentRetry:
         from program.extension.types import LoadExtensionsResult
         from program.resource.types import BaseResourceLoader
         from program.session.manager import SessionManager
-        from program.compaction.compact import Compaction
+        from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
         from program.hooks.service import Hooks
         from pathlib import Path
 
@@ -137,7 +137,7 @@ class TestAgentRetry:
         from program.extension.types import LoadExtensionsResult
         from program.resource.types import BaseResourceLoader
         from program.session.manager import SessionManager
-        from program.compaction.compact import Compaction
+        from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
         from program.hooks.service import Hooks
         from pathlib import Path
 
@@ -201,7 +201,7 @@ class TestAgentRetry:
         from program.extension.types import LoadExtensionsResult
         from program.resource.types import BaseResourceLoader
         from program.session.manager import SessionManager
-        from program.compaction.compact import Compaction
+        from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
         from program.hooks.service import Hooks
         from pathlib import Path
 

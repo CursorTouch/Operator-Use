@@ -8,8 +8,8 @@ from pydantic import BaseModel
 from program.agent.service import Agent
 from program.runtime.types import RuntimeConfig
 from program.agent.types import AgentConfig, PromptOptions
-from program.compaction.compact import Compaction
-from program.compaction.types import CompactionSettings, CompactionPreparation
+from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from program.compaction.strategy.types import CompactionSettings, CompactionPreparation
 from program.message.types import AgentMessage as _AgentMessage
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": _AgentMessage})
 from program.engine.service import Engine
