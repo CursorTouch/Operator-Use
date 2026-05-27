@@ -32,7 +32,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class Desktop:
+from operator_use.computer.types import Desktop as BaseDesktop
+
+
+class WindowsDesktop(BaseDesktop):
     def __init__(
         self, use_vision: bool = False, use_annotation: bool = False, use_accessibility: bool = True
     ):
@@ -780,3 +783,7 @@ class Desktop:
             yield
         finally:
             uia.ShowWindow(handle, win32con.SW_RESTORE)
+
+
+# Backward-compatible alias used by the platform router in computer/__init__.py
+Desktop = WindowsDesktop

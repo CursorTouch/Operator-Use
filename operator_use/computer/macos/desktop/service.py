@@ -14,9 +14,11 @@ import io
 import os
 import time
 
+from operator_use.computer.types import Desktop as BaseDesktop
+
 logger = logging.getLogger(__name__)
 
-class Desktop:
+class MacosDesktop(BaseDesktop):
     def __init__(
         self,
         use_vision: bool = False,
@@ -601,3 +603,7 @@ class Desktop:
             padded.save(buf, format="PNG")
             return buf.getvalue()
         return padded
+
+
+# Backward-compatible alias used by the platform router in computer/__init__.py
+Desktop = MacosDesktop
