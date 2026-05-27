@@ -910,8 +910,8 @@ class Browser:
         except Exception:
             pass
 
-    async def get_screenshot(self, full_page: bool = False, save_screenshot: bool = False) -> bytes | None:
-        return await self.current_page().get_screenshot(full_page=full_page, save_screenshot=save_screenshot)
+    async def get_screenshot(self, full_page: bool = False, save_screenshot: bool = False, as_bytes: bool = False):
+        return await self.current_page().get_screenshot(full_page=full_page, save_screenshot=save_screenshot, as_bytes=as_bytes)
 
     async def get_page_content(self) -> str:
         return await self.current_page().get_page_content()
@@ -971,9 +971,14 @@ class Browser:
 
         raise IndexError(f'Element index {index} out of range (interactive: {interactive_count}, scrollable: {len(state.dom_state.scrollable_nodes)})')
 
-    async def get_state(self, use_vision: bool = False, within_viewport: bool = True) -> BrowserState:
+    async def get_state(
+        self,
+        use_vision: bool = False,
+        within_viewport: bool = True,
+        as_bytes: bool = False,
+    ) -> BrowserState:
         if self._state_watchdog is not None:
-            state = await self._state_watchdog.get_state(use_vision=use_vision, within_viewport=within_viewport)
+            state = await self._state_watchdog.get_state(use_vision=use_vision, within_viewport=within_viewport, as_bytes=as_bytes)
             if state is not None:
                 return state
             if self._browser_state is not None:
@@ -982,7 +987,7 @@ class Browser:
         from operator_use.browser.dom import DOM
 
         dom = DOM(session=self)
-        screenshot, dom_state = await dom.get_state(use_vision=use_vision, within_viewport=within_viewport)
+        screenshot, dom_state = await dom.get_state(use_vision=use_vision, within_viewport=within_viewport, as_bytes=as_bytes)
         tabs = await self.get_all_tabs()
         current_tab = await self.get_current_tab()
         self._browser_state = BrowserState(

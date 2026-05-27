@@ -1,4 +1,11 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    from PIL.Image import Image
+
 from operator_use.browser.dom.views import DOMState
 
 
@@ -18,7 +25,7 @@ class Tab:
 class BrowserState:
     current_tab: Tab | None = None
     tabs: list[Tab] = field(default_factory=list)
-    screenshot: bytes | None = None
+    screenshot: Union[Image, bytes, None] = None
     dom_state: DOMState = field(default_factory=DOMState)
 
     def tabs_to_string(self) -> str:

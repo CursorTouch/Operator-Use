@@ -160,7 +160,8 @@ class ComputerTool(Tool):
                     return ToolResult.ok(id=invocation.id, content="Desktop access released.")
 
             # Guard: require an explicit open before any desktop interaction.
-            if self._desktop is None:
+            # Context-injected desktops (e.g. tests, subagents) bypass this check.
+            if self._desktop is None and (context is None or context.computer is None):
                 return ToolResult.error(
                     id=invocation.id,
                     content="Desktop is not accessible. Use action='open' to enable desktop control first.",
@@ -212,10 +213,14 @@ class ComputerTool(Tool):
         if self._desktop is None:
             return None
         try:
-            state = self._desktop.get_state(as_bytes=False)
+            use_vision=False
+            state = self._desktop.get_state(use_vision=use_vision,as_bytes=False)
             state_text = json.dumps(self._to_jsonable(state), indent=2)
             content=f"[Current desktop state]\n{state_text}"
-            return UserMessage.text(content)
+            if use_vision and state.screenshot:
+                return UserMessage.with_images(content, [state.screenshot])
+            else: 
+                return UserMessage.text(content)
         except Exception:
             return None
 

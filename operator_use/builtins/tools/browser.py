@@ -337,6 +337,7 @@ class BrowserTool(Tool):
         if self._browser is None:
             return None
         try:
+            use_vision = False
             state = await self._browser.get_state()
             if state is None:
                 return None

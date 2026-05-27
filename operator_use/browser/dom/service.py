@@ -128,7 +128,7 @@ class DOM:
     def __init__(self, session: 'Browser'):
         self.session = session
 
-    async def get_state(self, use_vision: bool = False, within_viewport: bool = True) -> tuple[bytes | None, DOMState]:
+    async def get_state(self, use_vision: bool = False, within_viewport: bool = True, as_bytes: bool = False):
         try:
             await self.session._wait_for_page(timeout=10.0)
             sid = self.session._get_current_session_id()
@@ -184,7 +184,7 @@ class DOM:
                 ]
                 await self.session.execute_script(_MARK_PAGE_JS.replace('BOXES', json.dumps(boxes)))
                 await sleep(0.1)
-                screenshot = await self.session.get_screenshot()
+                screenshot = await self.session.get_screenshot(as_bytes=as_bytes)
                 await self.session.execute_script(_UNMARK_PAGE_JS)
                 screenshot_capture_ms = (time.perf_counter() - t1) * 1000
 

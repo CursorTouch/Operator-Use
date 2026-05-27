@@ -36,7 +36,15 @@ class Page:
             logger.warning('execute_script error: %s', e)
         return None
 
-    async def get_screenshot(self, full_page: bool = False, save_screenshot: bool = False) -> bytes | None:
+    async def get_screenshot(
+        self,
+        full_page: bool = False,
+        save_screenshot: bool = False,
+        as_bytes: bool = False,
+    ):
+        import io
+        from PIL import Image
+
         sid = self.browser._get_current_session_id()
         await asyncio.sleep(0.3)
         try:
@@ -60,7 +68,9 @@ class Page:
         if self.browser.hooks and data:
             await self.browser.hooks.on_screenshot(data=data, browser=self.browser)
 
-        return data
+        if as_bytes:
+            return data
+        return Image.open(io.BytesIO(data))
 
     async def get_page_content(self) -> str:
         return await self.execute_script('document.documentElement.outerHTML') or ''
