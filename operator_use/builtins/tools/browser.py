@@ -327,8 +327,7 @@ class BrowserTool(Tool):
         except Exception as exc:
             return ToolResult.error(invocation.id, f"browser: {exc}")
 
-    @property
-    async def state_message(self)->Optional[UserMessage]:
+    async def state_message(self) -> Optional[UserMessage]:
         """Return a UserMessage with the current browser state, or None if closed.
 
         Called by EphemeralInjector just before each LLM API call.  The message
@@ -353,7 +352,8 @@ class BrowserTool(Tool):
                 state.dom_state.informative_elements_to_string(),
             ])
             from operator_use.message.types import UserMessage
-            return UserMessage.text(f"[Current browser state]\n{state_text}")
+            content=f"[Current browser state]\n{state_text}"
+            return UserMessage.text(content)
         except Exception:
             return None
 

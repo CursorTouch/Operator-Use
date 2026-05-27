@@ -197,22 +197,22 @@ class ComputerTool(Tool):
         except Exception as exc:
             return ToolResult.error(id=invocation.id, content=f"computer: {exc}")
     
-    @property
-    async def state_message(self)->Optional[UserMessage]:
+    async def state_message(self) -> Optional[UserMessage]:
         """Return a UserMessage with the current desktop state, or None if closed.
 
-        Called by EphemeralInjector just before each LLM API call.  The message
-        is injected into the context for that single call and then stripped —
-        it is never persisted in state.messages or the session JSONL.
-        Screenshots are excluded to keep token cost low; the model can request
-        them explicitly via action='snapshot' with include_screenshot=True.
+        Called just before each LLM API call. The message is injected into the
+        context for that single call and then stripped — it is never persisted
+        in state.messages or the session JSONL. Screenshots are excluded to keep
+        token cost low; the model can request them via action='snapshot' with
+        include_screenshot=True.
         """
         if self._desktop is None:
             return None
         try:
             state = self._desktop.get_state(as_bytes=False)
             state_text = json.dumps(self._to_jsonable(state), indent=2)
-            return UserMessage.text(f"[Current desktop state]\n{state_text}")
+            content=f"[Current desktop state]\n{state_text}"
+            return UserMessage.text(content)
         except Exception:
             return None
 
