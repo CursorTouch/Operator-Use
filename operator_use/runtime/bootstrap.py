@@ -76,23 +76,14 @@ def _agent_md(name: str, description: str) -> str:
     )
 
 
-_SOUL_MD = """\
-# Soul
+_TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
-*(Define the agent's persona, tone, and values here.)*
-"""
-
-_USER_MD = """\
-# User Profile
-
-Name:
-"""
-
-_MEMORY_MD = """\
-# Memory
-
-*(Persistent memory entries will appear here.)*
-"""
+def _read_template(name: str) -> str:
+    path = _TEMPLATES_DIR / name
+    try:
+        return path.read_text(encoding='utf-8')
+    except Exception:
+        return f'# {name.split(".")[0].capitalize()}\n'
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -190,9 +181,9 @@ def bootstrap_profile(profile_dir: Path, name: str, description: str = '') -> No
 
     # Identity / persona files
     _write_text(profile_dir / 'AGENT.md',  _agent_md(name, desc))
-    _write_text(profile_dir / 'SOUL.md',   _SOUL_MD)
-    _write_text(profile_dir / 'USER.md',   _USER_MD)
-    _write_text(profile_dir / 'MEMORY.md', _MEMORY_MD)
+    _write_text(profile_dir / 'SOUL.md',   _read_template('SOUL.md'))
+    _write_text(profile_dir / 'USER.md',   _read_template('USER.md'))
+    _write_text(profile_dir / 'MEMORY.md', _read_template('MEMORY.md'))
 
     # Config files
     _write_json(profile_dir / 'settings.json',           _PROFILE_SETTINGS)

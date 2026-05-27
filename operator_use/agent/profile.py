@@ -205,7 +205,7 @@ def load_agent_profile_from_file(
         )
 
         # Ensure all profile subdirs and default config files are present.
-        from operator_use.bootstrap import bootstrap_profile
+        from operator_use.runtime.bootstrap import bootstrap_profile
         bootstrap_profile(profile_dir, name, description)
 
         return profile, diagnostics

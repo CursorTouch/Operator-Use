@@ -140,7 +140,7 @@ class RuntimeContext:
         config_dir = (config.config_dir or get_config_dir()).resolve()
 
         # ── Bootstrap — ensure ~/.operator/ exists with default configs ───────
-        from operator_use.bootstrap import bootstrap_operator_dir
+        from operator_use.runtime.bootstrap import bootstrap_operator_dir
         bootstrap_operator_dir(config_dir)
 
         # ── Settings ──────────────────────────────────────────────────────────
