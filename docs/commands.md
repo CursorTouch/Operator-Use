@@ -137,7 +137,7 @@ Use `/reload` when you have edited a tool, skill, hook, or extension file and wa
 
 ### /skills
 
-Lists all available skills discovered by `ResourceLoader`, grouped by their source (Global `~/.program/agent/skills/` vs Project `.program/agent/skills/`), along with their descriptions and loaded diagnostics/warnings if any.
+Lists all available skills discovered by `ResourceLoader` — builtins plus any skills in the active profile's `skills/` directory (`~/.operator/profiles/<name>/skills/`). Shows descriptions and any load diagnostics/warnings.
 
 ### /start
 

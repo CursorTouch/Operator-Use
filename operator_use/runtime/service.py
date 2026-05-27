@@ -65,7 +65,7 @@ class Runtime:
             self.subagent_manager.update_profiles(merged)
         self.workflow_manager = self._create_workflow_manager(context)
         _profile = context.resource_loader._active_profile
-        _teams_dir = _profile.teams_dir if _profile else get_config_dir() / 'teams'
+        _teams_dir = _profile.teams_dir if _profile else None
         self.team_manager = TeamManager(_teams_dir)
         # Expose MCPManager for use in create_session_agent() (gateway + ACP) and shutdown.
         self.mcp_manager = context.mcp_manager

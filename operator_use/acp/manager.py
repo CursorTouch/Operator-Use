@@ -28,11 +28,14 @@ class ACPSessionManager:
     recreated automatically when the process restarts.
     """
 
-    def __init__(self, sessions_dir: Path) -> None:
+    def __init__(self, sessions_dir: Path | None) -> None:
         self._dir = sessions_dir
-        self._dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if sessions_dir is not None:
+            sessions_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-    def _path(self, agent_name: str) -> Path:
+    def _path(self, agent_name: str) -> Path | None:
+        if self._dir is None:
+            return None
         safe = agent_name.replace('/', '_').replace('\\', '_')
         return self._dir / f'{safe}.json'
 
@@ -41,7 +44,7 @@ class ACPSessionManager:
     def get(self, agent_name: str) -> dict | None:
         """Return session dict or None if no session exists."""
         p = self._path(agent_name)
-        if not p.exists():
+        if p is None or not p.exists():
             return None
         try:
             return json.loads(p.read_text())
@@ -53,7 +56,10 @@ class ACPSessionManager:
         return entry['session_id'] if entry else None
 
     def save(self, agent_name: str, session_id: str, cwd: str | None = None) -> None:
-        """Create or update the session file for an agent."""
+        """Create or update the session file for an agent. No-op when no profile is active."""
+        p = self._path(agent_name)
+        if p is None:
+            return
         now = datetime.now(timezone.utc).isoformat()
         existing = self.get(agent_name) or {}
         data = {
@@ -63,13 +69,14 @@ class ACPSessionManager:
             'created_at': existing.get('created_at', now),
             'last_used_at': now,
         }
-        p = self._path(agent_name)
         p.write_text(json.dumps(data, indent=2))
         p.chmod(0o600)
 
     def delete(self, agent_name: str) -> bool:
         """Delete the session file and return True if it existed."""
         p = self._path(agent_name)
+        if p is None:
+            return False
         if p.exists():
             p.unlink()
             logger.info('ACP session deleted for %r', agent_name)
@@ -78,6 +85,8 @@ class ACPSessionManager:
 
     def list(self) -> list[dict]:
         """Return all stored session dicts."""
+        if self._dir is None:
+            return []
         result = []
         for p in sorted(self._dir.glob('*.json')):
             try:

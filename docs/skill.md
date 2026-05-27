@@ -34,16 +34,16 @@ If `description` is missing or empty, the skill is not loaded (the file is silen
 
 ## Discovery order
 
-`ResourceLoader` drives skill discovery. On `reload()` it scans four sources in priority order:
+`ResourceLoader` drives skill discovery. On `reload()` it scans sources in this priority order:
 
-| Source | Directory | Path function |
+| Source | Directory | Notes |
 |---|---|---|
-| Built-in (`"builtin"`) | `program/builtins/skills/` | `get_builtins_skills_dir()` |
-| User (`"user"`) | `~/.program/agent/skills/` | `get_skills_dir()` |
-| Project (`"project"`) | `<project>/.program/agent/skills/` | `get_skills_dir(cwd)` |
-| Explicit (`"path"`) | `ResourceLoaderOptions.additional_skill_paths` | — |
+| Built-in | `operator_use/builtins/skills/` | Always present |
+| Profile | `~/.operator/profiles/<name>/skills/` | Only when `--profile <name>` is active |
+| Extensions | paths from `resources_discover` handlers | Registered at load time |
+| Packages | paths from installed packages | Registered at load time |
 
-All path functions are defined in `program/settings/paths.py`.
+Path helpers are defined in `operator_use/settings/paths.py`.
 
 Within each source, directories are scanned recursively. If a directory contains a `SKILL.md` at its root, it is treated as a single skill and subdirectories are not scanned further.
 
@@ -106,8 +106,13 @@ target skills by name.
 | `write_file` | `name`, `filename`, `content` | Write a file inside the skill directory |
 | `remove_file` | `name`, `filename` | Remove a file from inside the skill directory |
 
-Skills are written to the user skill directory (`~/.program/agent/skills/`) by
-default. After any write action the resource loader reloads skills automatically.
+Skills are written to the active profile's skill directory
+(`~/.operator/profiles/<name>/skills/`). **Write and delete actions require an
+active profile** — if the agent is started without `--profile`, those actions
+return an error. Read actions (`list`, `view`) always work; they include builtins
+and any profile skills if a profile is active.
+
+After any write action the resource loader reloads skills automatically.
 
 ## Validation rules
 
@@ -127,3 +132,4 @@ Validation errors become `warning` diagnostics. A skill with a missing descripti
 
 - [extensions.md](./extensions.md) — How extensions contribute additional skill paths via `resources_discover`
 - [agent.md](./agent.md) — How `_rebuild_system_prompt()` uses skills
+- [auth.md](./auth.md) — Profile directory layout (`~/.operator/profiles/<name>/`)

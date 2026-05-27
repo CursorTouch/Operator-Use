@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from operator_use.settings.paths import get_profiles_dir
+
 from operator_use.skill import usage as skill_usage
 from operator_use.skill.curator import archive_skill
 from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolInvocation, ToolKind, ToolResult
@@ -73,16 +73,20 @@ def _atomic_write(path: Path, text: str) -> None:
     tmp.replace(path)
 
 
-def _skill_dir(name: str, context=None) -> Path:
-    profile = getattr(context, 'active_profile', None)
-    base = profile.skills_dir if profile else (get_profiles_dir().parent / 'skills')
-    return base / name
+_NO_PROFILE_ERROR = "Skill operations require an active profile. Start the agent with --profile."
 
 
-def _skills_dir(context=None) -> Path:
-    """Return the skills base directory for the current profile."""
+def _skill_dir(name: str, context=None) -> Path | None:
     profile = getattr(context, 'active_profile', None)
-    return profile.skills_dir if profile else (get_profiles_dir().parent / 'skills')
+    if profile is None:
+        return None
+    return profile.skills_dir / name
+
+
+def _skills_dir(context=None) -> Path | None:
+    """Return the skills base directory for the current profile, or None when profileless."""
+    profile = getattr(context, 'active_profile', None)
+    return profile.skills_dir if profile else None
 
 
 class SkillTool(Tool):
@@ -162,34 +166,42 @@ class SkillTool(Tool):
         except OSError as exc:
             return ToolResult.error(id=inv_id, content=f'Cannot read skill file: {exc}')
         skills_dir = _skills_dir(context)
-        skill_usage.record_view(skills_dir, name)
+        if skills_dir is not None:
+            skill_usage.record_view(skills_dir, name)
         return ToolResult.ok(id=inv_id, content=content)
 
     def _create(self, inv_id: str, name: str, content: str, context: ToolContext | None) -> ToolResult:
+        skill_dir = _skill_dir(name, context)
+        if skill_dir is None:
+            return ToolResult.error(id=inv_id, content=_NO_PROFILE_ERROR)
         if not content.strip():
             return ToolResult.error(id=inv_id, content="'content' is required for create.")
         if len(content) > MAX_SKILL_SIZE:
             return ToolResult.error(id=inv_id, content=f'Content exceeds {MAX_SKILL_SIZE} chars.')
-        skill_dir = _skill_dir(name, context)
         if (skill_dir / 'SKILL.md').exists():
             return ToolResult.error(id=inv_id, content=f"Skill '{name}' already exists. Use edit or patch.")
         skill_dir.mkdir(parents=True, exist_ok=True)
         _atomic_write(skill_dir / 'SKILL.md', content)
         skills_dir = _skills_dir(context)
-        skill_usage.register(skills_dir, name)
+        if skills_dir is not None:
+            skill_usage.register(skills_dir, name)
         return ToolResult.ok(id=inv_id, content=f"Skill '{name}' created at {skill_dir}/SKILL.md")
 
     def _edit(self, inv_id: str, name: str, content: str, context: ToolContext | None) -> ToolResult:
+        skill_dir = _skill_dir(name, context)
+        if skill_dir is None:
+            return ToolResult.error(id=inv_id, content=_NO_PROFILE_ERROR)
         if not content.strip():
             return ToolResult.error(id=inv_id, content="'content' is required for edit.")
         if len(content) > MAX_SKILL_SIZE:
             return ToolResult.error(id=inv_id, content=f'Content exceeds {MAX_SKILL_SIZE} chars.')
-        skill_file = _skill_dir(name, context) / 'SKILL.md'
+        skill_file = skill_dir / 'SKILL.md'
         if not skill_file.exists():
             return ToolResult.error(id=inv_id, content=f"Skill '{name}' not found. Use create first.")
         _atomic_write(skill_file, content)
         skills_dir = _skills_dir(context)
-        skill_usage.record_patch(skills_dir, name)
+        if skills_dir is not None:
+            skill_usage.record_patch(skills_dir, name)
         return ToolResult.ok(id=inv_id, content=f"Skill '{name}' updated.")
 
     def _patch(
@@ -197,9 +209,11 @@ class SkillTool(Tool):
         file_path: str | None, old_string: str, new_string: str, replace_all: bool,
         context: ToolContext | None,
     ) -> ToolResult:
+        skill_dir = _skill_dir(name, context)
+        if skill_dir is None:
+            return ToolResult.error(id=inv_id, content=_NO_PROFILE_ERROR)
         if not old_string:
             return ToolResult.error(id=inv_id, content="'old_string' is required for patch.")
-        skill_dir = _skill_dir(name, context)
         target = skill_dir / (file_path if file_path else 'SKILL.md')
         if not target.exists():
             return ToolResult.error(id=inv_id, content=f"File not found: {target}")
@@ -211,14 +225,17 @@ class SkillTool(Tool):
             return ToolResult.error(id=inv_id, content=f'Patched content exceeds {MAX_SKILL_SIZE} chars.')
         _atomic_write(target, updated)
         skills_dir = _skills_dir(context)
-        skill_usage.record_patch(skills_dir, name)
+        if skills_dir is not None:
+            skill_usage.record_patch(skills_dir, name)
         return ToolResult.ok(id=inv_id, content=f"Patched {target.name} in skill '{name}'.")
 
     def _delete(self, inv_id: str, name: str, context: ToolContext | None) -> ToolResult:
-        skill_dir = _skill_dir(name, context)
-        if not skill_dir.exists():
-            return ToolResult.error(id=inv_id, content=f"Skill '{name}' not found.")
         skills_dir = _skills_dir(context)
+        if skills_dir is None:
+            return ToolResult.error(id=inv_id, content=_NO_PROFILE_ERROR)
+        skill_dir = _skill_dir(name, context)
+        if skill_dir is None or not skill_dir.exists():
+            return ToolResult.error(id=inv_id, content=f"Skill '{name}' not found.")
         if skill_usage.is_pinned(skills_dir, name):
             return ToolResult.error(id=inv_id, content=f"Skill '{name}' is pinned and cannot be deleted.")
         ok = archive_skill(skills_dir, name)
@@ -227,6 +244,9 @@ class SkillTool(Tool):
         return ToolResult.ok(id=inv_id, content=f"Skill '{name}' archived (recoverable via curator restore).")
 
     def _write_file(self, inv_id: str, name: str, file_path: str, file_content: str, context: ToolContext | None) -> ToolResult:
+        skill_dir = _skill_dir(name, context)
+        if skill_dir is None:
+            return ToolResult.error(id=inv_id, content=_NO_PROFILE_ERROR)
         if not file_path:
             return ToolResult.error(id=inv_id, content="'file_path' is required for write_file.")
         if not any(file_path.startswith(p) for p in _SUPPORT_PREFIXES):
@@ -234,7 +254,6 @@ class SkillTool(Tool):
                 id=inv_id,
                 content=f"file_path must start with one of: {', '.join(_SUPPORT_PREFIXES)}",
             )
-        skill_dir = _skill_dir(name, context)
         if not (skill_dir / 'SKILL.md').exists():
             return ToolResult.error(id=inv_id, content=f"Skill '{name}' not found.")
         target = skill_dir / file_path
@@ -243,9 +262,11 @@ class SkillTool(Tool):
         return ToolResult.ok(id=inv_id, content=f"Written {file_path} under skill '{name}'.")
 
     def _remove_file(self, inv_id: str, name: str, file_path: str, context: ToolContext | None) -> ToolResult:
+        skill_dir = _skill_dir(name, context)
+        if skill_dir is None:
+            return ToolResult.error(id=inv_id, content=_NO_PROFILE_ERROR)
         if not file_path:
             return ToolResult.error(id=inv_id, content="'file_path' is required for remove_file.")
-        skill_dir = _skill_dir(name, context)
         target = skill_dir / file_path
         if not target.exists():
             return ToolResult.error(id=inv_id, content=f"File not found: {file_path}")

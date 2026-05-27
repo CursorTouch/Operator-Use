@@ -54,7 +54,8 @@ class ControlCenterSchema(BaseModel):
         description=(
             "For action=reboot only. If provided, this message is injected into the agent "
             "automatically after restart so the task continues without waiting for human input. "
-            "Include all context needed to resume: what was done, what remains."
+            "State only the next action to take — do NOT claim what was already done, "
+            "as fabricated history will mislead the restarted agent."
         ),
     )
 

@@ -140,8 +140,8 @@ class RuntimeContext:
         config_dir = (config.config_dir or get_config_dir()).resolve()
 
         # ── Bootstrap — ensure ~/.operator/ exists with default configs ───────
-        from operator_use.runtime.bootstrap import bootstrap_operator_dir
-        bootstrap_operator_dir(config_dir)
+        from operator_use.runtime.bootstrap import bootstrap_global_dir
+        bootstrap_global_dir(config_dir)
 
         # ── Settings ──────────────────────────────────────────────────────────
         if settings_manager is None:
@@ -352,7 +352,7 @@ class RuntimeContext:
         auth_channel_manager = ChannelAuthManager(_ch_path) if _ch_path else None
         acp_auth_manager = ACPAuthManager(get_acp_auth_path())
         acp_session_manager = ACPSessionManager(
-            config.profile.acp_dir if config.profile else get_config_dir() / 'acp'
+            config.profile.acp_dir if config.profile else None
         )
 
         # ── Compaction: inject session_id_provider and extra tools ───────────

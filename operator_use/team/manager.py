@@ -21,16 +21,22 @@ from operator_use.team.types import MailboxMessage, TeamMember, TeamMemberStatus
 logger = logging.getLogger(__name__)
 
 
+_NO_PROFILE_ERROR = "Team operations require an active profile. Start the agent with --profile."
+
+
 class TeamManager:
-    def __init__(self, base_path: Path) -> None:
+    def __init__(self, base_path: Path | None) -> None:
         self._base = base_path
-        self._base.mkdir(parents=True, exist_ok=True)
         self._teams: dict[str, TeamRecord] = {}
-        self._load_all()
+        if base_path is not None:
+            base_path.mkdir(parents=True, exist_ok=True)
+            self._load_all()
 
     # ── Team CRUD ─────────────────────────────────────────────────────────────
 
     def create(self, name: str, description: str, creator_id: str = "root") -> TeamRecord:
+        if self._base is None:
+            raise RuntimeError(_NO_PROFILE_ERROR)
         if name in self._teams:
             raise ValueError(f"Team '{name}' already exists.")
         record = TeamRecord(
@@ -109,6 +115,8 @@ class TeamManager:
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def _save(self, record: TeamRecord) -> None:
+        if self._base is None:
+            return
         team_dir = self._base / record.name
         team_dir.mkdir(parents=True, exist_ok=True)
         path = team_dir / "team.json"
@@ -135,6 +143,8 @@ class TeamManager:
         os.rename(tmp, path)
 
     def _load_all(self) -> None:
+        if self._base is None:
+            return
         for team_json in self._base.glob("*/team.json"):
             try:
                 data = json.loads(team_json.read_text(encoding="utf-8"))

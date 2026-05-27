@@ -1,7 +1,7 @@
 """Bootstrap — ensure ~/.operator/ and profile directories exist with default configs.
 
 Two public functions:
-  bootstrap_operator_dir()   — idempotent; creates global ~/.operator/ structure
+  bootstrap_global_dir()     — idempotent; creates global ~/.operator/ structure
   bootstrap_profile(dir, name, description) — idempotent; scaffolds a profile dir
 
 Both functions only write files that do not already exist (never overwrite).
@@ -140,7 +140,7 @@ def _bootstrap_listed_profiles(root: Path) -> None:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
-def bootstrap_operator_dir(config_dir: Path | None = None) -> None:
+def bootstrap_global_dir(config_dir: Path | None = None) -> None:
     """Ensure the global ~/.operator/ structure exists with default config files.
 
     Also reads settings.json['profiles'] and auto-creates any listed profile

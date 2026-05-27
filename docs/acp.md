@@ -220,6 +220,16 @@ The `@agentclientprotocol/*` packages install ACP adapter binaries. They run as 
 | `set_acp_agent_config(name, **kwargs)` | Upsert an agent entry |
 | `remove_acp_agent_config(name)` | Delete an agent entry |
 
+## ACP session persistence
+
+`ACPSessionManager` tracks session IDs for each named agent so that follow-up tasks resume the same remote context. Session files are stored at:
+
+```
+~/.operator/profiles/<name>/acp/<agent_name>.json
+```
+
+**Session persistence requires an active profile.** When the agent is started without `--profile`, `ACPSessionManager` operates in-memory only — `save()` is a no-op, `get()` always returns `None`, and `list()` returns `[]`. No `acp/` directory is created in `~/.operator/`.
+
 ## Related documents
 
 - [inference.md](./inference.md) — Model and provider resolution (used by built-in `claude` agent)
