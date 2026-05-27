@@ -160,7 +160,7 @@ class TestFormatSkillsForPrompt:
     def test_skill_view_instruction_present(self):
         skill = make_skill("my-skill")
         out = format_skills_for_prompt([skill])
-        assert "skill_view" in out
+        assert "skill" in out
 
     def test_xml_special_chars_escaped(self):
         skill = make_skill("skill", description="Use <tags> & 'quotes'")

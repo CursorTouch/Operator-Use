@@ -83,7 +83,7 @@ class OutgoingMessage:
 | Phase | Meaning |
 |---|---|
 | `START` | A new agent turn has begun — start typing indicator, clear stale tool-status slot |
-| `CHUNK` | Streaming content: `metadata['kind']` is `'text'`, `'thinking'`, `'tool_start'`, or `'tool_end'` |
+| `CHUNK` | Streaming content: `metadata['kind']` is `'text'`, `'thinking'`, `'tool_start'`, `'tool_update'`, or `'tool_end'` |
 | `END` | Assistant message complete — flush buffered text, stop typing indicator |
 | `DONE` | Full turn complete (including TTS injection) |
 | `ERROR` | Turn ended with an error |
@@ -94,15 +94,17 @@ class OutgoingMessage:
 | `kind` | Extra metadata fields | Meaning |
 |---|---|---|
 | `'text'` | — | Streaming assistant text |
-| `'thinking'` | — | Streaming thinking/reasoning text (debounced into a rolling 💭 message) |
-| `'tool_start'` | `name`, `args`, `id`, `tool_kind` | Tool call beginning; `tool_kind` is a `ToolKind` value: `"read"`, `"edit"`, `"write"`, `"execute"`, `"web"`, `"unknown"`, or `null` |
-| `'tool_end'` | `name`, `id`, `is_error: bool`, `result: str` | Tool call complete; `result` only populated when `is_error=True` |
+| `'thinking'` | — | Streaming thinking/reasoning text |
+| `'tool_start'` | `name`, `args`, `id`, `tool_kind` | Tool call beginning |
+| `'tool_update'` | `name`, `text`, `id` | Mid-execution status update from the tool (emitted by `tool_execution_update_callback`) — channels edit the rolling status message in-place |
+| `'tool_end'` | `name`, `id`, `is_error: bool`, `result: str` | Tool call complete |
 
 ### Rolling tool-status messages
 
 For Telegram, Discord, and Slack, tool progress is shown through a **single shared message** per chat that is edited in-place rather than posting a new message for each event:
 
 - `tool_start` → post "⚙️ `<name>`…" (or edit the existing slot)
+- `tool_update` → edit the rolling status message in-place with the latest status text
 - `tool_end` (success) → edit to "✅ `<name>`"
 - `tool_end` (error) → edit to "❌ `<name>`\n`<result>`"
 - First text `CHUNK` → delete the rolling status message (the response replaces it)
@@ -201,6 +203,7 @@ await server.start()
 {"type": "chunk", "text": "Hello", "kind": "text"}
 {"type": "chunk", "text": "...", "kind": "thinking"}
 {"type": "chunk", "kind": "tool_start", "name": "web_search", "args": {...}}
+{"type": "chunk", "kind": "tool_update", "name": "web_search", "text": "Fetching results…", "id": "..."}
 {"type": "chunk", "kind": "tool_end", "name": "web_search", "is_error": false, "result": ""}
 {"type": "chunk", "kind": "tool_end", "name": "web_search", "is_error": true, "result": "timeout"}
 {"type": "end"}
@@ -247,6 +250,25 @@ IMAP polling (stdlib `imaplib`) + SMTP sending (stdlib `smtplib`). Polls `INBOX`
 
 **Setup:** Set `EMAIL_USERNAME` + `EMAIL_PASSWORD` env vars or `auth/channels.json`. Configure `imap_host` and `smtp_host` in settings.
 
+## Startup flags
+
+Two flags inject an initial message when the gateway or REPL starts, useful for
+quick-starting a task or resuming after a programmatic reboot.
+
+| Flag | Commands | Description |
+|---|---|---|
+| `--prompt "..."` | `operator`, `operator gateway`, `operator gateway run`, `operator repl` | Inject text as the first user message immediately on startup — the agent processes it without waiting for human input |
+| `--session-file <path>` | same (hidden flag) | Open a specific session JSONL file instead of creating a new one. Used internally by the `control_center` reboot action to restore the exact session |
+
+```bash
+# Quick-start with a task
+operator --prompt "summarise everything in the docs folder"
+operator repl --prompt "run the test suite and fix any failures"
+
+# Resume a specific session (normally handled automatically by reboot)
+operator gateway run --session-file ~/.program/agent/sessions/abc123.jsonl
+```
+
 ## Channel settings
 
 All channels are configured in `settings.json` under the `channels` key:
@@ -291,6 +313,51 @@ Channel-specific emoji notes:
 - **Slack**: use the name without colons, e.g. `"thumbsup"`, `"white_check_mark"`
 - **Telegram**: must be one of the 74 allowed reaction emojis
 - **Discord**: any standard emoji character
+
+## control_center tool
+
+The `control_center` builtin lets the agent inspect and update runtime settings
+without human involvement.
+
+**`action="get"`** — read one or all settings:
+```
+control_center, action="get"                          # all settings
+control_center, action="get", key="computer_use_enabled"
+```
+
+**`action="set"`** — update a setting and apply it. Feature-flag changes trigger
+`runtime.reload()` so the tool list is rebuilt immediately:
+```
+control_center, action="set", key="computer_use_enabled", value=true
+control_center, action="set", key="default_model", value="claude-opus-4-7"
+```
+
+**`action="reboot"`** — flush settings, gracefully shut down services, and replace
+the process with a fresh instance via `os.execv`. Pass `resume_prompt` to continue
+a task automatically after restart:
+```
+control_center, action="reboot",
+  resume_prompt="Reboot complete. Continue: run the test suite."
+```
+
+The reboot appends `--session-file` and `--prompt` to `sys.argv` before `execv`
+so the fresh process opens the exact same session and injects the continuation
+message — no intermediate files, no new session created.
+
+Controllable settings:
+
+| Key | Type | Reload? |
+|---|---|---|
+| `cron_enabled` | bool | yes |
+| `subagents_enabled` | bool | yes |
+| `workflows_enabled` | bool | yes |
+| `computer_use_enabled` | bool | yes |
+| `browser_use_enabled` | bool | yes |
+| `extensions_enabled` | bool | yes |
+| `compaction_enabled` | bool | no |
+| `retry_enabled` | bool | no |
+| `default_provider` | str | no |
+| `default_model` | str | no |
 
 ## Writing a custom channel
 

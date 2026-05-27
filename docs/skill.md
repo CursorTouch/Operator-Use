@@ -91,6 +91,24 @@ class ResourceDiagnostic(BaseModel):
 
 The `ResourceLoader` hands skill objects to `PromptTemplate.build()`. Skills are injected as named blocks inside the system prompt — the LLM sees the skill body and description as an instruction section. Skills marked `disable_model_invocation=True` are flagged to the engine so the model call can be skipped.
 
+## Skill tool
+
+The `skill` builtin tool lets the agent manage skills at runtime. All actions
+target skills by name.
+
+| Action | Required params | Description |
+|---|---|---|
+| `view` | `name` | Read the full SKILL.md content |
+| `create` | `name`, `description`, `body` | Create a new skill directory + SKILL.md |
+| `edit` | `name`, `content` | Replace the entire SKILL.md |
+| `patch` | `name` | Update frontmatter fields only (description, disable-model-invocation) |
+| `delete` | `name` | Remove the skill directory and all its files |
+| `write_file` | `name`, `filename`, `content` | Write a file inside the skill directory |
+| `remove_file` | `name`, `filename` | Remove a file from inside the skill directory |
+
+Skills are written to the user skill directory (`~/.program/agent/skills/`) by
+default. After any write action the resource loader reloads skills automatically.
+
 ## Validation rules
 
 | Rule | Error |

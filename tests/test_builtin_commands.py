@@ -195,12 +195,12 @@ class TestHandleGoal:
 # ── BUILTIN_COMMANDS list ─────────────────────────────────────────────────────
 
 class TestBuiltinCommandsList:
-    def test_has_thirteen_builtins(self):
-        assert len(BUILTIN_COMMANDS) == 13
+    def test_has_fourteen_builtins(self):
+        assert len(BUILTIN_COMMANDS) == 14
 
     def test_names_present(self):
         names = {c.name for c in BUILTIN_COMMANDS}
-        assert names == {"login", "logout", "auth", "compact", "goal", "new", "help", "reload", "cron", "stop", "start", "skills", "steer"}
+        assert names == {"login", "logout", "auth", "compact", "goal", "new", "help", "reload", "cron", "stop", "start", "skills", "steer", "workflows"}
 
     def test_new_has_clear_alias(self):
         new_cmd = next(c for c in BUILTIN_COMMANDS if c.name == "new")

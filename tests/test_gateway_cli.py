@@ -111,7 +111,7 @@ def test_gateway_start_accepts_command_options(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 0
-    assert seen == [GatewayOptions(cwd=tmp_path, model="m1", provider="p1", resume=True)]
+    assert seen == [GatewayOptions(cwd=tmp_path, model="m1", provider="p1", resume=True, prompt=None, session_file=None)]
 
 
 def test_install_systemd_writes_unit_and_enables(monkeypatch, tmp_path):

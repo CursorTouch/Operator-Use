@@ -545,9 +545,9 @@ def gateway_run(ctx: click.Context, cwd: str | None, model: str | None, provider
 @gateway.command("start")
 @click.pass_context
 @gateway_options
-def gateway_start(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None) -> None:
+def gateway_start(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None, prompt: str | None, session_file: str | None) -> None:
     """Start the installed service or a background gateway process."""
-    start_gateway(_options_from_context(ctx, cwd, model, provider, resume, system_prompt))
+    start_gateway(_options_from_context(ctx, cwd, model, provider, resume, system_prompt, prompt, session_file))
 
 
 @gateway.command("stop")
@@ -565,9 +565,9 @@ def gateway_status_command() -> None:
 @gateway.command("install")
 @click.pass_context
 @gateway_options
-def gateway_install(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None) -> None:
+def gateway_install(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None, prompt: str | None, session_file: str | None) -> None:
     """Install the gateway to start at login."""
-    install_service(_options_from_context(ctx, cwd, model, provider, resume, system_prompt))
+    install_service(_options_from_context(ctx, cwd, model, provider, resume, system_prompt, prompt, session_file))
 
 
 @gateway.command("uninstall")

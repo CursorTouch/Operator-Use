@@ -15,6 +15,10 @@ class Tool(ABC):
     def validate(self, params: dict) -> tuple[bool, list[str]]: ...
     def to_json(self) -> dict: ...   # produces the tool spec sent to the LLM
 
+    def is_available(self, context: ToolContext) -> bool:
+        """Return False to exclude this tool when its backing service is unavailable."""
+        return True
+
     @abstractmethod
     async def execute(
         self,
@@ -23,6 +27,40 @@ class Tool(ABC):
         signal: AbortSignal | None = None,
     ) -> ToolResult: ...
 ```
+
+## Conditional availability
+
+Override `is_available(context: ToolContext) -> bool` to exclude a tool from the
+LLM's tool list when its backing service is absent or disabled in settings:
+
+```python
+class ProcessTool(Tool):
+    def is_available(self, context: ToolContext) -> bool:
+        sm = context.settings_manager
+        if sm is not None and sm.settings.some_flag is False:
+            return False
+        return context.process_manager is not None
+```
+
+`_configure_context()` in the Runtime calls `is_available()` for every tool after
+building the `ToolContext`. Tools that return `False` are removed from the engine
+immediately and do not appear in the list sent to the LLM. A `runtime.reload()`
+re-runs this filtering, so toggling a settings flag and reloading makes a tool
+appear or disappear without restarting.
+
+Built-in tools and their availability conditions:
+
+| Tool | Available when |
+|---|---|
+| `cron` | `cron_enabled ≠ false` AND cron service present |
+| `subagent` | `subagents_enabled ≠ false` AND subagent manager present |
+| `workflow` | `workflows_enabled ≠ false` AND workflow manager present |
+| `computer` | `computer_use_enabled ≠ false` |
+| `browser` | `browser_use_enabled ≠ false` |
+| `memory` | `memory.enabled ≠ false` AND memory manager present |
+| `mcp` | MCP manager present |
+| `send` | Bus present |
+| `process` | Process manager present |
 
 ## Defining a tool
 
@@ -130,7 +168,7 @@ async def execute(self, invocation, callback=None, signal=None) -> ToolResult:
     return ToolResult.ok(invocation.id, "done")
 ```
 
-Each `callback` call emits a `tool_execution_update` event that UIs can use to show live progress. The final `execute()` return value is the authoritative result.
+Each `callback` call emits a `ToolExecutionUpdateEvent` which is forwarded by the gateway as `kind: 'tool_update'` in `OutgoingMessage` metadata. Channels (Discord, Telegram, Slack) handle this by editing the rolling status message in-place during execution. The final `execute()` return value is the authoritative result.
 
 ## Abort signal
 
@@ -197,7 +235,7 @@ Load errors are non-fatal: `LoadToolsResult.errors` accumulates `ToolError` obje
 
 All path functions are defined in `program/settings/paths.py`.
 
-Drop a `.py` file exporting `tool = MyTool()` into any of those directories and it is picked up automatically on the next reload. The built-in tools (`read`, `write`, `edit`, `grep`, `glob`, `ls`, `terminal`, `computer`, `web_fetch`, `web_search`, `memory`) live in `program/builtins/tools/`.
+Drop a `.py` file exporting `tool = MyTool()` into any of those directories and it is picked up automatically on the next reload. The built-in tools (`read`, `write`, `edit`, `grep`, `glob`, `ls`, `terminal`, `computer`, `browser`, `web_fetch`, `web_search`, `memory`, `mcp`, `cron`, `subagent`, `workflow`, `process`, `send`, `skill`, `todo`, `control_center`) live in `program/builtins/tools/`.
 
 ## Extension tools
 
