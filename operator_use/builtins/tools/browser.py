@@ -132,6 +132,11 @@ class BrowserTool(Tool):
         )
         self._browser: Browser | None = None
 
+    @property
+    def is_open(self) -> bool:
+        """True when a browser session is active (action='open' has been called)."""
+        return self._browser is not None
+
     def is_available(self, context) -> bool:
         sm = context.settings_manager
         if sm is not None and sm.settings.browser_use_enabled is False:
@@ -155,7 +160,7 @@ class BrowserTool(Tool):
             match params.action:
                 case "open":
                     await _update("🌐 Opening browser…")
-                    if self._browser is not None:
+                    if self.is_open:
                         await self._browser.close()
                         self._browser = None
                     browser = await self._get_browser(params)
@@ -163,7 +168,7 @@ class BrowserTool(Tool):
                     return ToolResult.ok(invocation.id, f"Browser ready. {len(tabs)} tab(s) open.")
 
                 case "close":
-                    if self._browser is None:
+                    if not self.is_open:
                         return ToolResult.ok(invocation.id, "Browser is not open.")
                     await _update("🌐 Closing browser…")
                     await self._browser.close()
@@ -171,7 +176,7 @@ class BrowserTool(Tool):
                     return ToolResult.ok(invocation.id, "Browser closed.")
 
             # Guard: require an explicit open before any browser interaction.
-            if self._browser is None:
+            if not self.is_open:
                 return ToolResult.error(
                     invocation.id,
                     "Browser is not open. Use action='open' to launch the browser first.",
@@ -334,7 +339,7 @@ class BrowserTool(Tool):
         is injected into the context for that single call and then stripped —
         it is never persisted in state.messages or the session JSONL.
         """
-        if self._browser is None:
+        if not self.is_open:
             return None
         try:
             use_vision = False
@@ -363,14 +368,14 @@ class BrowserTool(Tool):
 
     async def _get_browser(self, params: BrowserSchema) -> Browser:
         # If the previous instance crashed (all tabs dead), tear it down first.
-        if self._browser is not None and self._browser.crashed:
+        if self.is_open and self._browser.crashed:
             try:
                 await self._browser.close()
             except Exception:
                 pass
             self._browser = None
 
-        if self._browser is None:
+        if not self.is_open:
             self._browser = Browser(
                 BrowserConfig(
                     browser=params.browser,

@@ -125,6 +125,11 @@ class ComputerTool(Tool):
         )
         self._desktop: Desktop | None = None
 
+    @property
+    def is_open(self) -> bool:
+        """True when desktop access has been enabled via action='open'."""
+        return self._desktop is not None
+
     def is_available(self, context) -> bool:
         sm = context.settings_manager
         if sm is not None and sm.settings.computer_use_enabled is False:
@@ -153,7 +158,7 @@ class ComputerTool(Tool):
                     return ToolResult.ok(id=invocation.id, content="Desktop access enabled.")
 
                 case ComputerAction.close:
-                    if self._desktop is None:
+                    if not self.is_open:
                         return ToolResult.ok(id=invocation.id, content="Desktop is not open.")
                     await _update("🖥️ Closing desktop…")
                     self._desktop = None
@@ -161,7 +166,7 @@ class ComputerTool(Tool):
 
             # Guard: require an explicit open before any desktop interaction.
             # Context-injected desktops (e.g. tests, subagents) bypass this check.
-            if self._desktop is None and (context is None or context.computer is None):
+            if not self.is_open and (context is None or context.computer is None):
                 return ToolResult.error(
                     id=invocation.id,
                     content="Desktop is not accessible. Use action='open' to enable desktop control first.",
@@ -210,7 +215,7 @@ class ComputerTool(Tool):
         token cost low; the model can request them via action='snapshot' with
         include_screenshot=True.
         """
-        if self._desktop is None:
+        if not self.is_open:
             return None
         try:
             use_vision=False
