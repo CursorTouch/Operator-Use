@@ -554,6 +554,14 @@ class Agent(ExtensionContext):
         # Session writes are now flushed — notify observers
         await self._extensions.emit('save_point', SavePointEvent())
 
+        # If a tool scheduled a deferred action (e.g. reboot), run it now — after
+        # the turn result is fully saved to the session JSONL.
+        deferred = self._engine._deferred_fn
+        if deferred is not None:
+            self._engine._deferred_fn = None
+            await deferred()
+            return  # deferred action takes over (e.g. sys.exit); don't continue
+
         # Notify extensions the turn ended
         await self._extensions.emit(
             'agent_end',

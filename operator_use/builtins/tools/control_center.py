@@ -113,7 +113,7 @@ class ControlCenterTool(Tool):
             case "set":
                 return await self._set(invocation, sm, params.key, params.value, context)
             case "reboot":
-                return await self._reboot(invocation, sm, params.resume_prompt, context)
+                return self._schedule_reboot(invocation, sm, params.resume_prompt, context)
             case _:
                 return ToolResult.error(id=invocation.id, content=f"Unknown action {params.action!r}.")
 
@@ -184,13 +184,44 @@ class ControlCenterTool(Tool):
 
         return ToolResult.ok(id=invocation.id, content=msg)
 
-    async def _reboot(
+    def _schedule_reboot(
         self,
         invocation: ToolInvocation,
         sm: Any,
         resume_prompt: str | None,
         context: ToolContext | None,
     ) -> ToolResult:
+        """Register a deferred reboot on the engine and return immediately.
+
+        The tool result is written to the session JSONL before the reboot fires,
+        so the conversation history is complete when the new process resumes.
+        """
+        engine = context.engine if context else None
+        if engine is None:
+            return ToolResult.error(
+                id=invocation.id,
+                content="Reboot unavailable: no engine context.",
+            )
+
+        snapshot = self._snapshot_changes(context)
+
+        async def _do_reboot() -> None:
+            await self._reboot(sm, resume_prompt, context, snapshot)
+
+        engine._deferred_fn = _do_reboot
+
+        msg = "Reboot scheduled — the process will restart once this turn is saved."
+        if resume_prompt:
+            msg += f'\nResume prompt: "{resume_prompt}"'
+        return ToolResult(id=invocation.id, content=msg, terminate=True)
+
+    async def _reboot(
+        self,
+        sm: Any,
+        resume_prompt: str | None,
+        context: ToolContext | None,
+        snapshot: dict,
+    ) -> None:
         import asyncio
         import os
         import subprocess
@@ -203,9 +234,6 @@ class ControlCenterTool(Tool):
             sf = getattr(context.session_manager, "session_file", None)
             if sf is not None:
                 session_file = Path(sf)
-
-        # Snapshot modified files so we can revert on failure
-        snapshot = self._snapshot_changes(context)
 
         # Flush settings to disk
         try:
@@ -271,7 +299,9 @@ class ControlCenterTool(Tool):
                     pass
             sys.exit(0)
 
-        # Child failed — collect error, revert changes, report back to agent
+        # Child failed — revert changes and inject an error message as a follow-up
+        # so the agent can diagnose and retry (we are already past the tool-result
+        # stage, so we cannot return a ToolResult here).
         proc.terminate()
         error_log = ""
         try:
@@ -282,15 +312,27 @@ class ControlCenterTool(Tool):
 
         revert_msg = self._restore_snapshot(snapshot, context)
 
-        return ToolResult.error(
-            id=invocation.id,
-            content=(
-                f"Reboot failed — new process exited before becoming ready.\n\n"
-                f"Error output:\n{error_log or '(none captured)'}\n\n"
-                f"{revert_msg}"
-                f"Fix the error and call reboot again."
-            ),
+        error_text = (
+            f"Reboot failed — new process exited before becoming ready.\n\n"
+            f"Error output:\n{error_log or '(none captured)'}\n\n"
+            f"{revert_msg}"
+            f"Fix the error and call reboot again."
         )
+
+        # Inject as a follow-up user message so the agent sees the failure
+        agent = context.agent if context else None
+        engine = context.engine if context else None
+        if engine is not None and engine.state.follow_up_queue is not None:
+            from operator_use.message.types import UserMessage, TextContent
+            await engine.state.follow_up_queue.enqueue(
+                UserMessage(contents=[TextContent(content=error_text)])
+            )
+        elif agent is not None:
+            # Fallback: schedule a new turn with the error as user input
+            import asyncio
+            asyncio.get_event_loop().call_soon(
+                lambda: asyncio.ensure_future(agent.invoke(error_text))
+            )
 
     def _snapshot_changes(self, context: ToolContext | None) -> dict[str, str]:
         """Read the content of every file modified since the last commit."""

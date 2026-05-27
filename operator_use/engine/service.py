@@ -1,7 +1,7 @@
 from __future__ import annotations
 from operator_use.message.types import ToolResultContent
 import asyncio
-from typing import TYPE_CHECKING, Optional, Callable, Literal
+from typing import TYPE_CHECKING, Optional, Callable, Coroutine, Literal
 from operator_use.hooks.service import Hooks
 from operator_use.engine.types import (
     EmitEvent, TurnStartEvent, TurnEndEvent,
@@ -60,6 +60,10 @@ class Engine:
         )
         self._signal: asyncio.Event = asyncio.Event()
         self._subscribers: list = []
+        # Set by tools that need to trigger a deferred action after the current
+        # turn is fully saved (e.g. reboot).  Checked by Agent.invoke() after
+        # _run_with_retry() returns — never called mid-turn.
+        self._deferred_fn: Callable[[], Coroutine] | None = None
 
     async def subscribe(self, handler):
         """Register an event handler (sync or async). Returns an unsubscribe callable."""
