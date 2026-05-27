@@ -167,6 +167,11 @@ def get_acp_sessions_dir() -> Path:
     return get_agent_dir() / 'acp'
 
 
+def get_teams_dir() -> Path:
+    """Persistent team state — always ~/.program/agent/teams/."""
+    return get_agent_dir() / "teams"
+
+
 def get_knowledge_dir(cwd: Path | None = None) -> Path:
     """Knowledge reference docs — ~/.program/knowledge/ or <project>/.program/knowledge/."""
     return get_config_dir(cwd) / 'knowledge'

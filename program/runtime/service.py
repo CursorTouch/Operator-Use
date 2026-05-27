@@ -16,6 +16,8 @@ from program.extension.types import (
     SessionBeforeSwitchResult, SessionBeforeForkEvent, SessionBeforeForkResult,
 )
 from program.tool.types import ToolContext
+from program.team.manager import TeamManager
+from program.settings.paths import get_teams_dir
 
 
 class Runtime:
@@ -61,6 +63,7 @@ class Runtime:
             merged = context.resource_loader.get_subagent_profiles() + ext_profiles
             self.subagent_manager.update_profiles(merged)
         self.workflow_manager = self._create_workflow_manager(context)
+        self.team_manager = TeamManager(get_teams_dir())
         # Expose MCPManager for use in create_session_agent() (gateway + ACP) and shutdown.
         self.mcp_manager = context.mcp_manager
         self._configure_context(context)
@@ -104,6 +107,7 @@ class Runtime:
             auth_channel_manager=context.auth_channel_manager,
             acp_auth_manager=context.acp_auth_manager,
             acp_session_manager=context.acp_session_manager,
+            team_manager=self.team_manager,
         )
         context.engine.tool_context = tool_ctx
         for tool in list(context.engine.state.tools):
@@ -368,6 +372,7 @@ class Runtime:
             auth_channel_manager=self._context.auth_channel_manager,
             acp_auth_manager=self._context.acp_auth_manager,
             acp_session_manager=self._context.acp_session_manager,
+            team_manager=self.team_manager,
         )
 
         return agent

@@ -36,6 +36,7 @@ class SubagentRecord:
     fork: bool = False                   # inherits parent conversation context
     parent_messages: list | None = None  # effective parent history (fork only)
     parent_system_prompt: str | None = None  # parent system prompt (fork only)
+    team_id: str | None = None           # team this subagent belongs to (if any)
 
 
 class SubagentSettings(BaseModel):

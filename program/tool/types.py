@@ -100,6 +100,7 @@ class ToolContext:
     auth_channel_manager: Any | None = None
     acp_auth_manager: Any | None = None
     acp_session_manager: Any | None = None
+    team_manager: Any | None = None
     spawn_depth: int = 0
 
 

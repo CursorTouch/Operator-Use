@@ -17,8 +17,9 @@ import asyncio
 import contextvars
 import logging
 import uuid
+from collections import defaultdict
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from program.subagent.pool import TaskPool
 from program.subagent.service import Subagent
@@ -68,6 +69,7 @@ class SubagentManager:
         self._tasks: dict[str, asyncio.Task] = {}
         self._bus: Bus | None = bus
         self._profiles: dict[str, SubagentProfile] = {p.name: p for p in (profiles or [])}
+        self._listeners: defaultdict[str, list[Callable[[SubagentRecord], Awaitable[None]]]] = defaultdict(list)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -80,6 +82,14 @@ class SubagentManager:
     def get_profile(self, name: str) -> SubagentProfile | None:
         return self._profiles.get(name)
 
+    def on_complete(
+        self,
+        task_id: str,
+        callback: Callable[[SubagentRecord], Awaitable[None]],
+    ) -> None:
+        """Register a one-shot callback fired when task_id completes (any status)."""
+        self._listeners[task_id].append(callback)
+
     async def invoke(
         self,
         task: str,
@@ -90,6 +100,7 @@ class SubagentManager:
         fork: bool = False,
         parent_messages: list | None = None,
         parent_system_prompt: str | None = None,
+        team_id: str | None = None,
     ) -> str:
         """Spawn a background subagent. Returns task_id immediately.
 
@@ -133,6 +144,7 @@ class SubagentManager:
             fork=fork,
             parent_messages=parent_messages,
             parent_system_prompt=parent_system_prompt,
+            team_id=team_id,
         )
         self._records[task_id] = record
 
@@ -174,6 +186,11 @@ class SubagentManager:
             await asyncio.shield(self._announce(record))
         except Exception:
             logger.exception('[%s] failed to announce result to bus', record.task_id)
+        for cb in self._listeners.pop(record.task_id, []):
+            try:
+                await cb(record)
+            except Exception:
+                logger.warning('[%s] completion listener raised', record.task_id, exc_info=True)
 
     async def _announce(self, record: SubagentRecord) -> None:
         """Deliver the subagent result back to the originating session via the bus.
