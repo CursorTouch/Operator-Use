@@ -61,6 +61,9 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
     click.echo(f"Channels: {channels_str}")
     click.echo("Press Ctrl-C to stop.\n")
 
+    # Signal parent process (if launched via Popen reboot) that startup succeeded
+    _signal_ready()
+
     if options.prompt:
         await _inject_prompt(options.prompt, runtime)
 
@@ -86,6 +89,19 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
         click.echo("\nShutting down...")
         await gateway_manager.astop()
         await runtime.ashutdown()
+
+
+def _signal_ready() -> None:
+    """Write to OPERATOR_READY_FD if present — tells the parent Popen reboot we started OK."""
+    fd_str = os.environ.get("OPERATOR_READY_FD", "")
+    if not fd_str:
+        return
+    try:
+        fd = int(fd_str)
+        os.write(fd, b"ready")
+        os.close(fd)
+    except OSError:
+        pass
 
 
 async def _inject_prompt(prompt: str, runtime) -> None:

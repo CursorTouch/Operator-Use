@@ -193,43 +193,157 @@ class ControlCenterTool(Tool):
     ) -> ToolResult:
         import asyncio
         import os
+        import subprocess
         import sys
         from pathlib import Path
 
-        # Capture session file before shutting anything down
+        # Capture session file before anything else
         session_file: Path | None = None
         if context is not None and context.session_manager is not None:
             sf = getattr(context.session_manager, "session_file", None)
             if sf is not None:
                 session_file = Path(sf)
 
-        # Flush any pending settings writes before exec-ing
+        # Snapshot current code changes so we can revert on failure
+        stash_ref = self._git_stash(context)
+
+        # Flush settings to disk
         try:
             await sm.flush()
         except Exception:
             pass
 
-        # Gracefully shut down runtime services
-        if context is not None:
-            agent = context.agent
-            runtime = getattr(agent, "_runtime", None) if agent else None
-            if runtime is not None:
-                try:
-                    await asyncio.wait_for(runtime.ashutdown(), timeout=5.0)
-                except Exception:
-                    pass
-
-        # Build argv: pass session file and prompt as CLI flags so no file is needed
+        # Build argv
         argv = list(sys.argv)
         if session_file and "--session-file" not in argv:
             argv.extend(["--session-file", str(session_file)])
         if resume_prompt and "--prompt" not in argv:
             argv.extend(["--prompt", resume_prompt])
 
-        os.execv(sys.executable, [sys.executable] + argv)
+        # Create ready pipe — child writes "ready" when gateway is up
+        read_fd, write_fd = os.pipe()
+        env = {**os.environ, "OPERATOR_READY_FD": str(write_fd)}
 
-        # execv never returns; this line is unreachable
-        return ToolResult.ok(id=invocation.id, content="Rebooting…")
+        proc = subprocess.Popen(
+            [sys.executable] + argv,
+            env=env,
+            stderr=subprocess.PIPE,
+            pass_fds=(write_fd,),
+        )
+        os.close(write_fd)  # parent keeps only the read end
+
+        # Wait for ready signal using asyncio (non-blocking)
+        loop = asyncio.get_event_loop()
+        ready_future: asyncio.Future[bytes] = loop.create_future()
+
+        def _on_readable() -> None:
+            loop.remove_reader(read_fd)
+            try:
+                data = os.read(read_fd, 64)
+                if not ready_future.done():
+                    ready_future.set_result(data)
+            except Exception as exc:
+                if not ready_future.done():
+                    ready_future.set_exception(exc)
+
+        loop.add_reader(read_fd, _on_readable)
+
+        ready = False
+        try:
+            data = await asyncio.wait_for(asyncio.shield(ready_future), timeout=30.0)
+            ready = data.strip() == b"ready"
+        except (asyncio.TimeoutError, Exception):
+            loop.remove_reader(read_fd)
+        finally:
+            try:
+                os.close(read_fd)
+            except OSError:
+                pass
+
+        if ready:
+            # New process is up — drop snapshot, shut down this process cleanly
+            self._git_stash_drop(stash_ref, context)
+            agent = context.agent if context else None
+            runtime = getattr(agent, "_runtime", None) if agent else None
+            if runtime is not None:
+                try:
+                    await asyncio.wait_for(runtime.ashutdown(), timeout=5.0)
+                except Exception:
+                    pass
+            sys.exit(0)
+
+        # Child failed — collect error, revert changes, report back to agent
+        proc.terminate()
+        error_log = ""
+        try:
+            stderr_bytes, _ = proc.communicate(timeout=5.0)
+            error_log = stderr_bytes.decode("utf-8", errors="replace").strip()
+        except Exception:
+            pass
+
+        revert_msg = self._git_stash_pop(stash_ref, context)
+
+        return ToolResult.error(
+            id=invocation.id,
+            content=(
+                f"Reboot failed — new process exited before becoming ready.\n\n"
+                f"Error output:\n{error_log or '(none captured)'}\n\n"
+                f"{revert_msg}"
+                f"Fix the error and call reboot again."
+            ),
+        )
+
+    def _git_stash(self, context: ToolContext | None) -> str | None:
+        """Stash uncommitted changes. Returns the stash ref name or None."""
+        import subprocess
+        cwd = self._cwd(context)
+        try:
+            result = subprocess.run(
+                ["git", "stash", "push", "-m", "operator-pre-reboot"],
+                cwd=cwd, capture_output=True, text=True,
+            )
+            if result.returncode == 0 and "No local changes" not in result.stdout:
+                return "operator-pre-reboot"
+        except Exception:
+            pass
+        return None
+
+    def _git_stash_drop(self, ref: str | None, context: ToolContext | None) -> None:
+        """Drop the pre-reboot stash — reboot succeeded, changes are good."""
+        if not ref:
+            return
+        import subprocess
+        cwd = self._cwd(context)
+        try:
+            subprocess.run(
+                ["git", "stash", "drop"],
+                cwd=cwd, capture_output=True,
+            )
+        except Exception:
+            pass
+
+    def _git_stash_pop(self, ref: str | None, context: ToolContext | None) -> str:
+        """Restore the pre-reboot stash — reboot failed, revert the changes."""
+        if not ref:
+            return ""
+        import subprocess
+        cwd = self._cwd(context)
+        try:
+            result = subprocess.run(
+                ["git", "stash", "pop"],
+                cwd=cwd, capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                return "Changes reverted to pre-reboot state.\n\n"
+            return f"Warning: could not revert changes automatically: {result.stderr.strip()}\n\n"
+        except Exception as exc:
+            return f"Warning: revert failed: {exc}\n\n"
+
+    def _cwd(self, context: ToolContext | None) -> str | None:
+        """Return the working directory string from context."""
+        if context and context.session_manager:
+            return str(getattr(context.session_manager, "cwd", None) or ".")
+        return None
 
 
 tool = ControlCenterTool()
