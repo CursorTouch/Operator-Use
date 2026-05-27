@@ -4,11 +4,14 @@ import base64
 import dataclasses
 import json
 from enum import Enum
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from operator_use.message.types import UserMessage
 from pydantic import BaseModel, Field, model_validator
 
 from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolInvocation, ToolKind, ToolResult
+
+if TYPE_CHECKING:
+    from operator_use.computer.types import Desktop
 
 
 class ComputerAction(str, Enum):
@@ -120,7 +123,7 @@ class ComputerTool(Tool):
             kind=ToolKind.Execute,
             execution_mode=ToolExecutionMode.Sequential,
         )
-        self._desktop: Any | None = None
+        self._desktop: Desktop | None = None
 
     def is_available(self, context) -> bool:
         sm = context.settings_manager
@@ -216,7 +219,7 @@ class ComputerTool(Tool):
         except Exception:
             return None
 
-    def _get_desktop(self, context: ToolContext | None, params: ComputerSchema) -> Any:
+    def _get_desktop(self, context: ToolContext | None, params: ComputerSchema) -> Desktop:
         if context is not None and context.computer is not None:
             return context.computer
         if self._desktop is None:
