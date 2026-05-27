@@ -15,6 +15,8 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 
 class BrowserSchema(BaseModel):
     action: Literal[
+        "open",
+        "close",
         "snapshot",
         "goto",
         "back",
@@ -32,7 +34,8 @@ class BrowserSchema(BaseModel):
         "download",
     ] = Field(
         description=(
-            "Browser action: snapshot, goto, back, forward, click, type, key, scroll, menu, "
+            "Browser action: open (launch/connect browser), close (shut down browser), "
+            "snapshot, goto, back, forward, click, type, key, scroll, menu, "
             "upload, tab, wait, script, scrape, or download."
         )
     )
@@ -69,7 +72,9 @@ class BrowserSchema(BaseModel):
                 data[field] = value.lower() not in {"false", "0", "no", "null", "none", ""}
 
         for field in ("x", "y", "amount", "times", "tab_index", "cdp_port"):
-            value = data.get(field)
+            if field not in data:
+                continue  # absent → let Pydantic apply the field default
+            value = data[field]
             if value is None or value == "null":
                 data[field] = None
             elif isinstance(value, str):
@@ -78,17 +83,20 @@ class BrowserSchema(BaseModel):
                 except ValueError:
                     pass
 
-        value = data.get("time")
-        if value is None or value == "null":
-            data["time"] = None
-        elif isinstance(value, str):
-            try:
-                data["time"] = float(value)
-            except ValueError:
-                pass
+        if "time" in data:
+            value = data["time"]
+            if value is None or value == "null":
+                data["time"] = None
+            elif isinstance(value, str):
+                try:
+                    data["time"] = float(value)
+                except ValueError:
+                    pass
 
         for field in ("filenames", "labels"):
-            value = data.get(field)
+            if field not in data:
+                continue  # absent → let Pydantic apply the field default
+            value = data[field]
             if value is None or value == "null":
                 data[field] = None
             elif isinstance(value, str):
@@ -111,10 +119,12 @@ class BrowserTool(Tool):
         super().__init__(
             name="browser",
             description=(
-                "Control a CDP browser with one action-based tool. Use snapshot to inspect tabs and "
-                "interactive DOM elements, goto/back/forward for navigation, click/type/key/scroll "
-                "for page interaction, tab for tab management, script for JavaScript, scrape for "
-                "markdown page content, upload for file inputs, menu for select boxes, and wait."
+                "Control a CDP browser with one action-based tool. Use open to launch or reconnect "
+                "the browser (also resets a crashed/stuck session), close to shut it down, snapshot "
+                "to inspect tabs and interactive DOM elements, goto/back/forward for navigation, "
+                "click/type/key/scroll for page interaction, tab for tab management, script for "
+                "JavaScript, scrape for markdown page content, upload for file inputs, menu for "
+                "select boxes, and wait."
             ),
             schema=BrowserSchema,
             kind=ToolKind.Web,
@@ -141,6 +151,25 @@ class BrowserTool(Tool):
 
         try:
             params = BrowserSchema.model_validate(invocation.params)
+
+            match params.action:
+                case "open":
+                    await _update("🌐 Opening browser…")
+                    if self._browser is not None:
+                        await self._browser.close()
+                        self._browser = None
+                    browser = await self._get_browser(params)
+                    tabs = await browser.get_all_tabs()
+                    return ToolResult.ok(invocation.id, f"Browser ready. {len(tabs)} tab(s) open.")
+
+                case "close":
+                    if self._browser is None:
+                        return ToolResult.ok(invocation.id, "Browser is not open.")
+                    await _update("🌐 Closing browser…")
+                    await self._browser.close()
+                    self._browser = None
+                    return ToolResult.ok(invocation.id, "Browser closed.")
+
             browser = await self._get_browser(params)
             page = browser.current_page()
 
@@ -292,6 +321,14 @@ class BrowserTool(Tool):
             return ToolResult.error(invocation.id, f"browser: {exc}")
 
     async def _get_browser(self, params: BrowserSchema) -> Browser:
+        # If the previous instance crashed (all tabs dead), tear it down first.
+        if self._browser is not None and self._browser.crashed:
+            try:
+                await self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+
         if self._browser is None:
             self._browser = Browser(
                 BrowserConfig(
@@ -301,12 +338,14 @@ class BrowserTool(Tool):
                     cdp_port=params.cdp_port,
                 )
             )
-        if self._browser._client is None:
-            await self._browser.init_browser()
-            await self._browser.init_tabs()
-        elif not self._browser._sessions:
-            await self._browser.init_tabs()
-        return self._browser
+        browser = self._browser
+        assert browser is not None
+        if browser._client is None:
+            await asyncio.wait_for(browser.init_browser(), timeout=30.0)
+            await browser.init_tabs()
+        elif not browser._sessions:
+            await browser.init_tabs()
+        return browser
 
     async def _tab_action(self, invocation_id: str, browser: Browser, params: BrowserSchema) -> ToolResult:
         match params.tab_mode:
