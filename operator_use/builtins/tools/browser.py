@@ -327,6 +327,35 @@ class BrowserTool(Tool):
         except Exception as exc:
             return ToolResult.error(invocation.id, f"browser: {exc}")
 
+    async def get_state_message(self):
+        """Return a UserMessage with the current browser state, or None if closed.
+
+        Called by EphemeralInjector just before each LLM API call.  The message
+        is injected into the context for that single call and then stripped —
+        it is never persisted in state.messages or the session JSONL.
+        """
+        if self._browser is None:
+            return None
+        try:
+            state = await self._browser.get_state()
+            if state is None:
+                return None
+            tabs = await self._browser.get_all_tabs()
+            state_text = "\n".join([
+                "Tabs:",
+                *[f"{tab.id}: {tab.title or '(untitled)'} {tab.url}" for tab in tabs],
+                "",
+                state.dom_state.interactive_elements_to_string(),
+                "",
+                state.dom_state.scrollable_elements_to_string(),
+                "",
+                state.dom_state.informative_elements_to_string(),
+            ])
+            from operator_use.message.types import UserMessage
+            return UserMessage.text(f"[Current browser state]\n{state_text}")
+        except Exception:
+            return None
+
     async def _get_browser(self, params: BrowserSchema) -> Browser:
         # If the previous instance crashed (all tabs dead), tear it down first.
         if self._browser is not None and self._browser.crashed:

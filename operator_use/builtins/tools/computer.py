@@ -197,6 +197,25 @@ class ComputerTool(Tool):
         except Exception as exc:
             return ToolResult.error(id=invocation.id, content=f"computer: {exc}")
 
+    async def get_state_message(self):
+        """Return a UserMessage with the current desktop state, or None if closed.
+
+        Called by EphemeralInjector just before each LLM API call.  The message
+        is injected into the context for that single call and then stripped —
+        it is never persisted in state.messages or the session JSONL.
+        Screenshots are excluded to keep token cost low; the model can request
+        them explicitly via action='snapshot' with include_screenshot=True.
+        """
+        if self._desktop is None:
+            return None
+        try:
+            state = self._desktop.get_state(as_bytes=False)
+            state_text = json.dumps(self._to_jsonable(state), indent=2)
+            from operator_use.message.types import UserMessage
+            return UserMessage.text(f"[Current desktop state]\n{state_text}")
+        except Exception:
+            return None
+
     def _get_desktop(self, context: ToolContext | None, params: ComputerSchema) -> Any:
         if context is not None and context.computer is not None:
             return context.computer
