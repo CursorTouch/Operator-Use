@@ -66,6 +66,8 @@ class FakeResourceLoader(BaseResourceLoader):
     def get_commands(self): return []
     def get_hooks(self): return []
     def get_subagent_profiles(self): return []
+    def get_agent_profiles(self): return []
+    def set_active_profile(self, profile): pass
     def get_context_files(self): return []
     def get_system_prompt(self): return None
     def get_append_system_prompt(self): return []

@@ -50,11 +50,22 @@ class Gateway:
         self._bus = runtime.bus
         self._channels: dict[str, BaseChannel] = {}
         self._sessions: dict[str, _SessionEntry] = {}
+        self._profile_agents: dict[str, Agent] = {}  # profile_name → dedicated Agent
         self._direct_handlers: dict[str, Callable[[IncomingMessage], Awaitable[None]]] = {}
         self._handler_tasks: set[asyncio.Task] = set()
         self._incoming_loop_task: asyncio.Task | None = None
         self._outgoing_loop_task: asyncio.Task | None = None
         self.hooks = Hooks()
+
+    # ── Profile agent registration ────────────────────────────────────────────
+
+    def register_profile_agent(self, profile_name: str, agent: Agent) -> None:
+        """Register a dedicated agent for a named profile.
+
+        All channels whose channel_id starts with '{profile_name}:' will share
+        this single agent (unified session per profile).
+        """
+        self._profile_agents[profile_name] = agent
 
     # ── Direct handler registration ───────────────────────────────────────────
 
@@ -200,7 +211,17 @@ class Gateway:
             await self._run_command(msg.channel, msg.chat_id, parsed)
             return
 
-        session_key = f"{msg.channel}:{msg.chat_id}"
+        # Profile channels (format: '{profile_name}:{channel_type}') share one
+        # session across all their channels and chat_ids.
+        colon = msg.channel.find(':')
+        if colon > 0:
+            profile_name = msg.channel[:colon]
+            if profile_name in self._profile_agents:
+                session_key = profile_name
+            else:
+                session_key = f"{msg.channel}:{msg.chat_id}"
+        else:
+            session_key = f"{msg.channel}:{msg.chat_id}"
         entry = self._get_or_create_session(session_key, channel_id=msg.channel, chat_id=msg.chat_id)
 
         if entry.task is not None and not entry.task.done():
@@ -249,16 +270,46 @@ class Gateway:
 
     def _get_or_create_session(self, session_key: str, channel_id: str | None = None, chat_id: str | None = None) -> _SessionEntry:
         if session_key not in self._sessions:
-            # `unified_session` (default True) shares the REPL agent across all channels.
-            # When False, each channel:chat_id pair gets its own isolated agent.
-            if self._runtime.unified_session_enabled:
-                agent = self._runtime.current_session
-                if agent is None:
-                    raise RuntimeError("No active session available.")
-            else:
-                agent = self._runtime.create_session_agent()
+            agent = self._resolve_agent_for_channel(channel_id)
             self._sessions[session_key] = _SessionEntry(agent=agent)
         return self._sessions[session_key]
+
+    def _resolve_agent_for_channel(self, channel_id: str | None) -> Agent:
+        """Resolve which agent handles a channel.
+
+        Profile channels use the format '{profile_name}:{channel_type}'.
+        Non-profile channels fall back to the runtime's unified/per-session logic.
+        """
+        if channel_id:
+            colon = channel_id.find(':')
+            if colon > 0:
+                profile_name = channel_id[:colon]
+                profile_agent = self._profile_agents.get(profile_name)
+                if profile_agent is not None:
+                    return profile_agent
+
+        # Fall back to original logic for non-profile channels
+        if self._runtime.unified_session_enabled:
+            agent = self._runtime.current_session
+            if agent is None:
+                raise RuntimeError("No active session available.")
+            return agent
+        return self._runtime.create_session_agent()
+
+    def reset_profile_session(self, profile_name: str) -> None:
+        """Clear all cached session entries for a profile so the next message starts fresh.
+
+        The profile's Agent is retained (not recreated), but the session cache
+        entries are dropped. The next incoming message will create a new
+        session entry pointing at the same agent, which starts a new session
+        via agent._session_manager.new_session().
+        """
+        keys_to_remove = [k for k in self._sessions if k == profile_name or k.startswith(f'{profile_name}:')]
+        for k in keys_to_remove:
+            self._sessions.pop(k, None)
+        agent = self._profile_agents.get(profile_name)
+        if agent is not None:
+            agent._session_manager.new_session()
 
     async def cancel_session(self, channel_id: str, chat_id: str) -> None:
         """Hard-cancel an in-progress session and fire MessageCancelEvent."""

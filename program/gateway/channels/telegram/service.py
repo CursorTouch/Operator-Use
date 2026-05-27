@@ -29,6 +29,7 @@ class TelegramChannel(BaseChannel):
     def __init__(
         self,
         token: str,
+        name: str = "telegram",
         commands: list[tuple[str, str]] | None = None,
         allow_from: list[str] | None = None,
         group_policy: str = "mention",
@@ -38,6 +39,7 @@ class TelegramChannel(BaseChannel):
         streaming_latency: float = 1.0,
     ) -> None:
         super().__init__()
+        self._name = name
         self._token = token
         self._commands = commands or []
         self._allow_from = set(allow_from or [])
@@ -60,7 +62,7 @@ class TelegramChannel(BaseChannel):
 
     @property
     def channel_id(self) -> str:
-        return "telegram"
+        return self._name
 
     async def connect(self) -> None:
         """Build PTB app, register handlers, start polling. Runs until cancelled."""
@@ -135,7 +137,7 @@ class TelegramChannel(BaseChannel):
                 meta['reply_to'] = str(msg.reply_to_message.message_id)
 
             await self.receive(IncomingMessage(
-                channel="telegram",
+                channel=self._name,
                 chat_id=chat_id,
                 parts=parts,
                 user_id=user_id,

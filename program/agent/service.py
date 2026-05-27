@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from program.compaction.strategy.base import Compaction
     from program.runtime.service import Runtime
     from program.memory.manager import MemoryManager
+    from program.agent.profile import AgentProfile
 
 
 
@@ -91,6 +92,8 @@ class Agent(ExtensionContext):
         )
 
         self._phase: str = "idle"
+        self._active_profile: AgentProfile | None = None
+        self._baseline_llm = engine.llm
         self._engine.options.before_tool_call = self._before_tool_call
         self._engine.options.after_tool_call = self._after_tool_call
         self._engine.options.on_event = self._on_engine_event
@@ -302,10 +305,60 @@ class Agent(ExtensionContext):
     # Internal helpers
     # -------------------------------------------------------------------------
 
+    # -------------------------------------------------------------------------
+    # Agent profile management
+    # -------------------------------------------------------------------------
+
+    async def apply_profile(self, profile: AgentProfile) -> None:
+        """Switch to a named agent profile: reload resources from profile dirs, update LLM."""
+        self._active_profile = profile
+        self._resources.set_active_profile(profile)
+        await self._resources.reload()
+        self._sync_tools_from_resources(profile.tools)
+        if profile.model_id:
+            from program.inference.api.text.service import LLM
+            self._engine.llm = LLM(
+                model_id=profile.model_id,
+                provider=profile.provider,
+                auth_store=self._engine.llm._auth_store,
+            )
+
+    async def clear_profile(self) -> None:
+        """Remove the active profile and restore global resources and baseline LLM."""
+        self._active_profile = None
+        self._resources.set_active_profile(None)
+        await self._resources.reload()
+        self._sync_tools_from_resources([])
+        self._engine.llm = self._baseline_llm
+
+    def get_active_profile(self) -> AgentProfile | None:
+        return self._active_profile
+
+    def _sync_tools_from_resources(self, allowlist: list[str]) -> None:
+        """Update the engine's tool set from the freshly-loaded resource loader.
+
+        If allowlist is non-empty, only builtin tools whose names are in the
+        list are kept; profile-local tools (from the profile's tools/ dir) are
+        always included regardless.
+        """
+        all_tools = self._resources.get_tools()
+        if allowlist:
+            allowed = set(allowlist)
+            filtered = [t for t in all_tools if t.name in allowed]
+        else:
+            filtered = all_tools
+        self._engine.tools = filtered
+        self._engine._tools = {t.name: t for t in filtered}
+        self._engine.state.tools = list(filtered)
+
     def _rebuild_system_prompt(self, channel: str | None = None) -> str:
         skills, _ = self._resources.get_skills()
         context_files = self._resources.get_context_files()
-        custom_prompt = self._resources.get_system_prompt()
+        custom_prompt = (
+            self._active_profile.system_prompt
+            if self._active_profile and self._active_profile.system_prompt
+            else self._resources.get_system_prompt()
+        )
         append_parts = self._resources.get_append_system_prompt()
         append_system_prompt = "\n\n".join(append_parts) if append_parts else None
 

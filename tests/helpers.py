@@ -168,6 +168,8 @@ def make_agent(llm, tools=None, hooks=None, compaction_settings=None):
         def get_user_profile(self): return None
         def get_agent_memory(self): return None
         def get_subagent_profiles(self): return []
+        def get_agent_profiles(self): return []
+        def set_active_profile(self, profile): pass
         def extend_resources(self, paths): pass
         def get_diagnostics(self, runtime=None): return []
         async def reload(self): pass

@@ -172,6 +172,11 @@ def get_teams_dir() -> Path:
     return get_agent_dir() / "teams"
 
 
+def get_profiles_dir() -> Path:
+    """Named agent profile dirs — always ~/.program/profiles/."""
+    return CONFIG_DIR_PATH / "profiles"
+
+
 def get_knowledge_dir(cwd: Path | None = None) -> Path:
     """Knowledge reference docs — ~/.program/knowledge/ or <project>/.program/knowledge/."""
     return get_config_dir(cwd) / 'knowledge'

@@ -192,3 +192,6 @@ class Settings:
 
     # Skill curator
     curator: Optional[CuratorSettings] = None
+
+    # Named agent profiles that should not be started at gateway startup
+    disabled_profiles: Optional[list[str]] = None

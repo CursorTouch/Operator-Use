@@ -18,6 +18,7 @@ from program.extension.types import (
 from program.tool.types import ToolContext
 from program.team.manager import TeamManager
 from program.settings.paths import get_teams_dir
+from program.agent.profile import AgentProfile
 
 
 class Runtime:
@@ -66,6 +67,9 @@ class Runtime:
         self.team_manager = TeamManager(get_teams_dir())
         # Expose MCPManager for use in create_session_agent() (gateway + ACP) and shutdown.
         self.mcp_manager = context.mcp_manager
+        self._agent_profiles: dict[str, AgentProfile] = {
+            p.name: p for p in context.resource_loader.get_agent_profiles()
+        }
         self._configure_context(context)
 
     def _create_workflow_manager(self, context: RuntimeContext) -> WorkflowManager:
@@ -268,6 +272,7 @@ class Runtime:
         self.subagent_manager = self._create_subagent_manager(self._context)
         self.workflow_manager = self._create_workflow_manager(self._context)
         self._configure_context(self._context)
+        await self._restore_agent_profile_from_session(self._context)
         await self._emit_session_start('resume')
 
     async def fork_session(self, from_entry_id: str) -> None:
@@ -376,6 +381,154 @@ class Runtime:
         )
 
         return agent
+
+    def create_profile_agent(self, profile: AgentProfile) -> Agent:
+        """
+        Create a persistent agent for a named profile.
+
+        Unlike create_session_agent() (which is always in-memory), this agent
+        uses a persisted SessionManager rooted at profile.sessions_dir, continues
+        from the most recent session if one exists, and loads its resources
+        exclusively from the profile directory.
+        """
+        from program.hooks.service import Hooks
+        from program.engine.service import Engine
+        from program.engine.types import Options
+        from program.session.manager import SessionManager
+        from program.extension.runtime import ExtensionRuntime
+        from program.resource.loader import ResourceLoader
+        from program.resource.types import ResourceLoaderOptions
+        from program.compaction.strategy.summarization.service import SummarizationCompaction
+        from program.compaction.strategy.types import CompactionSettings as CmpSettings
+        from program.runtime.types import _DeferredExtensionRuntime
+        from program.session.utils import find_most_recent_session
+        from program.agent.types import AgentConfig
+        from program.settings.paths import get_config_dir
+
+        hooks = Hooks()
+
+        # Resolve profile LLM (use profile model override if specified)
+        llm = self._context.llm
+        if profile.model_id:
+            try:
+                from program.inference.api.text.service import LLM
+                llm = LLM(
+                    model_id=profile.model_id,
+                    provider=profile.provider,
+                    auth_store=llm._auth_store,
+                )
+            except Exception:
+                pass  # fall back to default LLM
+
+        engine = Engine(
+            llm=llm,
+            tools=list(self._context.engine.tools),
+            options=Options(),
+            hooks=hooks,
+        )
+
+        # Persisted session in profile's sessions/ directory
+        sessions_dir = profile.sessions_dir
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        most_recent = find_most_recent_session(sessions_dir)
+        session_manager = SessionManager(
+            cwd=sessions_dir,
+            session_dir=sessions_dir,
+            session_file=most_recent,
+            persist=True,
+        )
+
+        # ResourceLoader scoped to the profile directory
+        resource_loader = ResourceLoader(
+            ResourceLoaderOptions(
+                cwd=sessions_dir,
+                config_dir=get_config_dir(),
+            )
+        )
+        resource_loader.set_active_profile(profile)
+
+        load_result = resource_loader.get_extensions()
+        deferred = _DeferredExtensionRuntime(load_result)
+
+        compaction_settings = CmpSettings(enabled=False)
+        if self._context.settings_manager:
+            s = self._context.settings_manager.settings
+            if s.compaction:
+                compaction_settings = CmpSettings(
+                    enabled=s.compaction.enabled,
+                    strategy=s.compaction.strategy,
+                )
+        compaction = SummarizationCompaction(
+            llm=llm,
+            settings=compaction_settings,
+        )
+
+        config = self._context.agent._config if self._context.agent else AgentConfig(
+            cwd=sessions_dir,
+            retry_enabled=True,
+        )
+
+        agent = Agent(
+            engine=engine,
+            session_manager=session_manager,
+            resource_loader=resource_loader,
+            extension_runtime=deferred,  # type: ignore[arg-type]
+            compaction=compaction,
+            config=config,
+        )
+
+        real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
+        agent._extensions = real_ext
+        agent._runtime = self
+        agent._active_profile = profile
+
+        engine.tool_context = ToolContext(
+            llm=llm,
+            engine=engine,
+            agent=agent,
+            session_manager=session_manager,
+            resource_loader=resource_loader,
+            extension_runtime=real_ext,
+            hooks=hooks,
+            subagent_manager=self.subagent_manager,
+            workflow_manager=self.workflow_manager,
+            bus=self.bus,
+            cron=self._context.cron,
+            mcp_manager=self.mcp_manager,
+            memory_manager=self._context.memory_manager,
+            process_manager=self._context.process_manager,
+            settings_manager=self._context.settings_manager,
+            auth_channel_manager=self._context.auth_channel_manager,
+            acp_auth_manager=self._context.acp_auth_manager,
+            acp_session_manager=self._context.acp_session_manager,
+            team_manager=self.team_manager,
+        )
+
+        return agent
+
+    # -------------------------------------------------------------------------
+    # Agent profile helpers
+    # -------------------------------------------------------------------------
+
+    def get_agent_profiles(self) -> dict[str, AgentProfile]:
+        return self._agent_profiles
+
+    def get_active_agent_profile(self) -> AgentProfile | None:
+        agent = self._context.agent
+        return agent.get_active_profile() if agent else None
+
+    async def _restore_agent_profile_from_session(self, context: RuntimeContext) -> None:
+        """Re-apply the last agent profile recorded in the session entries."""
+        if context.agent is None or context.session_manager is None:
+            return
+        from program.session.types import CustomInfoEntry
+        for entry in reversed(context.session_manager.entries):
+            if isinstance(entry, CustomInfoEntry) and entry.custom_type == 'agent_profile':
+                name = (entry.data or {}).get('name')
+                profile = self._agent_profiles.get(name) if name else None
+                if profile:
+                    await context.agent.apply_profile(profile)
+                return
 
     def shutdown(self) -> None:
         """Stop runtime-owned background services. Call when exiting the REPL."""

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from program.skill.types import Skill
     from program.extension.types import LoadExtensionsResult
     from program.subagent.profile import SubagentProfile
+    from program.agent.profile import AgentProfile
 
 
 # ============================================================================
@@ -77,6 +78,12 @@ class BaseResourceLoader(ABC):
 
     @abstractmethod
     def get_subagent_profiles(self) -> list['SubagentProfile']: ...
+
+    @abstractmethod
+    def get_agent_profiles(self) -> list['AgentProfile']: ...
+
+    @abstractmethod
+    def set_active_profile(self, profile: 'AgentProfile | None') -> None: ...
 
     @abstractmethod
     def get_diagnostics(self, runtime: 'ExtensionRuntime | None' = None) -> list['ResourceDiagnostic']:

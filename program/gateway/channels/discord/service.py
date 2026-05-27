@@ -39,6 +39,7 @@ class DiscordChannel(BaseChannel):
     def __init__(
         self,
         token: str,
+        name: str = "discord",
         commands: list[tuple[str, str]] | None = None,
         command_handler: Callable[[CommandParseResult], Awaitable[str]] | None = None,
         allow_from: list[str] | None = None,
@@ -51,6 +52,7 @@ class DiscordChannel(BaseChannel):
         super().__init__()
         if not _DISCORD_AVAILABLE:
             raise ImportError('discord.py>=2.0 is required for DiscordChannel.')
+        self._name = name
         self._token = token
         self._commands = commands or []
         self._command_handler = command_handler
@@ -77,7 +79,7 @@ class DiscordChannel(BaseChannel):
 
     @property
     def channel_id(self) -> str:
-        return "discord"
+        return self._name
 
     async def connect(self) -> None:
         """Create Discord client, register events, connect. Runs until cancelled."""
@@ -148,7 +150,7 @@ class DiscordChannel(BaseChannel):
                 meta['reply_to'] = str(ref.message_id)
 
             await self.receive(IncomingMessage(
-                channel="discord",
+                channel=self._name,
                 chat_id=chat_id,
                 parts=parts,
                 user_id=user_id,

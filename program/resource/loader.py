@@ -23,11 +23,13 @@ from program.settings.paths import (
     get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
     get_builtins_extensions_dir, get_builtins_hooks_dir,
     get_builtins_subagents_dir, get_subagents_dir,
+    get_profiles_dir,
     get_soul_path, get_user_profile_path, get_agent_memory_path,
 )
 from program.skill.loader import load_skills_cached
 from program.skill.types import Skill, LoadSkillsOptions
 from program.subagent.profile import SubagentProfile, load_profiles
+from program.agent.profile import AgentProfile, load_agent_profiles
 
 if TYPE_CHECKING:
     from program.extension.runtime import ExtensionRuntime
@@ -40,24 +42,21 @@ def _read_optional_file(path: Path) -> str | None:
         return None
 
 
-def _discover_system_prompt(cwd: Path) -> str | None:
-    project = get_system_prompt_path(cwd)
-    if project.is_file():
-        return _read_optional_file(project)
+def _discover_system_prompt() -> str | None:
     return _read_optional_file(get_system_prompt_path())
 
 
-def _discover_append_system_prompt(cwd: Path) -> str | None:
-    project = get_append_system_prompt_path(cwd)
-    if project.is_file():
-        return _read_optional_file(project)
+def _discover_append_system_prompt() -> str | None:
     return _read_optional_file(get_append_system_prompt_path())
 
 
 class ResourceLoader(BaseResourceLoader):
     """
-    Discovers and caches skills, extensions, and context files for one cwd.
+    Discovers and caches skills, extensions, and context files.
     Call reload() once before use. reload() is also called to refresh after settings change.
+
+    When a profile is active (set via set_active_profile()), profile-specific resource
+    directories replace the global user directories. Auth always comes from global.
     """
 
     def __init__(self, options: ResourceLoaderOptions) -> None:
@@ -77,6 +76,7 @@ class ResourceLoader(BaseResourceLoader):
         self._packages_dir = options.packages_dir
 
         self._bus = EventBus()
+        self._active_profile: AgentProfile | None = None
 
         # Cached state (populated by reload)
         self._extensions_result: LoadExtensionsResult = LoadExtensionsResult()
@@ -93,8 +93,17 @@ class ResourceLoader(BaseResourceLoader):
         self._agent_memory: str | None = None
         self._extension_skill_paths: list[str] = []
         self._subagent_profiles: list[SubagentProfile] = []
+        self._agent_profiles: list[AgentProfile] = []
         self._package_command_dirs: list[Path] = []
         self._package_subagent_dirs: list[Path] = []
+
+    # -------------------------------------------------------------------------
+    # Profile management
+    # -------------------------------------------------------------------------
+
+    def set_active_profile(self, profile: AgentProfile | None) -> None:
+        """Set or clear the active profile. Call reload() afterwards to apply."""
+        self._active_profile = profile
 
     # -------------------------------------------------------------------------
     # Public interface
@@ -144,8 +153,10 @@ class ResourceLoader(BaseResourceLoader):
     def get_subagent_profiles(self) -> list[SubagentProfile]:
         return self._subagent_profiles
 
+    def get_agent_profiles(self) -> list[AgentProfile]:
+        return self._agent_profiles
+
     def get_diagnostics(self, runtime: ExtensionRuntime | None = None) -> list[ResourceDiagnostic]:
-        """Return all diagnostics: extension load errors, collisions, skill warnings, and (optionally) runtime errors."""
         from program.skill.types import LoadSkillsResult
         skills_result = LoadSkillsResult(skills=self._skills, diagnostics=self._skill_diagnostics)
         return run_diagnostics(self._extensions_result, skills_result=skills_result, runtime=runtime)
@@ -160,6 +171,7 @@ class ResourceLoader(BaseResourceLoader):
         self._reload_system_prompt()
         self._reload_identity_files()
         self._reload_subagent_profiles()
+        self._reload_agent_profiles()
 
     # -------------------------------------------------------------------------
     # Internal reload helpers
@@ -171,12 +183,18 @@ class ResourceLoader(BaseResourceLoader):
             return
 
         dirs: list[Path] = [get_builtins_extensions_dir()]
-        project_ext = get_extensions_dir(self._cwd)
-        global_ext = get_extensions_dir()
-        if project_ext.is_dir():
-            dirs.append(project_ext)
-        if global_ext.is_dir():
-            dirs.append(global_ext)
+
+        if self._active_profile is not None:
+            # Profile mode: use profile's extensions dir only (no global user extensions)
+            profile_ext = self._active_profile.extensions_dir
+            if profile_ext.is_dir():
+                dirs.append(profile_ext)
+        else:
+            # Global mode: use global user extensions
+            global_ext = get_extensions_dir()
+            if global_ext.is_dir():
+                dirs.append(global_ext)
+
         dirs.extend(self._additional_extension_dirs)
 
         if self._package_sources and self._packages_dir:
@@ -202,17 +220,23 @@ class ResourceLoader(BaseResourceLoader):
             self._skill_diagnostics = []
             return
 
-        all_skill_paths = (
-            [str(get_builtins_skills_dir())]
-            + list(self._additional_skill_paths)
-            + list(self._extension_skill_paths)
-            + getattr(self, "_package_skill_paths", [])
-        )
+        skill_paths = [str(get_builtins_skills_dir())]
+
+        if self._active_profile is not None:
+            profile_skills = self._active_profile.skills_dir
+            if profile_skills.is_dir():
+                skill_paths.append(str(profile_skills))
+        else:
+            skill_paths.extend(self._additional_skill_paths)
+
+        skill_paths.extend(self._extension_skill_paths)
+        skill_paths.extend(getattr(self, '_package_skill_paths', []))
+
         cache_dir = get_config_dir() / 'cache'
         result = load_skills_cached(
             LoadSkillsOptions(
                 cwd=self._cwd,
-                skill_paths=all_skill_paths,
+                skill_paths=skill_paths,
                 include_defaults=True,
             ),
             cache_dir=cache_dir,
@@ -222,60 +246,73 @@ class ResourceLoader(BaseResourceLoader):
 
     def _reload_tools(self) -> None:
         dirs = [get_builtins_tools_dir()]
-        project_tools = get_tools_dir(self._cwd)
-        global_tools = get_tools_dir()
-        if project_tools.is_dir():
-            dirs.append(project_tools)
-        if global_tools.is_dir():
-            dirs.append(global_tools)
-        dirs.extend(self._additional_tool_dirs)
+
+        if self._active_profile is not None:
+            profile_tools = self._active_profile.tools_dir
+            if profile_tools.is_dir():
+                dirs.append(profile_tools)
+        else:
+            global_tools = get_tools_dir()
+            if global_tools.is_dir():
+                dirs.append(global_tools)
+            dirs.extend(self._additional_tool_dirs)
+
         self._tools = load_tools(dirs).tools
 
     def _reload_commands(self) -> None:
         dirs = [get_builtins_commands_dir()]
-        project_cmds = get_commands_dir(self._cwd)
-        global_cmds = get_commands_dir()
-        if project_cmds.is_dir():
-            dirs.append(project_cmds)
-        if global_cmds.is_dir():
-            dirs.append(global_cmds)
+
+        if self._active_profile is None:
+            global_cmds = get_commands_dir()
+            if global_cmds.is_dir():
+                dirs.append(global_cmds)
+
         dirs.extend(self._package_command_dirs)
         self._commands = load_commands(dirs).commands
 
     def _reload_hooks(self) -> None:
         dirs = [get_builtins_hooks_dir()]
-        project_hooks = get_hooks_dir(self._cwd)
-        global_hooks = get_hooks_dir()
-        if project_hooks.is_dir():
-            dirs.append(project_hooks)
-        if global_hooks.is_dir():
-            dirs.append(global_hooks)
+
+        if self._active_profile is None:
+            global_hooks = get_hooks_dir()
+            if global_hooks.is_dir():
+                dirs.append(global_hooks)
+
         self._hooks = load_hooks(dirs).hooks
 
     def _reload_context_files(self) -> None:
         if self._no_context_files:
             self._context_files = []
             return
-        self._context_files = load_project_context_files(self._cwd, self._config_dir)
+        # Context files come from profile knowledge dir or global knowledge
+        if self._active_profile is not None:
+            self._context_files = load_project_context_files(self._cwd, self._active_profile.profile_dir)
+        else:
+            self._context_files = load_project_context_files(self._cwd, self._config_dir)
 
     def _reload_subagent_profiles(self) -> None:
         dirs = [get_builtins_subagents_dir()]
-        global_sub = get_subagents_dir()
-        project_sub = get_subagents_dir(self._cwd)
-        if global_sub.is_dir():
-            dirs.append(global_sub)
-        if project_sub.is_dir():
-            dirs.append(project_sub)
+
+        if self._active_profile is None:
+            global_sub = get_subagents_dir()
+            if global_sub.is_dir():
+                dirs.append(global_sub)
+
         dirs.extend(self._package_subagent_dirs)
         self._subagent_profiles = load_profiles(dirs).profiles
+
+    def _reload_agent_profiles(self) -> None:
+        profiles_root = get_profiles_dir()
+        dirs = [profiles_root] if profiles_root.is_dir() else []
+        self._agent_profiles = load_agent_profiles(dirs).profiles
 
     def _reload_system_prompt(self) -> None:
         if self._system_prompt_override is not None:
             self._system_prompt = self._system_prompt_override
         else:
-            self._system_prompt = _discover_system_prompt(self._cwd)
+            self._system_prompt = _discover_system_prompt()
 
-        discovered_append = _discover_append_system_prompt(self._cwd)
+        discovered_append = _discover_append_system_prompt()
         if self._append_system_prompt_override:
             self._append_system_prompt = list(self._append_system_prompt_override)
         elif discovered_append:
@@ -283,17 +320,34 @@ class ResourceLoader(BaseResourceLoader):
         else:
             self._append_system_prompt = []
 
-        # Append knowledge index if any docs exist (project-level takes precedence)
+        # Knowledge index — profile knowledge takes precedence over global
         from program.knowledge.service import Knowledge
-        knowledge = Knowledge(get_knowledge_dir(self._cwd), get_knowledge_dir())
+        if self._active_profile is not None:
+            knowledge = Knowledge(self._active_profile.knowledge_dir, get_knowledge_dir())
+        else:
+            knowledge = Knowledge(get_knowledge_dir())
         if index := knowledge.build_knowledge_index():
             self._append_system_prompt.append(index)
 
-        # Ensure temp dirs exist so the agent can use them immediately
+        # Ensure temp dir exists
         get_temp_dir().mkdir(parents=True, exist_ok=True)
-        get_temp_dir(self._cwd).mkdir(parents=True, exist_ok=True)
 
     def _reload_identity_files(self) -> None:
-        self._soul_prompt = _read_optional_file(get_soul_path())
-        self._user_profile = _read_optional_file(get_user_profile_path())
-        self._agent_memory = _read_optional_file(get_agent_memory_path())
+        if self._active_profile is not None:
+            # Profile identity overrides global — fall back to global if not present in profile
+            self._soul_prompt = (
+                _read_optional_file(self._active_profile.soul_path)
+                or _read_optional_file(get_soul_path())
+            )
+            self._user_profile = (
+                _read_optional_file(self._active_profile.user_path)
+                or _read_optional_file(get_user_profile_path())
+            )
+            self._agent_memory = (
+                _read_optional_file(self._active_profile.memory_path)
+                or _read_optional_file(get_agent_memory_path())
+            )
+        else:
+            self._soul_prompt = _read_optional_file(get_soul_path())
+            self._user_profile = _read_optional_file(get_user_profile_path())
+            self._agent_memory = _read_optional_file(get_agent_memory_path())

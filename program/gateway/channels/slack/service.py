@@ -50,6 +50,7 @@ class SlackChannel(BaseChannel):
         self,
         bot_token: str,
         app_token: str,
+        name: str = "slack",
         commands: list[tuple[str, str]] | None = None,
         command_handler: Callable[[CommandParseResult], Awaitable[str]] | None = None,
         allow_from: list[str] | None = None,
@@ -61,6 +62,7 @@ class SlackChannel(BaseChannel):
         super().__init__()
         if not _SLACK_AVAILABLE:
             raise ImportError('slack-bolt>=1.0 is required for SlackChannel.')
+        self._name = name
         self._bot_token = bot_token
         self._app_token = app_token
         self._commands = commands or []
@@ -85,7 +87,7 @@ class SlackChannel(BaseChannel):
 
     @property
     def channel_id(self) -> str:
-        return "slack"
+        return self._name
 
     async def _build_parts(self, event: dict) -> list:
         """Extract audio and text parts from a Slack event dict."""
@@ -126,7 +128,7 @@ class SlackChannel(BaseChannel):
                 return
 
             await self.receive(IncomingMessage(
-                channel="slack",
+                channel=self._name,
                 chat_id=chat_id,
                 parts=parts,
                 user_id=event.get('user', ''),
@@ -159,7 +161,7 @@ class SlackChannel(BaseChannel):
                 return
 
             await self.receive(IncomingMessage(
-                channel="slack",
+                channel=self._name,
                 chat_id=chat_id,
                 parts=parts,
                 user_id=event.get('user', ''),
