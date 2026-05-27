@@ -297,7 +297,7 @@ class GeneratedImage:
     provider: str
     output: list["TextContent | ImageContent"]
     stop_reason: ImageStopReason
-    usage: Any = field(default_factory=lambda: __import__("program.message.types", fromlist=["Usage"]).Usage())
+    usage: Any = field(default_factory=lambda: __import__("operator_use.message.types", fromlist=["Usage"]).Usage())
     error: str = ""
     timestamp: float = field(default_factory=time.time)
 

@@ -210,7 +210,7 @@ def _operator_command() -> list[str]:
     if found:
         return [found]
 
-    return [sys.executable, "-m", "program.console.main"]
+    return [sys.executable, "-m", "operator_use.console.main"]
 
 
 def _start_pid_process(options: GatewayOptions) -> None:

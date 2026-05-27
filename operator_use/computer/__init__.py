@@ -10,9 +10,9 @@ from typing import Any, Literal
 PlatformName = Literal["linux", "macos", "windows"]
 
 _PLATFORM_PACKAGES: dict[PlatformName, str] = {
-    "linux": "program.computer.linux",
-    "macos": "program.computer.macos",
-    "windows": "program.computer.windows",
+    "linux": "operator_use.computer.linux",
+    "macos": "operator_use.computer.macos",
+    "windows": "operator_use.computer.windows",
 }
 
 _ROUTED_OBJECTS: dict[str, tuple[str, str]] = {
