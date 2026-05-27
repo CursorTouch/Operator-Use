@@ -111,6 +111,9 @@ class SendTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._bus = bus
 
+    def is_available(self, context) -> bool:
+        return (_bus or context.bus) is not None
+
     async def execute(
         self,
         invocation: ToolInvocation,

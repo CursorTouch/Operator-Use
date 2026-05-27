@@ -75,6 +75,9 @@ class ProcessTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._manager = manager
 
+    def is_available(self, context) -> bool:
+        return (_manager or context.process_manager) is not None
+
     async def execute(
         self,
         invocation: ToolInvocation,

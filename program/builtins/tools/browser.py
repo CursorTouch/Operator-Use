@@ -122,6 +122,12 @@ class BrowserTool(Tool):
         )
         self._browser: Browser | None = None
 
+    def is_available(self, context) -> bool:
+        sm = context.settings_manager
+        if sm is not None and sm.settings.browser_use_enabled is False:
+            return False
+        return True
+
     async def execute(
         self,
         invocation: ToolInvocation,

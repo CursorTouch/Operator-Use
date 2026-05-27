@@ -116,6 +116,12 @@ class CronTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._cron = cron
 
+    def is_available(self, context) -> bool:
+        sm = context.settings_manager
+        if sm is not None and sm.settings.cron_enabled is False:
+            return False
+        return (self._cron or context.cron) is not None
+
     async def execute(
         self,
         invocation: ToolInvocation,

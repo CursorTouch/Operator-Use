@@ -117,6 +117,12 @@ class ComputerTool(Tool):
         )
         self._desktop: Any | None = None
 
+    def is_available(self, context) -> bool:
+        sm = context.settings_manager
+        if sm is not None and sm.settings.computer_use_enabled is False:
+            return False
+        return True
+
     async def execute(
         self,
         invocation: ToolInvocation,

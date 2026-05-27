@@ -52,7 +52,14 @@ class MemoryTool(Tool):
             ),
             schema=MemorySchema,
             kind=ToolKind.Unknown,
-            execution_mode=ToolExecutionMode.Sequential,        )
+            execution_mode=ToolExecutionMode.Sequential,
+        )
+
+    def is_available(self, context) -> bool:
+        sm = context.settings_manager
+        if sm is not None and sm.settings.memory is not None and sm.settings.memory.enabled is False:
+            return False
+        return context.memory_manager is not None
 
     async def execute(
         self,

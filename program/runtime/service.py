@@ -84,8 +84,8 @@ class Runtime:
         )
 
     def _configure_context(self, context: RuntimeContext) -> None:
-        """Attach runtime-owned services to the active engine/tool context."""
-        context.engine.tool_context = ToolContext(
+        """Attach runtime-owned services to the active engine/tool context, then drop tools whose backing service is absent."""
+        tool_ctx = ToolContext(
             llm=context.llm,
             engine=context.engine,
             agent=context.agent,
@@ -105,6 +105,10 @@ class Runtime:
             acp_auth_manager=context.acp_auth_manager,
             acp_session_manager=context.acp_session_manager,
         )
+        context.engine.tool_context = tool_ctx
+        for tool in list(context.engine.state.tools):
+            if not tool.is_available(tool_ctx):
+                context.engine.remove_tool(tool.name)
 
     # -------------------------------------------------------------------------
     # Factory

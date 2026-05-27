@@ -61,6 +61,9 @@ class MCPTool(Tool):
         self._engine = engine
         self._agent_id = agent_id
 
+    def is_available(self, context) -> bool:
+        return (self._manager or context.mcp_manager) is not None
+
     async def execute(
         self,
         invocation: ToolInvocation,

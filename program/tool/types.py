@@ -118,6 +118,10 @@ class Tool(ABC):
         self.kind = kind
         self.execution_mode = execution_mode
 
+    def is_available(self, context: ToolContext) -> bool:
+        """Return False to exclude this tool when its backing service is unavailable."""
+        return True
+
     def validate(self, params: dict[str, Any]) -> tuple[bool, list[str]]:
         try:
             self.schema.model_validate(params)

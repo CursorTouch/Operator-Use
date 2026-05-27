@@ -148,6 +148,12 @@ class WorkflowTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._manager = manager
 
+    def is_available(self, context) -> bool:
+        sm = context.settings_manager
+        if sm is not None and sm.settings.workflows_enabled is False:
+            return False
+        return (self._manager or context.workflow_manager) is not None
+
     async def execute(
         self,
         invocation: ToolInvocation,
