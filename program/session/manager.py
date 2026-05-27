@@ -558,6 +558,21 @@ class SessionManager:
 
         return SessionManager(target_cwd, session_dir, new_session_file)
 
+    def list_own(
+        self,
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> list[SessionInfo]:
+        """List all sessions in this manager's session_dir only.
+
+        Safe for profile-scoped session managers — never leaks sessions from
+        other profiles or the global sessions directory.
+        """
+        if self.session_dir is None or not self.session_dir.exists():
+            return []
+        sessions = list_sessions_from_dir(self.session_dir, on_progress=on_progress)
+        sessions.sort(key=lambda s: s.modified.timestamp(), reverse=True)
+        return sessions
+
     @staticmethod
     def list(
         cwd: Path | str,

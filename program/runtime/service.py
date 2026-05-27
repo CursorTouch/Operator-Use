@@ -152,6 +152,29 @@ class Runtime:
     def auth_channel_manager(self):
         return self._context.auth_channel_manager
 
+    def get_session_dir(self, agent: Agent | None = None) -> Path:
+        """Return the sessions directory for the given agent (or current session).
+
+        Profile agents have their own isolated sessions_dir under
+        ~/.program/profiles/<name>/sessions/. Non-profile agents use the global
+        sessions directory from settings. This is the canonical source of truth
+        for scope-aware session listing — always use it instead of the global
+        get_sessions_dir().
+        """
+        target = agent or self._context.agent
+        if target is not None:
+            active = target.get_active_profile()
+            if active is not None:
+                return active.sessions_dir
+            sm = target._session_manager
+            if sm is not None and sm.session_dir is not None:
+                return sm.session_dir
+        sm = self._context.session_manager
+        if sm is not None and sm.session_dir is not None:
+            return sm.session_dir
+        from program.settings.paths import get_sessions_dir
+        return get_sessions_dir()
+
     @property
     def unified_session_enabled(self) -> bool:
         settings = self._context.settings_manager
@@ -247,7 +270,24 @@ class Runtime:
         await self._emit_session_start('new')
 
     async def resume_session(self, session_file: Path) -> None:
-        """Shut down the current session and resume an existing one from a file."""
+        """Shut down the current session and resume an existing one from a file.
+
+        If the active agent belongs to a profile, the session file must live
+        inside that profile's sessions_dir. Cross-profile access is silently
+        rejected to prevent one profile from reading another's history.
+        """
+        session_file = Path(session_file).resolve()
+        permitted_dir = self.get_session_dir()
+        try:
+            session_file.relative_to(permitted_dir)
+        except ValueError:
+            import logging
+            logging.getLogger(__name__).warning(
+                'resume_session: rejected — %s is outside permitted dir %s',
+                session_file, permitted_dir,
+            )
+            return
+
         before_results = await self._context.extension_runtime.emit(
             'session_before_switch',
             SessionBeforeSwitchEvent(reason='resume', target_session_file=str(session_file)),
@@ -453,9 +493,9 @@ class Runtime:
         compaction_settings = CmpSettings(enabled=False)
         if self._context.settings_manager:
             s = self._context.settings_manager.settings
-            if s.compaction:
+            if s.compaction and s.compaction.enabled is not None:
                 compaction_settings = CmpSettings(
-                    enabled=s.compaction.enabled,
+                    enabled=bool(s.compaction.enabled),
                     strategy=s.compaction.strategy,
                 )
         compaction = SummarizationCompaction(
