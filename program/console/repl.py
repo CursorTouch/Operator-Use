@@ -207,7 +207,8 @@ async def _wait_for_esc() -> None:
             pass
 
 
-async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False, resume: bool = False, system_prompt: str | None = None) -> None:
+async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', ephemeral: bool = False, resume: bool = False, system_prompt: str | None = None, prompt: str | None = None, session_file: str | None = None) -> None:
+    from pathlib import Path as _Path
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
@@ -216,6 +217,7 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
         persist_session=not ephemeral,
         resume=resume,
         system_prompt=system_prompt,
+        session_file=_Path(session_file) if session_file else None,
     )
 
     print(f"Agent starting in {cwd}  (model: {config.model_id})")
@@ -273,6 +275,12 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     cancel: asyncio.Event = asyncio.Event()
     session: PromptSession = PromptSession()
     last_interrupt = False
+
+    # If an initial prompt was provided (e.g. via --prompt or post-reboot resume),
+    # inject it before entering the interactive loop.
+    if prompt:
+        print(_cyan('\n[You] ') + prompt)
+        await runtime.user_input(prompt)
 
     # patch_stdout() keeps the event loop running during prompt_async() so
     # background asyncio tasks (subagents) can print above the prompt line
@@ -372,13 +380,15 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
 @click.option('--ephemeral', is_flag=True, default=False, help='Run in-memory only — session is not saved to disk.')
 @click.option('--resume', is_flag=True, default=False, help='Resume the most recent session instead of starting fresh')
 @click.option('--system-prompt', default=None, help='Override the default system prompt')
-def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, ephemeral: bool, resume: bool, system_prompt: str | None) -> None:
+@click.option('--prompt', default=None, help='Inject an initial message so the agent starts immediately.')
+@click.option('--session-file', default=None, hidden=True, help='Open a specific session file.')
+def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, ephemeral: bool, resume: bool, system_prompt: str | None, prompt: str | None, session_file: str | None) -> None:
     """Start the interactive agent REPL."""
     from dotenv import load_dotenv
     load_dotenv()
 
     cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
     try:
-        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, ephemeral=ephemeral, resume=resume, system_prompt=system_prompt))
+        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, ephemeral=ephemeral, resume=resume, system_prompt=system_prompt, prompt=prompt, session_file=session_file))
     except KeyboardInterrupt:
         pass

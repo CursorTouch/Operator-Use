@@ -34,6 +34,8 @@ class GatewayOptions:
     provider: str | None = None
     resume: bool = False
     system_prompt: str | None = None
+    prompt: str | None = None          # inject as first user message on startup
+    session_file: Path | None = None   # open a specific session file (internal, used by reboot)
 
 
 async def run_gateway_foreground(options: GatewayOptions) -> None:
@@ -46,6 +48,7 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
         provider=options.provider,
         resume=options.resume,
         system_prompt=options.system_prompt,
+        session_file=options.session_file,
     )
     runtime = await Runtime.create(config)
     gateway_manager = GatewayManager(runtime)
@@ -57,6 +60,9 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
     click.echo(f"Agent running in {options.cwd}  (model: {config.model_id})")
     click.echo(f"Channels: {channels_str}")
     click.echo("Press Ctrl-C to stop.\n")
+
+    if options.prompt:
+        await _inject_prompt(options.prompt, runtime)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -80,6 +86,18 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
         click.echo("\nShutting down...")
         await gateway_manager.astop()
         await runtime.ashutdown()
+
+
+async def _inject_prompt(prompt: str, runtime) -> None:
+    """Publish an initial prompt into the stdio channel so the agent starts immediately."""
+    from program.bus.types import IncomingMessage, TextPart
+
+    await runtime.bus.publish_incoming(IncomingMessage(
+        channel="stdio",
+        chat_id="cli",
+        parts=[TextPart(content=prompt)],
+        metadata={"source": "initial_prompt"},
+    ))
 
 
 def foreground_command(options: GatewayOptions) -> list[str]:
@@ -454,13 +472,15 @@ def _xml_escape(value: str) -> str:
     )
 
 
-def _options(cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None) -> GatewayOptions:
+def _options(cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None, prompt: str | None = None, session_file: str | None = None) -> GatewayOptions:
     return GatewayOptions(
         cwd=Path(cwd).resolve() if cwd else Path.cwd(),
         model=model,
         provider=provider,
         resume=resume,
         system_prompt=system_prompt,
+        prompt=prompt,
+        session_file=Path(session_file) if session_file else None,
     )
 
 
@@ -471,6 +491,8 @@ def _options_from_context(
     provider: str | None,
     resume: bool,
     system_prompt: str | None,
+    prompt: str | None = None,
+    session_file: str | None = None,
 ) -> GatewayOptions:
     base = ctx.obj.get("gateway_options") if ctx.obj else None
     return GatewayOptions(
@@ -479,10 +501,14 @@ def _options_from_context(
         provider=provider if provider is not None else (base.provider if base else None),
         resume=resume or (base.resume if base else False),
         system_prompt=system_prompt if system_prompt is not None else (base.system_prompt if base else None),
+        prompt=prompt or (base.prompt if base else None),
+        session_file=Path(session_file) if session_file else (base.session_file if base else None),
     )
 
 
 def gateway_options(command):
+    command = click.option("--session-file", default=None, hidden=True, help="Open a specific session file.")(command)
+    command = click.option("--prompt", default=None, help="Inject an initial message so the agent starts immediately.")(command)
     command = click.option("--system-prompt", default=None, help="Override the default system prompt")(command)
     command = click.option("--resume", is_flag=True, default=False, help="Resume the most recent session instead of starting fresh")(command)
     command = click.option("--provider", default=None, help="Provider override")(command)
@@ -498,10 +524,12 @@ def gateway_options(command):
 @click.option("--provider", default=None, help="Provider override")
 @click.option("--resume", is_flag=True, default=False, help="Resume the most recent session instead of starting fresh")
 @click.option("--system-prompt", default=None, help="Override the default system prompt")
-def gateway(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None) -> None:
+@click.option("--prompt", default=None, help="Inject an initial message so the agent starts immediately.")
+@click.option("--session-file", default=None, hidden=True, help="Open a specific session file.")
+def gateway(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None, prompt: str | None, session_file: str | None) -> None:
     """Run and manage the Operator gateway."""
     ctx.ensure_object(dict)
-    ctx.obj["gateway_options"] = _options(cwd, model, provider, resume, system_prompt)
+    ctx.obj["gateway_options"] = _options(cwd, model, provider, resume, system_prompt, prompt, session_file)
     if ctx.invoked_subcommand is None:
         asyncio.run(run_gateway_foreground(ctx.obj["gateway_options"]))
 
@@ -509,9 +537,9 @@ def gateway(ctx: click.Context, cwd: str | None, model: str | None, provider: st
 @gateway.command("run")
 @click.pass_context
 @gateway_options
-def gateway_run(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None) -> None:
+def gateway_run(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, resume: bool, system_prompt: str | None, prompt: str | None, session_file: str | None) -> None:
     """Run the gateway in the foreground."""
-    asyncio.run(run_gateway_foreground(_options_from_context(ctx, cwd, model, provider, resume, system_prompt)))
+    asyncio.run(run_gateway_foreground(_options_from_context(ctx, cwd, model, provider, resume, system_prompt, prompt, session_file)))
 
 
 @gateway.command("start")

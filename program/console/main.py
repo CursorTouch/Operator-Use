@@ -17,7 +17,9 @@ from program.console.gateway import GatewayOptions, gateway, run_gateway_foregro
 @click.option('--repl', 'use_repl', is_flag=True, default=False, help='Start interactive REPL')
 @click.option('--resume', is_flag=True, default=False, help='Resume the most recent session instead of starting fresh')
 @click.option('--system-prompt', default=None, help='Override the default system prompt')
-def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, use_repl: bool, resume: bool, system_prompt: str | None) -> None:
+@click.option('--prompt', default=None, help='Inject an initial message so the agent starts immediately.')
+@click.option('--session-file', default=None, hidden=True, help='Open a specific session file.')
+def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | None, use_repl: bool, resume: bool, system_prompt: str | None, prompt: str | None, session_file: str | None) -> None:
     """Operator — AI agent harness."""
     from dotenv import load_dotenv
     load_dotenv()
@@ -30,7 +32,7 @@ def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | 
     if ctx.invoked_subcommand is None:
         cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
         if use_repl:
-            ctx.invoke(repl, cwd=cwd, model=model, provider=provider, resume=resume, system_prompt=system_prompt)
+            ctx.invoke(repl, cwd=cwd, model=model, provider=provider, resume=resume, system_prompt=system_prompt, prompt=prompt, session_file=session_file)
         else:
             try:
                 asyncio.run(run_gateway_foreground(GatewayOptions(
@@ -39,6 +41,8 @@ def cli(ctx: click.Context, cwd: str | None, model: str | None, provider: str | 
                     provider=provider,
                     resume=resume,
                     system_prompt=system_prompt,
+                    prompt=prompt,
+                    session_file=Path(session_file) if session_file else None,
                 )))
             except KeyboardInterrupt:
                 pass
