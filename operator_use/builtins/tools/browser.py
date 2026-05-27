@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 import httpx
 from markdownify import markdownify
 from pydantic import BaseModel, Field, model_validator
-
+from operator_use.message.types import UserMessage
 from operator_use.browser import Browser, BrowserConfig
 from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolInvocation, ToolKind, ToolResult
 
@@ -327,7 +327,8 @@ class BrowserTool(Tool):
         except Exception as exc:
             return ToolResult.error(invocation.id, f"browser: {exc}")
 
-    async def get_state_message(self):
+    @property
+    async def state_message(self)->Optional[UserMessage]:
         """Return a UserMessage with the current browser state, or None if closed.
 
         Called by EphemeralInjector just before each LLM API call.  The message

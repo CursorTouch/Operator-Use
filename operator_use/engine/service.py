@@ -120,6 +120,7 @@ class Engine:
         if self.state.steering_queue:
             self.state.steering_queue.clear()
         self.state.error_message = None
+        self.state.state_message = None
         self.state.pending_tool_calls.clear()
         self.state.is_streaming = False
 

@@ -85,6 +85,7 @@ class AgentState:
     streaming_message: Optional[BaseMessage] = None
     thinking_level: Optional[ThinkingLevel] = None
     error_message: Optional[str] = None
+    state_message: Optional[BaseMessage] = None
     tools: list[Tool] = field(default_factory=list)
     follow_up_queue: Optional[FollowupQueue] = None
     steering_queue: Optional[SteeringQueue] = None

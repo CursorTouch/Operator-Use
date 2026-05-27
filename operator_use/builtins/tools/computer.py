@@ -4,8 +4,8 @@ import base64
 import dataclasses
 import json
 from enum import Enum
-from typing import Any
-
+from typing import Any, Optional
+from operator_use.message.types import UserMessage
 from pydantic import BaseModel, Field, model_validator
 
 from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolInvocation, ToolKind, ToolResult
@@ -196,8 +196,9 @@ class ComputerTool(Tool):
             return ToolResult.ok(id=invocation.id, content=content)
         except Exception as exc:
             return ToolResult.error(id=invocation.id, content=f"computer: {exc}")
-
-    async def get_state_message(self):
+    
+    @property
+    async def state_message(self)->Optional[UserMessage]:
         """Return a UserMessage with the current desktop state, or None if closed.
 
         Called by EphemeralInjector just before each LLM API call.  The message
@@ -211,7 +212,6 @@ class ComputerTool(Tool):
         try:
             state = self._desktop.get_state(as_bytes=False)
             state_text = json.dumps(self._to_jsonable(state), indent=2)
-            from operator_use.message.types import UserMessage
             return UserMessage.text(f"[Current desktop state]\n{state_text}")
         except Exception:
             return None
