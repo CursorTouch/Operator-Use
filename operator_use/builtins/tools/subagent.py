@@ -51,7 +51,6 @@ class SubAgentSchema(BaseModel):
             'Must match an existing profile name — use action="profiles" to see available options. '
             'Not required when fork=true.'
         ),
-        default='',
     )
     fork: bool = Field(
         default=False,
