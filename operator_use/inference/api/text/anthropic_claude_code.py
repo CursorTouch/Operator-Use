@@ -102,18 +102,32 @@ def _output_config(response_format: Any | None) -> dict[str, Any] | None:
     }
 
 
+_OAUTH_HEADERS = {
+    "anthropic-beta": "oauth-2025-04-20",
+    "x-app": "cli",
+    "User-Agent": "claude-cli/2.1.122 (external, sdk-cli)",
+}
+
+
 class AnthropicClaudeCodeAPI(BaseAPI):
-    """Anthropic Messages API using OAuth Bearer token auth (Claude Pro/Max)."""
+    """Anthropic Messages API using OAuth token auth (Claude Pro/Max).
+
+    Sends the token via X-Api-Key (not Authorization: Bearer) with the
+    required OAuth beta headers, which is what Anthropic's API enforces
+    for Claude Max / Pro OAuth tokens.
+    """
 
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
+        merged_headers = {**_OAUTH_HEADERS, **(options.headers or {})}
         self._client = AsyncAnthropic(
-            auth_token=options.api_key,
+            auth_token=options.api_key,        # Bearer auth for OAuth tokens
             base_url=options.base_url,
-            default_headers=options.headers,
+            default_headers=merged_headers,
             max_retries=options.max_retries,
             timeout=options.timeout.total_seconds(),
         )
+        self._current_api_key = options.api_key
 
     def _build_params(
         self,
@@ -145,7 +159,21 @@ class AnthropicClaudeCodeAPI(BaseAPI):
             ]
         return params
 
+    def _sync_client(self) -> None:
+        """Rebuild client if the api_key (OAuth token) has been refreshed."""
+        if self.options.api_key != self._current_api_key:
+            self._current_api_key = self.options.api_key
+            merged_headers = {**_OAUTH_HEADERS, **(self.options.headers or {})}
+            self._client = AsyncAnthropic(
+                auth_token=self.options.api_key,
+                base_url=self.options.base_url,
+                default_headers=merged_headers,
+                max_retries=self.options.max_retries,
+                timeout=self.options.timeout.total_seconds(),
+            )
+
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
+        self._sync_client()
         system, anthropic_messages = _messages_to_anthropic(context.messages)
         if context.system_prompt:
             system = context.system_prompt

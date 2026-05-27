@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 __all__ = ["GoogleAntigravityAPI"]
 
-_SKIP_KEYS = {"title", "$schema", "$defs", "default"}
+_SKIP_KEYS = {"title", "$schema", "$defs", "default", "prefixItems", "maxItems", "minItems"}
 
 
 def _resolve_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -63,6 +63,18 @@ def _resolve_schema(schema: dict[str, Any]) -> dict[str, Any]:
                 result[k] = [_resolve(i) for i in v]
             else:
                 result[k] = v
+
+        # Gemini requires `items` on every array type.
+        # Pydantic encodes tuple[int, int] as {type: array, prefixItems: [...]}
+        # which we drop above — fill in a generic integer items fallback.
+        if result.get("type") == "array" and "items" not in result:
+            prefix = obj.get("prefixItems")
+            if prefix and isinstance(prefix, list) and len(prefix) > 0:
+                # Use the type of the first element (all tuple coords are the same type)
+                result["items"] = _resolve(prefix[0])
+            else:
+                result["items"] = {"type": "string"}
+
         return result
 
     return _resolve(schema)
