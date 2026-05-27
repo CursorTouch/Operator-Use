@@ -113,19 +113,10 @@ def _render_event(event) -> None:
             args_str = ', '.join(f'{k}={v!r}' for k, v in tc.args.items())
             _out(f"\n{_yellow(f'[Tool] {tc.name}({args_str})')}")
 
-        case ToolExecutionUpdateEvent(partial_tool_result=part):
-            text = getattr(part, 'content', '') if part is not None else ''
-            if not text:
-                return
-            if _streaming_role != 'tool_stream':
-                _terminal_write(f"{_grey('[Tool ⋯]')} ")
-                _streaming_role = 'tool_stream'
-            _terminal_write(text)
+        case ToolExecutionUpdateEvent():
+            pass  # suppress live-update lines in the repl; [Result] already shows the outcome
 
         case ToolExecutionEndEvent(tool_result=res):
-            if _streaming_role == 'tool_stream':
-                _terminal_write(end='\r\n')
-                _streaming_role = None
             content = str(res.content)
             if len(content) > 500:
                 content = content[:500] + _grey(' … [truncated]')
