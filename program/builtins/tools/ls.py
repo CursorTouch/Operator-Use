@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 from pydantic import BaseModel, Field
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class LsSchema(BaseModel):
     path: str = Field(
@@ -18,10 +18,15 @@ class LsTool(Tool):
             description="List files and subdirectories inside a directory. Directories are shown first, then files, both sorted alphabetically.",
             schema=LsSchema,
             kind=ToolKind.Read,
-            execution_mode=ToolExecutionMode.Parallel
-        )
+            execution_mode=ToolExecutionMode.Parallel,        )
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback=None,
+        signal=None,
+        context: ToolContext | None = None,
+    ) -> ToolResult:
         params = invocation.params
         path_str = params.get("path", ".")
         resolved_path = Path(path_str).resolve()

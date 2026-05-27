@@ -96,7 +96,7 @@ def format_skills_for_prompt(skills: list[Skill], available_tools: set[str] | No
         '',
         'The following skills provide specialized instructions for specific tasks.',
         'Before replying to any task, scan the skills below. If a skill matches or is even '
-        'partially relevant, you MUST load it with skill_view before proceeding.',
+        'partially relevant, you MUST load it with skill action="view" before proceeding.',
         'When a skill file references a relative path, resolve it against the skill directory '
         '(parent of SKILL.md) and use that absolute path in tool commands.',
         '',

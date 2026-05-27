@@ -146,8 +146,7 @@ class TodoTool(Tool):
             ),
             schema=TodoSchema,
             kind=ToolKind.Read,
-            execution_mode=ToolExecutionMode.Sequential,
-        )
+            execution_mode=ToolExecutionMode.Sequential,        )
         self.store = store or TodoStore()
 
     def format_for_injection(self) -> str | None:

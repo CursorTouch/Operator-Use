@@ -1,6 +1,6 @@
 from pathlib import Path
 from pydantic import BaseModel, Field
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class Edit(BaseModel):
     old_content: str = Field(
@@ -28,10 +28,15 @@ class EditTool(Tool):
             description="Edit a file by replacing exact chunks of text. Pass one or more {old_content, new_content} pairs.",
             schema=EditSchema,
             kind=ToolKind.Write,
-            execution_mode=ToolExecutionMode.Parallel
-        )
+            execution_mode=ToolExecutionMode.Parallel,        )
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback=None,
+        signal=None,
+        context: ToolContext | None = None,
+    ) -> ToolResult:
         params = invocation.params
         path_str = params.get("path")
         edits_raw = params.get("edits", [])

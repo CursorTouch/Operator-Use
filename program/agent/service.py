@@ -240,7 +240,7 @@ class Agent(ExtensionContext):
         invocation: ToolInvocation,
         signal: object,
     ) -> ToolInvocation | ToolResultContent | None:
-        if invocation.name != 'skill_manage':
+        if invocation.name != 'skill':
             self._skill_review.on_tool_call()
 
         results = await self._extensions.emit(
@@ -369,8 +369,8 @@ class Agent(ExtensionContext):
     def _maybe_spawn_skill_review(self) -> None:
         """Spawn a background thread to review the conversation and update skills."""
         tools_by_name = {t.name: t for t in self._engine.state.tools}
-        skill_manage = tools_by_name.get('skill_manage')
-        if skill_manage is None:
+        skill_tool = tools_by_name.get('skill')
+        if skill_tool is None:
             return
         messages = list(self._engine.state.messages)
         if not messages:
@@ -378,8 +378,8 @@ class Agent(ExtensionContext):
         spawn_skill_review(
             llm=self._engine.llm,
             messages=messages,
-            skill_manage_tool=skill_manage,
-            skill_view_tool=tools_by_name.get('skill_view'),
+            skill_manage_tool=skill_tool,
+            skill_view_tool=skill_tool,
         )
 
     def _active_todo_injection(self) -> str | None:

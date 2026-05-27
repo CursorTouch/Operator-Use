@@ -1,6 +1,6 @@
 from pathlib import Path
 from pydantic import BaseModel, Field
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 MAX_TOOL_OUTPUT_LENGTH = 100000 
 
@@ -25,10 +25,15 @@ class ReadTool(Tool):
             description="Read a text file and return its contents with line numbers. Use offset/limit to read a slice of a large file.",
             schema=ReadSchema,
             kind=ToolKind.Read,
-            execution_mode=ToolExecutionMode.Parallel
-        )
+            execution_mode=ToolExecutionMode.Parallel,        )
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback=None,
+        signal=None,
+        context: ToolContext | None = None,
+    ) -> ToolResult:
         params = invocation.params
         path_str = params.get("path")
         offset = params.get("offset", 0)

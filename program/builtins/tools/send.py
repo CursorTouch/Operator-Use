@@ -108,8 +108,7 @@ class SendTool(Tool):
             ),
             schema=SendSchema,
             kind=ToolKind.Execute,
-            execution_mode=ToolExecutionMode.Sequential,
-        )
+            execution_mode=ToolExecutionMode.Sequential,        )
         self._bus = bus
 
     async def execute(

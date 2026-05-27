@@ -76,8 +76,13 @@ class MCPTool(Tool):
                 content='MCP is not configured. Add mcpServers to settings.json to enable it.',
             )
 
-        action = invocation.params.get('action')
-        server_name = invocation.params.get('server_name')
+        try:
+            validated = _MCPSchema.model_validate(invocation.params)
+        except Exception as exc:
+            return ToolResult.error(id=invocation.id, content=str(exc))
+
+        action = validated.action
+        server_name: str = validated.server_name or ''
 
         match action:
             case 'list':

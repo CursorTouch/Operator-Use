@@ -52,8 +52,7 @@ class MemoryTool(Tool):
             ),
             schema=MemorySchema,
             kind=ToolKind.Unknown,
-            execution_mode=ToolExecutionMode.Sequential,
-        )
+            execution_mode=ToolExecutionMode.Sequential,        )
 
     async def execute(
         self,

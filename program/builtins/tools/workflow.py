@@ -145,8 +145,7 @@ class WorkflowTool(Tool):
             ),
             schema=WorkflowSchema,
             kind=ToolKind.Workflow,
-            execution_mode=ToolExecutionMode.Sequential,
-        )
+            execution_mode=ToolExecutionMode.Sequential,        )
         self._manager = manager
 
     async def execute(

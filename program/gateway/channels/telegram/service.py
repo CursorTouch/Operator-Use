@@ -366,6 +366,14 @@ class TelegramChannel(BaseChannel):
                     await bot.send_chat_action(int(chat_id), ChatAction.TYPING)
                 except Exception:
                     pass
+            elif kind == 'tool_update' and self._show_tool_calls:
+                text = metadata.get('text', '')
+                existing_id = self._tool_msg_ids.get(chat_id)
+                if text and existing_id is not None:
+                    try:
+                        await bot.edit_message_text(text, chat_id=int(chat_id), message_id=existing_id)
+                    except Exception:
+                        pass
             elif kind == 'tool_end' and self._show_tool_calls:
                 name = metadata.get('name', '')
                 is_error = metadata.get('is_error', False)

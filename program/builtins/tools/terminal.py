@@ -75,8 +75,7 @@ class TerminalTool(Tool):
             ),
             schema=TerminalSchema,
             kind=ToolKind.Execute,
-            execution_mode=ToolExecutionMode.Parallel,
-        )
+            execution_mode=ToolExecutionMode.Parallel,        )
         self._manager: 'ProcessManager | None' = None
         self._execute_path: str | None = None
         self._execute_command_prefix: str | None = None
@@ -125,7 +124,6 @@ class TerminalTool(Tool):
         tool_execution_update_callback: Optional[ToolExecutionUpdateCallback] = None,
         signal: Optional[AbortSignal] = None,
         context: ToolContext | None = None,
-        **kwargs,
     ) -> ToolResult:
         params = invocation.params
         cmd = params.get("cmd")
@@ -140,7 +138,7 @@ class TerminalTool(Tool):
         if blocked:
             return ToolResult.error(id=invocation.id, content=f"Command blocked: contains forbidden pattern '{blocked}'")
 
-        profile_root = kwargs.get("_profile") or "."
+        profile_root = invocation.cwd or "."
         if cwd_param:
             resolved = Path(cwd_param) if Path(cwd_param).is_absolute() else Path(profile_root) / cwd_param
             cwd = str(resolved)

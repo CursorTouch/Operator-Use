@@ -72,8 +72,7 @@ class ProcessTool(Tool):
             ),
             schema=ProcessSchema,
             kind=ToolKind.Execute,
-            execution_mode=ToolExecutionMode.Sequential,
-        )
+            execution_mode=ToolExecutionMode.Sequential,        )
         self._manager = manager
 
     async def execute(

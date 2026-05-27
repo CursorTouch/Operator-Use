@@ -13,7 +13,7 @@ from program.subagent.manager import _session_channel, _session_chat_id, _sessio
 from program.agent.types import RetryStartEvent, RetryEndEvent
 from program.hooks.types import (
     AgentErrorEvent, MessageEndEvent, MessageUpdateEvent,
-    ToolExecutionEndEvent, ToolExecutionStartEvent,
+    ToolExecutionEndEvent, ToolExecutionStartEvent, ToolExecutionUpdateEvent,
     ChannelConnectEvent, ChannelDisconnectEvent,
     MessageReceiveEvent, MessageReceiveResult,
     MessageSendEvent, MessageSendResult, MessageCancelEvent,
@@ -368,6 +368,16 @@ class Gateway:
                         chat_id=chat_id,
                         stream_phase=StreamPhase.CHUNK,
                         metadata={'kind': 'tool_start', 'name': tc.name, 'args': tc.args, 'id': tc.id, 'tool_kind': tc.kind.value if tc.kind else None},
+                    )
+                    await self._bus.publish_outgoing(out)
+
+                case ToolExecutionUpdateEvent(partial_tool_result=partial) if partial is not None:
+                    name = _tool_names.get(partial.id, '')
+                    out = OutgoingMessage(
+                        channel=channel_id,
+                        chat_id=chat_id,
+                        stream_phase=StreamPhase.CHUNK,
+                        metadata={'kind': 'tool_update', 'name': name, 'text': str(partial.content), 'id': partial.id},
                     )
                     await self._bus.publish_outgoing(out)
 

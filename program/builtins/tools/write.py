@@ -1,6 +1,6 @@
 from pathlib import Path
 from pydantic import BaseModel, Field
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class WriteSchema(BaseModel):
     path: str = Field(
@@ -23,10 +23,15 @@ class WriteTool(Tool):
             description="Create a new file or fully overwrite an existing one. Parent directories are created automatically.",
             schema=WriteSchema,
             kind=ToolKind.Write,
-            execution_mode=ToolExecutionMode.Parallel
-        )
+            execution_mode=ToolExecutionMode.Parallel,        )
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback=None,
+        signal=None,
+        context: ToolContext | None = None,
+    ) -> ToolResult:
         params = invocation.params
         path_str = params.get("path")
         content = params.get("content")

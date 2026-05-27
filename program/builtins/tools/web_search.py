@@ -1,7 +1,7 @@
 import asyncio
 from enum import StrEnum
 from pydantic import BaseModel, Field
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 from ddgs import DDGS
 
 
@@ -74,10 +74,15 @@ class WebSearchTool(Tool):
             ),
             schema=WebSearchSchema,
             kind=ToolKind.Web,
-            execution_mode=ToolExecutionMode.Parallel,
-        )
+            execution_mode=ToolExecutionMode.Parallel,        )
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback=None,
+        signal=None,
+        context: ToolContext | None = None,
+    ) -> ToolResult:
         query = invocation.params.get("query")
         mode = SearchMode(invocation.params.get("mode", SearchMode.text))
         max_results = invocation.params.get("max_results", 10)

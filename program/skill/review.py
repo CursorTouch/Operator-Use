@@ -43,8 +43,8 @@ _SKILL_REVIEW_PROMPT = (
     "step, or outdated. Patch it now.\n\n"
     "Preference order — prefer the earliest action that fits:\n"
     "  1. PATCH A CURRENTLY-LOADED SKILL. If a skill was read via "
-    "skill_view this turn and it covers the new learning, patch it first.\n"
-    "  2. PATCH AN EXISTING SKILL. Use skill_view to check if another "
+    "skill action=view this turn and it covers the new learning, patch it first.\n"
+    "  2. PATCH AN EXISTING SKILL. Use skill action=view to check if another "
     "skill covers the territory, then patch it.\n"
     "  3. WRITE A SUPPORT FILE under an existing skill:\n"
     "     • references/<topic>.md — error transcripts, reproduction "
@@ -118,8 +118,8 @@ async def _run_review(
     ctx = AgentContext(
         system_prompt=(
             "You are a background skill curator. You review conversations and "
-            "maintain a library of reusable skills. You have access to skill_manage "
-            "to create, edit, and patch skills, and skill_view to read existing ones."
+            "maintain a library of reusable skills. You have access to the skill tool "
+            "to view, create, edit, and patch skills."
         ),
         messages=[UserMessage(contents=[TextContent(content=review_task)])],
         tools=tools,

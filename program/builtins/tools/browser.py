@@ -129,6 +129,10 @@ class BrowserTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        async def _update(text: str) -> None:
+            if tool_execution_update_callback:
+                await tool_execution_update_callback(ToolResult.ok(invocation.id, text))
+
         try:
             params = BrowserSchema.model_validate(invocation.params)
             browser = await self._get_browser(params)
@@ -136,6 +140,7 @@ class BrowserTool(Tool):
 
             match params.action:
                 case "snapshot":
+                    await _update("🌐 Taking DOM snapshot…")
                     state = await browser.get_state()
                     tabs = await browser.get_all_tabs()
                     return ToolResult.ok(
@@ -160,20 +165,24 @@ class BrowserTool(Tool):
                 case "goto":
                     if not params.url:
                         return ToolResult.error(invocation.id, "'url' is required for action='goto'.")
+                    await _update(f"🌐 Navigating to {params.url}")
                     await browser.navigate(params.url)
                     return ToolResult.ok(invocation.id, f"Navigated to {params.url}.")
 
                 case "back":
+                    await _update("🌐 Going back…")
                     await browser.go_back()
                     return ToolResult.ok(invocation.id, "Navigated back.")
 
                 case "forward":
+                    await _update("🌐 Going forward…")
                     await browser.go_forward()
                     return ToolResult.ok(invocation.id, "Navigated forward.")
 
                 case "click":
                     if params.x is None or params.y is None:
                         return ToolResult.error(invocation.id, "'x' and 'y' are required for action='click'.")
+                    await _update(f"🖱️ Clicking at ({params.x}, {params.y})…")
                     await page.click_at(params.x, params.y)
                     await browser._wait_for_page(timeout=8.0)
                     return ToolResult.ok(invocation.id, f"Clicked at ({params.x}, {params.y}).")
@@ -183,6 +192,8 @@ class BrowserTool(Tool):
                         return ToolResult.error(invocation.id, "'x' and 'y' are required for action='type'.")
                     if params.text is None:
                         return ToolResult.error(invocation.id, "'text' is required for action='type'.")
+                    preview = params.text[:40] + ('…' if len(params.text) > 40 else '')
+                    await _update(f"⌨️ Typing \"{preview}\"…")
                     await page.click_at(params.x, params.y)
                     if params.clear:
                         await page.key_press("Control+A")
@@ -196,11 +207,13 @@ class BrowserTool(Tool):
                 case "key":
                     if not params.text:
                         return ToolResult.error(invocation.id, "'text' is required for action='key'.")
+                    await _update(f"⌨️ Pressing {params.text}…")
                     for _ in range(params.times):
                         await page.key_press(params.text)
                     return ToolResult.ok(invocation.id, f"Pressed {params.text}.")
 
                 case "scroll":
+                    await _update(f"🖱️ Scrolling {params.direction} {params.amount}px…")
                     if params.x is not None and params.y is not None:
                         await page.scroll_at(params.x, params.y, params.direction, params.amount)
                         return ToolResult.ok(
@@ -222,6 +235,7 @@ class BrowserTool(Tool):
                         return ToolResult.error(invocation.id, "'x' and 'y' are required for action='menu'.")
                     if not params.labels:
                         return ToolResult.error(invocation.id, "'labels' is required for action='menu'.")
+                    await _update(f"🖱️ Selecting {', '.join(params.labels)}…")
                     await page.select_option_at(params.x, params.y, params.labels)
                     return ToolResult.ok(invocation.id, f"Selected {', '.join(params.labels)}.")
 
@@ -230,6 +244,7 @@ class BrowserTool(Tool):
                         return ToolResult.error(invocation.id, "'x' and 'y' are required for action='upload'.")
                     if not params.filenames:
                         return ToolResult.error(invocation.id, "'filenames' is required for action='upload'.")
+                    await _update(f"📎 Uploading {', '.join(params.filenames or [])}…")
                     upload_root = Path(invocation.cwd or ".").resolve() / "uploads"
                     files = [str(upload_root / filename) for filename in params.filenames]
                     missing = [path for path in files if not Path(path).exists()]
@@ -244,20 +259,25 @@ class BrowserTool(Tool):
                 case "wait":
                     if params.time is None:
                         return ToolResult.error(invocation.id, "'time' is required for action='wait'.")
+                    await _update(f"⏳ Waiting {params.time:g}s…")
                     await asyncio.sleep(params.time)
                     return ToolResult.ok(invocation.id, f"Waited {params.time:g}s.")
 
                 case "script":
                     if not params.script:
                         return ToolResult.error(invocation.id, "'script' is required for action='script'.")
+                    await _update("📜 Running script…")
                     result = await page.execute_script(params.script, truncate=True, repair=True)
                     return ToolResult.ok(invocation.id, f"Script result: {result}")
 
                 case "scrape":
+                    await _update("🌐 Scraping page content…")
                     html = await page.get_page_content()
                     return ToolResult.ok(invocation.id, f"Page content:\n{markdownify(html)}")
 
                 case "download":
+                    if params.url:
+                        await _update(f"⬇️ Downloading {params.filename or 'file'}…")
                     return await self._download(invocation.id, browser, params)
 
                 case _:

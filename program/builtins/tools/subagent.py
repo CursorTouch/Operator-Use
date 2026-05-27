@@ -92,8 +92,7 @@ class SubagentTool(Tool):
             ),
             schema=SubAgentSchema,
             kind=ToolKind.Agent,
-            execution_mode=ToolExecutionMode.Sequential,
-        )
+            execution_mode=ToolExecutionMode.Sequential,        )
         self._manager = manager
 
     async def execute(

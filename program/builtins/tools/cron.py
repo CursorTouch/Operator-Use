@@ -113,8 +113,7 @@ class CronTool(Tool):
             ),
             schema=CronSchema,
             kind=ToolKind.Cron,
-            execution_mode=ToolExecutionMode.Sequential,
-        )
+            execution_mode=ToolExecutionMode.Sequential,        )
         self._cron = cron
 
     async def execute(

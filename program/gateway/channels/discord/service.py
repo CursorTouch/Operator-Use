@@ -387,6 +387,15 @@ class DiscordChannel(BaseChannel):
                         await discord_ch.trigger_typing()  # pyright: ignore[reportAttributeAccessIssue]
                     except Exception:
                         pass
+            elif kind == 'tool_update' and self._show_tool_calls:
+                text = metadata.get('text', '')
+                if text:
+                    existing = self._tool_messages.get(chat_id)
+                    if existing is not None:
+                        try:
+                            await existing.edit(content=text)
+                        except Exception:
+                            pass
             elif kind == 'tool_end' and self._show_tool_calls:
                 name = metadata.get('name', '')
                 is_error = metadata.get('is_error', False)

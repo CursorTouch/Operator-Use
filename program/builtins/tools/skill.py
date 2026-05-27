@@ -1,4 +1,4 @@
-"""skill_manage — create, edit, patch, delete, and write support files for user skills."""
+"""skill — view, create, edit, patch, and delete user skills."""
 from __future__ import annotations
 
 import re
@@ -17,10 +17,11 @@ _VALID_NAME_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$|^[a-z0-9]$')
 MAX_SKILL_SIZE = 15_000
 
 
-class SkillManageSchema(BaseModel):
-    action: Literal['create', 'edit', 'patch', 'delete', 'write_file', 'remove_file'] = Field(
+class SkillSchema(BaseModel):
+    action: Literal['view', 'create', 'edit', 'patch', 'delete', 'write_file', 'remove_file'] = Field(
         description=(
             'Action to perform:\n'
+            '  view       — load the full SKILL.md content of a skill by name.\n'
             '  create     — create a new skill directory and SKILL.md.\n'
             '  edit       — fully replace the SKILL.md of an existing skill.\n'
             '  patch      — targeted find-and-replace within SKILL.md or a support file.\n'
@@ -76,17 +77,17 @@ def _skill_dir(name: str) -> Path:
     return get_skills_dir() / name
 
 
-class SkillManageTool(Tool):
+class SkillTool(Tool):
     def __init__(self) -> None:
         super().__init__(
-            name='skill_manage',
+            name='skill',
             description=(
-                'Create and maintain user skills. '
-                'Use during background skill review to encode learnings into reusable SKILL.md files. '
-                'Skills live in ~/.program/agent/skills/<name>/SKILL.md. '
-                'Support files go in references/, templates/, or scripts/ subdirectories.'
+                'View and manage user skills. '
+                'Use action="view" to load a skill\'s full content before applying it. '
+                'Use create/edit/patch to maintain the skill library from background review. '
+                'Skills live in ~/.program/agent/skills/<name>/SKILL.md.'
             ),
-            schema=SkillManageSchema,
+            schema=SkillSchema,
             kind=ToolKind.Write,
             execution_mode=ToolExecutionMode.Sequential,
         )
@@ -101,6 +102,9 @@ class SkillManageTool(Tool):
         p = invocation.params
         action = p.get('action')
         name = (p.get('name') or '').strip()
+
+        if action == 'view':
+            return self._view(invocation.id, name, context)
 
         err = _validate_name(name)
         if err:
@@ -128,6 +132,27 @@ class SkillManageTool(Tool):
                 return self._remove_file(invocation.id, name, p.get('file_path') or '')
             case _:
                 return ToolResult.error(id=invocation.id, content=f"Unknown action '{action}'.")
+
+    def _view(self, inv_id: str, name: str, context: ToolContext | None) -> ToolResult:
+        if not name:
+            return ToolResult.error(id=inv_id, content="'name' is required.")
+        loader = context.resource_loader if context else None
+        if loader is None:
+            return ToolResult.error(id=inv_id, content='Resource loader unavailable.')
+        skills, _ = loader.get_skills()
+        skill = next((s for s in skills if s.name == name), None)
+        if skill is None:
+            available = ', '.join(s.name for s in skills) or 'none'
+            return ToolResult.error(
+                id=inv_id,
+                content=f"Skill '{name}' not found. Available: {available}",
+            )
+        try:
+            content = skill.file_path.read_text(encoding='utf-8')
+        except OSError as exc:
+            return ToolResult.error(id=inv_id, content=f'Cannot read skill file: {exc}')
+        skill_usage.record_view(name)
+        return ToolResult.ok(id=inv_id, content=content)
 
     def _create(self, inv_id: str, name: str, content: str) -> ToolResult:
         if not content.strip():
@@ -208,7 +233,6 @@ class SkillManageTool(Tool):
         if not target.exists():
             return ToolResult.error(id=inv_id, content=f"File not found: {file_path}")
         target.unlink()
-        # Clean up empty parent dirs (but not the skill root itself)
         skill_dir = _skill_dir(name)
         parent = target.parent
         while parent != skill_dir and parent.is_dir() and not any(parent.iterdir()):
@@ -217,4 +241,4 @@ class SkillManageTool(Tool):
         return ToolResult.ok(id=inv_id, content=f"Removed {file_path} from skill '{name}'.")
 
 
-tool = SkillManageTool()
+tool = SkillTool()

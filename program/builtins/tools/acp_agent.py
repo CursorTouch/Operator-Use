@@ -97,15 +97,13 @@ class ACPAgentTool(Tool):
             schema=_ACPSchema,
             kind=ToolKind.Agent,
             execution_mode=ToolExecutionMode.Sequential,
-        )
+            )
         self._registry: dict[str, ACPAgentConfig] = {**_BUILTIN_AGENTS, **{a.name: a for a in registry}}
         self._session_manager = session_manager
         self._auth = auth_manager
         self._bus = bus
         self._agent = agent
         self._settings_manager = settings_manager
-
-    # ── Tool entry point ──────────────────────────────────────────────────────
 
     async def execute(
         self,

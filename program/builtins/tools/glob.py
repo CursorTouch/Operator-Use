@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from program.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class GlobSchema(BaseModel):
     pattern: str = Field(
@@ -24,10 +24,15 @@ class GlobTool(Tool):
             description="Find files matching a glob pattern. Supports recursive patterns like '**/*.ext'.",
             schema=GlobSchema,
             kind=ToolKind.Read,
-            execution_mode=ToolExecutionMode.Parallel
-        )
+            execution_mode=ToolExecutionMode.Parallel,        )
 
-    async def execute(self, invocation: ToolInvocation, **kwargs) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback=None,
+        signal=None,
+        context: ToolContext | None = None,
+    ) -> ToolResult:
         params = invocation.params
         pattern = params.get("pattern")
         path_str = params.get("path", ".")

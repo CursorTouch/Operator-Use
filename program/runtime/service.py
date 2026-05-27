@@ -441,13 +441,13 @@ class Runtime:
             if curator_cfg is not None and not curator_cfg.enabled:
                 return
             tools_by_name = {t.name: t for t in ctx.resource_loader.get_tools()}
-            skill_manage = tools_by_name.get('skill_manage')
-            if skill_manage is None:
+            skill_tool = tools_by_name.get('skill')
+            if skill_tool is None:
                 return
             maybe_run_curator(
                 llm=ctx.llm,
-                skill_manage_tool=skill_manage,
-                skill_view_tool=tools_by_name.get('skill_view'),
+                skill_manage_tool=skill_tool,
+                skill_view_tool=skill_tool,
                 interval_hours=curator_cfg.interval_hours if curator_cfg else 168,
                 paused=curator_cfg.paused if curator_cfg else False,
                 stale_after_days=curator_cfg.stale_after_days if curator_cfg else 30,

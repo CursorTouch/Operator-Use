@@ -124,8 +124,40 @@ class ComputerTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        async def _update(text: str) -> None:
+            if tool_execution_update_callback:
+                await tool_execution_update_callback(ToolResult.ok(invocation.id, text))
+
         try:
             params = ComputerSchema.model_validate(invocation.params)
+            loc = self._loc(params)
+            match params.action:
+                case ComputerAction.snapshot:
+                    await _update("🖥️ Taking desktop snapshot…")
+                case ComputerAction.click:
+                    btn = params.button.value
+                    coord = f"({loc[0]}, {loc[1]})" if loc else ""
+                    clicks = f" ×{params.clicks}" if params.clicks > 1 else ""
+                    await _update(f"🖱️ {btn.capitalize()} clicking{clicks} at {coord}…")
+                case ComputerAction.type:
+                    preview = (params.text or "")[:40]
+                    preview += "…" if len(params.text or "") > 40 else ""
+                    await _update(f"⌨️ Typing \"{preview}\"…")
+                case ComputerAction.wait:
+                    await _update(f"⏳ Waiting {params.duration:g}s…")
+                case ComputerAction.app:
+                    label = params.name or params.app_mode.value
+                    await _update(f"🖥️ App {params.app_mode.value}: {label}…")
+                case ComputerAction.scroll:
+                    await _update(f"🖱️ Scrolling {params.direction.value} {params.wheel_times}×…")
+                case ComputerAction.move:
+                    coord = f"({loc[0]}, {loc[1]})" if loc else ""
+                    await _update(f"🖱️ Moving pointer to {coord}…")
+                case ComputerAction.drag:
+                    coord = f"({loc[0]}, {loc[1]})" if loc else ""
+                    await _update(f"🖱️ Dragging to {coord}…")
+                case ComputerAction.shortcut:
+                    await _update(f"⌨️ Shortcut {params.shortcut}…")
             desktop = self._get_desktop(context, params)
             content = self._run_action(desktop, params)
             return ToolResult.ok(id=invocation.id, content=content)

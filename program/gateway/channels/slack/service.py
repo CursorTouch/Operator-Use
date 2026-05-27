@@ -379,6 +379,14 @@ class SlackChannel(BaseChannel):
                             self._tool_ts_map[chat_id] = resp['ts']
                     except Exception:
                         logger.exception("SlackChannel: chat_postMessage failed (tool_start)")
+            elif kind == 'tool_update' and self._show_tool_calls:
+                text = metadata.get('text', '')
+                existing_ts = self._tool_ts_map.get(chat_id)
+                if text and existing_ts is not None and client is not None:
+                    try:
+                        await client.chat_update(channel=slack_channel_id, ts=existing_ts, text=text)
+                    except Exception:
+                        pass
             elif kind == 'tool_end' and self._show_tool_calls:
                 name = metadata.get('name', '')
                 is_error = metadata.get('is_error', False)

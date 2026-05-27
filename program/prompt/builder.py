@@ -56,7 +56,7 @@ class PromptTemplate:
 
         tool_names = {t.name for t in self.tools}
         has_read = "read" in tool_names
-        has_skill_view = "skill_view" in tool_names
+        has_skill_view = "skill" in tool_names
 
         append_section = f"\n\n{self.append_system_prompt}" if self.append_system_prompt else ""
         context_section = context_files_section(self.context_files)

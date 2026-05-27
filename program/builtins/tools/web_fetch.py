@@ -38,8 +38,7 @@ class WebFetchTool(Tool):
             ),
             schema=WebFetchSchema,
             kind=ToolKind.Web,
-            execution_mode=ToolExecutionMode.Parallel
-        )
+            execution_mode=ToolExecutionMode.Parallel,        )
         self._llm = llm
 
     async def _extract_relevant(self, text: str, prompt: str, llm) -> str:
@@ -58,7 +57,13 @@ class WebFetchTool(Tool):
             pass
         return text
 
-    async def execute(self, invocation: ToolInvocation, context: ToolContext | None = None, **kwargs) -> ToolResult:
+    async def execute(
+        self,
+        invocation: ToolInvocation,
+        tool_execution_update_callback=None,
+        signal=None,
+        context: ToolContext | None = None,
+    ) -> ToolResult:
         params = invocation.params
         url = params.get("url")
         prompt = params.get("prompt")
