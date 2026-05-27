@@ -170,6 +170,13 @@ class BrowserTool(Tool):
                     self._browser = None
                     return ToolResult.ok(invocation.id, "Browser closed.")
 
+            # Guard: require an explicit open before any browser interaction.
+            if self._browser is None:
+                return ToolResult.error(
+                    invocation.id,
+                    "Browser is not open. Use action='open' to launch the browser first.",
+                )
+
             browser = await self._get_browser(params)
             page = browser.current_page()
 

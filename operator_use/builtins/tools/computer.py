@@ -12,6 +12,8 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 
 
 class ComputerAction(str, Enum):
+    open = "open"
+    close = "close"
     snapshot = "snapshot"
     click = "click"
     type = "type"
@@ -57,7 +59,8 @@ class CaretPosition(str, Enum):
 class ComputerSchema(BaseModel):
     action: ComputerAction = Field(
         description=(
-            "Computer action to perform: snapshot, click, type, wait, app, "
+            "Computer action to perform: open (enable desktop access), "
+            "close (release desktop access), snapshot, click, type, wait, app, "
             "scroll, move, drag, or shortcut."
         )
     )
@@ -107,8 +110,10 @@ class ComputerTool(Tool):
             name="computer",
             description=(
                 "Control the local desktop through one action-based computer tool. "
-                "Use snapshot to inspect the screen, click/type/scroll/move/drag for pointer "
-                "and text input, shortcut for keyboard shortcuts, wait for delays, and app for "
+                "Use open to enable desktop access (required before any other action) and "
+                "close to release it. Use snapshot to inspect the screen, "
+                "click/type/scroll/move/drag for pointer and text input, "
+                "shortcut for keyboard shortcuts, wait for delays, and app for "
                 "launching, switching, resizing, or moving applications."
             ),
             schema=ComputerSchema,
@@ -136,6 +141,28 @@ class ComputerTool(Tool):
 
         try:
             params = ComputerSchema.model_validate(invocation.params)
+
+            # open / close — the desktop object itself is the open/closed state.
+            match params.action:
+                case ComputerAction.open:
+                    await _update("🖥️ Opening desktop…")
+                    self._desktop = self._get_desktop(context, params)
+                    return ToolResult.ok(id=invocation.id, content="Desktop access enabled.")
+
+                case ComputerAction.close:
+                    if self._desktop is None:
+                        return ToolResult.ok(id=invocation.id, content="Desktop is not open.")
+                    await _update("🖥️ Closing desktop…")
+                    self._desktop = None
+                    return ToolResult.ok(id=invocation.id, content="Desktop access released.")
+
+            # Guard: require an explicit open before any desktop interaction.
+            if self._desktop is None:
+                return ToolResult.error(
+                    id=invocation.id,
+                    content="Desktop is not accessible. Use action='open' to enable desktop control first.",
+                )
+
             loc = self._loc(params)
             match params.action:
                 case ComputerAction.snapshot:
