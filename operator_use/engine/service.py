@@ -1,6 +1,7 @@
 from __future__ import annotations
 from operator_use.message.types import ToolResultContent
 import asyncio
+import inspect
 from typing import TYPE_CHECKING, Optional, Callable, Coroutine, Literal
 from operator_use.hooks.service import Hooks
 from operator_use.engine.types import (
@@ -313,21 +314,27 @@ class Engine:
                 message = AssistantMessage()
                 tool_calls.clear()
 
-                # Strip the previous state_message by identity, then collect a
-                # fresh one from any tool that exposes an async state_message().
-                if self.state.state_message:
-                    self.state.state_message=None
+                # Collect a fresh ephemeral state message from every tool that
+                # exposes an async state_message().  Combined into one UserMessage
+                # and appended only at the LLMContext call site — never written
+                # into the persistent messages list or the session JSONL.
+                self.state.state_message = None
                 for _tool in self._tools.values():
-                    _fn = getattr(_tool, "state_message", None)
-                    if callable(_fn):
-                        try:
-                            _msg = await _fn()
-                            if _msg is not None:
-                                self.state.state_message=_msg
-                        except Exception:
-                            pass
+                    if _fn := getattr(_tool, "state_message", None):
+                        if inspect.iscoroutinefunction(_fn):
+                            try:
+                                if _msg := await _fn():
+                                    self.state.state_message = _msg
+                            except Exception:
+                                pass
+
+                # Build the full context the LLM will see: persistent messages +
+                # ephemeral state.  transform_context operates on the full list so
+                # it can read and modify the state message if needed.
+                ctx_messages = messages + ([self.state.state_message] if self.state.state_message else [])
+
                 if self.options.transform_context is not None:
-                    messages = self.options.transform_context(messages, signal)
+                    ctx_messages = self.options.transform_context(ctx_messages, signal)
 
                 if signal.is_set():
                     end_reason = 'aborted'
@@ -338,14 +345,12 @@ class Engine:
                 if self._hooks:
                     await self._hooks.emit(BeforeProviderRequestEvent(
                         model=self.llm.model,
-                        messages=messages,
+                        messages=ctx_messages,
                         options=self.llm.api.options,
                     ))
 
-                state_messages=[self.state.state_message] if self.state.state_message else []
-
                 async for event in self.llm.stream(LLMContext(
-                    messages=messages+state_messages,
+                    messages=ctx_messages,
                     tools=self.state.tools,
                     system_prompt=self.state.system_prompt,
                 )):
