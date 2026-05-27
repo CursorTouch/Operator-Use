@@ -338,7 +338,7 @@ class BrowserTool(Tool):
             return None
         try:
             use_vision = False
-            state = await self._browser.get_state()
+            state = await self._browser.get_state(use_vision=use_vision,as_bytes=True)
             if state is None:
                 return None
             tabs = await self._browser.get_all_tabs()
@@ -354,7 +354,10 @@ class BrowserTool(Tool):
             ])
             from operator_use.message.types import UserMessage
             content=f"[Current browser state]\n{state_text}"
-            return UserMessage.text(content)
+            if use_vision and state.screenshot:
+                return UserMessage.with_images(content, [state.screenshot])
+            else:
+                return UserMessage.text(content)
         except Exception:
             return None
 
