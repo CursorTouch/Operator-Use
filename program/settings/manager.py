@@ -713,6 +713,46 @@ class SettingsManager:
         self._mark_modified("cron_enabled")
         self._save()
 
+    def get_subagents_enabled(self) -> bool:
+        """Return whether subagent delegation is enabled (default: True)."""
+        return self.settings.subagents_enabled if self.settings.subagents_enabled is not None else True
+
+    def set_subagents_enabled(self, enabled: bool):
+        """Enable or disable subagent delegation and persist to global settings."""
+        self.global_settings.subagents_enabled = enabled
+        self._mark_modified("subagents_enabled")
+        self._save()
+
+    def get_workflows_enabled(self) -> bool:
+        """Return whether workflow execution is enabled (default: True)."""
+        return self.settings.workflows_enabled if self.settings.workflows_enabled is not None else True
+
+    def set_workflows_enabled(self, enabled: bool):
+        """Enable or disable workflow execution and persist to global settings."""
+        self.global_settings.workflows_enabled = enabled
+        self._mark_modified("workflows_enabled")
+        self._save()
+
+    def get_computer_use_enabled(self) -> bool:
+        """Return whether computer use (desktop control) is enabled (default: True)."""
+        return self.settings.computer_use_enabled if self.settings.computer_use_enabled is not None else True
+
+    def set_computer_use_enabled(self, enabled: bool):
+        """Enable or disable computer use and persist to global settings."""
+        self.global_settings.computer_use_enabled = enabled
+        self._mark_modified("computer_use_enabled")
+        self._save()
+
+    def get_browser_use_enabled(self) -> bool:
+        """Return whether browser use is enabled (default: True)."""
+        return self.settings.browser_use_enabled if self.settings.browser_use_enabled is not None else True
+
+    def set_browser_use_enabled(self, enabled: bool):
+        """Enable or disable browser use and persist to global settings."""
+        self.global_settings.browser_use_enabled = enabled
+        self._mark_modified("browser_use_enabled")
+        self._save()
+
     def get_enable_skill_commands(self) -> bool:
         """Return whether skill slash commands are enabled (default: True)."""
         return self.settings.enable_skill_commands if self.settings.enable_skill_commands is not None else True
