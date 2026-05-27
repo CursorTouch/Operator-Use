@@ -204,8 +204,8 @@ class ControlCenterTool(Tool):
             if sf is not None:
                 session_file = Path(sf)
 
-        # Snapshot current code changes so we can revert on failure
-        stash_ref = self._git_stash(context)
+        # Snapshot modified files so we can revert on failure
+        snapshot = self._snapshot_changes(context)
 
         # Flush settings to disk
         try:
@@ -261,8 +261,7 @@ class ControlCenterTool(Tool):
                 pass
 
         if ready:
-            # New process is up — drop snapshot, shut down this process cleanly
-            self._git_stash_drop(stash_ref, context)
+            # New process is up — shut down this process cleanly
             agent = context.agent if context else None
             runtime = getattr(agent, "_runtime", None) if agent else None
             if runtime is not None:
@@ -281,7 +280,7 @@ class ControlCenterTool(Tool):
         except Exception:
             pass
 
-        revert_msg = self._git_stash_pop(stash_ref, context)
+        revert_msg = self._restore_snapshot(snapshot, context)
 
         return ToolResult.error(
             id=invocation.id,
@@ -293,51 +292,46 @@ class ControlCenterTool(Tool):
             ),
         )
 
-    def _git_stash(self, context: ToolContext | None) -> str | None:
-        """Stash uncommitted changes. Returns the stash ref name or None."""
+    def _snapshot_changes(self, context: ToolContext | None) -> dict[str, str]:
+        """Read the content of every file modified since the last commit."""
         import subprocess
+        from pathlib import Path
         cwd = self._cwd(context)
+        snapshot: dict[str, str] = {}
         try:
             result = subprocess.run(
-                ["git", "stash", "push", "-m", "operator-pre-reboot"],
+                ["git", "diff", "--name-only", "HEAD"],
                 cwd=cwd, capture_output=True, text=True,
             )
-            if result.returncode == 0 and "No local changes" not in result.stdout:
-                return "operator-pre-reboot"
+            if result.returncode != 0:
+                return snapshot
+            for rel in result.stdout.splitlines():
+                rel = rel.strip()
+                if not rel:
+                    continue
+                path = Path(cwd or ".") / rel
+                try:
+                    snapshot[str(path)] = path.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    pass
         except Exception:
             pass
-        return None
+        return snapshot
 
-    def _git_stash_drop(self, ref: str | None, context: ToolContext | None) -> None:
-        """Drop the pre-reboot stash — reboot succeeded, changes are good."""
-        if not ref:
-            return
-        import subprocess
-        cwd = self._cwd(context)
-        try:
-            subprocess.run(
-                ["git", "stash", "drop"],
-                cwd=cwd, capture_output=True,
-            )
-        except Exception:
-            pass
-
-    def _git_stash_pop(self, ref: str | None, context: ToolContext | None) -> str:
-        """Restore the pre-reboot stash — reboot failed, revert the changes."""
-        if not ref:
+    def _restore_snapshot(self, snapshot: dict[str, str], context: ToolContext | None) -> str:
+        """Write snapshot content back to disk — reboot failed, revert the changes."""
+        from pathlib import Path
+        if not snapshot:
             return ""
-        import subprocess
-        cwd = self._cwd(context)
-        try:
-            result = subprocess.run(
-                ["git", "stash", "pop"],
-                cwd=cwd, capture_output=True, text=True,
-            )
-            if result.returncode == 0:
-                return "Changes reverted to pre-reboot state.\n\n"
-            return f"Warning: could not revert changes automatically: {result.stderr.strip()}\n\n"
-        except Exception as exc:
-            return f"Warning: revert failed: {exc}\n\n"
+        failed: list[str] = []
+        for path_str, content in snapshot.items():
+            try:
+                Path(path_str).write_text(content, encoding="utf-8")
+            except Exception as exc:
+                failed.append(f"{path_str}: {exc}")
+        if failed:
+            return "Warning: could not revert some files:\n" + "\n".join(failed) + "\n\n"
+        return f"Reverted {len(snapshot)} file(s) to pre-reboot state.\n\n"
 
     def _cwd(self, context: ToolContext | None) -> str | None:
         """Return the working directory string from context."""
