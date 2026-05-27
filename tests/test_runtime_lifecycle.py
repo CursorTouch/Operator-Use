@@ -9,18 +9,18 @@ import pytest
 
 from helpers import FakeLLM, make_agent, text_seq
 
-from program.agent.types import AgentConfig
-from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-from program.compaction.strategy.types import CompactionSettings
-from program.engine.service import Engine
-from program.extension.runtime import ExtensionRuntime
-from program.extension.types import LoadExtensionsResult
-from program.hooks.service import Hooks
-from program.message.types import TextContent, AssistantMessage, Usage, Role
-from program.runtime.service import Runtime
-from program.runtime.types import RuntimeConfig, RuntimeContext
-from program.session.manager import SessionManager
-from program.settings.manager import SettingsManager
+from operator_use.agent.types import AgentConfig
+from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from operator_use.compaction.strategy.types import CompactionSettings
+from operator_use.engine.service import Engine
+from operator_use.extension.runtime import ExtensionRuntime
+from operator_use.extension.types import LoadExtensionsResult
+from operator_use.hooks.service import Hooks
+from operator_use.message.types import TextContent, AssistantMessage, Usage, Role
+from operator_use.runtime.service import Runtime
+from operator_use.runtime.types import RuntimeConfig, RuntimeContext
+from operator_use.session.manager import SessionManager
+from operator_use.settings.manager import SettingsManager
 
 
 def _build_runtime(fake_llm, tmp_path: Path) -> Runtime:

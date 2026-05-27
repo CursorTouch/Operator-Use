@@ -2,17 +2,17 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from program.builtins.commands.compact import _handle_compact, command as compact_command
-from program.builtins.commands.session import _handle_new, command as new_command
-from program.builtins.commands.help import _handle_help, command as help_command
-from program.builtins.commands.goal import _handle_goal
-from program.builtins.commands.auth import commands as auth_commands
-from program.commands.loader import load_commands_from_dir
-from program.commands.registry import CommandRegistry
-from program.commands.types import SlashCommandInfo
+from operator_use.builtins.commands.compact import _handle_compact, command as compact_command
+from operator_use.builtins.commands.session import _handle_new, command as new_command
+from operator_use.builtins.commands.help import _handle_help, command as help_command
+from operator_use.builtins.commands.goal import _handle_goal
+from operator_use.builtins.commands.auth import commands as auth_commands
+from operator_use.commands.loader import load_commands_from_dir
+from operator_use.commands.registry import CommandRegistry
+from operator_use.commands.types import SlashCommandInfo
 from pathlib import Path
 
-_BUILTINS_DIR = Path(__file__).parent.parent / 'program' / 'builtins' / 'commands'
+_BUILTINS_DIR = Path(__file__).parent.parent / 'operator_use' / 'builtins' / 'commands'
 
 BUILTIN_COMMANDS = load_commands_from_dir(_BUILTINS_DIR).commands
 

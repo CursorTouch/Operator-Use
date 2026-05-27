@@ -3,31 +3,31 @@ import pytest
 from pathlib import Path
 from typing import AsyncIterator
 
-from program.compaction.branch.summarization.service import (
+from operator_use.compaction.branch.summarization.service import (
     collect_entries_for_branch_summary,
     prepare_branch_entries,
     generate_branch_summary,
 )
-from program.compaction.branch.types import (
+from operator_use.compaction.branch.types import (
     BranchSummaryDetails, GenerateBranchSummaryOptions, BranchPreparation,
     CollectEntriesResult,
 )
-from program.message.types import AgentMessage as _AgentMessage
-from program.session.types import SessionEntry as _SessionEntry
-from program.inference.api.text.service import LLM as _LLM
+from operator_use.message.types import AgentMessage as _AgentMessage
+from operator_use.session.types import SessionEntry as _SessionEntry
+from operator_use.inference.api.text.service import LLM as _LLM
 CollectEntriesResult.model_rebuild(_types_namespace={"SessionEntry": _SessionEntry})
 BranchPreparation.model_rebuild(_types_namespace={"AgentMessage": _AgentMessage})
 GenerateBranchSummaryOptions.model_rebuild(_types_namespace={"LLM": _LLM})
-from program.inference.types import (
+from operator_use.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
 )
-from program.message.types import (
+from operator_use.message.types import (
     TextContent, UserMessage, AssistantMessage, BranchSummaryMessage, AgentMessage,
 )
-from program.session.manager import SessionManager
-from program.session.types import MessageEntry, BranchEntry, CompactionEntry
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import MessageEntry, BranchEntry, CompactionEntry
 
 
 # ── Fake LLM ──────────────────────────────────────────────────────────────────
@@ -203,14 +203,14 @@ class TestPrepareBranchEntries:
         assert "bar.py" in prep.file_ops.edited
 
     def test_tool_messages_excluded(self):
-        from program.message.types import ToolMessage, ToolResultContent
+        from operator_use.message.types import ToolMessage, ToolResultContent
         sm = make_sm()
         sm.append_message(user("q"))
         tool_msg = ToolMessage.from_result(ToolResultContent(id="t1", content="result"))
         sm.append_message(tool_msg)
         entries = sm.get_branch()
         prep = prepare_branch_entries(entries, token_budget=0)
-        from program.message.types import Role
+        from operator_use.message.types import Role
         roles = [m.role for m in prep.messages]
         assert Role.TOOL not in roles
 
@@ -220,7 +220,7 @@ class TestPrepareBranchEntries:
         id2 = sm.append_message(assistant("second"))
         entries = sm.get_branch()
         prep = prepare_branch_entries(entries, token_budget=0)
-        from program.message.types import Role
+        from operator_use.message.types import Role
         assert prep.messages[0].role == Role.USER
         assert prep.messages[1].role == Role.ASSISTANT
 

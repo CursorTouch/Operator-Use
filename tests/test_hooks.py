@@ -5,8 +5,8 @@ import asyncio
 
 import pytest
 
-from program.hooks.service import Hooks
-from program.hooks.types import (
+from operator_use.hooks.service import Hooks
+from operator_use.hooks.types import (
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
     TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageEndEvent,

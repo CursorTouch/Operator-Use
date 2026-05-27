@@ -1,10 +1,10 @@
 """Tests for SessionManager file persistence: create, open, fork_from, branched sessions."""
 import pytest
 from pathlib import Path
-from program.session.manager import SessionManager
-from program.session.types import MessageEntry, BranchEntry, CompactionEntry, SessionHeader
-from program.session.utils import read_session_file
-from program.message.types import UserMessage, AssistantMessage, TextContent, Role
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import MessageEntry, BranchEntry, CompactionEntry, SessionHeader
+from operator_use.session.utils import read_session_file
+from operator_use.message.types import UserMessage, AssistantMessage, TextContent, Role
 
 
 def user(text: str = "hello") -> UserMessage:
@@ -170,16 +170,16 @@ class TestGetChildren:
 
 class TestCustomEntries:
     def test_append_custom_message(self):
-        from program.message.types import TextContent
+        from operator_use.message.types import TextContent
         sm = SessionManager.in_memory()
         eid = sm.append_custom_message("tool_result", [TextContent(content="result data")])
         entry = sm.get_entry(eid)
-        from program.session.types import CustomMessageEntry
+        from operator_use.session.types import CustomMessageEntry
         assert isinstance(entry, CustomMessageEntry)
         assert entry.custom_type == "tool_result"
 
     def test_custom_message_with_details(self):
-        from program.message.types import TextContent
+        from operator_use.message.types import TextContent
         sm = SessionManager.in_memory()
         eid = sm.append_custom_message("event", [TextContent(content="x")], details={"meta": 1})
         entry = sm.get_entry(eid)
@@ -202,7 +202,7 @@ class TestCustomEntries:
 
     def test_append_custom_info(self):
         sm = SessionManager.in_memory()
-        from program.session.types import CustomInfoEntry
+        from operator_use.session.types import CustomInfoEntry
         eid = sm.append_custom_info("log_entry", {"msg": "hello"})
         entry = sm.get_entry(eid)
         assert isinstance(entry, CustomInfoEntry)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from acp.schema import AllowedOutcome, DeniedOutcome, PermissionOption
 
-from program.acp.client import OperatorACPClient
+from operator_use.acp.client import OperatorACPClient
 
 
 def make_opt(option_id: str, kind: str, name: str = '') -> PermissionOption:

@@ -4,13 +4,13 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from program.package.manifest import read_manifest, MANIFEST_FILE
-from program.package.types import PackageManifest, InstalledPackage, LoadedPackages
-from program.package.installer import (
+from operator_use.package.manifest import read_manifest, MANIFEST_FILE
+from operator_use.package.types import PackageManifest, InstalledPackage, LoadedPackages
+from operator_use.package.installer import (
     install_local, install_git, install_package, remove_package,
     _parse_git_source, _slug_from_url,
 )
-from program.package.loader import load_packages_from_settings, resolve_install_path
+from operator_use.package.loader import load_packages_from_settings, resolve_install_path
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -212,7 +212,7 @@ class TestInstallGit:
             m.stderr = ""
             return m
 
-        with patch("program.package.installer.subprocess.run", side_effect=fake_run):
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
             result = install_git("git:github.com/user/repo", packages_dir)
 
         assert result.success
@@ -228,7 +228,7 @@ class TestInstallGit:
             m.stdout = ""
             return m
 
-        with patch("program.package.installer.subprocess.run", side_effect=fake_run):
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
             result = install_git("git:github.com/user/bad-repo", packages_dir)
 
         assert not result.success
@@ -248,7 +248,7 @@ class TestInstallGit:
             m.stderr = ""
             return m
 
-        with patch("program.package.installer.subprocess.run", side_effect=fake_run):
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
             result = install_git("git:github.com/user/repo", packages_dir)
 
         assert result.success
@@ -269,7 +269,7 @@ class TestInstallGit:
             m.stderr = ""
             return m
 
-        with patch("program.package.installer.subprocess.run", side_effect=fake_run):
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
             result = install_git("git:github.com/user/repo@v1.0.0", packages_dir)
 
         assert result.success
@@ -303,7 +303,7 @@ class TestInstallPackageDispatch:
             m.stderr = ""
             return m
 
-        with patch("program.package.installer.subprocess.run", side_effect=fake_run):
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
             result = install_package("git:github.com/user/repo", packages_dir)
         assert result.success
 
@@ -321,7 +321,7 @@ class TestInstallPackageDispatch:
             m.stderr = ""
             return m
 
-        with patch("program.package.installer.subprocess.run", side_effect=fake_run):
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
             result = install_package("https://github.com/user/https-repo", packages_dir)
         assert result.success
 
@@ -581,7 +581,7 @@ class TestLoadedPackagesCommandsAndSubagents:
 
     def test_subagent_profiles_loadable_from_package_subagents_dir(self, tmp_path):
         """End-to-end: SUBAGENT.md files in a package's subagents/ dir are discoverable."""
-        from program.subagent.profile import load_profiles
+        from operator_use.subagent.profile import load_profiles
 
         pkg = make_package(tmp_path, manifest={"name": "pkg"}, with_subagents=True)
         make_subagent_profile_file(pkg / "subagents", name="coder")
@@ -596,13 +596,13 @@ class TestLoadedPackagesCommandsAndSubagents:
 
     def test_slash_commands_loadable_from_package_commands_dir(self, tmp_path):
         """End-to-end: .py files in a package's commands/ dir are discoverable."""
-        from program.commands.loader import load_commands as load_cmds
-        from program.commands.types import SlashCommandInfo
+        from operator_use.commands.loader import load_commands as load_cmds
+        from operator_use.commands.types import SlashCommandInfo
 
         pkg = make_package(tmp_path, manifest={"name": "pkg"}, with_commands=True)
         cmd_file = pkg / "commands" / "greet.py"
         cmd_file.write_text(
-            "from program.commands.types import SlashCommandInfo\n"
+            "from operator_use.commands.types import SlashCommandInfo\n"
             "async def handle(reg, args): pass\n"
             "command = SlashCommandInfo(name='greet', description='Say hi', handler=handle)\n",
             encoding="utf-8",

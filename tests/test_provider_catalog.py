@@ -1,6 +1,6 @@
-from program.auth.providers import ProviderAuthManager
-from program.inference.model.registry import ModelRegistry
-from program.inference.provider.registry import TextProviderRegistry
+from operator_use.auth.providers import ProviderAuthManager
+from operator_use.inference.model.registry import ModelRegistry
+from operator_use.inference.provider.registry import TextProviderRegistry
 
 
 def test_new_text_providers_are_registered():

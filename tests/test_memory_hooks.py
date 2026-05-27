@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from program.memory.api.base import BaseMemoryAPI
-from program.memory.manager import MemoryManager
+from operator_use.memory.api.base import BaseMemoryAPI
+from operator_use.memory.manager import MemoryManager
 
 
 class _HookAPI(BaseMemoryAPI):

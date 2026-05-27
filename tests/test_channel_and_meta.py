@@ -2,12 +2,12 @@
 
 from pathlib import Path
 
-from program.session.manager import SessionManager
-from program.session.types import (
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import (
     ChannelEntry, MessageEntry, MessageMeta, MessageAttachment,
 )
-from program.message.types import UserMessage, TextContent
-from program.agent.types import PromptOptions
+from operator_use.message.types import UserMessage, TextContent
+from operator_use.agent.types import PromptOptions
 
 
 def test_append_channel_entry_writes_entry(tmp_path: Path) -> None:
@@ -59,7 +59,7 @@ def test_channel_entry_persisted_to_jsonl(tmp_path: Path) -> None:
     session_file = tmp_path / "session.jsonl"
     sm = SessionManager(cwd=tmp_path, session_dir=tmp_path, session_file=session_file, persist=True)
     # Need an assistant message to trigger the deferred flush
-    from program.message.types import AssistantMessage
+    from operator_use.message.types import AssistantMessage
     sm.append_channel_entry("telegram", "1", "u1")
     sm.append_message(UserMessage(contents=[TextContent(content="hi")]))
     sm.append_message(AssistantMessage(contents=[TextContent(content="hello")]))
@@ -75,7 +75,7 @@ def test_channel_entry_persisted_to_jsonl(tmp_path: Path) -> None:
 def test_message_meta_round_trips_through_jsonl(tmp_path: Path) -> None:
     session_file = tmp_path / "session.jsonl"
     sm = SessionManager(cwd=tmp_path, session_dir=tmp_path, session_file=session_file, persist=True)
-    from program.message.types import AssistantMessage
+    from operator_use.message.types import AssistantMessage
     meta = MessageMeta(
         reply_to="t_42",
         attachments=[MessageAttachment(path="/a.png", mime_type="image/png")],

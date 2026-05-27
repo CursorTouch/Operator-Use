@@ -3,25 +3,25 @@ import pytest
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.engine.service import Engine
-from program.engine.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import (
     AgentEndEvent, AgentErrorEvent, AgentStartEvent,
     MessageEndEvent, MessageUpdateEvent,
     ToolExecutionEndEvent, ToolExecutionStartEvent,
     TurnEndEvent, Options, AgentEvent,
 )
-from program.inference.types import (
+from operator_use.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
 )
-from program.message.types import (
+from operator_use.message.types import (
     UserMessage, AssistantMessage, TextContent, ThinkingContent,
     ToolCallContent, ToolResultContent, Role,
 )
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from operator_use.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 
 # ── Reusable helpers (same pattern as test_agent_loop.py) ─────────────────────

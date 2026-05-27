@@ -6,10 +6,10 @@ import json
 
 import pytest
 
-from program.settings.manager import SettingsManager
-from program.engine.types import SteeringMode, FollowupMode
-from program.inference.types import ThinkingLevel
-from program.settings.types import CompactionSettings
+from operator_use.settings.manager import SettingsManager
+from operator_use.engine.types import SteeringMode, FollowupMode
+from operator_use.inference.types import ThinkingLevel
+from operator_use.settings.types import CompactionSettings
 
 
 def _sm(initial: dict | None = None) -> SettingsManager:
@@ -267,7 +267,7 @@ class TestOverridesAndFlush:
 
     @pytest.mark.asyncio
     async def test_reload_picks_up_external_change(self):
-        from program.settings.storage import InMemorySettingsStorage, LockResult, SCOPE
+        from operator_use.settings.storage import InMemorySettingsStorage, LockResult, SCOPE
         storage = InMemorySettingsStorage()
         sm = SettingsManager.from_storage(storage)
         storage.with_lock(SCOPE.GLOBAL, lambda _: LockResult(

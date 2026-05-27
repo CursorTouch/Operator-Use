@@ -1,8 +1,8 @@
 """Tests for Bus: two-queue message bus for channel ↔ runtime communication."""
 import asyncio
 import pytest
-from program.bus.service import Bus, EventBus
-from program.bus.types import IncomingMessage, OutgoingMessage, TextPart
+from operator_use.bus.service import Bus, EventBus
+from operator_use.bus.types import IncomingMessage, OutgoingMessage, TextPart
 
 
 def make_incoming(text: str = "hello", channel: str = "stdio", chat_id: str = "1") -> IncomingMessage:

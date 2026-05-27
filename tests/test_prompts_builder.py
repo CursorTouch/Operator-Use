@@ -4,10 +4,10 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from program.prompt.builder import PromptTemplate, build_system_prompt
-from program.prompt.types import SystemPromptOptions, ContextFile
-from program.prompt.utils import build_guidelines, context_files_section, format_skills_for_prompt
-from program.skill.types import Skill, SourceInfo
+from operator_use.prompt.builder import PromptTemplate, build_system_prompt
+from operator_use.prompt.types import SystemPromptOptions, ContextFile
+from operator_use.prompt.utils import build_guidelines, context_files_section, format_skills_for_prompt
+from operator_use.skill.types import Skill, SourceInfo
 
 
 def make_tool(name: str):

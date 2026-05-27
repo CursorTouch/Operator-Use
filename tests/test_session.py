@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from program.inference.types import ThinkingLevel
-from program.message.types import (
+from operator_use.inference.types import ThinkingLevel
+from operator_use.message.types import (
     TextContent, AssistantMessage, UserMessage, Usage,
 )
-from program.session.manager import SessionManager
-from program.session.types import (
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import (
     MessageEntry, CompactionEntry, LabelEntry, LeafEntry,
     ModelChangeEntry, ThinkingLevelChangeEntry,
     CustomInfoEntry, CustomMessageEntry,

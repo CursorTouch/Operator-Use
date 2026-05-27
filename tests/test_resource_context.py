@@ -2,7 +2,7 @@
 import pytest
 from pathlib import Path
 
-from program.resource.context import load_project_context_files
+from operator_use.resource.context import load_project_context_files
 
 
 def _write(path: Path, content: str) -> Path:

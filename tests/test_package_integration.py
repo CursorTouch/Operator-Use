@@ -7,12 +7,12 @@ Tests the full pipeline:
 import pytest
 from pathlib import Path
 
-from program.package.manifest import read_manifest
-from program.package.installer import install_local, install_package
-from program.package.loader import load_packages_from_settings
-from program.extension.loader import discover_and_load_extensions
-from program.skill.loader import load_skills
-from program.skill.types import LoadSkillsOptions
+from operator_use.package.manifest import read_manifest
+from operator_use.package.installer import install_local, install_package
+from operator_use.package.loader import load_packages_from_settings
+from operator_use.extension.loader import discover_and_load_extensions
+from operator_use.skill.loader import load_skills
+from operator_use.skill.types import LoadSkillsOptions
 
 FIXTURE_PKG = Path(__file__).parent / "fixtures" / "test_package"
 
@@ -32,14 +32,14 @@ class TestFixtureManifest:
         assert "skills" in m.skills
 
     def test_extension_dirs_resolve_to_real_paths(self):
-        from program.package.types import InstalledPackage
+        from operator_use.package.types import InstalledPackage
         m = read_manifest(FIXTURE_PKG)
         pkg = InstalledPackage(source=str(FIXTURE_PKG), install_path=FIXTURE_PKG, manifest=m)
         ext_dirs = pkg.extension_dirs()
         assert all(d.is_dir() for d in ext_dirs)
 
     def test_skill_paths_resolve_to_real_dirs(self):
-        from program.package.types import InstalledPackage
+        from operator_use.package.types import InstalledPackage
         m = read_manifest(FIXTURE_PKG)
         pkg = InstalledPackage(source=str(FIXTURE_PKG), install_path=FIXTURE_PKG, manifest=m)
         skill_paths = pkg.skill_paths()
@@ -150,8 +150,8 @@ class TestExtensionsLoadFromPackage:
 
     @pytest.mark.asyncio
     async def test_greet_tool_executes_correctly(self, tmp_path):
-        from program.tool.types import ToolInvocation
-        from program.bus.service import EventBus
+        from operator_use.tool.types import ToolInvocation
+        from operator_use.bus.service import EventBus
 
         loaded = load_packages_from_settings([str(FIXTURE_PKG)], tmp_path / "packages")
         result = await discover_and_load_extensions(loaded.extension_dirs, bus=EventBus())

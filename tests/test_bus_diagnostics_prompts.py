@@ -5,15 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from program.bus.service import Bus, EventBus
-from program.bus.types import IncomingMessage, OutgoingMessage, TextPart
-from program.diagnostics.service import run_diagnostics
-from program.diagnostics.types import ResourceDiagnostic
-from program.extension.types import LoadExtensionsResult, ExtensionError, Extension
-from program.prompt.builder import PromptTemplate
-from program.resource.context import load_project_context_files
-from program.resource.types import ContextFile
-from program.skill.types import SourceInfo
+from operator_use.bus.service import Bus, EventBus
+from operator_use.bus.types import IncomingMessage, OutgoingMessage, TextPart
+from operator_use.diagnostics.service import run_diagnostics
+from operator_use.diagnostics.types import ResourceDiagnostic
+from operator_use.extension.types import LoadExtensionsResult, ExtensionError, Extension
+from operator_use.prompt.builder import PromptTemplate
+from operator_use.resource.context import load_project_context_files
+from operator_use.resource.types import ContextFile
+from operator_use.skill.types import SourceInfo
 
 
 def _inc(text: str = "hi") -> IncomingMessage:

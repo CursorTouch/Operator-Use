@@ -6,13 +6,13 @@ from types import SimpleNamespace
 import pytest
 from helpers import FakeLLM, make_tool, text_seq, tool_call_seq, AnyParams
 
-from program.extension.types import (
+from operator_use.extension.types import (
     Extension, ContextEventResult, ToolCallEventResult, ToolResultEventResult,
     LoadExtensionsResult,
 )
-from program.message.types import UserMessage
-from program.skill.types import SourceInfo
-from program.tool.types import Tool, ToolKind, ToolResult
+from operator_use.message.types import UserMessage
+from operator_use.skill.types import SourceInfo
+from operator_use.tool.types import Tool, ToolKind, ToolResult
 
 
 def _make_ext(handlers: dict) -> Extension:
@@ -24,15 +24,15 @@ def _make_ext(handlers: dict) -> Extension:
 
 def _make_agent_with_ext(llm, ext, tools=None):
     from helpers import make_agent
-    from program.hooks.service import Hooks
-    from program.extension.runtime import ExtensionRuntime
+    from operator_use.hooks.service import Hooks
+    from operator_use.extension.runtime import ExtensionRuntime
     from pathlib import Path
-    from program.agent.service import Agent
-    from program.agent.types import AgentConfig
-    from program.session.manager import SessionManager
-    from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-    from program.compaction.strategy.types import CompactionSettings
-    from program.resource.types import BaseResourceLoader
+    from operator_use.agent.service import Agent
+    from operator_use.agent.types import AgentConfig
+    from operator_use.session.manager import SessionManager
+    from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+    from operator_use.compaction.strategy.types import CompactionSettings
+    from operator_use.resource.types import BaseResourceLoader
 
     class FakeLoader(BaseResourceLoader):
         def get_extensions(self): return LoadExtensionsResult()
@@ -57,7 +57,7 @@ def _make_agent_with_ext(llm, ext, tools=None):
 
     h = Hooks()
     sm = SessionManager.in_memory()
-    from program.engine.service import Engine
+    from operator_use.engine.service import Engine
     engine = Engine(llm=llm, tools=tools or [], hooks=h)
     load_result = LoadExtensionsResult(extensions=[ext])
     config = AgentConfig(cwd=Path("/tmp"), retry_enabled=False, retry_max_retries=0, retry_base_delay_ms=0)

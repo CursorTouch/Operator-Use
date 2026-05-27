@@ -1,16 +1,16 @@
 """Advanced tests for message/types.py: accessors, factories, from_session conversions."""
 import pytest
 from pathlib import Path
-from program.message.types import (
+from operator_use.message.types import (
     TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
     Usage, UserMessage, AssistantMessage, ToolMessage, SystemMessage,
     CustomMessage, BranchSummaryMessage, CompactionSummaryMessage,
     Role,
 )
-from program.session.types import (
+from operator_use.session.types import (
     CustomMessageEntry, BranchEntry, CompactionEntry,
 )
-from program.session.utils import generate_id, generate_timestamp
+from operator_use.session.utils import generate_id, generate_timestamp
 
 
 # ── UserMessage factories ─────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ class TestAssistantMessageAccessors:
         assert thoughts[0].content == "let me reason"
 
     def test_default_stop_reason(self):
-        from program.inference.types import StopReason
+        from operator_use.inference.types import StopReason
         msg = AssistantMessage()
         assert msg.stop_reason == StopReason.Stop
 

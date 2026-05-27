@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from program.settings.manager import SettingsManager
+from operator_use.settings.manager import SettingsManager
 
 
 @pytest.mark.asyncio

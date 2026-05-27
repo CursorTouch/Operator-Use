@@ -2,15 +2,15 @@
 import pytest
 from pathlib import Path  # noqa: F401 — used by _reg_profile helper
 
-from program.extension.runtime import ExtensionRuntime
-from program.extension.types import (
+from operator_use.extension.runtime import ExtensionRuntime
+from operator_use.extension.types import (
     Extension, ExtensionContext, ExtensionError, LoadExtensionsResult,
     ToolDefinition, RegisteredTool, RegisteredCommand, ContextUsage, CompactOptions,
     RegisteredInferenceProvider, RegisteredTextAPI, RegisteredMemoryProvider,
     RegisteredMemoryAPI, RegisteredSubagentProfile,
 )
-from program.skill.types import SourceInfo
-from program.tool.types import ToolResult
+from operator_use.skill.types import SourceInfo
+from operator_use.tool.types import ToolResult
 
 
 # ── Fake ExtensionContext ─────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ def _reg_mem_api(name: str, cls: type) -> RegisteredMemoryAPI:
 
 
 def _reg_profile(name: str) -> RegisteredSubagentProfile:
-    from program.subagent.profile import SubagentProfile
+    from operator_use.subagent.profile import SubagentProfile
     si = SourceInfo(path="test.py", source="local")
     profile = SubagentProfile(
         name=name, description=f"{name} agent",

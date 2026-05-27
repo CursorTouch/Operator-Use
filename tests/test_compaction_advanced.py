@@ -1,18 +1,18 @@
 """Advanced compaction tests: prepare with prior summary, split-turn, file ops, custom instructions."""
 import pytest
-from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-from program.compaction.strategy.types import (
+from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from operator_use.compaction.strategy.types import (
     CompactionSettings, CompactionPreparation, CompactionResult,
 )
-from program.message.types import AgentMessage, UserMessage, AssistantMessage, TextContent
-from program.session.manager import SessionManager
-from program.session.types import CompactionEntry
-from program.inference.types import (
+from operator_use.message.types import AgentMessage, UserMessage, AssistantMessage, TextContent
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import CompactionEntry
+from operator_use.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallEndEvent,
 )
-from program.message.types import ToolCallContent
+from operator_use.message.types import ToolCallContent
 
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": AgentMessage})
 

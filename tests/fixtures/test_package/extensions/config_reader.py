@@ -1,7 +1,7 @@
 """Config reader extension — reads its settings via api.config."""
 from pydantic import BaseModel
-from program.extension.types import ToolDefinition
-from program.tool.types import ToolResult
+from operator_use.extension.types import ToolDefinition
+from operator_use.tool.types import ToolResult
 
 _captured_config = {}
 

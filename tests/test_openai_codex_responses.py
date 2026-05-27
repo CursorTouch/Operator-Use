@@ -4,8 +4,8 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from program.inference.api.text.openai_codex_responses import _process_events
-from program.inference.types import EndEvent, StopReason, ToolCallEndEvent
+from operator_use.inference.api.text.openai_codex_responses import _process_events
+from operator_use.inference.types import EndEvent, StopReason, ToolCallEndEvent
 
 
 async def _iter_events(items: list[dict]) -> AsyncIterator[dict]:

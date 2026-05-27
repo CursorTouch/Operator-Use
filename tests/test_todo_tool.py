@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from program.builtins.tools.todo import TodoTool
-from program.message.types import AssistantMessage, ToolCallContent, ToolMessage, ToolResultContent
-from program.tool.types import ToolInvocation
+from operator_use.builtins.tools.todo import TodoTool
+from operator_use.message.types import AssistantMessage, ToolCallContent, ToolMessage, ToolResultContent
+from operator_use.tool.types import ToolInvocation
 
 
 def _inv(params: dict) -> ToolInvocation:

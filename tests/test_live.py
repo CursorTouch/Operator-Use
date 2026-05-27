@@ -8,10 +8,10 @@ from __future__ import annotations
 import pytest
 from helpers import make_mistral_llm, text_seq, make_tool, AnyParams
 
-from program.engine.service import Engine
-from program.engine.types import AgentEndEvent, AgentErrorEvent, ToolExecutionEndEvent
-from program.message.types import UserMessage, Role
-from program.tool.types import Tool, ToolKind, ToolResult
+from operator_use.engine.service import Engine
+from operator_use.engine.types import AgentEndEvent, AgentErrorEvent, ToolExecutionEndEvent
+from operator_use.message.types import UserMessage, Role
+from operator_use.tool.types import Tool, ToolKind, ToolResult
 
 
 @pytest.mark.live

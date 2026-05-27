@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from program.agent.goals import GoalManager, parse_judge_response
-from program.agent.types import PromptOptions
-from program.message.types import AssistantMessage, TextContent
-from program.session.manager import SessionManager
+from operator_use.agent.goals import GoalManager, parse_judge_response
+from operator_use.agent.types import PromptOptions
+from operator_use.message.types import AssistantMessage, TextContent
+from operator_use.session.manager import SessionManager
 
 
 def _manager(judge=None, max_turns: int = 20) -> GoalManager:

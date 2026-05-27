@@ -4,24 +4,24 @@ from __future__ import annotations
 import pytest
 from helpers import FakeLLM, make_tool, text_seq, tool_call_seq, collect_events, AnyParams
 
-from program.engine.service import Engine
-from program.engine.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import (
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
     TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageEndEvent, MessageUpdateEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent,
     Options,
 )
-from program.hooks.service import Hooks
-from program.hooks.types import (
+from operator_use.hooks.service import Hooks
+from operator_use.hooks.types import (
     AgentStartEvent as HookAgentStart, AgentEndEvent as HookAgentEnd,
     TurnStartEvent as HookTurnStart, TurnEndEvent as HookTurnEnd,
     MessageStartEvent as HookMsgStart, MessageEndEvent as HookMsgEnd,
     ToolExecutionStartEvent as HookToolStart, ToolExecutionEndEvent as HookToolEnd,
     SavePointEvent, SettledEvent,
 )
-from program.message.types import UserMessage, Role
-from program.session.manager import SessionManager
+from operator_use.message.types import UserMessage, Role
+from operator_use.session.manager import SessionManager
 
 
 class TestEngineEventSequence:

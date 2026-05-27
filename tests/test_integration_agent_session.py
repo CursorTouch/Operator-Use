@@ -5,36 +5,36 @@ from types import SimpleNamespace
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.agent.service import Agent
-from program.builtins.tools.todo import TodoTool
-from program.runtime.types import RuntimeConfig
-from program.agent.types import AgentConfig, PromptOptions
-from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-from program.compaction.strategy.types import CompactionSettings, CompactionPreparation
-from program.message.types import AgentMessage as _AgentMessage
+from operator_use.agent.service import Agent
+from operator_use.builtins.tools.todo import TodoTool
+from operator_use.runtime.types import RuntimeConfig
+from operator_use.agent.types import AgentConfig, PromptOptions
+from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from operator_use.compaction.strategy.types import CompactionSettings, CompactionPreparation
+from operator_use.message.types import AgentMessage as _AgentMessage
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": _AgentMessage})
-from program.engine.service import Engine
-from program.engine.types import Options
-from program.extension.runtime import ExtensionRuntime
-from program.extension.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import Options
+from operator_use.extension.runtime import ExtensionRuntime
+from operator_use.extension.types import (
     LoadExtensionsResult, Extension, BeforeAgentStartEventResult,
     SessionCompactEvent,
 )
-from program.inference.types import (
+from operator_use.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallEndEvent,
 )
-from program.message.types import (
+from operator_use.message.types import (
     TextContent, ToolCallContent, ToolResultContent,
     UserMessage, AssistantMessage, ToolMessage, Usage, Role,
 )
-from program.resource.types import BaseResourceLoader, ResourceExtensionPaths, ContextFile
-from program.session.manager import SessionManager
-from program.session.types import MessageEntry, CompactionEntry
-from program.skill.types import SourceInfo
-from program.tool.types import Tool, ToolKind, ToolInvocation, ToolResult
+from operator_use.resource.types import BaseResourceLoader, ResourceExtensionPaths, ContextFile
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import MessageEntry, CompactionEntry
+from operator_use.skill.types import SourceInfo
+from operator_use.tool.types import Tool, ToolKind, ToolInvocation, ToolResult
 
 
 # ── Fake LLM ──────────────────────────────────────────────────────────────────
@@ -179,7 +179,7 @@ def make_session(
     retry_max_retries: int = 0,
     context_window: int = 200_000,
 ) -> tuple[Agent, SessionManager]:
-    from program.hooks.service import Hooks
+    from operator_use.hooks.service import Hooks
     sm = SessionManager.in_memory()
     hooks = Hooks()
     engine = Engine(llm=llm, tools=tools or [], options=Options(), hooks=hooks)
@@ -406,7 +406,7 @@ class TestCompactionIntegration:
 
 class TestExtensionHooks:
     def _make_session_with_ext(self, llm, ext: Extension):
-        from program.hooks.service import Hooks
+        from operator_use.hooks.service import Hooks
         sm = SessionManager.in_memory()
         hooks = Hooks()
         engine = Engine(llm=llm, tools=[], options=Options(), hooks=hooks)

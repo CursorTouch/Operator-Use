@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 from click.testing import CliRunner
 
-from program.inference.provider.types import APIProvider
-from program.inference.types import LLMOptions
-from program.console.auth import auth
+from operator_use.inference.provider.types import APIProvider
+from operator_use.inference.types import LLMOptions
+from operator_use.console.auth import auth
 
 
 @dataclass
@@ -84,7 +84,7 @@ class _AuthStore:
 
 
 def _patch_llm(monkeypatch, auth_store, registry):
-    from program.inference.api.text import service
+    from operator_use.inference.api.text import service
 
     class _LLM:
         _auth_store = auth_store

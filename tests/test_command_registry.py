@@ -1,8 +1,8 @@
 """Tests for CommandRegistry and slash command parsing."""
 import pytest
 
-from program.commands.registry import CommandRegistry
-from program.commands.types import SlashCommandInfo, CommandParseResult, parse_command
+from operator_use.commands.registry import CommandRegistry
+from operator_use.commands.types import SlashCommandInfo, CommandParseResult, parse_command
 
 
 # ── parse_command ─────────────────────────────────────────────────────────────
@@ -84,8 +84,8 @@ class TestCommandRegistry:
         assert len(names) == len(set(names))
 
     def test_register_from_extensions(self):
-        from program.extension.types import RegisteredCommand
-        from program.skill.types import SourceInfo
+        from operator_use.extension.types import RegisteredCommand
+        from operator_use.skill.types import SourceInfo
         si = SourceInfo(path="x.py", source='local')
         async def h(r, a): pass
         ext_cmd = RegisteredCommand(name='ext_cmd', source_info=si, description='Ext', handler=h)

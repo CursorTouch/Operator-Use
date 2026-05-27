@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from program.memory import MemoryManager, MemoryRuntimeContext
-from program.memory.api.mem0 import Mem0MemoryAPI
-from program.memory.api.registry import MemoryAPIRegistry
-from program.memory.api.supermemory import SupermemoryAPI
-from program.memory.types import MemoryOptions
-from program.memory.provider.registry import MemoryProviderRegistry
+from operator_use.memory import MemoryManager, MemoryRuntimeContext
+from operator_use.memory.api.mem0 import Mem0MemoryAPI
+from operator_use.memory.api.registry import MemoryAPIRegistry
+from operator_use.memory.api.supermemory import SupermemoryAPI
+from operator_use.memory.types import MemoryOptions
+from operator_use.memory.provider.registry import MemoryProviderRegistry
 
 
 def test_memory_api_registry_loads_builtins():
@@ -88,7 +88,7 @@ class _FakeSupermemoryClient:
 
 
 def test_custom_memory_provider_registerable():
-    from program.memory.provider.types import MemoryProvider
+    from operator_use.memory.provider.types import MemoryProvider
 
     registry = MemoryProviderRegistry.from_builtins()
     custom = MemoryProvider(
@@ -106,7 +106,7 @@ def test_custom_memory_provider_registerable():
 
 
 def test_custom_memory_api_registerable():
-    from program.memory.api.base import BaseMemoryAPI
+    from operator_use.memory.api.base import BaseMemoryAPI
 
     class MyCustomAPI(BaseMemoryAPI):
         async def prefetch(self, query, *, session_id=""):
@@ -122,8 +122,8 @@ def test_custom_memory_api_registerable():
 
 
 def test_memory_manager_uses_custom_registry(tmp_path):
-    from program.memory.provider.types import MemoryProvider
-    from program.memory.api.base import BaseMemoryAPI
+    from operator_use.memory.provider.types import MemoryProvider
+    from operator_use.memory.api.base import BaseMemoryAPI
 
     class NullAPI(BaseMemoryAPI):
         pass
@@ -155,7 +155,7 @@ def test_memory_manager_rejects_unknown_provider_id():
 
 
 def test_custom_provider_unregister():
-    from program.memory.provider.types import MemoryProvider
+    from operator_use.memory.provider.types import MemoryProvider
 
     registry = MemoryProviderRegistry.from_builtins()
     custom = MemoryProvider(id="temp", name="Temp", api="x", options=MemoryOptions())

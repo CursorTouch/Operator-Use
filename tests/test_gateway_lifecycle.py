@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 
 from tests.helpers import make_agent
-from program.bus.service import Bus
-from program.gateway.service import Gateway, _SessionEntry
-from program.inference.types import LLMContext, StartEvent
-from program.settings.manager import SettingsManager
+from operator_use.bus.service import Bus
+from operator_use.gateway.service import Gateway, _SessionEntry
+from operator_use.inference.types import LLMContext, StartEvent
+from operator_use.settings.manager import SettingsManager
 
 
 class BlockingLLM:

@@ -10,21 +10,21 @@ from types import SimpleNamespace
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.engine.service import Engine
-from program.engine.types import MessageEndEvent, Options
-from program.inference.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import MessageEndEvent, Options
+from operator_use.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallEndEvent,
 )
-from program.message.types import (
+from operator_use.message.types import (
     TextContent, ToolCallContent, ToolResultContent,
     UserMessage, AssistantMessage, ToolMessage, Role,
 )
-from program.session.manager import SessionManager
-from program.session.types import MessageEntry
-from program.tool.types import Tool, ToolKind, ToolInvocation, ToolResult
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import MessageEntry
+from operator_use.tool.types import Tool, ToolKind, ToolInvocation, ToolResult
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -137,13 +137,13 @@ class TestReg001ToolMessageContentsCleared:
         must retain its contents after the Agent finishes a turn.
         """
         from pathlib import Path
-        from program.agent.service import Agent
-        from program.agent.types import AgentConfig
-        from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-        from program.compaction.strategy.types import CompactionSettings
-        from program.extension.runtime import ExtensionRuntime
-        from program.extension.types import LoadExtensionsResult
-        from program.resource.types import BaseResourceLoader, ResourceExtensionPaths
+        from operator_use.agent.service import Agent
+        from operator_use.agent.types import AgentConfig
+        from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+        from operator_use.compaction.strategy.types import CompactionSettings
+        from operator_use.extension.runtime import ExtensionRuntime
+        from operator_use.extension.types import LoadExtensionsResult
+        from operator_use.resource.types import BaseResourceLoader, ResourceExtensionPaths
 
         class FakeResourceLoader(BaseResourceLoader):
             def get_extensions(self): return LoadExtensionsResult()
@@ -166,7 +166,7 @@ class TestReg001ToolMessageContentsCleared:
 
         class _NullCtx: pass
 
-        from program.hooks.service import Hooks
+        from operator_use.hooks.service import Hooks
 
         llm = FakeLLM(tool_call_seq("t1", "my_tool"), text_seq("done"))
         tool = make_tool("my_tool", "session_output")
@@ -219,7 +219,7 @@ class TestReg001ToolMessageContentsCleared:
 class TestReg002GetLastActivityTimeFloat:
     def test_does_not_raise_with_float_timestamp(self):
         """get_last_activity_time must handle float message timestamps without AttributeError."""
-        from program.session.utils import get_last_activity_time
+        from operator_use.session.utils import get_last_activity_time
 
         sm = SessionManager.in_memory()
         sm.append_message(UserMessage.text("hi"))
@@ -235,7 +235,7 @@ class TestReg002GetLastActivityTimeFloat:
 
     def test_returns_correct_timestamp(self):
         """Returned timestamp must match the most-recent message, not some garbage value."""
-        from program.session.utils import get_last_activity_time
+        from operator_use.session.utils import get_last_activity_time
         import time
 
         sm = SessionManager.in_memory()
@@ -253,7 +253,7 @@ class TestReg002GetLastActivityTimeFloat:
 
     def test_two_messages_returns_later_one(self):
         """get_last_activity_time must return the max timestamp, not the first."""
-        from program.session.utils import get_last_activity_time
+        from operator_use.session.utils import get_last_activity_time
         import time
 
         sm = SessionManager.in_memory()

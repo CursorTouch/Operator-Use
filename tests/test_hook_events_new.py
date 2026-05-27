@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from program.hooks.types import (
+from operator_use.hooks.types import (
     ChannelConnectEvent,
     ChannelDisconnectEvent,
     GatewayErrorEvent,
@@ -14,8 +14,8 @@ from program.hooks.types import (
     SubagentEndEvent,
     HookEvent,
 )
-from program.subagent.types import SubagentStatus
-from program.bus.types import (
+from operator_use.subagent.types import SubagentStatus
+from operator_use.bus.types import (
     IncomingMessage, OutgoingMessage, TextPart, AudioPart, ImagePart, FilePart,
     ContentPart, StreamPhase, text_from_parts, media_paths_from_parts,
 )
@@ -49,7 +49,7 @@ class TestSubagentStartEvent:
         e = SubagentStartEvent()
         # isinstance check won't work on union, but we can verify type annotation via
         # checking the union members
-        from program.hooks.types import HookEvent
+        from operator_use.hooks.types import HookEvent
         import typing
         args = typing.get_args(HookEvent)
         assert SubagentStartEvent in args
@@ -80,7 +80,7 @@ class TestSubagentEndEvent:
 
     def test_is_hook_event(self):
         import typing
-        from program.hooks.types import HookEvent
+        from operator_use.hooks.types import HookEvent
         args = typing.get_args(HookEvent)
         assert SubagentEndEvent in args
 

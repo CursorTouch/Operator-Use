@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from program.builtins.tools.computer import ComputerTool
-from program.tool.types import ToolContext, ToolInvocation
+from operator_use.builtins.tools.computer import ComputerTool
+from operator_use.tool.types import ToolContext, ToolInvocation
 
 
 @dataclass

@@ -3,13 +3,13 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from program.extension.loader import load_extension_from_file, discover_and_load_extensions
-from program.extension.types import (
+from operator_use.extension.loader import load_extension_from_file, discover_and_load_extensions
+from operator_use.extension.types import (
     Extension, ExtensionAPI, ExtensionError, LoadExtensionsResult,
     ToolDefinition, RegisteredTool,
 )
-from program.bus.service import EventBus
-from program.tool.types import ToolResult, ToolExecutionMode
+from operator_use.bus.service import EventBus
+from operator_use.tool.types import ToolResult, ToolExecutionMode
 from pydantic import BaseModel
 
 
@@ -72,8 +72,8 @@ def extension(api):
     @pytest.mark.asyncio
     async def test_extension_registers_tool(self, tmp_path):
         p = write_ext(tmp_path, "tool_ext.py", """
-from program.extension.types import ToolDefinition
-from program.tool.types import ToolResult
+from operator_use.extension.types import ToolDefinition
+from operator_use.tool.types import ToolResult
 from pydantic import BaseModel
 
 class Params(BaseModel):
@@ -181,7 +181,7 @@ class TestProviderRegistration:
     async def test_register_inference_provider(self, tmp_path):
         p = write_ext(tmp_path, "prov_ext.py", """
 from dataclasses import dataclass
-from program.inference.types import LLMOptions, AuthType, Transport
+from operator_use.inference.types import LLMOptions, AuthType, Transport
 
 @dataclass
 class FakeProvider:
@@ -193,7 +193,7 @@ class FakeProvider:
     options: object = None
 
     def __post_init__(self):
-        from program.inference.types import AuthType, Transport, LLMOptions
+        from operator_use.inference.types import AuthType, Transport, LLMOptions
         self.auth_type = AuthType.ApiKey
         self.supported_transports = [Transport.HTTP]
         self.options = LLMOptions()
@@ -228,8 +228,8 @@ def extension(api):
     @pytest.mark.asyncio
     async def test_register_memory_provider(self, tmp_path):
         p = write_ext(tmp_path, "mem_prov_ext.py", """
-from program.memory.provider.types import MemoryProvider
-from program.memory.types import MemoryOptions
+from operator_use.memory.provider.types import MemoryProvider
+from operator_use.memory.types import MemoryOptions
 
 def extension(api):
     api.register_memory_provider(MemoryProvider(
@@ -249,7 +249,7 @@ def extension(api):
     @pytest.mark.asyncio
     async def test_register_memory_api(self, tmp_path):
         p = write_ext(tmp_path, "mem_api_ext.py", """
-from program.memory.api.base import BaseMemoryAPI
+from operator_use.memory.api.base import BaseMemoryAPI
 
 class MyMemAPI(BaseMemoryAPI):
     pass
@@ -265,7 +265,7 @@ def extension(api):
     @pytest.mark.asyncio
     async def test_register_subagent_profile(self, tmp_path):
         p = write_ext(tmp_path, "profile_ext.py", """
-from program.subagent.profile import SubagentProfile
+from operator_use.subagent.profile import SubagentProfile
 from pathlib import Path
 
 def extension(api):
@@ -286,8 +286,8 @@ def extension(api):
     @pytest.mark.asyncio
     async def test_multiple_providers_from_one_extension(self, tmp_path):
         p = write_ext(tmp_path, "multi_prov.py", """
-from program.memory.provider.types import MemoryProvider
-from program.memory.types import MemoryOptions
+from operator_use.memory.provider.types import MemoryProvider
+from operator_use.memory.types import MemoryOptions
 
 def extension(api):
     for i in range(3):
@@ -307,8 +307,8 @@ def extension(api):
     async def test_provider_registration_survives_other_errors(self, tmp_path):
         """Provider registration in the factory should work even if a handler raises later."""
         p = write_ext(tmp_path, "mixed.py", """
-from program.memory.provider.types import MemoryProvider
-from program.memory.types import MemoryOptions
+from operator_use.memory.provider.types import MemoryProvider
+from operator_use.memory.types import MemoryOptions
 
 def extension(api):
     api.register_memory_provider(MemoryProvider(

@@ -7,29 +7,29 @@ import base64
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from program.auth.providers import ProviderAuthManager
-from program.auth.storage import InMemoryAuthStorage
-from program.auth.types import OAuthCredential, APICredential, AuthType
-from program.inference.provider.registry import TextProviderRegistry
-from program.inference.provider.oauth.anthropic_claude_code import (
+from operator_use.auth.providers import ProviderAuthManager
+from operator_use.auth.storage import InMemoryAuthStorage
+from operator_use.auth.types import OAuthCredential, APICredential, AuthType
+from operator_use.inference.provider.registry import TextProviderRegistry
+from operator_use.inference.provider.oauth.anthropic_claude_code import (
     AnthropicClaudeCodeOAuthProvider,
     _parse_authorization_input as anthropic_parse_input,
     _parse_token_response as anthropic_parse_token,
     _build_authorization_url,
 )
-from program.inference.provider.oauth.github_copilot import (
+from operator_use.inference.provider.oauth.github_copilot import (
     GitHubCopilotOAuthProvider,
     get_copilot_base_url,
     normalize_domain,
 )
-from program.inference.provider.oauth.openai_codex import (
+from operator_use.inference.provider.oauth.openai_codex import (
     OpenAICodexOAuthProvider,
     _parse_authorization_input as openai_parse_input,
     _parse_token_response as openai_parse_token,
     _decode_jwt,
     _get_account_id,
 )
-from program.inference.provider.oauth.google_antigravity import (
+from operator_use.inference.provider.oauth.google_antigravity import (
     GoogleAntigravityOAuthProvider,
 )
 

@@ -3,8 +3,8 @@ import json
 import pytest
 from pathlib import Path
 
-from program.settings.storage import InMemorySettingsStorage, FileSettingsStorage
-from program.settings.types import LockResult
+from operator_use.settings.storage import InMemorySettingsStorage, FileSettingsStorage
+from operator_use.settings.types import LockResult
 
 
 # ── InMemorySettingsStorage ───────────────────────────────────────────────────

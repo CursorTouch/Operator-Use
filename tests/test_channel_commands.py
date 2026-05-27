@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from program.commands.types import CommandParseResult
+from operator_use.commands.types import CommandParseResult
 
 
 class TestDiscordCommands:
     def _channel(self):
-        from program.gateway.channels.discord.service import DiscordChannel
-        from program.gateway.types import BaseChannel
+        from operator_use.gateway.channels.discord.service import DiscordChannel
+        from operator_use.gateway.types import BaseChannel
 
         ch = DiscordChannel.__new__(DiscordChannel)
         BaseChannel.__init__(ch)
@@ -37,7 +37,7 @@ class TestDiscordCommands:
 
     @pytest.mark.asyncio
     async def test_application_command_callback_dispatches_existing_registry_command(self, monkeypatch):
-        from program.gateway.channels.discord import service as discord_service
+        from operator_use.gateway.channels.discord import service as discord_service
 
         ch = self._channel()
 
@@ -85,8 +85,8 @@ class TestDiscordCommands:
 
 class TestSlackCommands:
     def _channel(self):
-        from program.gateway.channels.slack.service import SlackChannel
-        from program.gateway.types import BaseChannel
+        from operator_use.gateway.channels.slack.service import SlackChannel
+        from operator_use.gateway.types import BaseChannel
 
         ch = SlackChannel.__new__(SlackChannel)
         BaseChannel.__init__(ch)

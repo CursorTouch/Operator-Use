@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from program.message.types import (
+from operator_use.message.types import (
     TextContent, ToolCallContent, ToolResultContent, ThinkingContent, ImageContent,
     UserMessage, AssistantMessage, ToolMessage, Role, Usage,
 )

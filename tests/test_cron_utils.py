@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from program.cron.types import CronJob, CronJobState, CronPayload, CronSchedule, CronStore
-from program.cron.utils import compute_next_run, dict_to_job, job_to_dict, ms
-from program.cron.jobs import CronJobStore
+from operator_use.cron.types import CronJob, CronJobState, CronPayload, CronSchedule, CronStore
+from operator_use.cron.utils import compute_next_run, dict_to_job, job_to_dict, ms
+from operator_use.cron.jobs import CronJobStore
 
 
 # ── ms() ──────────────────────────────────────────────────────────────────────

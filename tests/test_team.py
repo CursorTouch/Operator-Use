@@ -20,11 +20,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from program.team.types import MailboxMessage, TeamMember, TeamRecord
-from program.team.mailbox import TeamMailbox
-from program.team.manager import TeamManager
-from program.subagent.types import SubagentRecord, SubagentStatus, SubagentSettings
-from program.tool.types import ToolContext, ToolInvocation
+from operator_use.team.types import MailboxMessage, TeamMember, TeamRecord
+from operator_use.team.mailbox import TeamMailbox
+from operator_use.team.manager import TeamManager
+from operator_use.subagent.types import SubagentRecord, SubagentStatus, SubagentSettings
+from operator_use.tool.types import ToolContext, ToolInvocation
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -427,14 +427,14 @@ class TestTeamManagerMailbox:
 
 class TestCompletionListeners:
     def _make_manager(self):
-        from program.subagent.manager import SubagentManager
+        from operator_use.subagent.manager import SubagentManager
         mgr = SubagentManager.__new__(SubagentManager)
         from collections import defaultdict
         mgr._listeners = defaultdict(list)
         return mgr
 
     def test_on_complete_registers_callback(self):
-        from program.subagent.manager import SubagentManager
+        from operator_use.subagent.manager import SubagentManager
         mgr = self._make_manager()
         cb = AsyncMock()
         mgr.on_complete("sub_001", cb)
@@ -457,8 +457,8 @@ class TestCompletionListeners:
 
     @pytest.mark.asyncio
     async def test_listener_fires_on_task_completion(self):
-        from program.subagent.manager import SubagentManager
-        from program.subagent.types import SubagentSettings
+        from operator_use.subagent.manager import SubagentManager
+        from operator_use.subagent.types import SubagentSettings
 
         # Build a minimal manager with a mock runner and bus
         class _FakeLLM:
@@ -488,7 +488,7 @@ class TestCompletionListeners:
 
     @pytest.mark.asyncio
     async def test_listener_fires_once_then_cleared(self):
-        from program.subagent.manager import SubagentManager
+        from operator_use.subagent.manager import SubagentManager
 
         class _FakeLLM:
             model = MagicMock(name="fake")
@@ -511,7 +511,7 @@ class TestCompletionListeners:
 
     @pytest.mark.asyncio
     async def test_listener_exception_does_not_propagate(self):
-        from program.subagent.manager import SubagentManager
+        from operator_use.subagent.manager import SubagentManager
 
         class _FakeLLM:
             model = MagicMock(name="fake")
@@ -531,7 +531,7 @@ class TestCompletionListeners:
 
     @pytest.mark.asyncio
     async def test_multiple_listeners_all_fire(self):
-        from program.subagent.manager import SubagentManager
+        from operator_use.subagent.manager import SubagentManager
 
         class _FakeLLM:
             model = MagicMock(name="fake")
@@ -554,7 +554,7 @@ class TestCompletionListeners:
     @pytest.mark.asyncio
     async def test_listener_receives_correct_record(self):
         from unittest.mock import patch
-        from program.subagent.manager import SubagentManager
+        from operator_use.subagent.manager import SubagentManager
 
         class _FakeLLM:
             model = MagicMock(name="fake")
@@ -640,7 +640,7 @@ def _make_context(tmp_path, with_subagent=True) -> ToolContext:
     tm = TeamManager(tmp_path)
     ctx = ToolContext(team_manager=tm, spawn_depth=0)
     if with_subagent:
-        from program.subagent.types import SubagentSettings
+        from operator_use.subagent.types import SubagentSettings
         sub_mgr = MagicMock()
         sub_mgr._settings = SubagentSettings(max_spawn_depth=3)
         sub_mgr.invoke = AsyncMock(return_value="sub_spawn001")
@@ -656,7 +656,7 @@ def _inv(action: str, **kwargs) -> ToolInvocation:
 class TestTeamToolList:
     @pytest.mark.asyncio
     async def test_list_empty(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("list"), context=ctx)
@@ -665,7 +665,7 @@ class TestTeamToolList:
 
     @pytest.mark.asyncio
     async def test_list_shows_teams(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "test")
@@ -676,7 +676,7 @@ class TestTeamToolList:
 
     @pytest.mark.asyncio
     async def test_list_shows_member_count(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -689,7 +689,7 @@ class TestTeamToolList:
 class TestTeamToolCreate:
     @pytest.mark.asyncio
     async def test_create_success(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("create", team_name="alpha", description="test"), context=ctx)
@@ -699,7 +699,7 @@ class TestTeamToolCreate:
 
     @pytest.mark.asyncio
     async def test_create_missing_team_name(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("create"), context=ctx)
@@ -708,7 +708,7 @@ class TestTeamToolCreate:
 
     @pytest.mark.asyncio
     async def test_create_duplicate_returns_error(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         await tool.execute(_inv("create", team_name="alpha", description=""), context=ctx)
@@ -720,7 +720,7 @@ class TestTeamToolCreate:
 class TestTeamToolSpawn:
     @pytest.mark.asyncio
     async def test_spawn_success(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -738,7 +738,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_missing_team_name(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("spawn", member_name="Alice", role="r", task="t"), context=ctx)
@@ -746,7 +746,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_nonexistent_team(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(
@@ -758,7 +758,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_missing_role(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -770,7 +770,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_missing_task(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -782,7 +782,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_depth_limit_blocks(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.spawn_depth = 3  # at max
@@ -796,7 +796,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_calls_subagent_manager(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -811,7 +811,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_registers_completion_listener(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -823,7 +823,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_result_is_terminate(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -835,7 +835,7 @@ class TestTeamToolSpawn:
 
     @pytest.mark.asyncio
     async def test_spawn_subagent_invoke_error_returns_tool_error(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -851,7 +851,7 @@ class TestTeamToolSpawn:
 class TestTeamToolSend:
     @pytest.mark.asyncio
     async def test_send_success(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -865,7 +865,7 @@ class TestTeamToolSend:
 
     @pytest.mark.asyncio
     async def test_send_message_actually_stored(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -880,7 +880,7 @@ class TestTeamToolSend:
 
     @pytest.mark.asyncio
     async def test_send_missing_agent_id(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -890,7 +890,7 @@ class TestTeamToolSend:
 
     @pytest.mark.asyncio
     async def test_send_missing_message(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -900,7 +900,7 @@ class TestTeamToolSend:
 
     @pytest.mark.asyncio
     async def test_send_nonexistent_team(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(
@@ -914,7 +914,7 @@ class TestTeamToolSend:
 class TestTeamToolInbox:
     @pytest.mark.asyncio
     async def test_inbox_empty(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -925,7 +925,7 @@ class TestTeamToolInbox:
 
     @pytest.mark.asyncio
     async def test_inbox_shows_messages(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -937,7 +937,7 @@ class TestTeamToolInbox:
 
     @pytest.mark.asyncio
     async def test_inbox_clears_after_read(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -949,7 +949,7 @@ class TestTeamToolInbox:
 
     @pytest.mark.asyncio
     async def test_inbox_missing_agent_id(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -958,7 +958,7 @@ class TestTeamToolInbox:
 
     @pytest.mark.asyncio
     async def test_inbox_nonexistent_team(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("inbox", team_name="ghost", agent_id="sub_001"), context=ctx)
@@ -969,7 +969,7 @@ class TestTeamToolInbox:
 class TestTeamToolStatus:
     @pytest.mark.asyncio
     async def test_status_shows_team_info(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "my team")
@@ -980,7 +980,7 @@ class TestTeamToolStatus:
 
     @pytest.mark.asyncio
     async def test_status_shows_members(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -993,7 +993,7 @@ class TestTeamToolStatus:
 
     @pytest.mark.asyncio
     async def test_status_nonexistent_team(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("status", team_name="ghost"), context=ctx)
@@ -1002,7 +1002,7 @@ class TestTeamToolStatus:
 
     @pytest.mark.asyncio
     async def test_status_shows_inbox_count(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -1013,7 +1013,7 @@ class TestTeamToolStatus:
 
     @pytest.mark.asyncio
     async def test_status_missing_team_name(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("status"), context=ctx)
@@ -1023,7 +1023,7 @@ class TestTeamToolStatus:
 class TestTeamToolDissolve:
     @pytest.mark.asyncio
     async def test_dissolve_success(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         ctx.team_manager.create("alpha", "desc")
@@ -1033,7 +1033,7 @@ class TestTeamToolDissolve:
 
     @pytest.mark.asyncio
     async def test_dissolve_nonexistent_team(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("dissolve", team_name="ghost"), context=ctx)
@@ -1041,7 +1041,7 @@ class TestTeamToolDissolve:
 
     @pytest.mark.asyncio
     async def test_dissolve_missing_team_name(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(_inv("dissolve"), context=ctx)
@@ -1050,27 +1050,27 @@ class TestTeamToolDissolve:
 
 class TestTeamToolAvailability:
     def test_not_available_without_team_manager(self):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = ToolContext()  # team_manager=None
         assert not tool.is_available(ctx)
 
     def test_available_with_team_manager(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = ToolContext(team_manager=TeamManager(tmp_path))
         assert tool.is_available(ctx)
 
     @pytest.mark.asyncio
     async def test_execute_without_context_returns_error(self):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         r = await tool.execute(_inv("list"), context=None)
         assert r.is_error
 
     @pytest.mark.asyncio
     async def test_unknown_action_returns_error(self, tmp_path):
-        from program.builtins.tools.team import TeamTool
+        from operator_use.builtins.tools.team import TeamTool
         tool = TeamTool()
         ctx = _make_context(tmp_path)
         r = await tool.execute(ToolInvocation(id="i", name="team", params={"action": "nope"}), context=ctx)
@@ -1086,8 +1086,8 @@ class TestTeamSpawnCompletionWiring:
     @pytest.mark.asyncio
     async def test_completion_updates_member_status(self, tmp_path):
         """When a spawned subagent finishes, team member status → stopped."""
-        from program.builtins.tools.team import TeamTool
-        from program.subagent.manager import SubagentManager
+        from operator_use.builtins.tools.team import TeamTool
+        from operator_use.subagent.manager import SubagentManager
         from collections import defaultdict
 
         tool = TeamTool()

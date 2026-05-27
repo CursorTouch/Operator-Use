@@ -1,7 +1,7 @@
 """Greeter extension — registers a tool and a session_start handler."""
 from pydantic import BaseModel
-from program.extension.types import ToolDefinition
-from program.tool.types import ToolResult
+from operator_use.extension.types import ToolDefinition
+from operator_use.tool.types import ToolResult
 
 
 class GreetParams(BaseModel):

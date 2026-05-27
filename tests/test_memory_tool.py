@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from program.builtins.tools.memory import MemoryTool
-from program.memory.types import MemorySearchResult
-from program.tool.types import ToolContext, ToolInvocation
+from operator_use.builtins.tools.memory import MemoryTool
+from operator_use.memory.types import MemorySearchResult
+from operator_use.tool.types import ToolContext, ToolInvocation
 
 
 class _MemoryManager:

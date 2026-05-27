@@ -1,17 +1,17 @@
 """Tests for the diagnostics module: collision detection and extension error surfacing."""
 import pytest
-from program.diagnostics.service import (
+from operator_use.diagnostics.service import (
     detect_extension_tool_collisions,
     detect_extension_command_collisions,
     collect_extension_errors,
     run_diagnostics,
 )
-from program.extension.types import (
+from operator_use.extension.types import (
     Extension, ExtensionError, LoadExtensionsResult,
     RegisteredTool, RegisteredCommand, ToolDefinition,
 )
-from program.skill.types import LoadSkillsResult, ResourceDiagnostic, SourceInfo
-from program.tool.types import ToolExecutionMode, ToolResult, ToolInvocation
+from operator_use.skill.types import LoadSkillsResult, ResourceDiagnostic, SourceInfo
+from operator_use.tool.types import ToolExecutionMode, ToolResult, ToolInvocation
 from pydantic import BaseModel
 
 
@@ -44,7 +44,7 @@ def make_extension(path: str, tools: list[str] = (), commands: list[str] = ()) -
     for t in tools:
         ext.tools[t] = RegisteredTool(definition=make_tool_def(t), source_info=make_source(path))
     for c in commands:
-        from program.extension.types import RegisteredCommand
+        from operator_use.extension.types import RegisteredCommand
         ext.commands[c] = RegisteredCommand(
             name=c,
             source_info=make_source(path),

@@ -3,12 +3,12 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from program.inference.api.text.openai_completions import OpenAICompletionsAPI
-from program.inference.api.text.openai_responses import OpenAIResponsesAPI
-from program.inference.api.text.service import LLM
-from program.inference.model.types import Model
-from program.inference.types import LLMContext, LLMOptions, normalize_structured_response_format
-from program.message.types import UserMessage
+from operator_use.inference.api.text.openai_completions import OpenAICompletionsAPI
+from operator_use.inference.api.text.openai_responses import OpenAIResponsesAPI
+from operator_use.inference.api.text.service import LLM
+from operator_use.inference.model.types import Model
+from operator_use.inference.types import LLMContext, LLMOptions, normalize_structured_response_format
+from operator_use.message.types import UserMessage
 
 
 class Answer(BaseModel):

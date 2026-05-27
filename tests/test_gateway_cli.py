@@ -5,9 +5,9 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from program.console import gateway as gateway_cli
-from program.console.gateway import GatewayOptions
-from program.console.main import cli
+from operator_use.console import gateway as gateway_cli
+from operator_use.console.gateway import GatewayOptions
+from operator_use.console.main import cli
 
 
 def test_foreground_command_uses_gateway_run_with_group_options(monkeypatch, tmp_path):

@@ -1,11 +1,11 @@
 """Tests for message construction and content access."""
 import pytest
-from program.message.types import (
+from operator_use.message.types import (
     TextContent, ThinkingContent, ToolCallContent, ToolResultContent,
     UserMessage, AssistantMessage, SystemMessage, ToolMessage,
     Role, Usage,
 )
-from program.inference.types import StopReason
+from operator_use.inference.types import StopReason
 
 
 class TestTextContent:

@@ -1537,6 +1537,128 @@ wheels = [
 ]
 
 [[package]]
+name = "operator-use"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "agent-client-protocol" },
+    { name = "aiohttp" },
+    { name = "aiortc" },
+    { name = "anthropic" },
+    { name = "comtypes", marker = "sys_platform == 'win32'" },
+    { name = "croniter" },
+    { name = "ddgs" },
+    { name = "fastmcp" },
+    { name = "filelock" },
+    { name = "fuzzywuzzy", marker = "sys_platform == 'win32'" },
+    { name = "google-genai" },
+    { name = "httpx" },
+    { name = "inflection" },
+    { name = "jinja2-strcase" },
+    { name = "markdownify" },
+    { name = "mistralai" },
+    { name = "ollama" },
+    { name = "openai" },
+    { name = "pillow" },
+    { name = "platformdirs" },
+    { name = "prompt-toolkit" },
+    { name = "psutil", marker = "sys_platform == 'win32'" },
+    { name = "pydantic" },
+    { name = "pyobjc-framework-applicationservices", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
+    { name = "python-dotenv" },
+    { name = "python-telegram-bot" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "requests" },
+    { name = "tabulate" },
+    { name = "websockets" },
+]
+
+[package.optional-dependencies]
+channels = [
+    { name = "discord-py" },
+    { name = "python-telegram-bot" },
+    { name = "slack-bolt" },
+    { name = "twitchio" },
+]
+discord = [
+    { name = "discord-py" },
+]
+memory = [
+    { name = "mem0ai" },
+    { name = "supermemory" },
+]
+slack = [
+    { name = "slack-bolt" },
+]
+telegram = [
+    { name = "python-telegram-bot" },
+]
+twitch = [
+    { name = "twitchio" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-client-protocol", specifier = ">=0.10.0" },
+    { name = "aiohttp", specifier = ">=3.13.5" },
+    { name = "aiortc", specifier = ">=1.14.0" },
+    { name = "anthropic", specifier = ">=0.100.0" },
+    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.4.15" },
+    { name = "croniter", specifier = ">=3.0.0" },
+    { name = "ddgs", specifier = ">=9.14.2" },
+    { name = "discord-py", marker = "extra == 'channels'", specifier = ">=2.0" },
+    { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.0" },
+    { name = "fastmcp", specifier = ">=2.0.0" },
+    { name = "filelock", specifier = ">=3.29.0" },
+    { name = "fuzzywuzzy", marker = "sys_platform == 'win32'", specifier = ">=0.18.0" },
+    { name = "google-genai", specifier = ">=1.75.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "inflection", specifier = ">=0.5.1" },
+    { name = "jinja2-strcase", specifier = ">=0.0.2" },
+    { name = "markdownify", specifier = ">=1.2.2" },
+    { name = "mem0ai", marker = "extra == 'memory'", specifier = ">=0.1.0" },
+    { name = "mistralai", specifier = ">=1.9,<2" },
+    { name = "ollama", specifier = ">=0.6.2" },
+    { name = "openai", specifier = ">=2.35.1" },
+    { name = "pillow", specifier = ">=12.2.0" },
+    { name = "platformdirs", specifier = ">=4.9.4" },
+    { name = "prompt-toolkit", specifier = ">=3.0.52" },
+    { name = "psutil", marker = "sys_platform == 'win32'", specifier = ">=7.0.0" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pyobjc-framework-applicationservices", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "python-telegram-bot", specifier = ">=20.0" },
+    { name = "python-telegram-bot", marker = "extra == 'channels'", specifier = ">=20.0" },
+    { name = "python-telegram-bot", marker = "extra == 'telegram'", specifier = ">=20.0" },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=311" },
+    { name = "requests", specifier = ">=2.32.0" },
+    { name = "slack-bolt", marker = "extra == 'channels'", specifier = ">=1.0" },
+    { name = "slack-bolt", marker = "extra == 'slack'", specifier = ">=1.0" },
+    { name = "supermemory", marker = "extra == 'memory'", specifier = ">=0.3.0" },
+    { name = "tabulate", specifier = ">=0.9.0" },
+    { name = "twitchio", marker = "extra == 'channels'", specifier = ">=2.0" },
+    { name = "twitchio", marker = "extra == 'twitch'", specifier = ">=2.0" },
+    { name = "websockets", specifier = ">=16.0" },
+]
+provides-extras = ["telegram", "discord", "slack", "twitch", "memory", "channels"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-asyncio", specifier = ">=1.3.0" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1668,128 +1790,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7c/2f/2c3aafb2814703979bf5a216575f4478bcf6070bc6ec143056cf3b56c134/primp-1.2.3-cp314-cp314t-win32.whl", hash = "sha256:cb52db4d54105097773c0df4e2ef0ce7b42461d9d4d3ec28a0622ca2d22945bb", size = 3499126, upload-time = "2026-04-20T08:33:29.953Z" },
     { url = "https://files.pythonhosted.org/packages/54/f0/bad9c739a35f4cf69e2f39c01f664c9a5969e753c4cfcdc33e113cc984af/primp-1.2.3-cp314-cp314t-win_amd64.whl", hash = "sha256:d85a44585df27038e18298f7e35335c4961926e7401edd1a1bf4f7f967b3f107", size = 3870129, upload-time = "2026-04-20T08:34:11.666Z" },
     { url = "https://files.pythonhosted.org/packages/67/78/882563dc554c5f710b4e47c58978586c2528703435800a7a84e81b339d90/primp-1.2.3-cp314-cp314t-win_arm64.whl", hash = "sha256:6513dcb55e6b511c1ae383a3a0e887929b09d8d6b2c70e2b188b425c51471a02", size = 3874087, upload-time = "2026-04-20T08:33:58.109Z" },
-]
-
-[[package]]
-name = "program"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "agent-client-protocol" },
-    { name = "aiohttp" },
-    { name = "aiortc" },
-    { name = "anthropic" },
-    { name = "comtypes", marker = "sys_platform == 'win32'" },
-    { name = "croniter" },
-    { name = "ddgs" },
-    { name = "fastmcp" },
-    { name = "filelock" },
-    { name = "fuzzywuzzy", marker = "sys_platform == 'win32'" },
-    { name = "google-genai" },
-    { name = "httpx" },
-    { name = "inflection" },
-    { name = "jinja2-strcase" },
-    { name = "markdownify" },
-    { name = "mistralai" },
-    { name = "ollama" },
-    { name = "openai" },
-    { name = "pillow" },
-    { name = "platformdirs" },
-    { name = "prompt-toolkit" },
-    { name = "psutil", marker = "sys_platform == 'win32'" },
-    { name = "pydantic" },
-    { name = "pyobjc-framework-applicationservices", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
-    { name = "python-dotenv" },
-    { name = "python-telegram-bot" },
-    { name = "pywin32", marker = "sys_platform == 'win32'" },
-    { name = "requests" },
-    { name = "tabulate" },
-    { name = "websockets" },
-]
-
-[package.optional-dependencies]
-channels = [
-    { name = "discord-py" },
-    { name = "python-telegram-bot" },
-    { name = "slack-bolt" },
-    { name = "twitchio" },
-]
-discord = [
-    { name = "discord-py" },
-]
-memory = [
-    { name = "mem0ai" },
-    { name = "supermemory" },
-]
-slack = [
-    { name = "slack-bolt" },
-]
-telegram = [
-    { name = "python-telegram-bot" },
-]
-twitch = [
-    { name = "twitchio" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agent-client-protocol", specifier = ">=0.10.0" },
-    { name = "aiohttp", specifier = ">=3.13.5" },
-    { name = "aiortc", specifier = ">=1.14.0" },
-    { name = "anthropic", specifier = ">=0.100.0" },
-    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.4.15" },
-    { name = "croniter", specifier = ">=3.0.0" },
-    { name = "ddgs", specifier = ">=9.14.2" },
-    { name = "discord-py", marker = "extra == 'channels'", specifier = ">=2.0" },
-    { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.0" },
-    { name = "fastmcp", specifier = ">=2.0.0" },
-    { name = "filelock", specifier = ">=3.29.0" },
-    { name = "fuzzywuzzy", marker = "sys_platform == 'win32'", specifier = ">=0.18.0" },
-    { name = "google-genai", specifier = ">=1.75.0" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "inflection", specifier = ">=0.5.1" },
-    { name = "jinja2-strcase", specifier = ">=0.0.2" },
-    { name = "markdownify", specifier = ">=1.2.2" },
-    { name = "mem0ai", marker = "extra == 'memory'", specifier = ">=0.1.0" },
-    { name = "mistralai", specifier = ">=1.9,<2" },
-    { name = "ollama", specifier = ">=0.6.2" },
-    { name = "openai", specifier = ">=2.35.1" },
-    { name = "pillow", specifier = ">=12.2.0" },
-    { name = "platformdirs", specifier = ">=4.9.4" },
-    { name = "prompt-toolkit", specifier = ">=3.0.52" },
-    { name = "psutil", marker = "sys_platform == 'win32'", specifier = ">=7.0.0" },
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pyobjc-framework-applicationservices", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
-    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
-    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10.0" },
-    { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "python-telegram-bot", specifier = ">=20.0" },
-    { name = "python-telegram-bot", marker = "extra == 'channels'", specifier = ">=20.0" },
-    { name = "python-telegram-bot", marker = "extra == 'telegram'", specifier = ">=20.0" },
-    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=311" },
-    { name = "requests", specifier = ">=2.32.0" },
-    { name = "slack-bolt", marker = "extra == 'channels'", specifier = ">=1.0" },
-    { name = "slack-bolt", marker = "extra == 'slack'", specifier = ">=1.0" },
-    { name = "supermemory", marker = "extra == 'memory'", specifier = ">=0.3.0" },
-    { name = "tabulate", specifier = ">=0.9.0" },
-    { name = "twitchio", marker = "extra == 'channels'", specifier = ">=2.0" },
-    { name = "twitchio", marker = "extra == 'twitch'", specifier = ">=2.0" },
-    { name = "websockets", specifier = ">=16.0" },
-]
-provides-extras = ["telegram", "discord", "slack", "twitch", "memory", "channels"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-asyncio", specifier = ">=1.3.0" },
 ]
 
 [[package]]

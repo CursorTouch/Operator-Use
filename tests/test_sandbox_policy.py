@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from program.sandbox.policy import SandboxPolicy, _detect_os_sandbox
-from program.sandbox.service import Sandbox
+from operator_use.sandbox.policy import SandboxPolicy, _detect_os_sandbox
+from operator_use.sandbox.service import Sandbox
 
 
 # ── _detect_os_sandbox ────────────────────────────────────────────────────────

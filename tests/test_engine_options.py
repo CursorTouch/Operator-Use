@@ -4,13 +4,13 @@ from __future__ import annotations
 import pytest
 from helpers import FakeLLM, make_tool, text_seq, tool_call_seq, collect_events, AnyParams
 
-from program.engine.service import Engine
-from program.engine.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import (
     FollowupMode, SteeringMode, Options,
     ToolExecutionEndEvent, AgentEndEvent,
 )
-from program.inference.types import StartEvent, EndEvent, StopReason, ToolCallEndEvent
-from program.message.types import UserMessage, ToolCallContent, ToolResultContent
+from operator_use.inference.types import StartEvent, EndEvent, StopReason, ToolCallEndEvent
+from operator_use.message.types import UserMessage, ToolCallContent, ToolResultContent
 
 
 class TestSkipToolCalls:
@@ -115,7 +115,7 @@ class TestGetSteeringMessagesCallback:
 class TestShouldStopAfterTurn:
     @pytest.mark.asyncio
     async def test_stops_after_nth_turn(self):
-        from program.engine.types import FollowupMode
+        from operator_use.engine.types import FollowupMode
         n = [0]
 
         def stop_cb(msg, results):
@@ -133,7 +133,7 @@ class TestShouldStopAfterTurn:
 
     @pytest.mark.asyncio
     async def test_never_stop_drains_all_followups(self):
-        from program.engine.types import FollowupMode
+        from operator_use.engine.types import FollowupMode
         n = 3
         llm = FakeLLM(*[text_seq(f"r{i}") for i in range(n + 1)])
         engine = Engine(llm=llm, tools=[],

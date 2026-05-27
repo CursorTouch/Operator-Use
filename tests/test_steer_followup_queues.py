@@ -4,19 +4,19 @@ import pytest
 from pydantic import BaseModel
 from typing import AsyncIterator
 
-from program.engine.service import Engine
-from program.engine.types import Options, SteeringMode, FollowupMode
-from program.inference.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import Options, SteeringMode, FollowupMode
+from operator_use.inference.types import (
     LLMContext, LLMEvent,
     StartEvent, EndEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallEndEvent,
     StopReason,
 )
-from program.message.types import (
+from operator_use.message.types import (
     UserMessage, TextContent, ToolCallContent,
 )
-from program.tool.types import Tool, ToolKind, ToolResult
+from operator_use.tool.types import Tool, ToolKind, ToolResult
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

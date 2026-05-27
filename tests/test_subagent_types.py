@@ -6,8 +6,8 @@ from datetime import datetime
 
 import pytest
 
-from program.subagent.types import SubagentRecord, SubagentSettings, SubagentStatus
-from program.subagent.pool import TaskPool
+from operator_use.subagent.types import SubagentRecord, SubagentSettings, SubagentStatus
+from operator_use.subagent.pool import TaskPool
 
 
 # ── SubagentStatus ────────────────────────────────────────────────────────────
@@ -94,8 +94,8 @@ class TestSubagentSettings:
 class TestSpawnDepthEnforcement:
     @pytest.mark.asyncio
     async def test_depth_limit_blocks_spawn(self):
-        from program.builtins.tools.subagent import SubagentTool
-        from program.tool.types import ToolContext, ToolInvocation
+        from operator_use.builtins.tools.subagent import SubagentTool
+        from operator_use.tool.types import ToolContext, ToolInvocation
         from unittest.mock import AsyncMock, MagicMock
 
         manager = MagicMock()
@@ -114,8 +114,8 @@ class TestSpawnDepthEnforcement:
 
     @pytest.mark.asyncio
     async def test_depth_within_limit_proceeds(self):
-        from program.builtins.tools.subagent import SubagentTool
-        from program.tool.types import ToolContext, ToolInvocation
+        from operator_use.builtins.tools.subagent import SubagentTool
+        from operator_use.tool.types import ToolContext, ToolInvocation
         from unittest.mock import AsyncMock, MagicMock
 
         manager = MagicMock()
@@ -137,7 +137,7 @@ class TestSpawnDepthEnforcement:
 
     @pytest.mark.asyncio
     async def test_main_agent_depth_zero(self):
-        from program.tool.types import ToolContext
+        from operator_use.tool.types import ToolContext
         ctx = ToolContext()
         assert ctx.spawn_depth == 0
 

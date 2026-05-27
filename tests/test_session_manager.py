@@ -1,13 +1,13 @@
 """Tests for SessionManager: in-memory operations, branching, compaction, context building."""
 import pytest
 from pathlib import Path
-from program.session.manager import SessionManager
-from program.session.types import (
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import (
     MessageEntry, CompactionEntry, BranchEntry, LabelEntry,
     ThinkingLevelChangeEntry, ModelChangeEntry,
 )
-from program.message.types import UserMessage, AssistantMessage, TextContent, Role
-from program.inference.types import ThinkingLevel
+from operator_use.message.types import UserMessage, AssistantMessage, TextContent, Role
+from operator_use.inference.types import ThinkingLevel
 
 
 def make_sm() -> SessionManager:
@@ -131,7 +131,7 @@ class TestBuildSessionContext:
         ctx = sm.build_session_context()
         roles = [m.role for m in ctx.messages]
         # Should have: compaction summary, "new" user msg, "after compact" user msg
-        from program.message.types import Role
+        from operator_use.message.types import Role
         assert Role.COMPACTION_SUMMARY in roles
 
     def test_context_without_compaction_has_all_messages(self):

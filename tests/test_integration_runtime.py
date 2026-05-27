@@ -3,29 +3,29 @@ import pytest
 from pathlib import Path
 from typing import AsyncIterator
 
-from program.runtime.service import Runtime
-from program.runtime.types import RuntimeContext
-from program.agent.service import Agent
-from program.agent.types import AgentConfig
-from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-from program.compaction.strategy.types import CompactionSettings
-from program.commands.registry import CommandRegistry
-from program.commands.types import SlashCommandInfo
-from program.engine.service import Engine
-from program.engine.types import Options
-from program.extension.runtime import ExtensionRuntime
-from program.extension.types import LoadExtensionsResult, Extension, SessionStartEvent, SessionShutdownEvent
-from program.hooks.types import SessionBeforeCompactEvent, SessionCompactEvent
-from program.inference.types import (
+from operator_use.runtime.service import Runtime
+from operator_use.runtime.types import RuntimeContext
+from operator_use.agent.service import Agent
+from operator_use.agent.types import AgentConfig
+from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from operator_use.compaction.strategy.types import CompactionSettings
+from operator_use.commands.registry import CommandRegistry
+from operator_use.commands.types import SlashCommandInfo
+from operator_use.engine.service import Engine
+from operator_use.engine.types import Options
+from operator_use.extension.runtime import ExtensionRuntime
+from operator_use.extension.types import LoadExtensionsResult, Extension, SessionStartEvent, SessionShutdownEvent
+from operator_use.hooks.types import SessionBeforeCompactEvent, SessionCompactEvent
+from operator_use.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
 )
-from program.message.types import TextContent, UserMessage, AssistantMessage, Role
-from program.resource.types import BaseResourceLoader, ResourceExtensionPaths
-from program.session.manager import SessionManager
-from program.session.types import MessageEntry, CompactionEntry
-from program.skill.types import SourceInfo
+from operator_use.message.types import TextContent, UserMessage, AssistantMessage, Role
+from operator_use.resource.types import BaseResourceLoader, ResourceExtensionPaths
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import MessageEntry, CompactionEntry
+from operator_use.skill.types import SourceInfo
 
 
 # ── Fake LLM ──────────────────────────────────────────────────────────────────
@@ -201,8 +201,8 @@ class TestCurrentSession:
 class TestExtensionCommands:
     @pytest.mark.asyncio
     async def test_extension_command_registered_on_init(self):
-        from program.extension.types import RegisteredCommand
-        from program.skill.types import SourceInfo
+        from operator_use.extension.types import RegisteredCommand
+        from operator_use.skill.types import SourceInfo
 
         si = SourceInfo(path="ext.py", source="local")
         ext = Extension(path="ext.py", source_info=si)
@@ -222,7 +222,7 @@ class TestExtensionCommands:
 
     @pytest.mark.asyncio
     async def test_extension_command_dispatched(self):
-        from program.extension.types import RegisteredCommand
+        from operator_use.extension.types import RegisteredCommand
 
         si = SourceInfo(path="ext.py", source="local")
         ext = Extension(path="ext.py", source_info=si)

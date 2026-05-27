@@ -1,19 +1,19 @@
 """Tests for Compaction: should_compact threshold, prepare, and compact with fake LLM."""
 import pytest
 from typing import AsyncIterator
-from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-from program.compaction.strategy.types import CompactionSettings, CompactionResult, CompactionPreparation
-from program.message.types import AgentMessage
+from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from operator_use.compaction.strategy.types import CompactionSettings, CompactionResult, CompactionPreparation
+from operator_use.message.types import AgentMessage
 
 # CompactionPreparation uses AgentMessage as a TYPE_CHECKING-only forward ref;
 # rebuild the model so Pydantic can validate it at runtime.
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": AgentMessage})
-from program.session.manager import SessionManager
-from program.inference.types import (
+from operator_use.session.manager import SessionManager
+from operator_use.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, TextStartEvent, TextDeltaEvent, TextEndEvent,
 )
-from program.message.types import TextContent, UserMessage, AssistantMessage
+from operator_use.message.types import TextContent, UserMessage, AssistantMessage
 
 
 # ── Fake LLM for compaction (invoke path) ─────────────────────────────────────

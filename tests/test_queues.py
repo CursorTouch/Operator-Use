@@ -1,7 +1,7 @@
 """Tests for FollowupQueue and SteeringQueue: modes, enqueue/dequeue, is_empty."""
 import pytest
-from program.engine.types import FollowupQueue, SteeringQueue, FollowupMode, SteeringMode
-from program.message.types import UserMessage
+from operator_use.engine.types import FollowupQueue, SteeringQueue, FollowupMode, SteeringMode
+from operator_use.message.types import UserMessage
 
 
 def u(text: str = "msg") -> UserMessage:
@@ -69,7 +69,7 @@ class TestFollowupQueue:
         await q.enqueue(u("second"))
         first = await q.dequeue()
         second = await q.dequeue()
-        from program.message.types import TextContent
+        from operator_use.message.types import TextContent
         assert first[0].contents[0].content == "first"
         assert second[0].contents[0].content == "second"
 
@@ -79,7 +79,7 @@ class TestFollowupQueue:
         for text in ["x", "y", "z"]:
             await q.enqueue(u(text))
         msgs = await q.dequeue()
-        from program.message.types import TextContent
+        from operator_use.message.types import TextContent
         contents = [m.contents[0].content for m in msgs]
         assert contents == ["x", "y", "z"]
 

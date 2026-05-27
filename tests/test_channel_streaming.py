@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from program.bus.types import OutgoingMessage, StreamPhase, TextPart
+from operator_use.bus.types import OutgoingMessage, StreamPhase, TextPart
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -39,11 +39,11 @@ class TestSlackStreaming:
     """SlackChannel.send() with streaming=True posts then edits via chat_update."""
 
     def _channel(self, latency: float = 0.05):
-        from program.gateway.channels.slack.service import SlackChannel
-        with patch("program.gateway.channels.slack.service._SLACK_AVAILABLE", True):
+        from operator_use.gateway.channels.slack.service import SlackChannel
+        with patch("operator_use.gateway.channels.slack.service._SLACK_AVAILABLE", True):
             ch = SlackChannel.__new__(SlackChannel)
             # bypass __init__ import guard
-            from program.gateway.types import BaseChannel
+            from operator_use.gateway.types import BaseChannel
             BaseChannel.__init__(ch)
             ch._bot_token = "tok"
             ch._app_token = "atok"
@@ -175,9 +175,9 @@ class TestTelegramStreaming:
     """TelegramChannel.send() with streaming=True calls send_message then edit_message_text."""
 
     def _channel(self, latency: float = 0.05):
-        from program.gateway.channels.telegram.service import TelegramChannel
+        from operator_use.gateway.channels.telegram.service import TelegramChannel
         ch = TelegramChannel.__new__(TelegramChannel)
-        from program.gateway.types import BaseChannel
+        from operator_use.gateway.types import BaseChannel
         BaseChannel.__init__(ch)
         ch._token = "tok"
         ch._commands = []
@@ -274,9 +274,9 @@ class TestDiscordStreaming:
     """DiscordChannel.send() with streaming=True sends then edits the live message."""
 
     def _channel(self, latency: float = 0.05):
-        from program.gateway.channels.discord.service import DiscordChannel
+        from operator_use.gateway.channels.discord.service import DiscordChannel
         ch = DiscordChannel.__new__(DiscordChannel)
-        from program.gateway.types import BaseChannel
+        from operator_use.gateway.types import BaseChannel
         BaseChannel.__init__(ch)
         ch._token = "tok"
         ch._commands = []

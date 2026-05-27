@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from program.knowledge.service import Knowledge
+from operator_use.knowledge.service import Knowledge
 
 
 @pytest.fixture

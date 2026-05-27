@@ -10,27 +10,27 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
-from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-from program.compaction.strategy.types import CompactionSettings, CompactionPreparation
-from program.agent.types import AgentContext
-from program.engine.service import Engine
-from program.engine.types import AgentEvent, Options
-from program.hooks.service import Hooks
-from program.inference.types import (
+from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from operator_use.compaction.strategy.types import CompactionSettings, CompactionPreparation
+from operator_use.agent.types import AgentContext
+from operator_use.engine.service import Engine
+from operator_use.engine.types import AgentEvent, Options
+from operator_use.hooks.service import Hooks
+from operator_use.inference.types import (
     LLMContext, LLMEvent, StopReason,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallEndEvent,
 )
-from program.message.types import (
+from operator_use.message.types import (
     TextContent, ToolCallContent, ToolResultContent,
     UserMessage, AssistantMessage, ToolMessage, Role, Usage,
 )
-from program.session.manager import SessionManager
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from operator_use.session.manager import SessionManager
+from operator_use.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 # Forward-ref fix for CompactionPreparation
-from program.message.types import AgentMessage as _AgentMessage
+from operator_use.message.types import AgentMessage as _AgentMessage
 CompactionPreparation.model_rebuild(_types_namespace={"AgentMessage": _AgentMessage})
 
 
@@ -149,11 +149,11 @@ async def collect_events(engine: Engine, messages=None) -> list[AgentEvent]:
 
 def make_agent(llm, tools=None, hooks=None, compaction_settings=None):
     """Return (agent, session_manager) with minimal dependencies."""
-    from program.agent.service import Agent
-    from program.agent.types import AgentConfig
-    from program.extension.runtime import ExtensionRuntime
-    from program.extension.types import ExtensionContext, LoadExtensionsResult
-    from program.resource.types import BaseResourceLoader
+    from operator_use.agent.service import Agent
+    from operator_use.agent.types import AgentConfig
+    from operator_use.extension.runtime import ExtensionRuntime
+    from operator_use.extension.types import ExtensionContext, LoadExtensionsResult
+    from operator_use.resource.types import BaseResourceLoader
 
     class _FakeLoader(BaseResourceLoader):
         def get_extensions(self): return LoadExtensionsResult()
@@ -201,10 +201,10 @@ def make_mistral_llm(model_id: str = "mistral-small-latest"):
     from dotenv import load_dotenv
     load_dotenv()
     api_key = os.environ.get("MISTRAL_API_KEY", "")
-    from program.inference.api.text.mistral_chat import MistralChatAPI
-    from program.inference.types import LLMOptions
+    from operator_use.inference.api.text.mistral_chat import MistralChatAPI
+    from operator_use.inference.types import LLMOptions
 
-    from program.inference.model.types import Model
+    from operator_use.inference.model.types import Model
 
     class _Wrapper:
         def __init__(self):

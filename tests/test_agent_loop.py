@@ -4,25 +4,25 @@ import pytest
 from typing import AsyncIterator
 from pydantic import BaseModel
 
-from program.engine.service import Engine
-from program.engine.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import (
     AgentStartEvent, AgentEndEvent, AgentErrorEvent,
     TurnStartEvent, TurnEndEvent,
     MessageStartEvent, MessageUpdateEvent, MessageEndEvent,
     ToolExecutionStartEvent, ToolExecutionEndEvent,
     Options, AgentEvent,
 )
-from program.inference.types import (
+from operator_use.inference.types import (
     LLMContext, LLMEvent,
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
     StopReason,
 )
-from program.message.types import (
+from operator_use.message.types import (
     UserMessage, AssistantMessage, TextContent, ToolCallContent, ToolResultContent, Role,
 )
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from operator_use.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 
 # ── Fake LLM ──────────────────────────────────────────────────────────────────

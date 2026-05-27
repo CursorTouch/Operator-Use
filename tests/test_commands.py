@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from program.commands.registry import CommandRegistry
-from program.commands.types import SlashCommandInfo, CommandParseResult, parse_command
+from operator_use.commands.registry import CommandRegistry
+from operator_use.commands.types import SlashCommandInfo, CommandParseResult, parse_command
 
 
 class _FakeRuntime:

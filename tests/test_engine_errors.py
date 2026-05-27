@@ -6,12 +6,12 @@ import asyncio
 import pytest
 from helpers import FakeLLM, make_tool, text_seq, tool_call_seq, error_seq, collect_events
 
-from program.engine.service import Engine
-from program.engine.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import (
     AgentEndEvent, AgentErrorEvent, SteeringMode, FollowupMode, Options,
     MessageEndEvent,
 )
-from program.message.types import UserMessage, AssistantMessage, Role
+from operator_use.message.types import UserMessage, AssistantMessage, Role
 
 
 class TestEngineErrorPaths:
@@ -40,7 +40,7 @@ class TestEngineErrorPaths:
     async def test_abort_stops_subsequent_turns(self):
         """Aborting during a tool execution prevents the next LLM turn from starting."""
         from helpers import AnyParams
-        from program.tool.types import Tool, ToolKind, ToolResult
+        from operator_use.tool.types import Tool, ToolKind, ToolResult
 
         calls = []
 

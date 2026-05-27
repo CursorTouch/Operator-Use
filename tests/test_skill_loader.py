@@ -2,15 +2,15 @@
 import pytest
 from pathlib import Path
 
-from program.skill.loader import (
+from operator_use.skill.loader import (
     parse_frontmatter,
     validate_name,
     validate_description,
     load_skill_from_file,
     load_skills_from_dir,
 )
-from program.prompt.utils import format_skills_for_prompt
-from program.skill.types import LoadSkillsOptions, Skill
+from operator_use.prompt.utils import format_skills_for_prompt
+from operator_use.skill.types import LoadSkillsOptions, Skill
 
 
 # ── parse_frontmatter ─────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ class TestLoadSkillsFromDir:
 
 class TestFormatSkillsForPrompt:
     def _make_skill(self, name: str, description: str, disable: bool = False) -> Skill:
-        from program.skill.types import SourceInfo
+        from operator_use.skill.types import SourceInfo
         return Skill(
             name=name,
             description=description,

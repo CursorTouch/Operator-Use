@@ -2,9 +2,9 @@
 import asyncio
 import json
 import pytest
-from program.settings.manager import SettingsManager
-from program.settings.storage import InMemorySettingsStorage
-from program.settings.types import Settings, CompactionSettings
+from operator_use.settings.manager import SettingsManager
+from operator_use.settings.storage import InMemorySettingsStorage
+from operator_use.settings.types import Settings, CompactionSettings
 
 
 def make_manager(global_data: dict | None = None, project_data: dict | None = None) -> tuple[SettingsManager, InMemorySettingsStorage]:
@@ -181,7 +181,7 @@ class TestDrainErrors:
         assert any(e.scope == "global" for e in errors)
 
     def test_drain_clears_errors(self):
-        from program.settings.types import LockResult
+        from operator_use.settings.types import LockResult
 
         class BrokenStorage(InMemorySettingsStorage):
             def with_lock(self, scope, fn):

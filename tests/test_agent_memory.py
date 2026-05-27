@@ -8,16 +8,16 @@ from typing import cast
 
 from helpers import FakeLLM, text_seq, error_seq, make_agent
 
-from program.agent.service import Agent
-from program.agent.types import AgentConfig
-from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-from program.compaction.strategy.types import CompactionSettings
-from program.engine.service import Engine
-from program.extension.runtime import ExtensionRuntime
-from program.extension.types import ExtensionContext, LoadExtensionsResult
-from program.hooks.service import Hooks
-from program.resource.types import BaseResourceLoader
-from program.session.manager import SessionManager
+from operator_use.agent.service import Agent
+from operator_use.agent.types import AgentConfig
+from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+from operator_use.compaction.strategy.types import CompactionSettings
+from operator_use.engine.service import Engine
+from operator_use.extension.runtime import ExtensionRuntime
+from operator_use.extension.types import ExtensionContext, LoadExtensionsResult
+from operator_use.hooks.service import Hooks
+from operator_use.resource.types import BaseResourceLoader
+from operator_use.session.manager import SessionManager
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +287,7 @@ class TestMemoryOnPreCompact:
     @pytest.mark.asyncio
     async def test_on_pre_compact_called_before_compaction(self):
         """on_pre_compact must fire when run_compaction() is invoked explicitly."""
-        from program.compaction.strategy.types import CompactionResult
+        from operator_use.compaction.strategy.types import CompactionResult
         from unittest.mock import AsyncMock, patch
 
         mem = FakeMemory()
@@ -358,31 +358,31 @@ class TestMemoryManagerNoProvider:
     """MemoryManager exists but initialize() was never called (no provider_id)."""
 
     def _make_unprovided_manager(self) -> FakeMemory:
-        from program.memory.manager import MemoryManager
+        from operator_use.memory.manager import MemoryManager
         return MemoryManager()  # type: ignore[return-value]
 
     @pytest.mark.asyncio
     async def test_prefetch_returns_empty_string(self):
-        from program.memory.manager import MemoryManager
+        from operator_use.memory.manager import MemoryManager
         m = MemoryManager()
         result = await m.prefetch("anything")
         assert result == ""
 
     @pytest.mark.asyncio
     async def test_queue_prefetch_is_a_no_op(self):
-        from program.memory.manager import MemoryManager
+        from operator_use.memory.manager import MemoryManager
         m = MemoryManager()
         m.queue_prefetch("anything")  # must not raise
 
     @pytest.mark.asyncio
     async def test_on_turn_complete_is_a_no_op(self):
-        from program.memory.manager import MemoryManager
+        from operator_use.memory.manager import MemoryManager
         m = MemoryManager()
         await m.on_turn_complete("user", "assistant")  # must not raise
 
     @pytest.mark.asyncio
     async def test_on_pre_compact_returns_empty_string(self):
-        from program.memory.manager import MemoryManager
+        from operator_use.memory.manager import MemoryManager
         m = MemoryManager()
         result = await m.on_pre_compact([])
         assert result == ""
@@ -390,14 +390,14 @@ class TestMemoryManagerNoProvider:
     @pytest.mark.asyncio
     async def test_invoke_with_unprovided_manager_completes_normally(self):
         """Agent with a MemoryManager that has no backend must not raise."""
-        from program.memory.manager import MemoryManager
+        from operator_use.memory.manager import MemoryManager
         m = MemoryManager()
         agent, _ = make_agent_with_memory(FakeLLM(text_seq("hi")), m)  # type: ignore[arg-type]
         await agent.invoke("hello")
 
     @pytest.mark.asyncio
     async def test_no_memory_block_injected_when_prefetch_returns_empty(self):
-        from program.memory.manager import MemoryManager
+        from operator_use.memory.manager import MemoryManager
         m = MemoryManager()
         agent, _ = make_agent_with_memory(FakeLLM(text_seq("hi")), m)  # type: ignore[arg-type]
         await agent.invoke("hello")

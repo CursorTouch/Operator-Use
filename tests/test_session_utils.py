@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 
-from program.session.utils import (
+from operator_use.session.utils import (
     create_session_id,
     generate_id,
     generate_timestamp,
@@ -17,9 +17,9 @@ from program.session.utils import (
     get_last_activity_time,
     list_sessions_from_dir,
 )
-from program.session.types import SessionHeader, SessionType, MessageEntry
-from program.message.types import UserMessage, AssistantMessage, TextContent, Role
-from program.session.manager import SessionManager
+from operator_use.session.types import SessionHeader, SessionType, MessageEntry
+from operator_use.message.types import UserMessage, AssistantMessage, TextContent, Role
+from operator_use.session.manager import SessionManager
 
 
 # ── create_session_id ─────────────────────────────────────────────────────────
@@ -88,8 +88,8 @@ class TestGetDefaultSessionDir:
 
 def _write_session_file(path: Path) -> Path:
     """Write a valid JSONL session file (header + user + assistant entries)."""
-    from program.session.types import SessionHeader, MessageEntry
-    from program.session.utils import generate_id, generate_timestamp
+    from operator_use.session.types import SessionHeader, MessageEntry
+    from operator_use.session.utils import generate_id, generate_timestamp
     import time
 
     header = SessionHeader(id="test-session-id", timestamp=generate_timestamp(), cwd=str(path.parent))

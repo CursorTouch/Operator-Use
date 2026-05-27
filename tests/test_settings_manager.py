@@ -1,13 +1,13 @@
 """Tests for settings/manager.py: SettingsManager — merge, get/set, persistence, errors."""
 import pytest
-from program.settings.manager import SettingsManager
-from program.settings.storage import InMemorySettingsStorage
-from program.settings.types import (
+from operator_use.settings.manager import SettingsManager
+from operator_use.settings.storage import InMemorySettingsStorage
+from operator_use.settings.types import (
     Settings, CompactionSettings, BranchSummarySettings,
     RetrySettings, ProviderRetrySettings, SettingsError,
 )
-from program.engine.types import SteeringMode, FollowupMode
-from program.inference.types import Transport, ThinkingLevel
+from operator_use.engine.types import SteeringMode, FollowupMode
+from operator_use.inference.types import Transport, ThinkingLevel
 
 
 def make_manager(global_data: dict | None = None, project_data: dict | None = None) -> SettingsManager:
@@ -179,7 +179,7 @@ class TestSetters:
 
     @pytest.mark.asyncio
     async def test_set_extension_list(self):
-        from program.settings.types import ExtensionEntry
+        from operator_use.settings.types import ExtensionEntry
         sm = SettingsManager.in_memory()
         entry = ExtensionEntry(path="/ext/a.py", name="a", enabled=True, author="jeomon")
         sm.set_extension_list([entry])
@@ -266,7 +266,7 @@ class TestScopedGetters:
 
 class TestErrorHandling:
     def test_load_error_surfaces_in_errors(self):
-        from program.settings.types import LockResult
+        from operator_use.settings.types import LockResult
 
         class BrokenStorage(InMemorySettingsStorage):
             def with_lock(self, scope, fn):
@@ -280,7 +280,7 @@ class TestErrorHandling:
         assert sm.errors[0].scope == "global"
 
     def test_drain_errors_clears_queue(self):
-        from program.settings.types import LockResult
+        from operator_use.settings.types import LockResult
 
         class BrokenStorage(InMemorySettingsStorage):
             def with_lock(self, scope, fn):

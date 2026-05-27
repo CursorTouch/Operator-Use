@@ -1,6 +1,6 @@
 """Tests for compaction/utils.py: token estimation, file ops, cut points, serialization."""
 import pytest
-from program.compaction.strategy.utils import (
+from operator_use.compaction.strategy.utils import (
     calculate_context_tokens,
     estimate_tokens,
     get_assistant_usage,
@@ -23,19 +23,19 @@ from program.compaction.strategy.utils import (
     serialize_conversation,
     _truncate_for_summary,
 )
-from program.compaction.strategy.types import FileOperations
-from program.message.types import (
+from operator_use.compaction.strategy.types import FileOperations
+from operator_use.message.types import (
     UserMessage, AssistantMessage, ToolMessage,
     TextContent, ThinkingContent, ToolCallContent, ToolResultContent,
     BranchSummaryMessage, CompactionSummaryMessage, Usage, Role,
 )
-from program.session.manager import SessionManager
-from program.session.types import MessageEntry, CompactionEntry
-from program.inference.types import (
+from operator_use.session.manager import SessionManager
+from operator_use.session.types import MessageEntry, CompactionEntry
+from operator_use.inference.types import (
     StopReason, TextEndEvent, EndEvent, ErrorEvent, StartEvent,
     TextStartEvent, TextDeltaEvent,
 )
-from program.tool.types import ToolKind
+from operator_use.tool.types import ToolKind
 
 
 # ── calculate_context_tokens ──────────────────────────────────────────────────
@@ -59,7 +59,7 @@ class TestEstimateTokens:
         assert tokens >= 1
 
     def test_user_image_counts_fixed_amount(self):
-        from program.message.types import ImageContent
+        from operator_use.message.types import ImageContent
         msg = UserMessage()
         msg.contents = [ImageContent(images=["http://img.png"])]
         tokens = estimate_tokens(msg)

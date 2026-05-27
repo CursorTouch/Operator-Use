@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from program.rpc.types import (
+from operator_use.rpc.types import (
     CommandType,
     PromptCommand, SteerCommand, FollowUpCommand, AbortCommand,
     NewSessionCommand, SwitchSessionCommand, ForkCommand,

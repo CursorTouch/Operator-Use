@@ -12,13 +12,13 @@ from helpers import (
     collect_events, error_seq,
 )
 
-from program.engine.service import Engine
-from program.engine.types import (
+from operator_use.engine.service import Engine
+from operator_use.engine.types import (
     AgentErrorEvent, ToolExecutionEndEvent, MessageEndEvent, Options,
 )
-from program.inference.types import StartEvent, EndEvent, StopReason, ToolCallEndEvent
-from program.message.types import UserMessage, ToolCallContent, Role
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from operator_use.inference.types import StartEvent, EndEvent, StopReason, ToolCallEndEvent
+from operator_use.message.types import UserMessage, ToolCallContent, Role
+from operator_use.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 
 class TestToolContext:
@@ -112,7 +112,7 @@ class TestBeforeAfterHooks:
                 executed.append(True)
                 return ToolResult.ok(invocation.id, "no")
 
-        from program.message.types import ToolResultContent
+        from operator_use.message.types import ToolResultContent
 
         async def before(inv, sig):
             return ToolResultContent(id=inv.id, content="blocked", is_error=False, metadata={})
@@ -147,7 +147,7 @@ class TestBeforeAfterHooks:
 
     @pytest.mark.asyncio
     async def test_after_hook_replaces_result(self):
-        from program.tool.types import ToolResult as TR
+        from operator_use.tool.types import ToolResult as TR
 
         async def after(inv, result, sig):
             return TR(id=result.id, content="SWAPPED", is_error=False, metadata={})

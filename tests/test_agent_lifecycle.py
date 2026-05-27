@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import pytest
 from helpers import FakeLLM, make_agent, text_seq, error_seq
 
-from program.agent.types import AgentConfig, PromptOptions
-from program.compaction.strategy.types import CompactionSettings
-from program.message.types import UserMessage
+from operator_use.agent.types import AgentConfig, PromptOptions
+from operator_use.compaction.strategy.types import CompactionSettings
+from operator_use.message.types import UserMessage
 
 
 class TestAgentPhaseGuard:
@@ -66,14 +66,14 @@ class TestAgentRetry:
     @pytest.mark.asyncio
     async def test_retry_recovers_from_transient_error(self):
         """With retry enabled, a transient error on first attempt retries successfully."""
-        from program.agent.service import Agent
-        from program.agent.types import AgentConfig
-        from program.extension.runtime import ExtensionRuntime
-        from program.extension.types import LoadExtensionsResult
-        from program.resource.types import BaseResourceLoader
-        from program.session.manager import SessionManager
-        from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-        from program.hooks.service import Hooks
+        from operator_use.agent.service import Agent
+        from operator_use.agent.types import AgentConfig
+        from operator_use.extension.runtime import ExtensionRuntime
+        from operator_use.extension.types import LoadExtensionsResult
+        from operator_use.resource.types import BaseResourceLoader
+        from operator_use.session.manager import SessionManager
+        from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+        from operator_use.hooks.service import Hooks
         from pathlib import Path
 
         class FakeLoader(BaseResourceLoader):
@@ -114,7 +114,7 @@ class TestAgentRetry:
 
         hooks = Hooks()
         sm = SessionManager.in_memory()
-        from program.engine.service import Engine
+        from operator_use.engine.service import Engine
         engine = Engine(llm=RetryLLM(), tools=[], hooks=hooks)
         load_result = LoadExtensionsResult()
         config = AgentConfig(cwd=Path("/tmp"), retry_enabled=True, retry_max_retries=2, retry_base_delay_ms=0)
@@ -136,14 +136,14 @@ class TestAgentRetry:
         """Engine must not append error/abort turns to messages. If it did, retry
         attempt 2 would see a dangling assistant message and the provider would
         reject it with a role-order error (cascading 400s after an initial 429)."""
-        from program.agent.service import Agent
-        from program.agent.types import AgentConfig
-        from program.extension.runtime import ExtensionRuntime
-        from program.extension.types import LoadExtensionsResult
-        from program.resource.types import BaseResourceLoader
-        from program.session.manager import SessionManager
-        from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-        from program.hooks.service import Hooks
+        from operator_use.agent.service import Agent
+        from operator_use.agent.types import AgentConfig
+        from operator_use.extension.runtime import ExtensionRuntime
+        from operator_use.extension.types import LoadExtensionsResult
+        from operator_use.resource.types import BaseResourceLoader
+        from operator_use.session.manager import SessionManager
+        from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+        from operator_use.hooks.service import Hooks
         from pathlib import Path
 
         class FakeLoader(BaseResourceLoader):
@@ -183,7 +183,7 @@ class TestAgentRetry:
             async def invoke(self, ctx, thinking_level=None): return text_seq()
 
         hooks = Hooks()
-        from program.engine.service import Engine
+        from operator_use.engine.service import Engine
         engine = Engine(llm=RecordingLLM(), tools=[], hooks=hooks)
         load_result = LoadExtensionsResult()
         config = AgentConfig(cwd=Path("/tmp"), retry_enabled=True, retry_max_retries=2, retry_base_delay_ms=0)
@@ -205,14 +205,14 @@ class TestAgentRetry:
 
     @pytest.mark.asyncio
     async def test_retry_exhausted_raises_runtime_error(self):
-        from program.agent.service import Agent
-        from program.agent.types import AgentConfig
-        from program.extension.runtime import ExtensionRuntime
-        from program.extension.types import LoadExtensionsResult
-        from program.resource.types import BaseResourceLoader
-        from program.session.manager import SessionManager
-        from program.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
-        from program.hooks.service import Hooks
+        from operator_use.agent.service import Agent
+        from operator_use.agent.types import AgentConfig
+        from operator_use.extension.runtime import ExtensionRuntime
+        from operator_use.extension.types import LoadExtensionsResult
+        from operator_use.resource.types import BaseResourceLoader
+        from operator_use.session.manager import SessionManager
+        from operator_use.compaction.strategy.summarization.service import SummarizationCompaction as Compaction
+        from operator_use.hooks.service import Hooks
         from pathlib import Path
 
         class FakeLoader(BaseResourceLoader):
@@ -246,7 +246,7 @@ class TestAgentRetry:
 
         hooks = Hooks()
         sm = SessionManager.in_memory()
-        from program.engine.service import Engine
+        from operator_use.engine.service import Engine
         engine = Engine(llm=AlwaysFailLLM(), tools=[], hooks=hooks)
         load_result = LoadExtensionsResult()
         config = AgentConfig(cwd=Path("/tmp"), retry_enabled=True, retry_max_retries=1, retry_base_delay_ms=0)

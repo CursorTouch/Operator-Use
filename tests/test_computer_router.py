@@ -1,6 +1,6 @@
 import pytest
 
-from program import computer
+from operator_use import computer
 
 
 def test_get_platform_name_maps_supported_platforms():

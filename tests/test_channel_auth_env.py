@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from program.auth.channels import ChannelAuthManager
+from operator_use.auth.channels import ChannelAuthManager
 
 
 @pytest.fixture

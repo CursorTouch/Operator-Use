@@ -1,8 +1,8 @@
 """Tests for Bus: queue size, concurrent producers/consumers, and message fields."""
 import asyncio
 import pytest
-from program.bus.service import Bus
-from program.bus.types import IncomingMessage, OutgoingMessage, TextPart, AudioPart, text_from_parts
+from operator_use.bus.service import Bus
+from operator_use.bus.types import IncomingMessage, OutgoingMessage, TextPart, AudioPart, text_from_parts
 
 
 def make_incoming(text: str, channel: str = "stdio", chat_id: str = "1") -> IncomingMessage:
