@@ -480,11 +480,14 @@ class OpenAICodexResponsesAPI(BaseAPI):
             headers = _build_headers(token, account_id, websocket=False)
             stream_iter = self._stream_sse(body, headers)
 
+        cancelled = False
         async for event in stream_iter:
             if self._cancelled():
-                yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
-                return
+                cancelled = True
+                break
             yield event
+        if cancelled:
+            yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
 
     async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []

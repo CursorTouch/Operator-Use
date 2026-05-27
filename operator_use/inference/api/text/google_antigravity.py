@@ -388,6 +388,7 @@ class GoogleAntigravityAPI(BaseAPI):
 
         yield StartEvent()
 
+        done = False
         try:
             async with httpx.AsyncClient(timeout=self.options.timeout.total_seconds()) as client:
                 async with client.stream(
@@ -407,7 +408,8 @@ class GoogleAntigravityAPI(BaseAPI):
                     async for line in response.aiter_lines():
                         if self._cancelled():
                             yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
-                            return
+                            done = True
+                            break
                         if not line.startswith("data: "):
                             continue
                         raw = line[6:].strip()
@@ -486,17 +488,19 @@ class GoogleAntigravityAPI(BaseAPI):
                                 text_index += 1
                             stop = StopReason.ToolCalls if tool_index > 0 else _STOP_REASON.get(finish_reason, StopReason.Stop)
                             yield EndEvent(reason=stop)
-                            return
+                            done = True
+                            break
 
         except Exception as exc:
             yield ErrorEvent(reason=StopReason.Abort, error=str(exc))
             return
 
-        if thinking_started:
-            yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf, signature=thinking_sig))
-        if text_started:
-            yield TextEndEvent(text=TextContent(content=text_buf))
-        yield EndEvent(reason=StopReason.Stop)
+        if not done:
+            if thinking_started:
+                yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf, signature=thinking_sig))
+            if text_started:
+                yield TextEndEvent(text=TextContent(content=text_buf))
+            yield EndEvent(reason=StopReason.Stop)
 
     async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []
