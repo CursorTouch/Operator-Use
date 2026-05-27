@@ -313,6 +313,19 @@ class Engine:
                 message = AssistantMessage()
                 tool_calls.clear()
 
+                # Strip the previous state_message by identity, then collect a
+                # fresh one from any tool that exposes an async state_message().
+                if self.state.state_message:
+                    self.state.state_message=None
+                for _tool in self._tools.values():
+                    _fn = getattr(_tool, "state_message", None)
+                    if callable(_fn):
+                        try:
+                            _msg = await _fn()
+                            if _msg is not None:
+                                self.state.state_message=_msg
+                        except Exception:
+                            pass
                 if self.options.transform_context is not None:
                     messages = self.options.transform_context(messages, signal)
 
@@ -328,8 +341,11 @@ class Engine:
                         messages=messages,
                         options=self.llm.api.options,
                     ))
+
+                state_messages=[self.state.state_message] if self.state.state_message else []
+
                 async for event in self.llm.stream(LLMContext(
-                    messages=messages,
+                    messages=messages+state_messages,
                     tools=self.state.tools,
                     system_prompt=self.state.system_prompt,
                 )):
