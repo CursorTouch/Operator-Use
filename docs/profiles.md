@@ -58,6 +58,7 @@ Each profile has its own resource directory under `~/.operator/profiles/<name>/`
   hooks/            ← per-profile hooks
   subagents/        ← per-profile subagent templates
   knowledge/        ← per-profile knowledge documents
+    index.yaml      ← knowledge manifest (always_load, tags, priority per document)
   workflows/        ← per-profile workflow files
   teams/            ← team state (TeamManager)
   acp/              ← ACP session bookmarks

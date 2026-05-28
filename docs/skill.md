@@ -89,7 +89,40 @@ class ResourceDiagnostic(BaseModel):
 
 ## System prompt injection
 
-The `ResourceLoader` hands skill objects to `PromptTemplate.build()`. Skills are injected as named blocks inside the system prompt — the LLM sees the skill body and description as an instruction section. Skills marked `disable_model_invocation=True` are flagged to the engine so the model call can be skipped.
+The `ResourceLoader` hands skill objects to `PromptTemplate.build()` via `format_skills_for_prompt()`. The injected block uses strong enforcement language to ensure the agent checks skills before acting:
+
+```
+# Skills — FIRST PRIORITY (MANDATORY)
+
+CRITICAL: You have installed skills that provide specialized capabilities.
+Before attempting ANY task — simple or complex — you MUST check if an installed skill handles it.
+
+## Rules (MUST follow in order)
+1. ALWAYS scan the skill list below BEFORE taking ANY action on a user request
+2. If a skill's description matches or partially matches the task, you MUST load its full
+   instructions using the `skill` tool: `skill action="view" name="<name>"` — do this BEFORE anything else
+3. Follow the loaded skill instructions EXACTLY — do NOT improvise or use alternative approaches
+4. NEVER use general-purpose workarounds when a skill provides the right tool
+5. If multiple skills could apply, load the most specific one first
+6. Even for seemingly simple tasks, CHECK SKILLS FIRST
+
+## Enforcement
+- If you skip checking skills and use a raw approach for a task that a skill handles,
+  this is considered a FAILURE. Always check skills first.
+
+<available_skills>
+  <skill>
+    <name>skill-name</name>
+    <description>skill description</description>
+    <location>/absolute/path/to/profiles/<name>/skills/skill-name/SKILL.md</location>
+  </skill>
+</available_skills>
+
+To load a skill's full instructions: `skill action="view" name="<name>"`
+Scripts within a skill are relative to the skill's directory (parent of SKILL.md).
+```
+
+The `<location>` field carries the absolute path to `SKILL.md` from `Skill.file_path`, so the agent always knows where to find the file without guessing. Skills marked `disable_model_invocation=True` are excluded from the injected block entirely.
 
 ## Skill tool
 

@@ -41,6 +41,8 @@ class Knowledge:
             return None
         try:
             data = yaml.safe_load(index_path.read_text(encoding='utf-8'))
+            if data is None:
+                return []          # empty / comments-only file — valid, no entries yet
             if isinstance(data, list):
                 return data
             logger.warning('%s must be a YAML list — ignoring', index_path)

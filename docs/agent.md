@@ -125,15 +125,33 @@ Agent sets four callbacks on `Engine.options` at construction time:
 
 ## System prompt reconstruction
 
-`_rebuild_system_prompt()` assembles the system prompt from:
+`_rebuild_system_prompt()` assembles the system prompt in this order:
 
-1. Base prompt template (`PromptTemplate`) including: cwd, tool descriptions, prompt guidelines.
-2. Custom system prompt — from `RuntimeConfig.system_prompt` (CLI `--system-prompt` flag), `.operator/system-prompt.md` (project-level), or the global equivalent.
-3. Skills as inline context blocks.
-4. Context files injected verbatim.
-5. Append-system-prompt concatenated at the end.
+1. **Identity** — `SYSTEM.md` (replaces everything) → `SOUL.md` (replaces default persona) → `"You are a helpful assistant."` + guidelines.
+2. **Docs reference** — path to the `docs/` directory with a per-topic file map; injected only if the directory exists. Agent reads lazily when asked about Operator internals.
+3. **Append section** — `append_system_prompt` content (includes knowledge injection — see [knowledge.md](./knowledge.md)).
+4. **Memory** — contents of `MEMORY.md` if present.
+5. **User profile** — contents of `USER.md` if present.
+6. **Skills** — `<available_skills>` XML block with enforcement rules; only when `read` or `skill` tool is available. Each entry includes `<location>` with the absolute path to `SKILL.md`.
+7. **Platform hint** — channel-specific formatting rules (Telegram, Discord, Slack, etc.).
+8. **Footer** — always appended last:
+   ```
+   Current date: <ISO date>
+   Current working directory: <cwd>
+   Global directory: ~/.operator
+   ```
+   When a profile is active, the footer expands to include:
+   ```
+   Profile directory: ~/.operator/profiles/<name>
+   Profile MEMORY.md: ~/.operator/profiles/<name>/MEMORY.md  ← long-term memory
+   Profile USER.md:   ~/.operator/profiles/<name>/USER.md    ← user preferences
+   Profile skills directory: ~/.operator/profiles/<name>/skills
+   Profile knowledge directory: ~/.operator/profiles/<name>/knowledge
+   Profile temp directory: ~/.operator/profiles/<name>/temp  ← scratchpad / terminal CWD
+   Session ID: <id>   ← only when a session exists
+   ```
 
-When a custom prompt is set, it replaces the default "You are a helpful assistant." base. The footer (current date, cwd, global temp directory `~/.operator/temp/`, project temp directory `<project>/.operator/temp/`) is always appended.
+When a custom prompt (`SYSTEM.md`) is set it replaces the identity layer only — docs, memory, user, skills, platform, and footer are still appended.
 
 After `before_agent_start`, extensions may replace the entire system prompt string.
 
