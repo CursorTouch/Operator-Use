@@ -231,16 +231,16 @@ Hooks can be registered without writing an extension. `ResourceLoader` discovers
 
 | Directory | Path function | Purpose |
 |---|---|---|
-| `program/builtins/hooks/` | `get_builtins_hooks_dir()` | Shipped built-in hooks |
-| `<project>/.program/agent/hooks/` | `get_hooks_dir(cwd)` | Project-level hooks |
-| `~/.program/agent/hooks/` | `get_hooks_dir()` | Global user hooks |
+| `operator_use/builtins/hooks/` | `get_builtins_hooks_dir()` | Shipped built-in hooks |
+| `<project>/.operator/agent/hooks/` | `get_hooks_dir(cwd)` | Project-level hooks |
+| `~/.operator/agent/hooks/` | `get_hooks_dir()` | Global user hooks |
 
 All path functions are defined in `program/settings/paths.py`.
 
 A hook file must export `hooks` — a list of `(event_type, handler)` tuples:
 
 ```python
-# .program/agent/hooks/logging.py
+# .operator/agent/hooks/logging.py
 async def on_agent_end(event):
     print(f"Done: {len(event.messages)} messages")
 
@@ -257,7 +257,7 @@ All discovered `(event_type, handler)` pairs are registered against the `Hooks` 
 
 ### Builtin hooks
 
-Two builtin hooks ship in `program/builtins/hooks/`:
+Two builtin hooks ship in `operator_use/builtins/hooks/`:
 
 **`stt.py`** — Speech-to-text. Registered on `message:receive`. Detects `AudioPart` entries, transcribes each with the configured STT model, and returns `MessageReceiveResult(action='transform', parts=[TextPart(transcript)])`. STT settings are read from `settings.stt` (`model`, `provider`, `language`, `enabled`). Returns `None` (pass-through) if no audio parts exist or STT is explicitly disabled.
 

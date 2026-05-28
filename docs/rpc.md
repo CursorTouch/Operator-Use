@@ -65,9 +65,9 @@ Events are serialized with `_to_jsonable()`, which recursively converts dataclas
 ## Starting the server
 
 ```python
-from program.rpc.server import RPCServer
-from program.runtime.service import Runtime
-from program.runtime.types import RuntimeConfig
+from operator_use.rpc.server import RPCServer
+from operator_use.runtime.service import Runtime
+from operator_use.runtime.types import RuntimeConfig
 
 config = RuntimeConfig(cwd="/my/project")
 runtime = await Runtime.create(config)

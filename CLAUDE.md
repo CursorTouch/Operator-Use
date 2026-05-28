@@ -4,25 +4,28 @@ Top-level guidance for Claude Code when working on this repository.
 
 ## Project Overview
 
-**Operator** is a stateful Python AI agent harness. It wraps a multi-provider LLM inference layer with session persistence, context compaction, an extension/package system, and a gateway that connects the agent to multiple messaging channels simultaneously (Telegram, Discord, Slack, WebSocket, Email, Twitch, stdio).
+**Operator** is a stateful Python AI agent harness. It wraps a multi-provider LLM inference layer with session persistence, context compaction, an extension/package system, sandbox enforcement, browser/computer automation, and a gateway that connects the agent to multiple messaging channels simultaneously (Telegram, Discord, Slack, WebSocket, Email, Twitch, stdio).
 
 Four layers build on each other:
 
-1. **Engine** (`program/engine/`) — raw LLM streaming loop, tool execution, abort signal. No knowledge of sessions or extensions.
-2. **Agent** (`program/agent/`) — turn orchestration, retry, compaction scheduling, extension event fan-out. Implements `ExtensionContext`.
-3. **Runtime** (`program/runtime/`) — session lifecycle, slash-command dispatch, gateway/cron/subagent wiring.
-4. **Gateway** (`program/gateway/`) — channel adapters, async message bus, per-session agent routing.
+1. **Engine** (`operator_use/engine/`) — raw LLM streaming loop, tool execution, abort signal. No knowledge of sessions or extensions.
+2. **Agent** (`operator_use/agent/`) — turn orchestration, retry, compaction scheduling, extension event fan-out. Implements `ExtensionContext`.
+3. **Runtime** (`operator_use/runtime/`) — session lifecycle, slash-command dispatch, gateway/cron/subagent wiring.
+4. **Gateway** (`operator_use/gateway/`) — channel adapters, async message bus, per-session agent routing.
 
 ## Repository Layout
 
 ```
-program/
+operator_use/
   agent/         engine/        session/       runtime/
   extension/     hooks/         resource/      gateway/
   inference/     settings/      package/       builtins/
   compaction/    subagent/      cron/          process/
   mcp/           acp/           auth/          tool/
   skill/         commands/      message/       prompt/
+  browser/       computer/      peer/          team/
+  workflow/      knowledge/     sandbox/       diagnostics/
+  memory/        bus/           console/       templates/
 tests/
 docs/            ← read these before exploring code
 ```
@@ -45,6 +48,14 @@ Find detailed documentation before reading source:
 | SKILL.md format, discovery | `docs/skill.md` |
 | Slash commands, builtin commands | `docs/commands.md` |
 | Credentials, OAuth, token refresh | `docs/auth.md` |
+| Named profiles, AGENT.md format | `docs/profiles.md` |
+| Browser automation via CDP | `docs/browser.md` |
+| Desktop computer control | `docs/computer.md` |
+| Sandbox policy, OS-level isolation | `docs/sandbox.md` |
+| Knowledge base, document injection | `docs/knowledge.md` |
+| Multi-agent teams, mailboxes | `docs/team.md` |
+| Python workflows, DSL globals | `docs/workflow.md` |
+| ACP transports, server/client | `docs/acp.md` |
 
 ## Key Invariants
 
@@ -59,16 +70,16 @@ Violating these breaks the architecture:
 
 ## Common Tasks
 
-**Add a builtin tool** → create `program/builtins/tools/my_tool.py` exporting `tool = MyTool()`.
+**Add a builtin tool** → create `operator_use/builtins/tools/my_tool.py` exporting `tool = MyTool()`.
 
-**Add a user tool** → drop `my_tool.py` in `~/.program/agent/tools/` or `<project>/.program/agent/tools/`.
+**Add a user tool** → drop `my_tool.py` in `~/.operator/agent/tools/` or `<project>/.operator/agent/tools/`.
 
 **Write an extension:**
 ```python
-# ~/.program/agent/extensions/my_ext.py
+# ~/.operator/agent/extensions/my_ext.py
 from pydantic import BaseModel
-from program.extension.types import ToolDefinition
-from program.tool.types import ToolResult
+from operator_use.extension.types import ToolDefinition
+from operator_use.tool.types import ToolResult
 
 class Params(BaseModel):
     text: str
@@ -84,7 +95,7 @@ def extension(api):
     ))
 ```
 
-**Configure an extension** in `~/.program/settings.json`:
+**Configure an extension** in `~/.operator/settings.json`:
 ```json
 {
   "extensions": true,
@@ -96,16 +107,20 @@ def extension(api):
 
 **Install a package:**
 ```python
-from program.package.installer import install_package
-from program.settings.paths import get_packages_dir
+from operator_use.package.installer import install_package
+from operator_use.settings.paths import get_packages_dir
 
 install_package("git:github.com/user/my-tools", get_packages_dir())
 # then add the source to settings_manager.set_packages([...])
 ```
 
-**Add a skill** → create `my-skill/SKILL.md` in `~/.program/agent/skills/` with a `name` and `description` frontmatter block.
+**Add a skill** → create `my-skill/SKILL.md` in `~/.operator/agent/skills/` with a `name` and `description` frontmatter block.
 
-**Add a slash command** → create `program/builtins/commands/my_cmd.py` exporting `command = SlashCommandInfo(...)`.
+**Add a slash command** → create `operator_use/builtins/commands/my_cmd.py` exporting `command = SlashCommandInfo(...)`.
+
+**Add an agent profile** → create `~/.operator/profiles/<name>/AGENT.md` with `name`, `description`, and optional `model`, `provider`, `tools` frontmatter.
+
+**Add a workflow** → create a `.py` file with a `meta` dict and `async def run()` in `~/.operator/profiles/<name>/workflows/` or the global skills directory.
 
 ## Behavioral Guidelines
 

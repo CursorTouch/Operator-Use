@@ -127,7 +127,7 @@ Returns the full tree as a list of `SessionTreeNode` objects (each with children
 All sessions are stored flat in a single directory:
 
 ```
-~/.program/agent/sessions/
+~/.operator/agent/sessions/
   2024-01-15T10-30-00-000000_<uuid>.jsonl
   2024-01-15T11-00-00-000000_<uuid>.jsonl
   ...

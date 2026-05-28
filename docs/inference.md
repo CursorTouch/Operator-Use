@@ -35,7 +35,7 @@ Resolution order at construction:
 
 ### API implementations
 
-Each API is a class in `program/inference/api/text/` that wraps one HTTP endpoint style:
+Each API is a class in `operator_use/inference/api/text/` that wraps one HTTP endpoint style:
 
 | Module | Provider(s) |
 |---|---|
@@ -116,11 +116,11 @@ The `GoogleAntigravityAPI` now:
 
 ## Image generation
 
-`ImageLLM` handles image generation through `program/inference/api/image/`. The interface mirrors the text one but uses a single non-streaming `generate()` call:
+`ImageLLM` handles image generation through `operator_use/inference/api/image/`. The interface mirrors the text one but uses a single non-streaming `generate()` call:
 
 ```python
-from program.inference.types import ImageContext
-from program.message.types import TextContent
+from operator_use.inference.types import ImageContext
+from operator_use.message.types import TextContent
 
 svc = ImageLLM("dall-e-3")
 result = await svc.generate(ImageContext(
@@ -169,11 +169,11 @@ Three distinct API styles exist:
 
 ## Video generation
 
-`VideoLLM` handles video generation through `program/inference/api/video/`. The interface mirrors the image one but adds async job polling, since all video providers are queue-based.
+`VideoLLM` handles video generation through `operator_use/inference/api/video/`. The interface mirrors the image one but adds async job polling, since all video providers are queue-based.
 
 ```python
-from program.inference.api.video.service import VideoLLM
-from program.inference.types import VideoContext
+from operator_use.inference.api.video.service import VideoLLM
+from operator_use.inference.types import VideoContext
 
 svc = VideoLLM("fal-ai/veo3")
 result = await svc.generate(VideoContext(
@@ -242,11 +242,11 @@ All video models route through the `fal-video` API (fal.ai).
 
 ## Audio (TTS / STT)
 
-`AudioText` handles text-to-speech and speech-to-text through `program/inference/api/audio/`. It uses the same registry/auth pattern as `LLM` and `ImageLLM`.
+`AudioText` handles text-to-speech and speech-to-text through `operator_use/inference/api/audio/`. It uses the same registry/auth pattern as `LLM` and `ImageLLM`.
 
 ```python
-from program.inference.api.audio.service import AudioText
-from program.inference.types import TTSContext, STTContext, AudioFormat
+from operator_use.inference.api.audio.service import AudioText
+from operator_use.inference.types import TTSContext, STTContext, AudioFormat
 
 # Text-to-speech
 svc = AudioText("tts-1")                         # reads OPENAI_API_KEY from env/auth
@@ -414,10 +414,10 @@ class Model:
 
 | Method | Source file |
 |---|---|
-| `ModelRegistry.from_llm_builtins()` | `program/builtins/models/text.py` |
-| `ModelRegistry.from_image_builtins()` | `program/builtins/models/image.py` |
-| `ModelRegistry.from_audio_builtins()` | `program/builtins/models/audio.py` |
-| `ModelRegistry.from_video_builtins()` | `program/builtins/models/video.py` |
+| `ModelRegistry.from_llm_builtins()` | `operator_use/builtins/models/text.py` |
+| `ModelRegistry.from_image_builtins()` | `operator_use/builtins/models/image.py` |
+| `ModelRegistry.from_audio_builtins()` | `operator_use/builtins/models/audio.py` |
+| `ModelRegistry.from_video_builtins()` | `operator_use/builtins/models/video.py` |
 | `ModelRegistry.from_all_builtins()` | All four combined |
 
 Each file exports a `models` list. To add a model, append to the appropriate file.
@@ -474,7 +474,7 @@ class AudioProvider:
     base_url: str | None = None
 ```
 
-Built-in audio providers live in `program/builtins/providers/audio.py`.
+Built-in audio providers live in `operator_use/builtins/providers/audio.py`.
 
 ### Video providers
 
@@ -488,16 +488,16 @@ class VideoProvider:
     base_url: str | None = None
 ```
 
-Built-in video providers live in `program/builtins/providers/video.py`.
+Built-in video providers live in `operator_use/builtins/providers/video.py`.
 
 ### Provider source files
 
 | Registry | Source file |
 |---|---|
-| `TextProviderRegistry` | `program/builtins/providers/text.py` |
-| `ImageProviderRegistry` | `program/builtins/providers/image.py` |
-| `AudioProviderRegistry` | `program/builtins/providers/audio.py` |
-| `VideoProviderRegistry` | `program/builtins/providers/video.py` |
+| `TextProviderRegistry` | `operator_use/builtins/providers/text.py` |
+| `ImageProviderRegistry` | `operator_use/builtins/providers/image.py` |
+| `AudioProviderRegistry` | `operator_use/builtins/providers/audio.py` |
+| `VideoProviderRegistry` | `operator_use/builtins/providers/video.py` |
 
 Each file exports a `providers` list (and for LLM: `api_providers`, `oauth_providers` separately). To add a provider, append to the appropriate file.
 
@@ -518,7 +518,7 @@ API key resolution order (for `ProviderAuthManager.get_api_key(provider)`):
 2. Stored `APICredential` in `auth.json`
 3. Environment variable — `f"{provider.upper()}_API_KEY"` (e.g. `OPENAI_API_KEY`, `GROQ_API_KEY`)
 
-OAuth flows are implemented per-provider in `program/inference/provider/oauth/`:
+OAuth flows are implemented per-provider in `operator_use/inference/provider/oauth/`:
 
 | Module | Provider |
 |---|---|

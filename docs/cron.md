@@ -43,7 +43,7 @@ Standard 5-field format: `minute hour dom month dow`.
 
 ## Persistence
 
-Jobs are stored in `~/.program/crons.json` (global, not project-scoped). The file is written synchronously on every mutation (add, update, remove, enable/disable, mark-run). On startup, `Cron._load()` reads the file lazily — only on the first access — so the store is re-read from disk if the process restarts.
+Jobs are stored in `~/.operator/profiles/<name>/crons.json` (global, not project-scoped). The file is written synchronously on every mutation (add, update, remove, enable/disable, mark-run). On startup, `Cron._load()` reads the file lazily — only on the first access — so the store is re-read from disk if the process restarts.
 
 ```json
 {
@@ -174,7 +174,7 @@ Controls whether the cron scheduler and tool are active. Defaults to `True`.
 { "cron_enabled": false }
 ```
 
-Set in `~/.program/settings.json` (global) or `.program/settings.json` (project). Project scope wins.
+Set in `~/.operator/settings.json` (global) or `.operator/settings.json` (project). Project scope wins.
 
 When `cron_enabled` is `false`:
 - `Cron` is never instantiated and `context.cron` is `None`.
@@ -225,7 +225,7 @@ class CronJob:
 ## Service API
 
 ```python
-cron = Cron(store_path=Path("~/.program/crons.json"))
+cron = Cron(store_path=Path("~/.operator/profiles/<name>/crons.json"))
 cron.on_job = async_callback          # set before start()
 cron.start()                          # begin background loop
 cron.stop()                           # cancel background loop

@@ -7,7 +7,7 @@ The memory layer provides persistent, cross-session context that is separate fro
 Memory mirrors the inference registry pattern:
 
 ```text
-program/memory/
+operator_use/memory/
   api/          # backend behavior implementations
   provider/     # provider metadata and provider registry
   manager.py    # active-provider orchestration
@@ -85,9 +85,9 @@ Memory providers can implement lifecycle hooks. `MemoryManager` forwards these h
 Extensions and packages can ship custom memory backends without modifying the core. Register a `MemoryProvider` descriptor and a `BaseMemoryAPI` subclass inside an extension factory:
 
 ```python
-from program.memory.provider.types import MemoryProvider
-from program.memory.api.base import BaseMemoryAPI
-from program.memory.types import MemoryOptions, MemoryRuntimeContext
+from operator_use.memory.provider.types import MemoryProvider
+from operator_use.memory.api.base import BaseMemoryAPI
+from operator_use.memory.types import MemoryOptions, MemoryRuntimeContext
 
 class MyMemoryAPI(BaseMemoryAPI):
     async def prefetch(self, query, *, session_id="") -> str:

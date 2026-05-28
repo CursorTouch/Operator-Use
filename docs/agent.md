@@ -128,12 +128,12 @@ Agent sets four callbacks on `Engine.options` at construction time:
 `_rebuild_system_prompt()` assembles the system prompt from:
 
 1. Base prompt template (`PromptTemplate`) including: cwd, tool descriptions, prompt guidelines.
-2. Custom system prompt — from `RuntimeConfig.system_prompt` (CLI `--system-prompt` flag), `.program/system-prompt.md` (project-level), or the global equivalent.
+2. Custom system prompt — from `RuntimeConfig.system_prompt` (CLI `--system-prompt` flag), `.operator/system-prompt.md` (project-level), or the global equivalent.
 3. Skills as inline context blocks.
 4. Context files injected verbatim.
 5. Append-system-prompt concatenated at the end.
 
-When a custom prompt is set, it replaces the default "You are a helpful assistant." base. The footer (current date, cwd, global temp directory `~/.program/temp/`, project temp directory `<project>/.program/temp/`) is always appended.
+When a custom prompt is set, it replaces the default "You are a helpful assistant." base. The footer (current date, cwd, global temp directory `~/.operator/temp/`, project temp directory `<project>/.operator/temp/`) is always appended.
 
 After `before_agent_start`, extensions may replace the entire system prompt string.
 

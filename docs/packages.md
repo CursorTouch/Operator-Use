@@ -63,8 +63,8 @@ Packages are installed via `install_package()` and tracked in `settings.packages
 ### Git packages
 
 ```python
-from program.package.installer import install_package
-from program.settings.paths import get_packages_dir
+from operator_use.package.installer import install_package
+from operator_use.settings.paths import get_packages_dir
 
 result = install_package("git:github.com/user/my-package", get_packages_dir())
 # or with a pinned ref:
@@ -73,7 +73,7 @@ result = install_package("git:github.com/user/my-package@v1.0.0", get_packages_d
 result = install_package("https://github.com/user/my-package", get_packages_dir())
 ```
 
-Git packages are cloned into `~/.program/agent/packages/git/<host>/<path>/`. Subsequent installs of an unpinned package run `git pull`. Pinned packages (with a `@ref`) are never pulled.
+Git packages are cloned into `~/.operator/agent/packages/git/<host>/<path>/`. Subsequent installs of an unpinned package run `git pull`. Pinned packages (with a `@ref`) are never pulled.
 
 ### Local packages
 
@@ -100,7 +100,7 @@ result.error        # error message on failure
 ### Removing packages
 
 ```python
-from program.package.installer import remove_package
+from operator_use.package.installer import remove_package
 
 ok, err = remove_package("git:github.com/user/my-package", get_packages_dir())
 ```
@@ -118,8 +118,8 @@ sm.set_packages([s for s in sm.get_packages() if s != source])
 `load_packages_from_settings()` resolves each source spec in `settings.packages` to its install path, reads its manifest, and returns the collected resource directories:
 
 ```python
-from program.package.loader import load_packages_from_settings
-from program.settings.paths import get_packages_dir
+from operator_use.package.loader import load_packages_from_settings
+from operator_use.settings.paths import get_packages_dir
 
 loaded = load_packages_from_settings(
     package_sources=settings_manager.get_packages(),
@@ -167,7 +167,7 @@ Drop `.py` files exporting `command = SlashCommandInfo(...)` (or a `commands` li
 
 ```python
 # my-package/commands/deploy.py
-from program.commands.types import SlashCommandInfo
+from operator_use.commands.types import SlashCommandInfo
 
 async def handle(registry, args):
     print("deploying...")
@@ -213,7 +213,7 @@ Packages register custom inference and memory providers through extension files 
 ## Install path layout
 
 ```
-~/.program/agent/packages/
+~/.operator/agent/packages/
   git/
     github.com/
       user/

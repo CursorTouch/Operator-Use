@@ -21,7 +21,7 @@ class APICredential:
 
 ## Storage
 
-Credentials are stored in `auth.json` in the platform config directory (`~/.config/program/auth.json` by default). The file is created with mode `0600` (owner read/write only) and the parent directory with mode `0700`.
+Credentials are stored in `auth.json` in the platform config directory (`~/.operator/auth/providers.json` by default). The file is created with mode `0600` (owner read/write only) and the parent directory with mode `0700`.
 
 The JSON format is a flat object keyed by provider ID:
 
@@ -189,7 +189,7 @@ Storage errors are non-fatal. `ProviderAuthManager._load()` catches exceptions f
 
 Channel bot tokens are stored separately from LLM provider credentials. They are never mixed with `auth.json`.
 
-**Storage:** `~/.program/auth/channels.json`, mode `0600`.
+**Storage:** `~/.operator/auth/channels.json`, mode `0600`.
 
 ```json
 {
@@ -223,8 +223,8 @@ Environment variables take effect when the JSON field is blank:
 ### Usage
 
 ```python
-from program.auth.channels import ChannelAuthManager
-from program.settings.paths import get_channels_auth_path
+from operator_use.auth.channels import ChannelAuthManager
+from operator_use.settings.paths import get_channels_auth_path
 
 auth = ChannelAuthManager(get_channels_auth_path())
 

@@ -40,10 +40,10 @@ class Extension:
 An extension file must export a callable named `extension`. It receives an `ExtensionAPI` object and uses it to register handlers, tools, and commands:
 
 ```python
-# ~/.program/agent/extensions/my_ext.py
+# ~/.operator/agent/extensions/my_ext.py
 from pydantic import BaseModel
-from program.extension.types import ToolDefinition
-from program.tool.types import ToolResult
+from operator_use.extension.types import ToolDefinition
+from operator_use.tool.types import ToolResult
 
 class MyParams(BaseModel):
     text: str
@@ -97,13 +97,13 @@ The factory may also be `async def extension(api)` for startup work such as fetc
 
 | Directory | Path function | Purpose |
 |---|---|---|
-| `program/builtins/extensions/` | `get_builtins_extensions_dir()` | Shipped built-in extensions |
-| `<project>/.program/agent/extensions/` | `get_extensions_dir(cwd)` | Project-level extensions |
-| `~/.program/agent/extensions/` | `get_extensions_dir()` | Global user extensions |
+| `operator_use/builtins/extensions/` | `get_builtins_extensions_dir()` | Shipped built-in extensions |
+| `<project>/.operator/agent/extensions/` | `get_extensions_dir(cwd)` | Project-level extensions |
+| `~/.operator/agent/extensions/` | `get_extensions_dir()` | Global user extensions |
 | Installed package `extensions/` dirs | `get_packages_dir()` | From packages in `settings.packages` |
 | `ResourceLoaderOptions.additional_extension_dirs` | — | Programmatically injected extras |
 
-All path functions are defined in `program/settings/paths.py`.
+All path functions are defined in `operator_use/settings/paths.py`.
 
 Each file is executed in a sandboxed module. Files starting with `_` are skipped. Load errors are non-fatal: a file that raises on import is recorded as an `ExtensionError` and skipped. The rest of the extensions load normally.
 
@@ -116,7 +116,7 @@ Extensions are configured in `settings.json` under `extension_list`. Each entry 
   "extensions": true,
   "extension_list": [
     {
-      "path": "~/.program/agent/extensions/git_guard.py",
+      "path": "~/.operator/agent/extensions/git_guard.py",
       "name": "git_guard",
       "enabled": true,
       "author": "jeomon",
@@ -127,7 +127,7 @@ Extensions are configured in `settings.json` under `extension_list`. Each entry 
       }
     },
     {
-      "path": "~/.program/agent/extensions/noisy.py",
+      "path": "~/.operator/agent/extensions/noisy.py",
       "name": "noisy",
       "enabled": false
     }
@@ -232,8 +232,8 @@ Extensions can register custom inference and memory providers so the rest of the
 ### Inference providers
 
 ```python
-from program.inference.provider.types import APIProvider
-from program.inference.types import LLMOptions
+from operator_use.inference.provider.types import APIProvider
+from operator_use.inference.types import LLMOptions
 
 def extension(api):
     api.register_provider(APIProvider(
@@ -250,9 +250,9 @@ def extension(api):
 ### Memory providers
 
 ```python
-from program.memory.provider.types import MemoryProvider
-from program.memory.api.base import BaseMemoryAPI
-from program.memory.types import MemoryOptions
+from operator_use.memory.provider.types import MemoryProvider
+from operator_use.memory.api.base import BaseMemoryAPI
+from operator_use.memory.types import MemoryOptions
 
 class MyMemoryAPI(BaseMemoryAPI):
     async def prefetch(self, query, *, session_id=""):
@@ -273,7 +273,7 @@ def extension(api):
 ### Subagent profiles
 
 ```python
-from program.subagent.profile import SubagentProfile
+from operator_use.subagent.profile import SubagentProfile
 from pathlib import Path
 
 def extension(api):

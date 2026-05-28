@@ -88,7 +88,7 @@ operator acp connect <target>
 ## Python client (`ACPClient`)
 
 ```python
-from program.acp.client import ACPClient
+from operator_use.acp.client import ACPClient
 
 # Stdio subprocess
 client = ACPClient.stdio('operator', 'acp', 'serve')

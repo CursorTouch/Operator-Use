@@ -166,26 +166,26 @@ Fired after an `IncomingMessage` arrives but before it reaches the Agent. Handle
 # action='reject'    — drop the message; optional reason sent back to channel
 ```
 
-The builtin **STT hook** (`program/builtins/hooks/stt.py`) handles this: it detects `AudioPart` entries, transcribes them using the configured STT model, and returns `MessageReceiveResult(action='transform', parts=[TextPart(transcript)])`.
+The builtin **STT hook** (`operator_use/builtins/hooks/stt.py`) handles this: it detects `AudioPart` entries, transcribes them using the configured STT model, and returns `MessageReceiveResult(action='transform', parts=[TextPart(transcript)])`.
 
 ### `message:send` — after the agent finishes
 
 Fired after the agent completes its turn, before the `DONE` frame. Handlers receive `MessageSendEvent` and may return `MessageSendResult(parts=[...])` to inject additional content (e.g., TTS audio).
 
-The builtin **TTS hook** (`program/builtins/hooks/tts.py`) handles this: it synthesizes speech from `event.response_text` and returns `MessageSendResult(parts=[AudioPart(...)])`. `event.is_voice` lets TTS hooks gate synthesis on whether the user spoke vs. typed.
+The builtin **TTS hook** (`operator_use/builtins/hooks/tts.py`) handles this: it synthesizes speech from `event.response_text` and returns `MessageSendResult(parts=[AudioPart(...)])`. `event.is_voice` lets TTS hooks gate synthesis on whether the user spoke vs. typed.
 
 ## Built-in channels
 
 ### StdioChannel
 
-Terminal REPL with ANSI colour output. Used by `program.console.main:cli` for the interactive CLI. Sends `IncomingMessage` when the user presses Enter; renders streaming chunks in real time.
+Terminal REPL with ANSI colour output. Used by `operator_use.console.main:cli` for the interactive CLI. Sends `IncomingMessage` when the user presses Enter; renders streaming chunks in real time.
 
 ### WebSocketChannel / WebSocketServer
 
 One `WebSocketChannel` per connected client. `WebSocketServer` listens for connections and spawns a channel per client.
 
 ```python
-from program.gateway.channels.websocket import WebSocketServer
+from operator_use.gateway.channels.websocket import WebSocketServer
 server = WebSocketServer(gateway, host='127.0.0.1', port=8765)
 await server.start()
 ```
@@ -266,7 +266,7 @@ operator --prompt "summarise everything in the docs folder"
 operator repl --prompt "run the test suite and fix any failures"
 
 # Resume a specific session (normally handled automatically by reboot)
-operator gateway run --session-file ~/.program/agent/sessions/abc123.jsonl
+operator gateway run --session-file ~/.operator/agent/sessions/abc123.jsonl
 ```
 
 ## Channel settings
@@ -362,8 +362,8 @@ Controllable settings:
 ## Writing a custom channel
 
 ```python
-from program.gateway.types import BaseChannel
-from program.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart
+from operator_use.gateway.types import BaseChannel
+from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart
 
 class MyChannel(BaseChannel):
     @property
@@ -396,7 +396,7 @@ class MyChannel(BaseChannel):
 Register and start it:
 
 ```python
-from program.gateway.manager import GatewayManager
+from operator_use.gateway.manager import GatewayManager
 
 # via GatewayManager (in Runtime context)
 gateway_manager.gateway.register(MyChannel())

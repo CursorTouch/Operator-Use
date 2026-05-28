@@ -68,7 +68,7 @@ Subclass `Tool` and implement `execute()`:
 
 ```python
 from pydantic import BaseModel
-from program.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
+from operator_use.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class ReadFileParams(BaseModel):
     path: str
@@ -208,7 +208,7 @@ Before calling `execute()`, the Engine calls `tool.validate(params)`. This runs 
 
 ```python
 # my_tool.py
-from program.tool.types import Tool, ToolKind, ToolExecutionMode
+from operator_use.tool.types import Tool, ToolKind, ToolExecutionMode
 
 class MyTool(Tool):
     ...
@@ -228,14 +228,14 @@ Load errors are non-fatal: `LoadToolsResult.errors` accumulates `ToolError` obje
 
 | Directory | Path function | Purpose |
 |---|---|---|
-| `program/builtins/tools/` | `get_builtins_tools_dir()` | Shipped built-in tools |
-| `<project>/.program/agent/tools/` | `get_tools_dir(cwd)` | Project-level custom tools |
-| `~/.program/agent/tools/` | `get_tools_dir()` | Global user tools |
+| `operator_use/builtins/tools/` | `get_builtins_tools_dir()` | Shipped built-in tools |
+| `<project>/.operator/agent/tools/` | `get_tools_dir(cwd)` | Project-level custom tools |
+| `~/.operator/agent/tools/` | `get_tools_dir()` | Global user tools |
 | `ResourceLoaderOptions.additional_tool_dirs` | — | Programmatically injected extras |
 
 All path functions are defined in `program/settings/paths.py`.
 
-Drop a `.py` file exporting `tool = MyTool()` into any of those directories and it is picked up automatically on the next reload. The built-in tools (`read`, `write`, `edit`, `grep`, `glob`, `ls`, `terminal`, `computer`, `browser`, `web_fetch`, `web_search`, `memory`, `mcp`, `cron`, `subagent`, `workflow`, `process`, `send`, `skill`, `todo`, `control_center`) live in `program/builtins/tools/`.
+Drop a `.py` file exporting `tool = MyTool()` into any of those directories and it is picked up automatically on the next reload. The built-in tools (`read`, `write`, `edit`, `grep`, `glob`, `ls`, `terminal`, `computer`, `browser`, `web_fetch`, `web_search`, `memory`, `mcp`, `cron`, `subagent`, `workflow`, `process`, `send`, `skill`, `todo`, `control_center`) live in `operator_use/builtins/tools/`.
 
 ## Extension tools
 
