@@ -10,10 +10,12 @@ It has no knowledge of sessions, extensions, or compaction. Those concerns live 
 @dataclass
 class AgentState:
     system_prompt: str | None
-    messages: list[BaseMessage]       # accumulates during the run
+    messages: list[LLMMessage]        # accumulates during the run
     pending_tool_calls: set[str]
     is_streaming: bool
     error_message: str | None
+    streaming_message: AssistantMessage | None
+    thinking_level: ThinkingLevel | None
     llm: LLM
     tools: list[Tool]
     follow_up_queue: FollowupQueue
@@ -154,9 +156,18 @@ class Options:
     get_follow_up_messages: GetFollowUpMessagesCallback | None = None
     should_stop_after_turn: ShouldStopAfterTurnCallback | None = None
     transform_context: TransformContextCallback | None = None
+    get_ephemeral_messages: GetEphemeralMessagesCallback | None = None
 ```
 
-Agent sets `before_tool_call`, `after_tool_call`, and `on_event` at construction time. The others are available for lower-level callers.
+Agent sets `before_tool_call`, `after_tool_call`, `on_event`, and `get_ephemeral_messages` at construction time. The others are available for lower-level callers.
+
+### get_ephemeral_messages
+
+`get_ephemeral_messages: Callable[[], Awaitable[list[LLMMessage]]]`
+
+Called at the start of every turn, before the LLM call. The returned messages are appended to `ctx_messages` for that call only — they are never written to `state.messages` or persisted to the session. Exceptions are suppressed.
+
+Agent uses this to inject live desktop and browser state (window/tab info, DOM tree, optional screenshot) so the LLM always sees fresh context without it polluting the session history.
 
 ## run_continue()
 

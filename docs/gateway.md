@@ -322,13 +322,13 @@ without human involvement.
 **`action="get"`** — read one or all settings:
 ```
 control_center, action="get"                          # all settings
-control_center, action="get", key="computer_use_enabled"
+control_center, action="get", key="computer_use"
 ```
 
 **`action="set"`** — update a setting and apply it. Feature-flag changes trigger
 `runtime.reload()` so the tool list is rebuilt immediately:
 ```
-control_center, action="set", key="computer_use_enabled", value=true
+control_center, action="set", key="computer_use", value={"enabled": true}
 control_center, action="set", key="default_model", value="claude-opus-4-7"
 ```
 
@@ -351,8 +351,8 @@ Controllable settings:
 | `cron_enabled` | bool | yes |
 | `subagents_enabled` | bool | yes |
 | `workflows_enabled` | bool | yes |
-| `computer_use_enabled` | bool | yes |
-| `browser_use_enabled` | bool | yes |
+| `computer_use` | `ComputerUseSettings` | yes |
+| `browser_use` | `BrowserUseSettings` | yes |
 | `extensions_enabled` | bool | yes |
 | `compaction_enabled` | bool | no |
 | `retry_enabled` | bool | no |

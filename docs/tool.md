@@ -55,8 +55,8 @@ Built-in tools and their availability conditions:
 | `cron` | `cron_enabled ≠ false` AND cron service present |
 | `subagent` | `subagents_enabled ≠ false` AND subagent manager present |
 | `workflow` | `workflows_enabled ≠ false` AND workflow manager present |
-| `computer` | `computer_use_enabled ≠ false` |
-| `browser` | `browser_use_enabled ≠ false` |
+| `computer` | `computer_use.enabled ≠ false` AND desktop present |
+| `browser` | `browser_use.enabled ≠ false` AND browser present |
 | `memory` | `memory.enabled ≠ false` AND memory manager present |
 | `mcp` | MCP manager present |
 | `send` | Bus present |

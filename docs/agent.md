@@ -11,9 +11,10 @@ invoke(user_input)
   └─ _run_with_retry(ctx, user_entry_id)
         └─ engine.run(ctx)            ← Engine streams LLM events
              │
-             ├─ _on_engine_event      ← re-dispatches to ExtensionRuntime
-             ├─ _before_tool_call     ← emits 'tool_call', can block
-             └─ _after_tool_call      ← emits 'tool_result', can patch
+             ├─ _on_engine_event        ← re-dispatches to ExtensionRuntime
+             ├─ _before_tool_call       ← emits 'tool_call', can block
+             ├─ _after_tool_call        ← emits 'tool_result', can patch
+             └─ _get_ephemeral_messages ← injects live desktop/browser state per turn
 ```
 
 ## Phase model
@@ -103,14 +104,24 @@ Extension errors are caught and appended to `self._extensions._errors`. They do 
 
 ## Tool hooks
 
-Agent sets two callbacks on `Engine.options` at construction time:
+Agent sets four callbacks on `Engine.options` at construction time:
 
 - `options.before_tool_call = self._before_tool_call`
 - `options.after_tool_call = self._after_tool_call`
+- `options.on_event = self._on_engine_event`
+- `options.get_ephemeral_messages = self._get_ephemeral_messages`
 
 **before_tool_call**: Emits `tool_call` to extensions. If any handler returns `ToolCallEventResult(block=True)`, the call is short-circuited and a `ToolResultContent(is_error=True)` is returned to the Engine. The LLM sees this as a tool error.
 
 **after_tool_call**: Emits `tool_result` to extensions. Handlers may return `ToolResultEventResult` to patch `content`, `is_error`, or set `terminate=True`. Patches accumulate — each handler sees the previous patched state. Setting `terminate=True` signals the Engine to skip the follow-up LLM call if every tool in the batch terminates.
+
+**get_ephemeral_messages**: Called by the Engine at the start of each turn before the LLM call. Agent inspects `tool_context.desktop` and `tool_context.browser` — if either is open, `get_state()` is called and the result is wrapped in a `UserMessage` (with an image if `use_screenshot=True`). These messages are appended to `ctx_messages` for that LLM call only and are never written to session history. Controlled by `ComputerUseSettings` and `BrowserUseSettings` baked into the desktop/browser instances at runtime startup:
+
+| Flag | Effect |
+|---|---|
+| `use_screenshot` | Screenshot is captured and embedded as an image in the message |
+| `use_accessibility` | DOM/accessibility tree is captured and included as text |
+| (always) | Basic app/window/tab info is always present when the tool is open |
 
 ## System prompt reconstruction
 
