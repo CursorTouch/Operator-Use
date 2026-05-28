@@ -91,7 +91,8 @@ class WebFetchTool(Tool):
             result = await asyncio.to_thread(
                 lambda: ddgs.extract(url)
             )
-            text = result.get("content", "") or ""
+            raw = result.get("content", "") or ""
+            text: str = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
 
             if not text:
                 return ToolResult.error(id=invocation.id, content=f"No content returned from {url}")

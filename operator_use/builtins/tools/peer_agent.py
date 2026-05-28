@@ -71,9 +71,9 @@ def _last_response(session_manager: SessionManager) -> str:
         if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
             msg = entry.message
             parts = []
-            for c in (msg.content or []):
-                if hasattr(c, 'text') and c.text:
-                    parts.append(c.text)
+            for c in (msg.contents or []):
+                if hasattr(c, 'content') and c.content:
+                    parts.append(c.content)
             return '\n'.join(parts).strip()
     return ''
 

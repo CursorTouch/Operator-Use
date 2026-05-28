@@ -117,7 +117,7 @@ def _render_event(event) -> None:
             pass  # suppress live-update lines in the repl; [Result] already shows the outcome
 
         case ToolExecutionEndEvent(tool_result=res):
-            content = str(res.content)
+            content = res.content
             if len(content) > 500:
                 content = content[:500] + _grey(' … [truncated]')
             _out(f"{_green('[Result]')} {content}")

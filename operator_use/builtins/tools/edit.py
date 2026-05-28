@@ -57,15 +57,15 @@ class EditTool(Tool):
         # but the params passed to execute are often raw dicts.
         for i, entry in enumerate(edits_raw):
             if isinstance(entry, dict):
-                old = entry.get("old_content")
-                new = entry.get("new_content")
+                old = entry.get("old_content") or ''
+                new = entry.get("new_content") or ''
                 replace_all = entry.get("replace_all", False)
             else:
                 old = entry.old_content
                 new = entry.new_content
                 replace_all = entry.replace_all
 
-            if old is None:
+            if not old:
                 return ToolResult.error(id=invocation.id, content=f"Edit #{i + 1}: old_content is required.")
             if old not in content:
                 return ToolResult.error(id=invocation.id, content=f"Edit #{i + 1}: old_content not found in {resolved_path}. Ensure exact match.")

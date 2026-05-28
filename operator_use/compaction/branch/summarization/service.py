@@ -136,7 +136,7 @@ def prepare_branch_entries(
         if token_budget > 0 and total_tokens + tokens > token_budget:
             # Summary entries are high-value — try to squeeze them in anyway
             is_summary = isinstance(entry, (CompactionEntry, BranchEntry))
-            if is_summary and total_tokens < token_budget * 0.9:
+            if is_summary and total_tokens < token_budget * 9 // 10:
                 messages.insert(0, message)
                 total_tokens += tokens
             break

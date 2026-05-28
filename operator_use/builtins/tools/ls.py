@@ -45,7 +45,7 @@ class LsTool(Tool):
         if not items:
             return ToolResult.ok(id=invocation.id, content=f"Directory is empty: {resolved_path}")
 
-        def _human_size(n: int) -> str:
+        def _human_size(n: float) -> str:
             for unit in ("B", "K", "M", "G", "T"):
                 if n < 1024:
                     return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
