@@ -33,6 +33,25 @@ _GLOBAL_SETTINGS = {
         "archive_after_days": 90,
         "paused": False
     },
+    "acp": {
+        "enabled": True,
+        "agents": [
+            {
+                "enabled": True,
+                "name": "codex",
+                "transport": "stdio",
+                "command": "codex-acp",
+                "args": []
+            },
+            {
+                "enabled": True,
+                "name": "claude-code",
+                "transport": "stdio",
+                "command": "claude-agent-acp",
+                "args": []
+            }
+        ]
+    },
     "profiles": []
 }
 
