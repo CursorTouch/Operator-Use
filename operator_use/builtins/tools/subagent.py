@@ -46,11 +46,10 @@ class SubAgentSchema(BaseModel):
     )
     profile: str = Field(
         description=(
-            'Named subagent profile to use (create action). '
-            'Applies the profile\'s specialized system prompt and restricts tools to its allow-list. '
-            'Must match an existing profile name — use action="profiles" to see available options. '
-            'Not required when fork=true.'
-        ),
+            'Named subagent profile to use (create action). Required unless fork=true. '
+            'NEVER guess a name — call action="profiles" first to get the exact list of available profiles. '
+            'Providing an unknown profile name is an error.'
+        )
     )
     fork: bool = Field(
         default=False,
@@ -83,9 +82,9 @@ class SubagentTool(Tool):
             name='subagent',
             description=(
                 'Spawn named subagents for parallel or background tasks.\n\n'
-                'Every subagent must use a pre-defined profile (use action="profiles" to list them). '
-                'The profile determines the subagent\'s system prompt and allowed tools — '
-                'anonymous subagents are not permitted.\n\n'
+                'Every subagent must use a pre-defined profile. '
+                'Call action="profiles" FIRST to discover exact profile names — never guess. '
+                'The profile determines the subagent\'s system prompt and allowed tools.\n\n'
                 'After calling create, END YOUR TURN — the result is injected back automatically '
                 'when the subagent finishes. Do not poll with list or status after create.'
             ),
