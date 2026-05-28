@@ -54,6 +54,8 @@ class ToolKind(str, Enum):
     Agent = "agent"
     Workflow = "workflow"
     Plan = "plan"
+    Automation = "automation"
+    MCP = "mcp"
     Unknown = "unknown"
 
 

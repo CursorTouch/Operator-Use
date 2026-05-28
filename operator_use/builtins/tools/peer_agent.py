@@ -194,7 +194,7 @@ class PeerAgentsTool(Tool):
                 'Use subagent for anonymous one-shot parallel work with no persistent state.'
             ),
             schema=PeerAgentsParams,
-            kind=ToolKind.Execute,
+            kind=ToolKind.Agent,
             execution_mode=ToolExecutionMode.Sequential,
         )
 

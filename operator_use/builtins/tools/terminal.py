@@ -17,25 +17,6 @@ STREAM_FLUSH_INTERVAL = 0.1  # seconds between streamed partial updates
 
 MAX_TOOL_OUTPUT_LENGTH = 100000
 
-BLOCKED_COMMANDS = {
-    "rm -rf /",
-    "rm -rf ~",
-    "rm -rf /*",
-    "dd if=/dev/zero",
-    "dd if=/dev/random",
-    "mkfs",
-    "fdisk",
-    "parted",
-    ":(){:|:&};:",
-    "chmod 777 /",
-    "chmod -R 777",
-    "shutdown",
-    "reboot",
-    "halt",
-    "poweroff",
-    "init 0",
-    "init 6",
-}
 
 class TerminalSchema(BaseModel):
     cmd: str = Field(
@@ -68,7 +49,6 @@ class TerminalTool(Tool):
             description=(
                 "Run a shell command and return stdout, stderr, and exit code. "
                 "Use for git, package installs, running scripts, or any CLI task. "
-                "Destructive commands are blocked. "
                 "If a command is still running when the timeout expires it is moved "
                 "to a background process instead of killed — use the process tool to "
                 "check its output or stop it."
@@ -79,14 +59,6 @@ class TerminalTool(Tool):
         self._manager: 'ProcessManager | None' = None
         self._execute_path: str | None = None
         self._execute_command_prefix: str | None = None
-
-    def _is_command_blocked(self, cmd: str) -> str | None:
-        """Return blocked pattern if cmd matches, else None."""
-        normalized = " ".join(cmd.strip().split())
-        for blocked in BLOCKED_COMMANDS:
-            if blocked in normalized:
-                return blocked
-        return None
 
     async def _kill_process_group(self, process) -> None:
         """Terminate the subprocess and every child it spawned.
@@ -133,10 +105,6 @@ class TerminalTool(Tool):
 
         if not cmd:
              return ToolResult.error(id=invocation.id, content="Parameter 'cmd' is required.")
-
-        blocked = self._is_command_blocked(cmd)
-        if blocked:
-            return ToolResult.error(id=invocation.id, content=f"Command blocked: contains forbidden pattern '{blocked}'")
 
         profile_root = invocation.cwd or "."
         if cwd_param:
