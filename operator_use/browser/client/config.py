@@ -71,6 +71,8 @@ def detect_installed_browser() -> Literal['chrome', 'edge']:
 @dataclass
 class BrowserConfig:
     headless: bool = False
+    use_vision: bool = False        # Capture screenshot in get_state()
+    within_viewport: bool = True    # Filter DOM nodes to visible viewport only
     wss_url: str | None = None          # Remote CDP endpoint (ws:// or http:// for /json/version)
     cdp_port: int = 9222         # Local remote-debugging port
     device: str | None = None

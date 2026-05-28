@@ -100,6 +100,24 @@ class AuxiliaryTaskSettings:
 
 
 @dataclass
+class ComputerUseSettings:
+    enabled: bool = True
+    use_vision: bool = False
+    use_accessibility: bool = True
+    use_annotation: bool = False
+
+
+@dataclass
+class BrowserUseSettings:
+    enabled: bool = True
+    use_vision: bool = False
+    headless: bool = False
+    browser: Optional[Literal["chrome", "edge"]] = None   # "chrome" | "edge" | None (auto-detect)
+    cdp_port: int = 9222
+    attach_to_existing: bool = False
+
+
+@dataclass
 class AuxiliarySettings:
     compaction: Optional[AuxiliaryTaskSettings] = None
     branch_summary: Optional[AuxiliaryTaskSettings] = None
@@ -167,8 +185,8 @@ class Settings:
     cron_enabled: Optional[bool] = None
     subagents_enabled: Optional[bool] = None
     workflows_enabled: Optional[bool] = None
-    computer_use_enabled: Optional[bool] = None
-    browser_use_enabled: Optional[bool] = None
+    computer_use: Optional[ComputerUseSettings] = None
+    browser_use: Optional[BrowserUseSettings] = None
     unified_session: Optional[bool] = None       # share one session across all channels (default: True)
 
     # Channels

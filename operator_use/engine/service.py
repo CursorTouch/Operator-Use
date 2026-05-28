@@ -1,7 +1,6 @@
 from __future__ import annotations
 from operator_use.message.types import ToolResultContent
 import asyncio
-import inspect
 from typing import TYPE_CHECKING, Optional, Callable, Coroutine, Literal
 from operator_use.hooks.service import Hooks
 from operator_use.engine.types import (
@@ -121,7 +120,6 @@ class Engine:
         if self.state.steering_queue:
             self.state.steering_queue.clear()
         self.state.error_message = None
-        self.state.state_message = None
         self.state.pending_tool_calls.clear()
         self.state.is_streaming = False
 
@@ -314,25 +312,7 @@ class Engine:
                 message = AssistantMessage()
                 tool_calls.clear()
 
-                # Collect a fresh ephemeral state message from every tool that
-                # exposes an async state_message().  Combined into one UserMessage
-                # and appended only at the LLMContext call site — never written
-                # into the persistent messages list or the session JSONL.
-                self.state.state_message = None
-                for _tool in self._tools.values():
-                    if _fn := getattr(_tool, "state_message", None):
-                        if inspect.iscoroutinefunction(_fn):
-                            try:
-                                if _msg := await _fn():
-                                    self.state.state_message = _msg
-                                    break
-                            except Exception:
-                                pass
-
-                # Build the full context the LLM will see: persistent messages +
-                # ephemeral state.  transform_context operates on the full list so
-                # it can read and modify the state message if needed.
-                ctx_messages = messages + ([self.state.state_message] if self.state.state_message else [])
+                ctx_messages = list(messages)
 
                 if self.options.transform_context is not None:
                     ctx_messages = self.options.transform_context(ctx_messages, signal)

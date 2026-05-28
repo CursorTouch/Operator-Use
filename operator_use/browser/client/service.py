@@ -959,7 +959,7 @@ class Browser:
         )
 
     async def get_element_by_index(self, index: int):
-        state = await self.get_state(use_vision=False)
+        state = await self.get_state()
         interactive_count = len(state.dom_state.interactive_nodes)
 
         if index < interactive_count:
@@ -971,12 +971,17 @@ class Browser:
 
         raise IndexError(f'Element index {index} out of range (interactive: {interactive_count}, scrollable: {len(state.dom_state.scrollable_nodes)})')
 
-    async def get_state(
-        self,
-        use_vision: bool = False,
-        within_viewport: bool = True,
-        as_bytes: bool = False,
-    ) -> BrowserState:
+    async def open(self) -> None:
+        """Launch or connect to the browser and start watchdogs."""
+        if self._client is None:
+            await asyncio.wait_for(self.init_browser(), timeout=30.0)
+            await self.init_tabs()
+        elif not self._sessions:
+            await self.init_tabs()
+
+    async def get_state(self, as_bytes: bool = False) -> BrowserState:
+        use_vision = self.config.use_vision
+        within_viewport = self.config.within_viewport
         if self._state_watchdog is not None:
             state = await self._state_watchdog.get_state(use_vision=use_vision, within_viewport=within_viewport, as_bytes=as_bytes)
             if state is not None:

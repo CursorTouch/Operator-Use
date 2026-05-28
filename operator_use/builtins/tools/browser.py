@@ -3,13 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import httpx
 from markdownify import markdownify
 from pydantic import BaseModel, Field, model_validator
-from operator_use.message.types import UserMessage
-from operator_use.browser import Browser, BrowserConfig
+from operator_use.browser import Browser
 from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolInvocation, ToolKind, ToolResult
 
 
@@ -130,17 +129,15 @@ class BrowserTool(Tool):
             kind=ToolKind.Web,
             execution_mode=ToolExecutionMode.Sequential,
         )
-        self._browser: Browser | None = None
 
-    @property
-    def is_open(self) -> bool:
-        """True when a browser session is active (action='open' has been called)."""
-        return self._browser is not None
-
-    def is_available(self, context) -> bool:
-        sm = context.settings_manager
-        if sm is not None and sm.settings.browser_use_enabled is False:
+    def is_available(self, context: ToolContext) -> bool:
+        if context.browser is None:
             return False
+        sm = context.settings_manager
+        if sm is not None:
+            bu = sm.settings.browser_use
+            if bu is not None and not bu.enabled:
+                return False
         return True
 
     async def execute(
@@ -156,33 +153,34 @@ class BrowserTool(Tool):
 
         try:
             params = BrowserSchema.model_validate(invocation.params)
+            browser = context.browser if context is not None else None
 
             match params.action:
                 case "open":
+                    if browser is None:
+                        return ToolResult.error(invocation.id, "Browser is not available.")
                     await _update("🌐 Opening browser…")
-                    if self.is_open:
-                        await self._browser.close()
-                        self._browser = None
-                    browser = await self._get_browser(params)
+                    if browser.crashed:
+                        await browser.close()
+                    await browser.open()
                     tabs = await browser.get_all_tabs()
                     return ToolResult.ok(invocation.id, f"Browser ready. {len(tabs)} tab(s) open.")
 
                 case "close":
-                    if not self.is_open:
+                    if browser is None or browser._client is None:
                         return ToolResult.ok(invocation.id, "Browser is not open.")
                     await _update("🌐 Closing browser…")
-                    await self._browser.close()
-                    self._browser = None
+                    await browser.close()
                     return ToolResult.ok(invocation.id, "Browser closed.")
 
             # Guard: require an explicit open before any browser interaction.
-            if not self.is_open:
+            if browser is None or browser._client is None:
                 return ToolResult.error(
                     invocation.id,
                     "Browser is not open. Use action='open' to launch the browser first.",
                 )
 
-            browser = await self._get_browser(params)
+            browser = await self._get_browser(browser, params)
             page = browser.current_page()
 
             match params.action:
@@ -332,65 +330,14 @@ class BrowserTool(Tool):
         except Exception as exc:
             return ToolResult.error(invocation.id, f"browser: {exc}")
 
-    async def state_message(self) -> Optional[UserMessage]:
-        """Return a UserMessage with the current browser state, or None if closed.
-
-        Called by EphemeralInjector just before each LLM API call.  The message
-        is injected into the context for that single call and then stripped —
-        it is never persisted in state.messages or the session JSONL.
-        """
-        if not self.is_open:
-            return None
-        try:
-            use_vision = False
-            state = await self._browser.get_state(use_vision=use_vision,as_bytes=True)
-            if state is None:
-                return None
-            tabs = await self._browser.get_all_tabs()
-            state_text = "\n".join([
-                "Tabs:",
-                *[f"{tab.id}: {tab.title or '(untitled)'} {tab.url}" for tab in tabs],
-                "",
-                state.dom_state.interactive_elements_to_string(),
-                "",
-                state.dom_state.scrollable_elements_to_string(),
-                "",
-                state.dom_state.informative_elements_to_string(),
-            ])
-            from operator_use.message.types import UserMessage
-            content=f"[Current browser state]\n{state_text}"
-            if use_vision and state.screenshot:
-                return UserMessage.with_images(content, [state.screenshot])
-            else:
-                return UserMessage.text(content)
-        except Exception:
-            return None
-
-    async def _get_browser(self, params: BrowserSchema) -> Browser:
-        # If the previous instance crashed (all tabs dead), tear it down first.
-        if self.is_open and self._browser.crashed:
+    async def _get_browser(self, browser: Browser, params: BrowserSchema) -> Browser:
+        """Ensure the browser is connected, reconnecting if needed."""
+        if browser.crashed:
             try:
-                await self._browser.close()
+                await browser.close()
             except Exception:
                 pass
-            self._browser = None
-
-        if not self.is_open:
-            self._browser = Browser(
-                BrowserConfig(
-                    browser=params.browser,
-                    headless=params.headless,
-                    attach_to_existing=params.attach_to_existing,
-                    cdp_port=params.cdp_port,
-                )
-            )
-        browser = self._browser
-        assert browser is not None
-        if browser._client is None:
-            await asyncio.wait_for(browser.init_browser(), timeout=30.0)
-            await browser.init_tabs()
-        elif not browser._sessions:
-            await browser.init_tabs()
+        await browser.open()
         return browser
 
     async def _tab_action(self, invocation_id: str, browser: Browser, params: BrowserSchema) -> ToolResult:

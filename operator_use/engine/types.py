@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from operator_use.inference.types import ThinkingLevel
     from operator_use.tool.types import Tool
 
-from operator_use.message.types import LLMMessage, AssistantMessage, UserMessage, ToolCallContent, ToolResultContent
+from operator_use.message.types import LLMMessage, AssistantMessage, ToolCallContent, ToolResultContent
 from operator_use.tool.types import ToolInvocation, ToolResult, ToolExecutionMode
 
 AbortSignal = asyncio.Event
@@ -85,7 +85,6 @@ class AgentState:
     streaming_message: Optional[AssistantMessage] = None
     thinking_level: Optional[ThinkingLevel] = None
     error_message: Optional[str] = None
-    state_message: Optional[UserMessage] = None
     tools: list[Tool] = field(default_factory=list)
     follow_up_queue: Optional[FollowupQueue] = None
     steering_queue: Optional[SteeringQueue] = None

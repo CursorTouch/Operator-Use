@@ -25,6 +25,13 @@ class _State:
 class _Computer:
     def __init__(self):
         self.calls = []
+        self._is_open = True  # tests inject a pre-opened desktop
+
+    def open(self): self._is_open = True
+    def close(self): self._is_open = False
+
+    @property
+    def is_open(self) -> bool: return self._is_open
 
     def get_state(self, as_bytes: bool = False):
         self.calls.append(("snapshot", as_bytes))

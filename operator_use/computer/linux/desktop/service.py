@@ -9,7 +9,17 @@ class LinuxDesktop(BaseDesktop):
     def __init__(self, *args, **kwargs):
         raise NotImplementedError(_MSG)
 
-    def get_state(self, use_vision=False, as_bytes=False):
+    def open(self):
+        raise NotImplementedError(_MSG)
+
+    def close(self):
+        raise NotImplementedError(_MSG)
+
+    @property
+    def is_open(self) -> bool:
+        raise NotImplementedError(_MSG)
+
+    def get_state(self, as_bytes=False):
         raise NotImplementedError(_MSG)
 
     def get_screen_size(self):

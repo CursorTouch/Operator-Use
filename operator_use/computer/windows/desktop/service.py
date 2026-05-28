@@ -44,11 +44,28 @@ class WindowsDesktop(BaseDesktop):
         self.use_accessibility = use_accessibility
         self.tree = Tree(self)
         self.desktop_state = None
+        self._is_open: bool = False
 
         # Cached system info (does not change during session)
         self._cached_windows_version: str | None = None
         self._cached_default_language: str | None = None
         self._cached_user_account_type: str | None = None
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def open(self) -> None:
+        """Mark the desktop session as active."""
+        self._is_open = True
+
+    def close(self) -> None:
+        """Mark the desktop session as inactive."""
+        self._is_open = False
+
+    @property
+    def is_open(self) -> bool:
+        return self._is_open
 
     def warm_up(self):
         """Pre-warm expensive resources to eliminate cold start delay.

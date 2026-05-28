@@ -93,6 +93,51 @@ class Runtime:
             profiles=context.resource_loader.get_subagent_profiles(),
         )
 
+    def _create_desktop_instance(self, context: RuntimeContext):
+        """Instantiate a Desktop from settings, or None if computer-use is disabled."""
+        sm = context.settings_manager
+        if sm is None:
+            return None
+        s = sm.settings
+        # Legacy flat flag still respected; new settings object takes precedence.
+        cu = s.computer_use
+        if cu is None:
+            from operator_use.settings.types import ComputerUseSettings
+            cu = ComputerUseSettings()
+        if not cu.enabled:
+            return None
+        import operator_use.computer as computer_module
+        return computer_module.Desktop(
+            use_vision=cu.use_vision,
+            use_accessibility=cu.use_accessibility,
+            use_annotation=cu.use_annotation,
+        )
+
+    def _create_browser_instance(self, context: RuntimeContext):
+        """Instantiate a Browser from settings, or None if browser-use is disabled."""
+        sm = context.settings_manager
+        if sm is None:
+            return None
+        s = sm.settings
+        bu = s.browser_use
+        if bu is None:
+            from operator_use.settings.types import BrowserUseSettings
+            bu = BrowserUseSettings()
+        if not bu.enabled:
+            return None
+        from operator_use.browser.client.service import Browser
+        from operator_use.browser.client.config import BrowserConfig
+        return Browser(
+            config=BrowserConfig(
+                use_vision=bu.use_vision,
+                headless=bu.headless,
+                browser=bu.browser,
+                cdp_port=bu.cdp_port,
+                attach_to_existing=bu.attach_to_existing,
+            ),
+            hooks=context.hooks,
+        )
+
     def _configure_context(self, context: RuntimeContext) -> None:
         """Attach runtime-owned services to the active engine/tool context, then drop tools whose backing service is absent."""
         tool_ctx = ToolContext(
@@ -109,6 +154,8 @@ class Runtime:
             cron=context.cron,
             mcp_manager=context.mcp_manager,
             memory_manager=context.memory_manager,
+            desktop=self._create_desktop_instance(context),
+            browser=self._create_browser_instance(context),
             process_manager=context.process_manager,
             settings_manager=context.settings_manager,
             auth_channel_manager=context.auth_channel_manager,
@@ -411,6 +458,8 @@ class Runtime:
             cron=self._context.cron,
             mcp_manager=self.mcp_manager,
             memory_manager=self._context.memory_manager,
+            desktop=self._create_desktop_instance(self._context),
+            browser=self._create_browser_instance(self._context),
             process_manager=self._context.process_manager,
             settings_manager=self._context.settings_manager,
             auth_channel_manager=self._context.auth_channel_manager,
@@ -545,6 +594,8 @@ class Runtime:
             cron=self._context.cron,
             mcp_manager=self.mcp_manager,
             memory_manager=self._context.memory_manager,
+            desktop=self._create_desktop_instance(self._context),
+            browser=self._create_browser_instance(self._context),
             process_manager=self._context.process_manager,
             settings_manager=self._context.settings_manager,
             auth_channel_manager=self._context.auth_channel_manager,

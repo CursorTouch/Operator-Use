@@ -4,14 +4,10 @@ import base64
 import dataclasses
 import json
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
-from operator_use.message.types import UserMessage
+from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolInvocation, ToolKind, ToolResult
-
-if TYPE_CHECKING:
-    from operator_use.computer.types import Desktop
 
 
 class ComputerAction(str, Enum):
@@ -85,8 +81,6 @@ class ComputerSchema(BaseModel):
     wheel_times: int = Field(default=1, ge=1, le=20, description="Number of wheel ticks for action=scroll.")
     shortcut: str | None = Field(default=None, description="Keyboard shortcut such as command+c or ctrl+c.")
     include_screenshot: bool = Field(default=False, description="Include screenshot bytes in action=snapshot output.")
-    annotate: bool = Field(default=False, description="Request annotated screenshots when supported.")
-    accessibility: bool = Field(default=True, description="Include accessibility tree data when supported.")
 
     @model_validator(mode="after")
     def _check_action_fields(self) -> ComputerSchema:
@@ -123,17 +117,15 @@ class ComputerTool(Tool):
             kind=ToolKind.Execute,
             execution_mode=ToolExecutionMode.Sequential,
         )
-        self._desktop: Desktop | None = None
 
-    @property
-    def is_open(self) -> bool:
-        """True when desktop access has been enabled via action='open'."""
-        return self._desktop is not None
-
-    def is_available(self, context) -> bool:
-        sm = context.settings_manager
-        if sm is not None and sm.settings.computer_use_enabled is False:
+    def is_available(self, context: ToolContext) -> bool:
+        if context.desktop is None:
             return False
+        sm = context.settings_manager
+        if sm is not None:
+            cu = sm.settings.computer_use
+            if cu is not None and not cu.enabled:
+                return False
         return True
 
     async def execute(
@@ -149,24 +141,24 @@ class ComputerTool(Tool):
 
         try:
             params = ComputerSchema.model_validate(invocation.params)
+            desktop = context.desktop if context is not None else None
 
-            # open / close — the desktop object itself is the open/closed state.
             match params.action:
                 case ComputerAction.open:
+                    if desktop is None:
+                        return ToolResult.error(id=invocation.id, content="Desktop is not available.")
                     await _update("🖥️ Opening desktop…")
-                    self._desktop = self._get_desktop(context, params)
+                    desktop.open()
                     return ToolResult.ok(id=invocation.id, content="Desktop access enabled.")
 
                 case ComputerAction.close:
-                    if not self.is_open:
+                    if desktop is None or not desktop.is_open:
                         return ToolResult.ok(id=invocation.id, content="Desktop is not open.")
                     await _update("🖥️ Closing desktop…")
-                    self._desktop = None
+                    desktop.close()
                     return ToolResult.ok(id=invocation.id, content="Desktop access released.")
 
-            # Guard: require an explicit open before any desktop interaction.
-            # Context-injected desktops (e.g. tests, subagents) bypass this check.
-            if not self.is_open and (context is None or context.desktop is None):
+            if desktop is None or not desktop.is_open:
                 return ToolResult.error(
                     id=invocation.id,
                     content="Desktop is not accessible. Use action='open' to enable desktop control first.",
@@ -200,47 +192,10 @@ class ComputerTool(Tool):
                     await _update(f"🖱️ Dragging to {coord}…")
                 case ComputerAction.shortcut:
                     await _update(f"⌨️ Shortcut {params.shortcut}…")
-            desktop = self._get_desktop(context, params)
             content = self._run_action(desktop, params)
             return ToolResult.ok(id=invocation.id, content=content)
         except Exception as exc:
             return ToolResult.error(id=invocation.id, content=f"computer: {exc}")
-    
-    async def state_message(self) -> Optional[UserMessage]:
-        """Return a UserMessage with the current desktop state, or None if closed.
-
-        Called just before each LLM API call. The message is injected into the
-        context for that single call and then stripped — it is never persisted
-        in state.messages or the session JSONL. Screenshots are excluded to keep
-        token cost low; the model can request them via action='snapshot' with
-        include_screenshot=True.
-        """
-        if not self.is_open:
-            return None
-        try:
-            use_vision=False
-            state = self._desktop.get_state(use_vision=use_vision,as_bytes=False)
-            state_text = json.dumps(self._to_jsonable(state), indent=2)
-            content=f"[Current desktop state]\n{state_text}"
-            if use_vision and state.screenshot:
-                return UserMessage.with_images(content, [state.screenshot])
-            else: 
-                return UserMessage.text(content)
-        except Exception:
-            return None
-
-    def _get_desktop(self, context: ToolContext | None, params: ComputerSchema) -> Desktop:
-        if context is not None and context.desktop is not None:
-            return context.desktop
-        if self._desktop is None:
-            from operator_use import computer
-
-            self._desktop = computer.Desktop(
-                use_vision=params.include_screenshot,
-                use_annotation=params.annotate,
-                use_accessibility=params.accessibility,
-            )
-        return self._desktop
 
     def _run_action(self, desktop: Any, params: ComputerSchema) -> str:
         loc = self._loc(params)

@@ -1,4 +1,4 @@
-"""Tests for BrowserTool — open/close guard, snapshot, state_message,
+"""Tests for BrowserTool — open/close guard, snapshot,
 and the browser screenshot as_bytes pipeline."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import pytest
 from PIL import Image as PILImage
 
 from operator_use.builtins.tools.browser import BrowserTool
-from operator_use.tool.types import ToolInvocation
+from operator_use.tool.types import ToolContext, ToolInvocation
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +45,9 @@ class _BrowserState:
     screenshot: PILImage.Image | bytes | None = None
     dom_state: _DOMState = field(default_factory=_DOMState)
 
+    def to_string(self) -> str:
+        return "Interactive elements:\n[1] <button>Click me</button>"
+
 
 @dataclass
 class _Tab:
@@ -53,14 +56,21 @@ class _Tab:
     title: str
 
 
-def _make_browser(screenshot=None):
+def _make_browser(screenshot=None, is_open=True):
     """Return an async-capable fake browser object."""
     browser = MagicMock()
     browser.crashed = False  # prevent _get_browser from tearing down the mock
+    browser._client = MagicMock() if is_open else None  # guard check uses _client
+    browser.open = AsyncMock()
     browser.get_state = AsyncMock(return_value=_BrowserState(screenshot=screenshot))
     browser.get_all_tabs = AsyncMock(return_value=[_Tab(0, "https://example.com", "Example")])
     browser.close = AsyncMock()
     return browser
+
+
+def _make_context(browser=None) -> ToolContext:
+    """Build a minimal ToolContext with the given browser."""
+    return ToolContext(browser=browser)
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +92,7 @@ async def test_browser_close_when_not_open_is_ok():
     tool = BrowserTool()
     result = await tool.execute(
         ToolInvocation(id="1", name="browser", params={"action": "close"}),
+        context=_make_context(browser=None),
     )
     assert not result.is_error
     assert "not open" in result.content.lower()
@@ -89,14 +100,14 @@ async def test_browser_close_when_not_open_is_ok():
 
 @pytest.mark.asyncio
 async def test_browser_guard_passes_after_open():
-    """After open sets _browser, subsequent actions are allowed."""
+    """After open sets _client, subsequent actions are allowed."""
     tool = BrowserTool()
-    browser = _make_browser()
-    # Manually inject an open browser (bypasses real CDP launch)
-    tool._browser = browser
+    browser = _make_browser(is_open=True)
+    ctx = _make_context(browser=browser)
 
     result = await tool.execute(
         ToolInvocation(id="1", name="browser", params={"action": "snapshot"}),
+        context=ctx,
     )
     assert not result.is_error
     assert "Example" in result.content
@@ -105,52 +116,24 @@ async def test_browser_guard_passes_after_open():
 @pytest.mark.asyncio
 async def test_browser_close_clears_state():
     tool = BrowserTool()
-    tool._browser = _make_browser()
+    browser = _make_browser(is_open=True)
+    ctx = _make_context(browser=browser)
 
     result = await tool.execute(
         ToolInvocation(id="1", name="browser", params={"action": "close"}),
+        context=ctx,
     )
     assert not result.is_error
-    assert tool._browser is None
+
+    # After close, _client should be None — simulate it
+    browser._client = None
 
     # Next action must fail with the guard error
     blocked = await tool.execute(
         ToolInvocation(id="2", name="browser", params={"action": "snapshot"}),
+        context=ctx,
     )
     assert blocked.is_error
-
-
-# ---------------------------------------------------------------------------
-# state_message — ephemeral injection
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_state_message_returns_none_when_closed():
-    tool = BrowserTool()
-    msg = await tool.state_message()
-    assert msg is None
-
-
-@pytest.mark.asyncio
-async def test_state_message_returns_browser_state_when_open():
-    tool = BrowserTool()
-    tool._browser = _make_browser()
-
-    msg = await tool.state_message()
-    assert msg is not None
-    assert "[Current browser state]" in msg.contents[0].content
-    assert "Example" in msg.contents[0].content
-
-
-@pytest.mark.asyncio
-async def test_state_message_suppresses_exceptions():
-    tool = BrowserTool()
-    browser = MagicMock()
-    browser.get_state = AsyncMock(side_effect=RuntimeError("CDP gone"))
-    tool._browser = browser
-
-    msg = await tool.state_message()
-    assert msg is None
 
 
 # ---------------------------------------------------------------------------

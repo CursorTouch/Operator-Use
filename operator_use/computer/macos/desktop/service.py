@@ -30,6 +30,23 @@ class MacosDesktop(BaseDesktop):
         self.use_accessibility = use_accessibility
         self.tree = Tree()
         self.desktop_state = None
+        self._is_open: bool = False
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def open(self) -> None:
+        """Mark the desktop session as active."""
+        self._is_open = True
+
+    def close(self) -> None:
+        """Mark the desktop session as inactive."""
+        self._is_open = False
+
+    @property
+    def is_open(self) -> bool:
+        return self._is_open
 
     def get_screen_size(self) -> Size:
         """Return the virtual screen size (all displays combined) in logical points."""

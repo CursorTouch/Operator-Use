@@ -81,6 +81,13 @@ class DesktopState:
         w = self.active_window
         return f"{w.name} [{w.status.value}] pid={w.process_id}"
 
+    def to_string(self) -> str:
+        """Compact, LLM-friendly summary of the full desktop state."""
+        parts: list[str] = []
+        parts.append(f"Active window: {self.active_window_to_string()}")
+        parts.append(f"Open windows:\n{self.windows_to_string()}")
+        return "\n\n".join(parts)
+
 
 # ---------------------------------------------------------------------------
 # Abstract Desktop interface
@@ -95,23 +102,36 @@ class Desktop(ABC):
     """
 
     # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def open(self) -> None:
+        """Start the desktop session (check permissions, start watchdog if any)."""
+
+    @abstractmethod
+    def close(self) -> None:
+        """Stop the desktop session and release resources."""
+
+    @property
+    @abstractmethod
+    def is_open(self) -> bool:
+        """True when the session is active (after ``open()`` and before ``close()``)."""
+
+    # ------------------------------------------------------------------
     # State / inspection
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_state(
-        self,
-        use_vision: bool = False,
-        as_bytes: bool = False,
-    ) -> DesktopState:
+    def get_state(self, as_bytes: bool = False) -> DesktopState:
         """Return a full snapshot of the current desktop.
 
+        Uses the ``use_vision`` / ``use_accessibility`` / ``use_annotation``
+        flags set at construction time.
+
         Args:
-            use_vision: When ``True``, capture a screenshot and include it
-                        in the returned ``DesktopState``.
-            as_bytes:   When ``True`` (and ``use_vision`` is ``True``),
-                        encode the screenshot as raw PNG bytes instead of a
-                        ``PIL.Image``.
+            as_bytes: When ``True``, encode any screenshot as raw PNG bytes
+                      instead of a ``PIL.Image``.
         """
 
     @abstractmethod

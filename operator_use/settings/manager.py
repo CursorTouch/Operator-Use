@@ -735,22 +735,30 @@ class SettingsManager:
 
     def get_computer_use_enabled(self) -> bool:
         """Return whether computer use (desktop control) is enabled (default: True)."""
-        return self.settings.computer_use_enabled if self.settings.computer_use_enabled is not None else True
+        cu = self.settings.computer_use
+        return cu.enabled if cu is not None else True
 
     def set_computer_use_enabled(self, enabled: bool):
         """Enable or disable computer use and persist to global settings."""
-        self.global_settings.computer_use_enabled = enabled
-        self._mark_modified("computer_use_enabled")
+        from operator_use.settings.types import ComputerUseSettings
+        if self.global_settings.computer_use is None:
+            self.global_settings.computer_use = ComputerUseSettings()
+        self.global_settings.computer_use.enabled = enabled
+        self._mark_modified("computer_use")
         self._save()
 
     def get_browser_use_enabled(self) -> bool:
         """Return whether browser use is enabled (default: True)."""
-        return self.settings.browser_use_enabled if self.settings.browser_use_enabled is not None else True
+        bu = self.settings.browser_use
+        return bu.enabled if bu is not None else True
 
     def set_browser_use_enabled(self, enabled: bool):
         """Enable or disable browser use and persist to global settings."""
-        self.global_settings.browser_use_enabled = enabled
-        self._mark_modified("browser_use_enabled")
+        from operator_use.settings.types import BrowserUseSettings
+        if self.global_settings.browser_use is None:
+            self.global_settings.browser_use = BrowserUseSettings()
+        self.global_settings.browser_use.enabled = enabled
+        self._mark_modified("browser_use")
         self._save()
 
     def get_enable_skill_commands(self) -> bool:

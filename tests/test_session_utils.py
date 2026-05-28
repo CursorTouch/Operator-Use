@@ -71,17 +71,17 @@ class TestGenerateTimestamp:
 
 class TestGetDefaultSessionDir:
     def test_creates_directory(self, tmp_path):
-        result = get_default_session_dir("/some/project", agent_dir=tmp_path)
+        result = get_default_session_dir(agent_dir=tmp_path)
         assert result.is_dir()
 
-    def test_encodes_cwd_in_path(self, tmp_path):
-        result = get_default_session_dir("/my/project", agent_dir=tmp_path)
-        assert "my" in str(result) or "project" in str(result)
+    def test_returns_agent_dir_when_provided(self, tmp_path):
+        result = get_default_session_dir(agent_dir=tmp_path)
+        assert result == tmp_path
 
-    def test_different_cwds_produce_different_dirs(self, tmp_path):
-        d1 = get_default_session_dir("/proj/a", agent_dir=tmp_path)
-        d2 = get_default_session_dir("/proj/b", agent_dir=tmp_path)
-        assert d1 != d2
+    def test_returns_path_when_no_args(self):
+        result = get_default_session_dir()
+        assert isinstance(result, Path)
+        assert result.is_dir()
 
 
 # ── read_session_file / is_valid_session_file ─────────────────────────────────
