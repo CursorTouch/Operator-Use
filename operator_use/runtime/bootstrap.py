@@ -81,7 +81,7 @@ _PROFILE_SETTINGS = {
     }
 }
 
-_CRONS: list = []
+_CRONS: dict = {'version': 1, 'jobs': []}
 _ACP_TOKENS: dict = {}
 
 
