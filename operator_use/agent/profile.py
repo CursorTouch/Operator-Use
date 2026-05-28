@@ -133,6 +133,10 @@ class AgentProfile(BaseModel):
         return self.profile_dir / 'temp'
 
     @property
+    def tasks_dir(self) -> Path:
+        return self.profile_dir / 'tasks'
+
+    @property
     def crons_path(self) -> Path:
         return self.profile_dir / 'crons.json'
 
