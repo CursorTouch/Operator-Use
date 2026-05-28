@@ -84,6 +84,27 @@ _PROFILE_SETTINGS = {
 _CRONS: dict = {'version': 1, 'jobs': []}
 _ACP_TOKENS: dict = {}
 
+_KNOWLEDGE_INDEX = """\
+# Knowledge index for this profile.
+# Add entries below to make documents available to the agent in the system prompt.
+#
+# Fields:
+#   path        — path relative to this knowledge/ directory (required)
+#   always_load — true: inject content directly into prompt; false: list as available (default: false)
+#   priority    — hint for the agent: high | normal | low (default: normal)
+#   tags        — list of topic labels for filtering
+#
+# Example:
+# - path: company/overview.md
+#   always_load: true
+#   priority: high
+#   tags: [company, overview]
+#
+# - path: api/reference.md
+#   priority: normal
+#   tags: [api, reference]
+"""
+
 
 
 def _agent_md(name: str, description: str) -> str:
@@ -209,4 +230,5 @@ def bootstrap_profile(profile_dir: Path, name: str, description: str = '') -> No
     _write_json(profile_dir / 'auth' / 'channels.json',  _CHANNELS_AUTH)
     _write_json(profile_dir / 'crons.json',              _CRONS)
     _write_json(profile_dir / 'acp' / 'tokens.json',    _ACP_TOKENS)
+    _write_text(profile_dir / 'knowledge' / 'index.yaml', _KNOWLEDGE_INDEX)
 

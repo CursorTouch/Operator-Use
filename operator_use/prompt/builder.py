@@ -46,12 +46,23 @@ class PromptTemplate:
         today = date.today().isoformat()
         cwd = self.cwd.replace("\\", "/")
         global_dir = get_config_dir()
-        profile_line = f"\nProfile directory: {self.profile_dir}" if self.profile_dir else ""
+        if self.profile_dir:
+            p = self.profile_dir
+            profile_block = (
+                f"\n\n## Profile: {p}\n"
+                f"\n- {p / 'MEMORY.md'} — long-term memory (read/write to remember things across sessions)"
+                f"\n- {p / 'USER.md'} — user preferences and profile"
+                f"\n- {p / 'skills'} — skill guides, each as {{name}}/SKILL.md; scan before tasks and load with skill action=\"view\" when relevant"
+                f"\n- {p / 'knowledge'} — reference documents (read on demand when relevant to the task)"
+                f"\n- {p / 'temp'} — scratchpad and working files; use as terminal CWD for intermediate output"
+            )
+        else:
+            profile_block = ""
         session_line = f"\nSession ID: {self.session_id}" if self.session_id else ""
         footer = (
             f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
             f"\nGlobal directory: {global_dir}"
-            + profile_line
+            + profile_block
             + session_line
         )
 

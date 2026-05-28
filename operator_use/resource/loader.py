@@ -289,12 +289,12 @@ class ResourceLoader(BaseResourceLoader):
         else:
             self._append_system_prompt = []
 
-        # Knowledge index from profile
+        # Knowledge section from profile
         if self._active_profile is not None:
             from operator_use.knowledge.service import Knowledge
             knowledge = Knowledge(self._active_profile.knowledge_dir)
-            if index := knowledge.build_knowledge_index():
-                self._append_system_prompt.append(index)
+            if section := knowledge.build_knowledge_for_prompt():
+                self._append_system_prompt.append(section)
 
         if self._active_profile is not None:
             self._active_profile.temp_dir.mkdir(parents=True, exist_ok=True)

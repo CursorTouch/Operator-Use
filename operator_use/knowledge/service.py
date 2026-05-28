@@ -2,48 +2,65 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
+INDEX_FILENAME = 'index.yaml'
 
 
 class Knowledge:
     """
-    Manages reference documents in ~/.operator/knowledge/ and .program/knowledge/.
+    Manages reference documents in the profile knowledge/ directory.
 
-    Two supported layouts — both work simultaneously:
+    Two modes — tried in order per directory:
 
-    1. Directory nodes (preferred for multi-file topics):
-         knowledge/products/index.md   → name "products"
-         knowledge/api/v2/index.md     → name "api/v2"
+    1. index.yaml (preferred) — explicit manifest with always_load, tags, priority:
+         - always_load: true  → content injected directly into the system prompt
+         - always_load: false → listed as available for on-demand read
 
-    2. Flat files (simple single-topic docs):
-         knowledge/company.md          → name "company"
-         knowledge/pricing.md          → name "pricing"
-
-    Project-level docs (.program/knowledge/) take precedence over global ones
-    (~/.operator/knowledge/) when both define the same name.
+    2. Filesystem scan (fallback when no index.yaml) — discovers index.md nodes
+       and flat .md files; all treated as on-demand.
     """
 
     def __init__(self, *knowledge_dirs: Path) -> None:
         """Accept one or more knowledge directories ordered by priority (highest first)."""
         self._dirs = [d for d in knowledge_dirs if d is not None]
 
-    # ── File discovery ────────────────────────────────────────────────────────
+    # ── Index loading ─────────────────────────────────────────────────────────
+
+    def _load_index(self, knowledge_dir: Path) -> list[dict[str, Any]] | None:
+        """Load index.yaml from a knowledge directory. Returns None if absent/invalid."""
+        index_path = knowledge_dir / INDEX_FILENAME
+        if not index_path.exists():
+            return None
+        try:
+            import yaml
+        except ImportError:
+            logger.warning('PyYAML not installed — cannot load %s; pip install pyyaml', index_path)
+            return None
+        try:
+            data = yaml.safe_load(index_path.read_text(encoding='utf-8'))
+            if isinstance(data, list):
+                return data
+            logger.warning('%s must be a YAML list — ignoring', index_path)
+        except Exception as e:
+            logger.warning('Failed to load %s: %s', index_path, e)
+        return None
+
+    # ── Filesystem scan (fallback) ────────────────────────────────────────────
 
     def list_files(self) -> list[dict]:
-        """Return all knowledge entries, deduplicated by name (first dir wins)."""
+        """Return all knowledge entries discovered from filesystem, deduplicated by name."""
         seen: set[str] = set()
         files: list[dict] = []
-
         for knowledge_dir in self._dirs:
             if not knowledge_dir.exists():
                 continue
             self._collect(knowledge_dir, seen, files)
-
         return sorted(files, key=lambda f: f['name'])
 
     def _collect(self, knowledge_dir: Path, seen: set[str], files: list[dict]) -> None:
-        # 1. Directory nodes: folders containing an index.md
         for path in sorted(knowledge_dir.rglob('index.md')):
             rel_dir = path.parent.relative_to(knowledge_dir)
             name = str(rel_dir).replace('\\', '/')
@@ -52,7 +69,6 @@ class Knowledge:
             seen.add(name)
             files.append({'name': name, 'path': path, 'preview': self._preview(path)})
 
-        # 2. Flat .md files (not index.md)
         for path in sorted(knowledge_dir.rglob('*.md')):
             if path.name == 'index.md':
                 continue
@@ -75,35 +91,82 @@ class Knowledge:
 
     # ── System prompt injection ───────────────────────────────────────────────
 
-    def build_knowledge_index(self) -> str | None:
-        """Return a formatted markdown index for injection into the system prompt."""
-        files = self.list_files()
-        if not files:
+    def build_knowledge_for_prompt(self) -> str | None:
+        """
+        Build knowledge section for system prompt injection.
+
+        With index.yaml:
+          - always_load entries → <knowledge> blocks with full content
+          - remaining entries   → <available_knowledge> list
+
+        Without index.yaml (filesystem scan):
+          - all discovered files → <available_knowledge> list
+        """
+        always_blocks: list[str] = []
+        available: list[dict[str, str]] = []
+
+        for knowledge_dir in self._dirs:
+            if not knowledge_dir.exists():
+                continue
+
+            index = self._load_index(knowledge_dir)
+
+            if index is not None:
+                for entry in index:
+                    rel_path = entry.get('path', '')
+                    if not rel_path:
+                        continue
+                    full_path = knowledge_dir / rel_path
+                    always = entry.get('always_load', False)
+                    tags = ','.join(entry.get('tags', []))
+                    priority = entry.get('priority', 'normal')
+
+                    if always:
+                        try:
+                            content = full_path.read_text(encoding='utf-8')
+                            always_blocks.append(
+                                f'<knowledge path="{rel_path}">\n{content.strip()}\n</knowledge>'
+                            )
+                        except Exception as e:
+                            logger.warning('Failed to load always_load knowledge %s: %s', full_path, e)
+                    else:
+                        attrs: dict[str, str] = {'path': rel_path, 'priority': priority}
+                        if tags:
+                            attrs['tags'] = tags
+                        available.append(attrs)
+            else:
+                # Filesystem scan fallback — all on-demand
+                seen: set[str] = set()
+                files: list[dict] = []
+                self._collect(knowledge_dir, seen, files)
+                for f in files:
+                    rel = f['path'].relative_to(knowledge_dir).as_posix()
+                    entry_attrs: dict[str, str] = {'path': rel, 'priority': 'normal'}
+                    if f.get('preview'):
+                        entry_attrs['description'] = f['preview']
+                    available.append(entry_attrs)
+
+        if not always_blocks and not available:
             return None
 
-        lines: list[str] = []
-        current_group: str | None = None
+        sections: list[str] = ['## Knowledge\n']
 
-        for f in files:
-            parts = f['name'].split('/')
-            group = parts[0] if len(parts) > 1 else None
+        if always_blocks:
+            sections.extend(always_blocks)
 
-            if group and group != current_group:
-                lines.append(f'\n**{group}/**')
-                current_group = group
-            elif group is None:
-                current_group = None
+        if available:
+            lines = ['<available_knowledge>']
+            for doc in available:
+                attr_str = ' '.join(f'{k}="{v}"' for k, v in doc.items())
+                lines.append(f'  <doc {attr_str} />')
+            lines.append('</available_knowledge>')
+            lines.append('\nUse the `read` tool to load any available knowledge document when needed.')
+            sections.append('\n'.join(lines))
 
-            indent = '  ' if group else ''
-            entry = f"{indent}- **{f['name']}**"
-            if f['preview']:
-                entry += f" — {f['preview']}"
-            entry += f" (`{f['path'].as_posix()}`)"
-            lines.append(entry)
+        logger.info('Knowledge prompt built | always_load=%d available=%d',
+                    len(always_blocks), len(available))
+        return '\n\n'.join(sections)
 
-        logger.info('Knowledge index built | count=%d', len(files))
-        return (
-            '## Knowledge\n\n'
-            'Reference documents available to you. Read the relevant file(s) when the task requires it.\n'
-            + '\n'.join(lines)
-        )
+    # Keep old name as alias
+    def build_knowledge_index(self) -> str | None:
+        return self.build_knowledge_for_prompt()

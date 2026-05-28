@@ -116,20 +116,38 @@ def format_skills_for_prompt(skills: list[Skill], available_tools: set[str] | No
     lines = [
         '',
         '',
-        'The following skills provide specialized instructions for specific tasks.',
-        'Before replying to any task, scan the skills below. If a skill matches or is even '
-        'partially relevant, you MUST load it with skill action="view" before proceeding.',
-        'When a skill file references a relative path, resolve it against the skill directory '
-        '(parent of SKILL.md) and use that absolute path in tool commands.',
+        '# Skills — FIRST PRIORITY (MANDATORY)',
+        '',
+        'CRITICAL: You have installed skills that provide specialized capabilities.',
+        'Before attempting ANY task — simple or complex — you MUST check if an installed skill handles it.',
+        '',
+        '## Rules (MUST follow in order)',
+        '1. ALWAYS scan the skill list below BEFORE taking ANY action on a user request',
+        '2. If a skill\'s description matches or partially matches the task, you MUST load its full',
+        '   instructions using the `skill` tool: `skill action="view" name="<name>"` — do this BEFORE anything else',
+        '3. Follow the loaded skill instructions EXACTLY — do NOT improvise or use alternative approaches',
+        '4. NEVER use general-purpose workarounds when a skill provides the right tool',
+        '5. If multiple skills could apply, load the most specific one first',
+        '6. Even for seemingly simple tasks, CHECK SKILLS FIRST — skills often handle edge cases',
+        '   and produce higher quality results than ad-hoc approaches',
+        '',
+        '## Enforcement',
+        '- If you skip checking skills and use a raw approach for a task that a skill handles,',
+        '  this is considered a FAILURE. Always check skills first.',
         '',
         '<available_skills>',
     ]
 
     for skill in visible:
+        location = escape_xml(str(skill.file_path))
         lines.append('  <skill>')
         lines.append(f'    <name>{escape_xml(skill.name)}</name>')
         lines.append(f'    <description>{escape_xml(skill.description)}</description>')
+        lines.append(f'    <location>{location}</location>')
         lines.append('  </skill>')
 
     lines.append('</available_skills>')
+    lines.append('')
+    lines.append('To load a skill\'s full instructions: `skill action="view" name="<name>"`')
+    lines.append('Scripts within a skill are relative to the skill\'s directory (parent of SKILL.md).')
     return '\n'.join(lines)
