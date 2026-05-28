@@ -139,7 +139,6 @@ class Runtime:
                 cdp_port=bu.cdp_port,
                 attach_to_existing=bu.attach_to_existing,
             ),
-            hooks=context.hooks,
         )
 
     def _configure_context(self, context: RuntimeContext) -> None:
