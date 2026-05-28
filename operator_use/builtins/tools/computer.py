@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import dataclasses
-import json
 from enum import Enum
 from typing import Any
 from pydantic import BaseModel, Field, model_validator
@@ -13,7 +12,6 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 class ComputerAction(str, Enum):
     open = "open"
     close = "close"
-    snapshot = "snapshot"
     click = "click"
     type = "type"
     wait = "wait"
@@ -59,7 +57,7 @@ class ComputerSchema(BaseModel):
     action: ComputerAction = Field(
         description=(
             "Computer action to perform: open (enable desktop access), "
-            "close (release desktop access), snapshot, click, type, wait, app, "
+            "close (release desktop access), click, type, wait, app, "
             "scroll, move, drag, or shortcut."
         )
     )
@@ -80,8 +78,6 @@ class ComputerSchema(BaseModel):
     direction: ScrollDirection = Field(default=ScrollDirection.down, description="Scroll direction.")
     wheel_times: int = Field(default=1, ge=1, le=20, description="Number of wheel ticks for action=scroll.")
     shortcut: str | None = Field(default=None, description="Keyboard shortcut such as command+c or ctrl+c.")
-    include_screenshot: bool = Field(default=False, description="Include screenshot bytes in action=snapshot output.")
-
     @model_validator(mode="after")
     def _check_action_fields(self) -> ComputerSchema:
         loc = self.loc or ((self.x, self.y) if self.x is not None and self.y is not None else None)
@@ -108,8 +104,7 @@ class ComputerTool(Tool):
             description=(
                 "Control the local desktop through one action-based computer tool. "
                 "Use open to enable desktop access (required before any other action) and "
-                "close to release it. Use snapshot to inspect the screen, "
-                "click/type/scroll/move/drag for pointer and text input, "
+                "close to release it. Use click/type/scroll/move/drag for pointer and text input, "
                 "shortcut for keyboard shortcuts, wait for delays, and app for "
                 "launching, switching, resizing, or moving applications."
             ),
@@ -166,8 +161,6 @@ class ComputerTool(Tool):
 
             loc = self._loc(params)
             match params.action:
-                case ComputerAction.snapshot:
-                    await _update("🖥️ Taking desktop snapshot…")
                 case ComputerAction.click:
                     btn = params.button.value
                     coord = f"({loc[0]}, {loc[1]})" if loc else ""
@@ -200,9 +193,6 @@ class ComputerTool(Tool):
     def _run_action(self, desktop: Any, params: ComputerSchema) -> str:
         loc = self._loc(params)
         match params.action:
-            case ComputerAction.snapshot:
-                state = desktop.get_state(as_bytes=params.include_screenshot)
-                return json.dumps(self._to_jsonable(state), indent=2)
             case ComputerAction.click:
                 assert loc is not None
                 desktop.click(loc, button=params.button.value, clicks=params.clicks)

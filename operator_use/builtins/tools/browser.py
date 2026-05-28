@@ -16,7 +16,6 @@ class BrowserSchema(BaseModel):
     action: Literal[
         "open",
         "close",
-        "snapshot",
         "goto",
         "back",
         "forward",
@@ -34,7 +33,7 @@ class BrowserSchema(BaseModel):
     ] = Field(
         description=(
             "Browser action: open (launch/connect browser), close (shut down browser), "
-            "snapshot, goto, back, forward, click, type, key, scroll, menu, "
+            "goto, back, forward, click, type, key, scroll, menu, "
             "upload, tab, wait, script, scrape, or download."
         )
     )
@@ -119,11 +118,10 @@ class BrowserTool(Tool):
             name="browser",
             description=(
                 "Control a CDP browser with one action-based tool. Use open to launch or reconnect "
-                "the browser (also resets a crashed/stuck session), close to shut it down, snapshot "
-                "to inspect tabs and interactive DOM elements, goto/back/forward for navigation, "
-                "click/type/key/scroll for page interaction, tab for tab management, script for "
-                "JavaScript, scrape for markdown page content, upload for file inputs, menu for "
-                "select boxes, and wait."
+                "the browser (also resets a crashed/stuck session), close to shut it down, "
+                "goto/back/forward for navigation, click/type/key/scroll for page interaction, "
+                "tab for tab management, script for JavaScript, scrape for markdown page content, "
+                "upload for file inputs, menu for select boxes, and wait."
             ),
             schema=BrowserSchema,
             kind=ToolKind.Web,
@@ -184,29 +182,6 @@ class BrowserTool(Tool):
             page = browser.current_page()
 
             match params.action:
-                case "snapshot":
-                    await _update("🌐 Taking DOM snapshot…")
-                    state = await browser.get_state()
-                    tabs = await browser.get_all_tabs()
-                    return ToolResult.ok(
-                        invocation.id,
-                        "\n".join(
-                            [
-                                "Tabs:",
-                                *[
-                                    f"{tab.id}: {tab.title or '(untitled)'} {tab.url}"
-                                    for tab in tabs
-                                ],
-                                "",
-                                state.dom_state.interactive_elements_to_string(),
-                                "",
-                                state.dom_state.scrollable_elements_to_string(),
-                                "",
-                                state.dom_state.informative_elements_to_string(),
-                            ]
-                        ),
-                    )
-
                 case "goto":
                     if not params.url:
                         return ToolResult.error(invocation.id, "'url' is required for action='goto'.")

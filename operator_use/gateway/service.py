@@ -481,7 +481,7 @@ class Gateway:
                     # Store the error; it will be surfaced via RetryEndEvent (mid-retry)
                     # or the final except block (exhausted/permanent). Posting here would
                     # show a duplicate for every retry attempt.
-                    _last_error[0] = str(err)
+                    _last_error[0] = err
 
                 case RetryStartEvent(max_retries=mx):
                     _retry_max[0] = mx + 1
