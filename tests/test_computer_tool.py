@@ -67,7 +67,7 @@ async def test_computer_tool_snapshot_returns_state_json():
 
     result = await tool.execute(
         ToolInvocation(id="1", name="computer", params={"action": "snapshot", "include_screenshot": True}),
-        context=ToolContext(computer=computer),
+        context=ToolContext(desktop=computer),
     )
 
     assert not result.is_error
@@ -84,7 +84,7 @@ async def test_computer_tool_routes_pointer_and_text_actions():
 
     click = await tool.execute(
         ToolInvocation(id="1", name="computer", params={"action": "click", "x": 10, "y": 20, "clicks": 2}),
-        context=ToolContext(computer=computer),
+        context=ToolContext(desktop=computer),
     )
     typed = await tool.execute(
         ToolInvocation(
@@ -92,7 +92,7 @@ async def test_computer_tool_routes_pointer_and_text_actions():
             name="computer",
             params={"action": "type", "loc": [30, 40], "text": "hello", "clear": True, "press_enter": True},
         ),
-        context=ToolContext(computer=computer),
+        context=ToolContext(desktop=computer),
     )
 
     assert not click.is_error
@@ -110,11 +110,11 @@ async def test_computer_tool_routes_app_and_keyboard_actions():
 
     app = await tool.execute(
         ToolInvocation(id="1", name="computer", params={"action": "app", "app_mode": "switch", "name": "Terminal"}),
-        context=ToolContext(computer=computer),
+        context=ToolContext(desktop=computer),
     )
     shortcut = await tool.execute(
         ToolInvocation(id="2", name="computer", params={"action": "shortcut", "shortcut": "command+c"}),
-        context=ToolContext(computer=computer),
+        context=ToolContext(desktop=computer),
     )
 
     assert not app.is_error
@@ -132,7 +132,7 @@ async def test_computer_tool_validates_required_action_fields():
 
     result = await tool.execute(
         ToolInvocation(id="1", name="computer", params={"action": "click"}),
-        context=ToolContext(computer=_Computer()),
+        context=ToolContext(desktop=_Computer()),
     )
 
     assert result.is_error

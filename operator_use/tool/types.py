@@ -3,8 +3,31 @@ import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Awaitable, Callable, Optional, Type
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional, Type
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from operator_use.inference.api.text.service import LLM
+    from operator_use.engine.service import Engine
+    from operator_use.agent.service import Agent
+    from operator_use.session.manager import SessionManager
+    from operator_use.resource.loader import ResourceLoader
+    from operator_use.extension.runtime import ExtensionRuntime
+    from operator_use.hooks.service import Hooks
+    from operator_use.subagent.manager import SubagentManager
+    from operator_use.workflow.manager import WorkflowManager
+    from operator_use.bus.service import Bus
+    from operator_use.cron.scheduler import CronScheduler
+    from operator_use.mcp.manager import MCPManager
+    from operator_use.memory.manager import MemoryManager
+    from operator_use.computer.types import Desktop
+    from operator_use.browser.client.service import Browser
+    from operator_use.process.manager import ProcessManager
+    from operator_use.settings.manager import SettingsManager
+    from operator_use.auth.channels import ChannelAuthManager
+    from operator_use.auth.acp import ACPAuthManager
+    from operator_use.acp.manager import ACPSessionManager
+    from operator_use.team.manager import TeamManager
 
 
 @dataclass
@@ -81,26 +104,27 @@ AbortSignal = asyncio.Event
 @dataclass
 class ToolContext:
     """Runtime services available to tools during execution."""
-    llm: Any | None = None
-    engine: Any | None = None
-    agent: Any | None = None
-    session_manager: Any | None = None
-    resource_loader: Any | None = None
-    extension_runtime: Any | None = None
-    hooks: Any | None = None
-    subagent_manager: Any | None = None
-    workflow_manager: Any | None = None
-    bus: Any | None = None
-    cron: Any | None = None
-    mcp_manager: Any | None = None
-    memory_manager: Any | None = None
-    computer: Any | None = None
-    process_manager: Any | None = None
-    settings_manager: Any | None = None
-    auth_channel_manager: Any | None = None
-    acp_auth_manager: Any | None = None
-    acp_session_manager: Any | None = None
-    team_manager: Any | None = None
+    llm: LLM | None = None
+    engine: Engine | None = None
+    agent: Agent | None = None
+    session_manager: SessionManager | None = None
+    resource_loader: ResourceLoader | None = None
+    extension_runtime: ExtensionRuntime | None = None
+    hooks: Hooks | None = None
+    subagent_manager: SubagentManager | None = None
+    workflow_manager: WorkflowManager | None = None
+    bus: Bus | None = None
+    cron: CronScheduler | None = None
+    mcp_manager: MCPManager | None = None
+    memory_manager: MemoryManager | None = None
+    desktop: Desktop | None = None
+    browser: Browser | None = None
+    process_manager: ProcessManager | None = None
+    settings_manager: SettingsManager | None = None
+    auth_channel_manager: ChannelAuthManager | None = None
+    acp_auth_manager: ACPAuthManager | None = None
+    acp_session_manager: ACPSessionManager | None = None
+    team_manager: TeamManager | None = None
     spawn_depth: int = 0
 
 

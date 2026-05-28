@@ -166,7 +166,7 @@ class ComputerTool(Tool):
 
             # Guard: require an explicit open before any desktop interaction.
             # Context-injected desktops (e.g. tests, subagents) bypass this check.
-            if not self.is_open and (context is None or context.computer is None):
+            if not self.is_open and (context is None or context.desktop is None):
                 return ToolResult.error(
                     id=invocation.id,
                     content="Desktop is not accessible. Use action='open' to enable desktop control first.",
@@ -230,8 +230,8 @@ class ComputerTool(Tool):
             return None
 
     def _get_desktop(self, context: ToolContext | None, params: ComputerSchema) -> Desktop:
-        if context is not None and context.computer is not None:
-            return context.computer
+        if context is not None and context.desktop is not None:
+            return context.desktop
         if self._desktop is None:
             from operator_use import computer
 
