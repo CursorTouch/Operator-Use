@@ -224,30 +224,23 @@ class Agent(ExtensionContext):
         These are never persisted to session history — the engine appends them
         to ctx_messages only for the current LLM call.
 
-        Controlled by settings:
-          use_screenshot   — capture and embed a screenshot in the message
-          use_accessibility — include tree/DOM state text (desktop) or DOM state (browser)
-          App/window/tab data is always included when the tool is open.
+        use_screenshot / use_accessibility are baked into the desktop/browser
+        instances at construction time. get_state(as_bytes=True) returns what
+        those flags allow; None screenshot means use_screenshot=False.
         """
-        from operator_use.settings.types import ComputerUseSettings, BrowserUseSettings
         msgs: list[LLMMessage] = []
         ctx = self._engine.tool_context
-        sm = ctx.settings_manager
 
         # ── Desktop ──────────────────────────────────────────────────────────
         try:
             desktop = ctx.desktop
             if desktop is not None and desktop.is_open:
-                cu = (sm.settings.computer_use if sm else None) or ComputerUseSettings()
-
-                state = desktop.get_state(as_bytes=False)
-                content=f"[Desktop state]\n{state.to_string()}"
-                if cu.use_screenshot and cu.use_accessibility and state.screenshot:
+                state = desktop.get_state(as_bytes=True)
+                content = f"[Desktop state]\n{state.to_string()}"
+                if state.screenshot:
                     msgs.append(UserMessage.with_images(images=[state.screenshot], content=content))
-                elif cu.use_accessibility:
-                    msgs.append(UserMessage.text(content=content))
-                elif cu.use_screenshot and state.screenshot:
-                    msgs.append(UserMessage.with_images(images=[state.screenshot], content=content))
+                else:
+                    msgs.append(UserMessage.text(content))
         except Exception:
             pass
 
@@ -255,16 +248,12 @@ class Agent(ExtensionContext):
         try:
             browser = ctx.browser
             if browser is not None and browser._client is not None:
-                bu = (sm.settings.browser_use if sm else None) or BrowserUseSettings()
-                
-                state = await browser.get_state(as_bytes=False)
-                content=f"[Browser state]\n{state.to_string()}"
-                if bu.use_screenshot and bu.use_accessibility and state.screenshot:
+                state = await browser.get_state(as_bytes=True)
+                content = f"[Browser state]\n{state.to_string()}"
+                if state.screenshot:
                     msgs.append(UserMessage.with_images(images=[state.screenshot], content=content))
-                elif bu.use_accessibility:
-                    msgs.append(UserMessage.text(content=content))
-                elif bu.use_screenshot and state.screenshot:
-                    msgs.append(UserMessage.with_images(images=[state.screenshot], content=content))
+                else:
+                    msgs.append(UserMessage.text(content))
         except Exception:
             pass
 
