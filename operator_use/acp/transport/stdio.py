@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class ACPStdioServer:
     """
-    Serves OperatorACPAgent over stdio for IDE/CLI integrations.
+    Serves ACPAgent over stdio for IDE/CLI integrations.
 
     Intended for Zed, Claude Code CLI, Codex CLI, and same-machine
     inter-agent communication via subprocess.  Stdout is used exclusively
@@ -26,8 +26,10 @@ class ACPStdioServer:
     """
 
     def __init__(self, runtime: Runtime) -> None:
-        from operator_use.acp.server import OperatorACPAgent
-        self._agent = OperatorACPAgent(runtime)
+        from operator_use.acp.server import ACPAgent
+        profile = getattr(getattr(runtime, '_config', None), 'profile', None)
+        acp_sessions_dir = profile.acp_sessions_dir if profile is not None else None
+        self._agent = ACPAgent(runtime, acp_sessions_dir=acp_sessions_dir)
 
     async def serve(self) -> None:
         """Run until stdin closes."""

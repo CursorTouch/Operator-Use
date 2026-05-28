@@ -17,6 +17,7 @@ from operator_use.extension.types import (
 )
 from operator_use.tool.types import ToolContext
 from operator_use.team.manager import TeamManager
+from operator_use.peer.manager import PeerSessionManager
 from operator_use.settings.paths import get_config_dir
 from operator_use.agent.profile import AgentProfile
 
@@ -72,6 +73,8 @@ class Runtime:
         self._agent_profiles: dict[str, AgentProfile] = {
             p.name: p for p in context.resource_loader.get_agent_profiles()
         }
+        # Registry of built peer agents — populated lazily or by GatewayManager.
+        self._peer_agents: dict[str, Agent] = {}
         self._configure_context(context)
 
     def _create_workflow_manager(self, context: RuntimeContext) -> WorkflowManager:
@@ -162,6 +165,8 @@ class Runtime:
             auth_channel_manager=context.auth_channel_manager,
             acp_auth_manager=context.acp_auth_manager,
             acp_session_manager=context.acp_session_manager,
+            peer_session_manager=context.peer_session_manager,
+            peer_agents=self._peer_agents,
             team_manager=self.team_manager,
         )
         context.engine.tool_context = tool_ctx
@@ -471,6 +476,102 @@ class Runtime:
 
         return agent
 
+    def create_acp_session_agent(self, sessions_dir: Path, session_id: str) -> Agent:
+        """
+        Create a persistent agent for a server-side ACP session.
+
+        Unlike create_session_agent() which is always in-memory, this agent writes
+        conversation history to *sessions_dir*/<session_id>.jsonl so sessions survive
+        restarts.  If the file already exists the conversation is resumed from it.
+
+        The session_id is the ACP-level UUID assigned by new_session() — it becomes
+        the filename, giving a deterministic sessions_dir/<session_id>.jsonl mapping.
+        """
+        from operator_use.hooks.service import Hooks
+        from operator_use.engine.service import Engine
+        from operator_use.engine.types import Options
+        from operator_use.session.manager import SessionManager
+        from operator_use.extension.runtime import ExtensionRuntime
+        from operator_use.runtime.types import _DeferredExtensionRuntime
+
+        hooks = Hooks()
+
+        engine = Engine(
+            llm=self._context.llm,
+            tools=list(self._context.engine.tools),
+            options=Options(),
+            hooks=hooks,
+        )
+
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        session_file = sessions_dir / f'{session_id}.jsonl'
+        session_manager = SessionManager(
+            cwd=self._context.session_manager.cwd,
+            session_dir=sessions_dir,
+            session_file=session_file,
+            persist=True,
+        )
+
+        load_result = self._context.resource_loader.get_extensions()
+        deferred = _DeferredExtensionRuntime(load_result)
+
+        if self.mcp_manager is not None:
+            from operator_use.builtins.tools.mcp import MCPTool
+            engine.add_tool(MCPTool(
+                manager=self.mcp_manager,
+                engine=engine,
+                agent_id=str(id(engine)),
+            ))
+
+        from operator_use.builtins.tools.acp_agent import ACPAgentTool
+        if self._context.acp_session_manager is not None and self._context.acp_auth_manager is not None:
+            engine.add_tool(ACPAgentTool(
+                registry=self._context.settings_manager.get_acp_agents() if self._context.settings_manager else [],
+                session_manager=self._context.acp_session_manager,
+                auth_manager=self._context.acp_auth_manager,
+                bus=self.bus,
+                agent=None,
+                settings_manager=self._context.settings_manager,
+            ))
+
+        agent = Agent(
+            engine=engine,
+            session_manager=session_manager,
+            resource_loader=self._context.resource_loader,
+            extension_runtime=deferred,  # type: ignore[arg-type]
+            compaction=self._context.compaction,
+            config=self._context.agent._config,
+        )
+
+        real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
+        agent._extensions = real_ext
+        agent._runtime = self
+        engine.tool_context = ToolContext(
+            llm=self._context.llm,
+            engine=engine,
+            agent=agent,
+            session_manager=session_manager,
+            resource_loader=self._context.resource_loader,
+            extension_runtime=real_ext,
+            hooks=hooks,
+            subagent_manager=self.subagent_manager,
+            workflow_manager=self.workflow_manager,
+            bus=self.bus,
+            cron=self._context.cron,
+            mcp_manager=self.mcp_manager,
+            memory_manager=self._context.memory_manager,
+            desktop=self._create_desktop_instance(self._context),
+            browser=self._create_browser_instance(self._context),
+            process_manager=self._context.process_manager,
+            settings_manager=self._context.settings_manager,
+            auth_channel_manager=self._context.auth_channel_manager,
+            acp_auth_manager=self._context.acp_auth_manager,
+            acp_session_manager=self._context.acp_session_manager,
+            team_manager=self.team_manager,
+        )
+
+        return agent
+
     async def create_profile_agent(self, profile: AgentProfile) -> Agent:
         """
         Create a persistent agent for a named profile.
@@ -602,6 +703,8 @@ class Runtime:
             auth_channel_manager=self._context.auth_channel_manager,
             acp_auth_manager=self._context.acp_auth_manager,
             acp_session_manager=self._context.acp_session_manager,
+            peer_session_manager=PeerSessionManager(profile.peer_dir),
+            peer_agents=self._peer_agents,
             team_manager=self.team_manager,
         )
 
@@ -618,6 +721,27 @@ class Runtime:
 
     def get_agent_profiles(self) -> dict[str, AgentProfile]:
         return self._agent_profiles
+
+    # ── Peer agent registry ───────────────────────────────────────────────────
+
+    def register_peer_agent(self, name: str, agent: Agent) -> None:
+        """Register a pre-built profile agent so peers can call it directly."""
+        self._peer_agents[name] = agent
+
+    async def get_or_build_peer_agent(self, name: str) -> Agent:
+        """Return the live peer agent for *name*, building it lazily if needed.
+
+        Called by the peer_agent tool.  GatewayManager pre-populates the
+        registry at startup; in REPL mode agents are built on first access.
+        """
+        if name in self._peer_agents:
+            return self._peer_agents[name]
+        profile = self._agent_profiles.get(name)
+        if profile is None:
+            raise ValueError(f"No profile named '{name}'. Known profiles: {list(self._agent_profiles)}")
+        agent = await self.create_profile_agent(profile)
+        self._peer_agents[name] = agent
+        return agent
 
     def get_active_agent_profile(self) -> AgentProfile | None:
         agent = self._context.agent

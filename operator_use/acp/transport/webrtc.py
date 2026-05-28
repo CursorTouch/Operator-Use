@@ -15,7 +15,7 @@ from aiortc.sdp import candidate_from_sdp
 
 if TYPE_CHECKING:
     from operator_use.runtime.service import Runtime
-    from operator_use.acp.server import OperatorACPAgent
+    from operator_use.acp.server import ACPAgent
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ async def _forward_reader_to_channel(
 
 class ACPWebRTCServer:
     """
-    Serves OperatorACPAgent over a WebRTC DataChannel.
+    Serves ACPAgent over a WebRTC DataChannel.
 
     PeerJS is used only as signaling. Once SDP exchange completes, ACP JSON-RPC
     lines flow peer-to-peer through the DataChannel using Zed's ACP connection
@@ -164,7 +164,7 @@ class ACPWebRTCServer:
 
     def __init__(
         self,
-        agent: OperatorACPAgent,
+        agent: ACPAgent,
         room: str,
         *,
         signal_url: str = DEFAULT_SIGNAL_URL,
@@ -281,9 +281,11 @@ class ACPWebRTCServer:
 
 async def serve_webrtc(runtime: Runtime, room: str, *, signal_url: str = DEFAULT_SIGNAL_URL) -> None:
     """Create ACPWebRTCServer and serve until the process is interrupted."""
-    from operator_use.acp.server import OperatorACPAgent
+    from operator_use.acp.server import ACPAgent
 
-    agent = OperatorACPAgent(runtime)
+    _profile = getattr(getattr(runtime, '_config', None), 'profile', None)
+    acp_sessions_dir = _profile.acp_sessions_dir if _profile is not None else None
+    agent = ACPAgent(runtime, acp_sessions_dir=acp_sessions_dir)
     server = ACPWebRTCServer(agent, room, signal_url=signal_url)
     try:
         await server.start()

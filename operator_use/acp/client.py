@@ -537,19 +537,39 @@ class ACPClient:
     # ── Session management ────────────────────────────────────────────────────
 
     @asynccontextmanager
-    async def session(self, cwd: str | None = None) -> AsyncIterator[str]:
-        """Async context manager that creates a session and yields the session_id."""
+    async def session(
+        self,
+        cwd: str | None = None,
+        resume_id: str | None = None,
+        keep_alive: bool = False,
+    ) -> AsyncIterator[str]:
+        """Async context manager that creates (or resumes) a session and yields the session_id.
+
+        Args:
+            cwd:        Working directory reported to the remote agent.
+            resume_id:  If given, resume this existing session via ``load_session``
+                        instead of creating a new one.
+            keep_alive: If True, skip ``close_session`` on exit so the remote
+                        server keeps the session alive for future ``resume_id`` calls.
+                        Useful for HTTP/WebRTC agents where the server is long-running.
+        """
         import os as _os
-        resp = await self._conn.new_session(cwd=cwd or _os.getcwd())
-        session_id = resp.session_id
+        _cwd = cwd or _os.getcwd()
+        if resume_id:
+            await self._conn.load_session(cwd=_cwd, session_id=resume_id)
+            session_id = resume_id
+        else:
+            resp = await self._conn.new_session(cwd=_cwd)
+            session_id = resp.session_id
         self._session_id = session_id
         try:
             yield session_id
         finally:
-            try:
-                await self._conn.close_session(session_id=session_id)
-            except Exception:
-                pass
+            if not keep_alive:
+                try:
+                    await self._conn.close_session(session_id=session_id)
+                except Exception:
+                    pass
             if self._session_id == session_id:
                 self._session_id = None
 

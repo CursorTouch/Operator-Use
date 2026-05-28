@@ -90,6 +90,9 @@ class GatewayManager:
             try:
                 agent = await self._runtime.create_profile_agent(profile)
                 self.gateway.register_profile_agent(profile_name, agent)
+                # Also register in the runtime's peer registry so peer agents
+                # can call each other via the peer_agent tool without rebuilding.
+                self._runtime.register_peer_agent(profile_name, agent)
             except Exception as exc:
                 logger.error('Failed to create agent for profile %r: %s', profile_name, exc)
                 continue

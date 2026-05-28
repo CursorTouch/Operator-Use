@@ -1,11 +1,11 @@
 try:
-    from operator_use.acp.server import OperatorACPAgent
+    from operator_use.acp.server import ACPAgent
     from operator_use.acp.client import OperatorACPClient, ACPClient
     from operator_use.acp.transport.stdio import serve_stdio
     from operator_use.acp.utils import text_from_content_blocks, content_blocks_from_text
 
     __all__ = [
-        'OperatorACPAgent',
+        'ACPAgent',
         'OperatorACPClient',
         'ACPClient',
         'serve_stdio',

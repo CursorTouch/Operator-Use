@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from acp import (
@@ -40,20 +41,23 @@ _AGENT_NAME = 'Operator'
 _AGENT_VERSION = '1.0.0'
 
 
-class OperatorACPAgent:
+class ACPAgent:
     """
     ACP agent backed by the Operator runtime.
 
-    One instance handles all ACP sessions. Each session/new call creates
-    an isolated Agent via runtime.create_session_agent() keyed by session_id.
+    One instance handles all ACP sessions. Each session creates an isolated
+    Agent keyed by session_id. When *acp_sessions_dir* is provided, session
+    history is written to <acp_sessions_dir>/<session_id>.jsonl so conversations
+    survive restarts (server-side persistence).
 
     Usage:
-        agent = OperatorACPAgent(runtime)
+        agent = ACPAgent(runtime, acp_sessions_dir=profile.acp_sessions_dir)
         await acp.run_agent(agent)   # serves over stdio until stdin closes
     """
 
-    def __init__(self, runtime: Runtime) -> None:
+    def __init__(self, runtime: Runtime, acp_sessions_dir: Path | None = None) -> None:
         self._runtime = runtime
+        self._acp_sessions_dir = acp_sessions_dir
         self._sessions: dict[str, Agent] = {}
         self._connection: Any = None  # AgentSideConnection — set via on_connect
 
@@ -87,6 +91,12 @@ class OperatorACPAgent:
         # Token / provenance validation is handled at the transport layer.
         return AuthenticateResponse()
 
+    def _make_agent(self, session_id: str) -> Agent:
+        """Create a session agent — persistent if acp_sessions_dir is set, otherwise in-memory."""
+        if self._acp_sessions_dir is not None:
+            return self._runtime.create_acp_session_agent(self._acp_sessions_dir, session_id)
+        return self._runtime.create_session_agent()
+
     async def new_session(
         self,
         cwd: str,
@@ -96,12 +106,12 @@ class OperatorACPAgent:
     ) -> NewSessionResponse:
         session_id = str(uuid.uuid4())
         try:
-            agent = self._runtime.create_session_agent()
+            agent = self._make_agent(session_id)
         except Exception:
             logger.exception('ACP: failed to create agent for new session %s', session_id)
             raise
         self._sessions[session_id] = agent
-        logger.info('ACP: new session %s', session_id)
+        logger.info('ACP: new session %s (persist=%s)', session_id, self._acp_sessions_dir is not None)
         return NewSessionResponse(session_id=session_id)
 
     async def load_session(
@@ -114,11 +124,12 @@ class OperatorACPAgent:
     ) -> LoadSessionResponse:
         if session_id not in self._sessions:
             try:
-                self._sessions[session_id] = self._runtime.create_session_agent()
+                agent = self._make_agent(session_id)
             except Exception:
                 logger.exception('ACP: failed to create agent for resumed session %s', session_id)
                 raise
-            logger.info('ACP: resumed session %s (new agent)', session_id)
+            self._sessions[session_id] = agent
+            logger.info('ACP: loaded session %s', session_id)
         return LoadSessionResponse()
 
     async def prompt(
@@ -137,7 +148,7 @@ class OperatorACPAgent:
 
         agent = self._sessions.get(session_id)
         if agent is None:
-            agent = self._runtime.create_session_agent()
+            agent = self._make_agent(session_id)
             self._sessions[session_id] = agent
 
         text = text_from_content_blocks(prompt)
@@ -207,9 +218,13 @@ class OperatorACPAgent:
         mcp_servers: Any = None,
         **kwargs: Any,
     ) -> ForkSessionResponse:
+        # Fork creates a brand-new independent session (no history copy).
         new_id = str(uuid.uuid4())
-        source = self._sessions.get(session_id)
-        agent = source if source is not None else self._runtime.create_session_agent()
+        try:
+            agent = self._make_agent(new_id)
+        except Exception:
+            logger.exception('ACP: failed to create agent for fork %s → %s', session_id, new_id)
+            raise
         self._sessions[new_id] = agent
         logger.info('ACP: forked session %s → %s', session_id, new_id)
         return ForkSessionResponse(session_id=new_id)
@@ -224,11 +239,12 @@ class OperatorACPAgent:
     ) -> ResumeSessionResponse:
         if session_id not in self._sessions:
             try:
-                self._sessions[session_id] = self._runtime.create_session_agent()
+                agent = self._make_agent(session_id)
             except Exception:
                 logger.exception('ACP: failed to create agent for resumed session %s', session_id)
                 raise
-            logger.info('ACP: resume_session created new agent for %s', session_id)
+            self._sessions[session_id] = agent
+            logger.info('ACP: resume_session loaded %s', session_id)
         return ResumeSessionResponse()
 
     async def cancel(self, session_id: str, **kwargs: Any) -> None:

@@ -38,6 +38,7 @@ from operator_use.memory.provider.registry import MemoryProviderRegistry
 from operator_use.memory.api.registry import MemoryAPIRegistry
 from operator_use.memory.types import MemoryOptions, MemoryRuntimeContext
 from operator_use.acp.manager import ACPSessionManager
+from operator_use.peer.manager import PeerSessionManager
 from operator_use.process.manager import ProcessManager
 from operator_use.settings.paths import (
     get_config_dir, get_acp_auth_path, get_packages_dir,
@@ -110,6 +111,7 @@ class RuntimeContext:
         memory_manager: MemoryManager | None = None,
         acp_auth_manager: ACPAuthManager | None = None,
         acp_session_manager: ACPSessionManager | None = None,
+        peer_session_manager: PeerSessionManager | None = None,
         process_manager: ProcessManager | None = None,
     ) -> None:
         self.agent = agent
@@ -128,6 +130,7 @@ class RuntimeContext:
         self.memory_manager: MemoryManager | None = memory_manager
         self.acp_auth_manager: ACPAuthManager | None = acp_auth_manager
         self.acp_session_manager: ACPSessionManager | None = acp_session_manager
+        self.peer_session_manager: PeerSessionManager | None = peer_session_manager
         self.process_manager: ProcessManager | None = process_manager
 
     @classmethod
@@ -366,6 +369,7 @@ class RuntimeContext:
         auth_channel_manager = ChannelAuthManager(_ch_path) if _ch_path else None
         acp_auth_manager = ACPAuthManager(get_acp_auth_path())
         acp_session_manager = ACPSessionManager(effective_profile.acp_dir)
+        peer_session_manager = PeerSessionManager(effective_profile.peer_dir)
 
         # ── Compaction: inject session_id_provider and extra tools ───────────
         if hasattr(compaction, '_session_id_provider') and compaction._session_id_provider is None:  # type: ignore[union-attr]
@@ -507,6 +511,7 @@ class RuntimeContext:
             memory_manager=memory_manager,
             acp_auth_manager=acp_auth_manager,
             acp_session_manager=acp_session_manager,
+            peer_session_manager=peer_session_manager,
             process_manager=process_manager,
         )
 

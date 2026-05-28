@@ -12,14 +12,14 @@ from aiohttp import web
 if TYPE_CHECKING:
     from operator_use.runtime.service import Runtime
     from operator_use.acp.device_flow import DeviceFlowManager
-    from operator_use.acp.server import OperatorACPAgent
+    from operator_use.acp.server import ACPAgent
 
 logger = logging.getLogger(__name__)
 
 
 class ACPHttpServer:
     """
-    Serves OperatorACPAgent over HTTP so remote machines can connect.
+    Serves ACPAgent over HTTP so remote machines can connect.
 
     Endpoints:
         GET  /acp/events              — SSE stream (server→client messages)
@@ -34,7 +34,7 @@ class ACPHttpServer:
         Tokens are issued by the device flow and validated by DeviceFlowManager.
     """
 
-    def __init__(self, agent: OperatorACPAgent, device_flow: DeviceFlowManager) -> None:
+    def __init__(self, agent: ACPAgent, device_flow: DeviceFlowManager) -> None:
         self._agent = agent
         self._device_flow = device_flow
         # conn_id → bridge_writer (POST /rpc writes incoming messages here)
@@ -207,11 +207,12 @@ class ACPHttpServer:
 
 async def serve_http(runtime: Runtime, host: str = '0.0.0.0', port: int = 8080) -> None:
     """Convenience wrapper — create ACPHttpServer and serve."""
-    from operator_use.acp.server import OperatorACPAgent
+    from operator_use.acp.server import ACPAgent
     from operator_use.acp.device_flow import DeviceFlowManager
-    agent = OperatorACPAgent(runtime)
-    _profile = getattr(runtime, '_context', None) and runtime._context.resource_loader._active_profile
+    _profile = getattr(getattr(runtime, '_config', None), 'profile', None)
     tokens_path = _profile.acp_tokens_path if _profile else Path.home() / '.operator' / 'acp' / 'tokens.json'
+    acp_sessions_dir = _profile.acp_sessions_dir if _profile is not None else None
+    agent = ACPAgent(runtime, acp_sessions_dir=acp_sessions_dir)
     tokens_path.parent.mkdir(parents=True, exist_ok=True)
     device_flow = DeviceFlowManager(tokens_path)
     http_server = ACPHttpServer(agent, device_flow)

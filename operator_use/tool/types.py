@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from operator_use.auth.channels import ChannelAuthManager
     from operator_use.auth.acp import ACPAuthManager
     from operator_use.acp.manager import ACPSessionManager
+    from operator_use.peer.manager import PeerSessionManager
     from operator_use.team.manager import TeamManager
 
 
@@ -124,6 +125,8 @@ class ToolContext:
     auth_channel_manager: ChannelAuthManager | None = None
     acp_auth_manager: ACPAuthManager | None = None
     acp_session_manager: ACPSessionManager | None = None
+    peer_session_manager: PeerSessionManager | None = None
+    peer_agents: dict[str, Agent] | None = None
     team_manager: TeamManager | None = None
     spawn_depth: int = 0
 

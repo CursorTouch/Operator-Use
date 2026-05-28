@@ -149,6 +149,11 @@ class AgentProfile(BaseModel):
         return self.profile_dir / 'acp' / 'tokens.json'
 
     @property
+    def acp_sessions_dir(self) -> Path:
+        """Server-side ACP session storage — conversations this agent received."""
+        return self.profile_dir / 'acp' / 'sessions'
+
+    @property
     def workflows_dir(self) -> Path:
         return self.profile_dir / 'workflows'
 
@@ -163,6 +168,26 @@ class AgentProfile(BaseModel):
     @property
     def auth_channels_path(self) -> Path:
         return self.profile_dir / 'auth' / 'channels.json'
+
+    # ── Peer-to-peer paths ────────────────────────────────────────────────────
+
+    @property
+    def peer_dir(self) -> Path:
+        """Root peer directory — holds bookmarks and session history."""
+        return self.profile_dir / 'peer'
+
+    def peer_bookmark_path(self, profile_name: str) -> Path:
+        """Bookmark file for a specific peer profile."""
+        return self.peer_dir / f'{profile_name}.json'
+
+    def peer_sessions_dir(self, other_profile: str) -> Path:
+        """Session directory for conversations with *other_profile*.
+
+        Named from this profile's perspective:
+          profiles/alice/peer/sessions/bob/  — alice's sessions talking to bob
+          profiles/bob/peer/sessions/alice/  — bob's sessions talking to alice
+        """
+        return self.peer_dir / 'sessions' / other_profile
 
 
 def create_ephemeral_profile() -> AgentProfile:
