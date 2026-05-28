@@ -69,6 +69,7 @@ AfterToolCallCallback = Callable[[ToolInvocation, ToolResult, Optional[AbortSign
 BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Awaitable[Optional[ToolInvocation | ToolResultContent]]]
 GetFollowUpMessagesCallback = Callable[[], list[LLMMessage]]
 GetSteeringMessagesCallback = Callable[[], list[LLMMessage]]
+GetEphemeralMessagesCallback = Callable[[], Awaitable[list[LLMMessage]]]
 OnEventCallback = Callable[['AgentEvent'], Awaitable[None]]
 ShouldSkipToolCallsCallback = Callable[[ToolCallContent], ToolResultContent]
 ShouldStopAfterTurnCallback = Callable[[AssistantMessage, list[ToolResultContent]], bool]
@@ -103,6 +104,7 @@ class Options:
     should_stop_after_turn: Optional[ShouldStopAfterTurnCallback] = None
     should_skip_tool_calls: Optional[ShouldSkipToolCallsCallback] = None
     transform_context: Optional[TransformContextCallback] = None
+    get_ephemeral_messages: Optional[GetEphemeralMessagesCallback] = None
 
 
 @dataclass

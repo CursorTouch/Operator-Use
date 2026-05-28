@@ -314,6 +314,13 @@ class Engine:
 
                 ctx_messages = list(messages)
 
+                if self.options.get_ephemeral_messages is not None:
+                    try:
+                        ephemeral = await self.options.get_ephemeral_messages()
+                        ctx_messages = ctx_messages + ephemeral
+                    except Exception:
+                        pass
+
                 if self.options.transform_context is not None:
                     ctx_messages = self.options.transform_context(ctx_messages, signal)
 

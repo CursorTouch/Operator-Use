@@ -16,7 +16,7 @@ from operator_use.extension.types import (
     ContextEvent, ContextEventResult,
     SavePointEvent, SettledEvent, MessageEndEvent,
 )
-from operator_use.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent
+from operator_use.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent, LLMMessage
 from operator_use.message.utils import strip_unusable_trailing_assistant
 from operator_use.tool.types import ToolInvocation, ToolResult
 
@@ -77,6 +77,8 @@ class Agent(ExtensionContext):
             try:
                 from operator_use.settings.manager import SettingsManager
                 _sm = SettingsManager.get_instance()
+                if _sm is None:
+                    return engine.llm
                 _aux = _sm.get_auxiliary_task("goal_judge")
                 if _aux.model or _aux.provider:
                     from operator_use.inference.api.text.service import LLM
@@ -97,6 +99,7 @@ class Agent(ExtensionContext):
         self._engine.options.before_tool_call = self._before_tool_call
         self._engine.options.after_tool_call = self._after_tool_call
         self._engine.options.on_event = self._on_engine_event
+        self._engine.options.get_ephemeral_messages = self._get_ephemeral_messages
 
     # -------------------------------------------------------------------------
     # Hooks
@@ -210,6 +213,46 @@ class Agent(ExtensionContext):
     async def switch_session(self, session_file: Path) -> None:
         if self._runtime is not None:
             await self._runtime.resume_session(session_file)
+
+    # -------------------------------------------------------------------------
+    # Ephemeral context injection
+    # -------------------------------------------------------------------------
+
+    async def _get_ephemeral_messages(self) -> list[LLMMessage]:
+        """Build ephemeral messages injected into the LLM context at each turn start.
+
+        These are never persisted to session history — the engine appends them
+        to ctx_messages only for the current LLM call.
+        """
+        msgs: list[LLMMessage] = []
+        ctx = self._engine.tool_context
+        try:
+            desktop = ctx.desktop
+            if desktop is not None and desktop.is_open:
+                state = desktop.get_state()
+                content=f"[Desktop state]\n{state.to_string()}"
+                if screenshot:=state.screenshot:
+                    msg=UserMessage.with_images(images=[screenshot], content=content)
+                else:
+                    msg=UserMessage.text(content)
+                msgs.append(msg)
+        except Exception:
+            pass
+
+        try:
+            browser = ctx.browser
+            if browser is not None and browser._client is not None:
+                state = await browser.get_state()
+                content=f"[Browser state]\n{state.to_string()}"
+                if screenshot:=state.screenshot:
+                    msg=UserMessage.with_images(images=[screenshot], content=content)
+                else:
+                    msg=UserMessage.text(content)
+                msgs.append(msg)
+        except Exception:
+            pass
+        
+        return msgs
 
     # -------------------------------------------------------------------------
     # Engine event fan-out (agent is the single funnel)

@@ -42,6 +42,18 @@ _PYDANTIC_FIELD_TYPES: dict[str, type] = {
 
 
 class SettingsManager:
+    _instance: Optional["SettingsManager"] = None
+
+    @classmethod
+    def get_instance(cls) -> Optional["SettingsManager"]:
+        """Return the process-wide singleton, or None if not yet registered."""
+        return cls._instance
+
+    @classmethod
+    def set_instance(cls, manager: "SettingsManager") -> None:
+        """Register the process-wide singleton (called once at runtime startup)."""
+        cls._instance = manager
+
     def __init__(
         self,
         storage: SettingsStorage,

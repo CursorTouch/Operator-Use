@@ -146,6 +146,7 @@ class RuntimeContext:
         # ── Settings ──────────────────────────────────────────────────────────
         if settings_manager is None:
             settings_manager = SettingsManager.create(cwd, config_dir)
+        SettingsManager.set_instance(settings_manager)
 
         # ── Resource loader ───────────────────────────────────────────────────
         # Extensions must load before LLM so they can register custom providers.
