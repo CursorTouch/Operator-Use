@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from operator_use.subagent.types import SubagentStatus
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
@@ -44,12 +44,13 @@ class SubAgentSchema(BaseModel):
             'The task is deferred until all dependencies finish.'
         ),
     )
-    profile: str = Field(
+    profile: str | None = Field(
+        default=None,
         description=(
             'Named subagent profile to use (create action). Required unless fork=true. '
             'NEVER guess a name — call action="profiles" first to get the exact list of available profiles. '
             'Providing an unknown profile name is an error.'
-        )
+        ),
     )
     fork: bool = Field(
         default=False,
@@ -60,6 +61,15 @@ class SubAgentSchema(BaseModel):
             'Forks cannot spawn further forks. Use when the task needs full conversation context.'
         ),
     )
+
+    @model_validator(mode='after')
+    def _check_profile(self) -> 'SubAgentSchema':
+        if self.action == 'create' and not self.fork and not self.profile:
+            raise ValueError(
+                "'profile' is required for action='create'. "
+                "Call action='profiles' first to see available profile names."
+            )
+        return self
 
 
 def _format_duration(started: datetime, finished: datetime | None) -> str:

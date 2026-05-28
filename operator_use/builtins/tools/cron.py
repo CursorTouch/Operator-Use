@@ -1,7 +1,7 @@
 import json
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
@@ -77,6 +77,20 @@ class CronSchema(BaseModel):
             'If False (default), the job callback runs through the agent loop instead.'
         ),
     )
+
+    @model_validator(mode='after')
+    def _check_fields(self) -> 'CronSchema':
+        if self.action == 'add':
+            missing = [f for f, v in [('name', self.name), ('schedule_mode', self.schedule_mode), ('message', self.message)] if not v]
+            if missing:
+                raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='add'.")
+            if self.schedule_mode == 'every' and not self.interval_ms:
+                raise ValueError("'interval_ms' is required when schedule_mode='every'.")
+            if self.schedule_mode == 'cron' and not self.expr:
+                raise ValueError("'expr' is required when schedule_mode='cron'.")
+        elif self.action in {'update', 'remove', 'enable', 'disable'} and not self.job_id:
+            raise ValueError(f"'job_id' is required for action='{self.action}'.")
+        return self
 
 
 def _format_job(job: CronJob) -> dict:

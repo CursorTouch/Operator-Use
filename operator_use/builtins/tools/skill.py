@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 from operator_use.skill import usage as skill_usage
@@ -59,6 +59,20 @@ class SkillSchema(BaseModel):
         default=False,
         description='Replace all occurrences (patch only). Default replaces the first.',
     )
+
+    @model_validator(mode='after')
+    def _check_fields(self) -> 'SkillSchema':
+        if self.action in {'create', 'edit'} and not self.content:
+            raise ValueError(f"'content' is required for action='{self.action}'.")
+        elif self.action == 'patch' and not self.old_string:
+            raise ValueError("'old_string' is required for action='patch'.")
+        elif self.action == 'write_file':
+            missing = [f for f, v in [('file_path', self.file_path), ('file_content', self.file_content)] if not v]
+            if missing:
+                raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='write_file'.")
+        elif self.action == 'remove_file' and not self.file_path:
+            raise ValueError("'file_path' is required for action='remove_file'.")
+        return self
 
 
 def _validate_name(name: str) -> str | None:

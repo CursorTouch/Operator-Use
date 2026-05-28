@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
@@ -56,6 +56,24 @@ class TeamSchema(BaseModel):
         default=None,
         description='Message text to send to the member\'s inbox (send action).',
     )
+
+    @model_validator(mode='after')
+    def _check_fields(self) -> 'TeamSchema':
+        if self.action == 'list':
+            return self
+        if not self.team_name:
+            raise ValueError(f"'team_name' is required for action='{self.action}'.")
+        if self.action == 'spawn':
+            missing = [f for f, v in [('member_name', self.member_name), ('role', self.role), ('task', self.task)] if not v]
+            if missing:
+                raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='spawn'.")
+        elif self.action == 'send':
+            missing = [f for f, v in [('agent_id', self.agent_id), ('message', self.message)] if not v]
+            if missing:
+                raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='send'.")
+        elif self.action == 'inbox' and not self.agent_id:
+            raise ValueError("'agent_id' is required for action='inbox'.")
+        return self
 
 
 def _fmt_time(epoch: float) -> str:

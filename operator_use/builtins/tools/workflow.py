@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from operator_use.workflow.types import WorkflowStatus
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
@@ -116,6 +116,18 @@ class WorkflowSchema(BaseModel):
         default=None,
         description='Run ID — required for status and cancel actions.',
     )
+
+    @model_validator(mode='after')
+    def _check_fields(self) -> 'WorkflowSchema':
+        if self.action == 'create':
+            missing = [f for f, v in [('name', self.name), ('description', self.description)] if not v]
+            if missing:
+                raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='create'.")
+        elif self.action == 'run' and not self.name:
+            raise ValueError("'name' is required for action='run'.")
+        elif self.action in {'status', 'cancel'} and not self.run_id:
+            raise ValueError(f"'run_id' is required for action='{self.action}'.")
+        return self
 
 
 def _format_duration(started: datetime, finished: datetime | None) -> str:

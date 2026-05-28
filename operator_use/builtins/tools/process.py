@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
@@ -46,6 +46,16 @@ class ProcessSchema(BaseModel):
         default=12000,
         description="Maximum bytes of output to return for action='output'.",
     )
+
+    @model_validator(mode='after')
+    def _check_fields(self) -> 'ProcessSchema':
+        if self.action == 'start':
+            missing = [f for f, v in [('command', self.command), ('description', self.description)] if not v]
+            if missing:
+                raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='start'.")
+        elif self.action in {'get', 'stop', 'output'} and not self.process_id:
+            raise ValueError(f"'process_id' is required for action='{self.action}'.")
+        return self
 
 
 def _format_record(r) -> dict:
