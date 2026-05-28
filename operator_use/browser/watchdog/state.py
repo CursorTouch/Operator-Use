@@ -27,6 +27,17 @@ class StateWatchdog(BaseWatchdog):
         self.session.on_browser_event(NavigationSettledEvent, self._on_navigation_settled)
         self.session.on_browser_event(StateInvalidatedEvent, self._on_state_invalidated)
 
+    async def detach(self) -> None:
+        if self._inflight_capture is not None and not self._inflight_capture.done():
+            self._inflight_capture.cancel()
+            try:
+                await self._inflight_capture
+            except (asyncio.CancelledError, Exception):
+                pass
+        self._inflight_capture = None
+        self._cached_state = None
+        self._dirty = True
+
     def _on_navigation_started(self, payload: NavigationStartedEvent) -> None:
         self._dirty = True
         self._cached_state = None

@@ -87,3 +87,14 @@ class DesktopState:
         headers = ["Name", "Depth", "Status", "Width", "Height", "Handle"]
         rows = [window.to_row() for window in self.windows]
         return tabulate(rows, headers=headers, tablefmt="simple")
+
+    def to_string(self) -> str:
+        """Compact, LLM-friendly summary of the full desktop state."""
+        parts: list[str] = []
+        parts.append(f"Active window:\n{self.active_window_to_string()}")
+        parts.append(f"Open windows:\n{self.windows_to_string()}")
+        if self.tree_state is not None:
+            interactive = self.tree_state.interactive_elements_to_string()
+            if interactive:
+                parts.append(f"Interactive elements:\n{interactive}")
+        return "\n\n".join(parts)

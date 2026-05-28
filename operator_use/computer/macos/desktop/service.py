@@ -15,6 +15,7 @@ import os
 import time
 
 from operator_use.computer.types import Desktop as BaseDesktop
+from operator_use.computer.macos.watchdog.service import WatchDog
 
 logger = logging.getLogger(__name__)
 
@@ -31,18 +32,23 @@ class MacosDesktop(BaseDesktop):
         self.tree = Tree()
         self.desktop_state = None
         self._is_open: bool = False
+        self._watchdog = WatchDog()
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     def open(self) -> None:
-        """Mark the desktop session as active."""
+        """Mark the desktop session as active and start the watchdog."""
         self._is_open = True
+        if not self._watchdog.is_running:
+            self._watchdog.start()
 
     def close(self) -> None:
-        """Mark the desktop session as inactive."""
+        """Mark the desktop session as inactive and stop the watchdog."""
         self._is_open = False
+        if self._watchdog.is_running:
+            self._watchdog.stop()
 
     @property
     def is_open(self) -> bool:

@@ -68,3 +68,14 @@ class DesktopState:
             return "No focused window."
         w = self.active_window
         return f"{w.name} ({w.bundle_id}) - {w.status.value}"
+
+    def to_string(self) -> str:
+        """Compact, LLM-friendly summary of the full desktop state."""
+        parts: list[str] = []
+        parts.append(f"Active window: {self.active_window_to_string()}")
+        parts.append(f"Open windows:\n{self.windows_to_string()}")
+        if self.tree_state is not None:
+            interactive = self.tree_state.interactive_elements_to_string()
+            if interactive:
+                parts.append(f"Interactive elements:\n{interactive}")
+        return "\n\n".join(parts)

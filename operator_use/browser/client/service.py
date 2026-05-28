@@ -383,6 +383,12 @@ class Browser:
             return resp.json()['webSocketDebuggerUrl']
 
     async def close(self):
+        for watchdog in self._watchdogs:
+            try:
+                await watchdog.detach()
+            except Exception:
+                pass
+
         try:
             for target_id, session_id in list(self._sessions.items()):
                 try:
