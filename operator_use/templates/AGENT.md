@@ -1,3 +1,11 @@
+---
+name: example
+description: One-line description of this agent's purpose.
+# model: claude-opus-4-7
+# provider: anthropic
+# tools: read, edit, terminal
+---
+
 # Operation Manual
 
 This is the operation manual — how this agent works, not who it is.

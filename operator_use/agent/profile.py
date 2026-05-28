@@ -243,14 +243,6 @@ def load_agent_profile_from_file(
         model_id = str(front['model']).strip() if front.get('model') else None
         provider = str(front['provider']).strip() if front.get('provider') else None
 
-        if not description:
-            diagnostics.append(ResourceDiagnostic(
-                type='warning',
-                message='description is required',
-                path=str(file_path),
-            ))
-            return None, diagnostics
-
         if len(name) > MAX_NAME_LENGTH:
             diagnostics.append(ResourceDiagnostic(
                 type='warning',
