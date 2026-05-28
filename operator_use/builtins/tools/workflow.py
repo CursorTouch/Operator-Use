@@ -86,7 +86,7 @@ def _validate_workflow_code(code: str) -> str | None:
 
 
 class WorkflowSchema(BaseModel):
-    action: Literal['run', 'list', 'status', 'cancel', 'discover', 'create'] = Field(
+    action: Literal['run', 'list', 'status', 'cancel', 'discover', 'create', 'delete'] = Field(
         description=(
             'Action to perform:\n'
             '  create   — generate a new workflow Python file from a description using the LLM.\n'
@@ -95,7 +95,8 @@ class WorkflowSchema(BaseModel):
             '  list     — show all active and recent workflow runs.\n'
             '  status   — get detailed status and result of a specific run by run_id.\n'
             '  cancel   — stop a running workflow by run_id.\n'
-            '  discover — list all available workflow files with their descriptions.'
+            '  discover — list all available workflow files with their descriptions.\n'
+            '  delete   — permanently delete a workflow file by name.'
         )
     )
     name: str | None = Field(
@@ -124,8 +125,8 @@ class WorkflowSchema(BaseModel):
             missing = [f for f, v in [('name', self.name), ('description', self.description)] if not v]
             if missing:
                 raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='create'.")
-        elif self.action == 'run' and not self.name:
-            raise ValueError("'name' is required for action='run'.")
+        elif self.action in {'run', 'delete'} and not self.name:
+            raise ValueError(f"'name' is required for action='{self.action}'.")
         elif self.action in {'status', 'cancel'} and not self.run_id:
             raise ValueError(f"'run_id' is required for action='{self.action}'.")
         return self
@@ -321,6 +322,18 @@ class WorkflowTool(Tool):
                     if meta.when_to_use:
                         lines.append(f'    when: {meta.when_to_use}')
                 return ToolResult.ok(id=invocation.id, content='\n'.join(lines))
+
+            case 'delete':
+                name = params.get('name')
+                if not name:
+                    return ToolResult.error(id=invocation.id, content="'name' is required for action='delete'.")
+                profile = context.resource_loader._active_profile if context and context.resource_loader else None
+                wf_dir = profile.workflows_dir if profile else Path(tempfile.gettempdir()) / '.operator-workflows'
+                target = wf_dir / f'{name}.py'
+                if not target.exists():
+                    return ToolResult.error(id=invocation.id, content=f"Workflow '{name}' not found at {target}.")
+                target.unlink()
+                return ToolResult.ok(id=invocation.id, content=f"Workflow '{name}' deleted.")
 
             case _:
                 return ToolResult.error(id=invocation.id, content=f"Unknown action '{action}'.")
