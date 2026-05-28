@@ -54,16 +54,6 @@ logger = logging.getLogger(__name__)
 
 _BUILTIN_AGENTS: dict[str, ACPAgentConfig] = {}
 
-def _init_builtins() -> None:
-    import shutil
-    from operator_use.acp.types import ACPAgentConfig as _Cfg
-    if shutil.which('operator'):
-        _BUILTIN_AGENTS['claude'] = _Cfg(
-            name='claude', transport='stdio', command='operator', args=['acp', 'serve']
-        )
-
-_init_builtins()
-
 
 # ── Task registry helpers ─────────────────────────────────────────────────────
 
@@ -149,7 +139,6 @@ class ACPAgentTool(Tool):
                 '  sessions                                — view session bookmarks\n'
                 '  status, task_id=<id>                    — check a detached run\n'
                 '  cancel, task_id=<id>                    — stop a detached run\n\n'
-                'Built-in: claude — spawns an Operator child via "operator acp serve".\n\n'
                 'detached=True (default): result arrives as a follow-up message.\n'
                 'detached=False: blocks and returns the result directly.'
             ),
@@ -165,7 +154,6 @@ class ACPAgentTool(Tool):
         self._auth = auth_manager
         self._bus = bus
         self._agent = agent
-        self._settings_manager = settings_manager
 
     async def execute(
         self,
@@ -409,8 +397,6 @@ class ACPAgentTool(Tool):
                 if not config.command:
                     raise ValueError(f"ACP agent '{config.name}' requires a command for stdio transport")
                 args = list(config.args)
-                if config.name in _BUILTIN_AGENTS and self._settings_manager is not None:
-                    args = self._inject_model_args(args)
                 return ACPClient.stdio(config.command, *args)
             case 'http':
                 if not config.url:
@@ -423,42 +409,6 @@ class ACPAgentTool(Tool):
                 return ACPClient.webrtc(config.url)
             case _:
                 raise ValueError(f"Unknown ACP transport {config.transport!r} for agent '{config.name}'")
-
-    def _inject_model_args(self, args: list[str]) -> list[str]:
-        """Add --provider / --model flags for built-in claude agent."""
-        if self._settings_manager is None:
-            return args
-        provider = self._settings_manager.get_default_provider()
-        model = self._settings_manager.get_default_model()
-        if not provider:
-            try:
-                import json as _json
-                from operator_use.settings.paths import get_providers_auth_path
-                p = get_providers_auth_path()
-                if p.exists():
-                    creds = _json.loads(p.read_text())
-                    if creds:
-                        provider = 'anthropic-claude-code' if 'anthropic-claude-code' in creds else next(iter(creds))
-            except Exception:
-                pass
-        if not model and provider:
-            try:
-                from operator_use.inference.model.registry import ModelRegistry
-                reg = ModelRegistry.from_llm_builtins()
-                for candidates in reg._models.values():
-                    for m in (candidates if isinstance(candidates, list) else [candidates]):
-                        if getattr(m, 'provider', None) == provider:
-                            model = m.id
-                            break
-                    if model:
-                        break
-            except Exception:
-                pass
-        if provider:
-            args += ['--provider', provider]
-        if model:
-            args += ['--model', model]
-        return args
 
     # ── Result delivery ───────────────────────────────────────────────────────
 
