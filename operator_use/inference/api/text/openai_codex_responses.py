@@ -22,7 +22,7 @@ from operator_use.inference.types import (
     normalize_structured_response_format,
 )
 from operator_use.message.types import (
-    BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
+    SystemMessage, UserMessage, AssistantMessage, ToolMessage,
     TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
 from typing import Optional, TYPE_CHECKING
@@ -107,7 +107,7 @@ def _content_to_input(content_items: list, role: str) -> list[dict[str, Any]]:
     return parts
 
 
-def _messages_to_input(messages: list[BaseMessage]) -> tuple[str, list[dict[str, Any]]]:
+def _messages_to_input(messages: list[LLMMessage]) -> tuple[str, list[dict[str, Any]]]:
     instructions = "You are a helpful assistant."
     input_items: list[dict[str, Any]] = []
 

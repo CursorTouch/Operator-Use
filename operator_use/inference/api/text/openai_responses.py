@@ -14,7 +14,7 @@ from operator_use.inference.types import (
     normalize_structured_response_format,
 )
 from operator_use.message.types import (
-    BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
+    SystemMessage, UserMessage, AssistantMessage, ToolMessage,
     TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
 from typing import Optional, TYPE_CHECKING
@@ -65,7 +65,7 @@ def _content_to_openai(content_items: list) -> list[dict[str, Any]]:
 
 
 def _messages_to_input(
-    messages: list[BaseMessage],
+    messages: list[LLMMessage],
 ) -> tuple[str | None, list[dict[str, Any]]]:
     instructions: str | None = None
     input_items: list[dict[str, Any]] = []

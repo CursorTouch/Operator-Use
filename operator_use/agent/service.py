@@ -133,7 +133,7 @@ class Agent(ExtensionContext):
     @property
     def _last_assistant_text(self) -> str:
         for message in reversed(self._engine.state.messages):
-            if getattr(message, 'role', None) and message.role == Role.ASSISTANT:
+            if message.role == Role.ASSISTANT:
                 parts = [
                     c.content for c in getattr(message, 'contents', [])
                     if hasattr(c, 'content') and isinstance(c.content, str)

@@ -33,7 +33,7 @@ from operator_use.engine.types import (
     SteeringQueue,
     AbortSignal,
 )
-from operator_use.message.types import BaseMessage, ToolMessage
+from operator_use.message.types import LLMMessage, ToolMessage
 
 
 class Engine:
@@ -76,7 +76,7 @@ class Engine:
 
         return unsubscribe
 
-    async def steer(self, message: BaseMessage) -> None:
+    async def steer(self, message: LLMMessage) -> None:
         if self.state.steering_queue:    
             await self.state.steering_queue.enqueue(message)
             if self._hooks:
@@ -86,7 +86,7 @@ class Engine:
                     messages=self.state.steering_queue.snapshot(),
                 ))
 
-    async def follow_up(self, message: BaseMessage) -> None:
+    async def follow_up(self, message: LLMMessage) -> None:
         if self.state.follow_up_queue:
             await self.state.follow_up_queue.enqueue(message)
             if self._hooks:
@@ -301,7 +301,7 @@ class Engine:
     # Main loop
     # -------------------------------------------------------------------------
 
-    async def _loop(self, messages: list[BaseMessage], emit: EmitEvent, signal: AbortSignal):
+    async def _loop(self, messages: list[LLMMessage], emit: EmitEvent, signal: AbortSignal):
         await emit(AgentStartEvent())
 
         tool_calls: list[ToolCallContent] = []
@@ -422,7 +422,7 @@ class Engine:
                             break
 
                         # Drain the live steering queue first, then call the options callback.
-                        steering_messages: list[BaseMessage] = []
+                        steering_messages: list[LLMMessage] = []
                         if self.state.steering_queue and not self.state.steering_queue.is_empty():
                             steering_messages.extend(await self.state.steering_queue.dequeue())
                         if self.options.get_steering_messages is not None:
@@ -436,7 +436,7 @@ class Engine:
                         await emit(MessageEndEvent(message=message))
                         messages.append(message)
                         # Drain the live follow-up queue first, then call the options callback.
-                        follow_up_messages: list[BaseMessage] = []
+                        follow_up_messages: list[LLMMessage] = []
                         if self.state.follow_up_queue and not self.state.follow_up_queue.is_empty():
                             follow_up_messages.extend(await self.state.follow_up_queue.dequeue())
                         if self.options.get_follow_up_messages is not None:

@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from operator_use.inference.api.text.service import LLM
-    from operator_use.message.types import BaseMessage
     from operator_use.tool.types import Tool
 
 logger = logging.getLogger(__name__)

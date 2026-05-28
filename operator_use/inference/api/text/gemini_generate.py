@@ -15,7 +15,7 @@ from operator_use.inference.types import (
     normalize_structured_response_format,
 )
 from operator_use.message.types import (
-    BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
+    SystemMessage, UserMessage, AssistantMessage, ToolMessage,
     TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
 from typing import Optional, TYPE_CHECKING
@@ -31,7 +31,7 @@ _STOP_REASON: dict[str, StopReason] = {
 
 
 def _messages_to_gemini(
-    messages: list[BaseMessage],
+    messages: list[LLMMessage],
 ) -> tuple[str | None, list[genai_types.Content]]:
     system: str | None = None
     contents: list[genai_types.Content] = []

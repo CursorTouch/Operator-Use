@@ -8,7 +8,7 @@ from operator_use.inference.provider.types import APIProvider, OAuthProvider
 from operator_use.auth.providers import ProviderAuthManager
 from operator_use.auth.types import OAuthCredential
 from operator_use.inference.types import LLMContext, LLMEvent, LLMOptions
-from operator_use.message.types import BaseMessage, SystemMessage
+from operator_use.message.types import LLMMessage, SystemMessage
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -92,7 +92,7 @@ class LLM:
                 setattr(merged, f.name, value)
         return merged
 
-    def _resolve_messages(self, context: LLMContext) -> list[BaseMessage]:
+    def _resolve_messages(self, context: LLMContext) -> list[LLMMessage]:
         messages = context.messages
         if context.system_prompt:
             if not messages or not isinstance(messages[0], SystemMessage):

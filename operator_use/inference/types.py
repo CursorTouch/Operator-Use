@@ -10,7 +10,7 @@ from copy import deepcopy
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from operator_use.message.types import BaseMessage, TextContent, ThinkingContent, ToolCallContent, ImageContent
+    from operator_use.message.types import LLMMessage, TextContent, ThinkingContent, ToolCallContent, ImageContent
     from operator_use.tool.types import Tool
 
 
@@ -146,7 +146,7 @@ def normalize_structured_response_format(response_format: StructuredResponseInpu
 
 @dataclass
 class LLMContext:
-    messages: list["BaseMessage"]
+    messages: list["LLMMessage"]
     tools: list["Tool"] = field(default_factory=list)
     system_prompt: Optional[str] = None
     response_format: Optional[StructuredResponseInput] = None

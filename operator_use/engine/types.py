@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from operator_use.inference.types import ThinkingLevel
     from operator_use.tool.types import Tool
 
-from operator_use.message.types import BaseMessage, ToolCallContent, ToolResultContent
+from operator_use.message.types import LLMMessage, AssistantMessage, UserMessage, ToolCallContent, ToolResultContent
 from operator_use.tool.types import ToolInvocation, ToolResult, ToolExecutionMode
 
 AbortSignal = asyncio.Event
@@ -67,25 +67,25 @@ AgentEvent = (
 
 AfterToolCallCallback = Callable[[ToolInvocation, ToolResult, Optional[AbortSignal]], Awaitable[Optional[ToolResult]]]
 BeforeToolCallCallback = Callable[[ToolInvocation, Optional[AbortSignal]], Awaitable[Optional[ToolInvocation | ToolResultContent]]]
-GetFollowUpMessagesCallback = Callable[[], list[BaseMessage]]
-GetSteeringMessagesCallback = Callable[[], list[BaseMessage]]
+GetFollowUpMessagesCallback = Callable[[], list[LLMMessage]]
+GetSteeringMessagesCallback = Callable[[], list[LLMMessage]]
 OnEventCallback = Callable[['AgentEvent'], Awaitable[None]]
 ShouldSkipToolCallsCallback = Callable[[ToolCallContent], ToolResultContent]
-ShouldStopAfterTurnCallback = Callable[[BaseMessage,list[ToolResultContent]], bool]
-TransformContextCallback = Callable[[list[BaseMessage], Optional[AbortSignal]], list[BaseMessage]]
+ShouldStopAfterTurnCallback = Callable[[AssistantMessage, list[ToolResultContent]], bool]
+TransformContextCallback = Callable[[list[LLMMessage], Optional[AbortSignal]], list[LLMMessage]]
 
 
 @dataclass
 class AgentState:
     system_prompt: Optional[str] = None
-    messages: list[BaseMessage] = field(default_factory=list)
+    messages: list[LLMMessage] = field(default_factory=list)
     pending_tool_calls: set[str] = field(default_factory=set)
     is_streaming: bool = False
     llm: Optional[LLM] = None
-    streaming_message: Optional[BaseMessage] = None
+    streaming_message: Optional[AssistantMessage] = None
     thinking_level: Optional[ThinkingLevel] = None
     error_message: Optional[str] = None
-    state_message: Optional[BaseMessage] = None
+    state_message: Optional[UserMessage] = None
     tools: list[Tool] = field(default_factory=list)
     follow_up_queue: Optional[FollowupQueue] = None
     steering_queue: Optional[SteeringQueue] = None
@@ -109,21 +109,21 @@ class Options:
 @dataclass
 class FollowupQueue:
     mode: FollowupMode
-    queue: Queue[BaseMessage] = field(default_factory=Queue)
+    queue: Queue[LLMMessage] = field(default_factory=Queue)
 
     def clear(self):
         self.queue = Queue()
 
-    async def enqueue(self, message: BaseMessage):
+    async def enqueue(self, message: LLMMessage):
         await self.queue.put(message)
 
     def is_empty(self) -> bool:
         return self.queue.empty()
 
-    def snapshot(self) -> list[BaseMessage]:
+    def snapshot(self) -> list[LLMMessage]:
         return list(self.queue._queue)  # type: ignore[attr-defined]
 
-    async def dequeue(self) -> list[BaseMessage]:
+    async def dequeue(self) -> list[LLMMessage]:
         messages = []
         if self.mode == FollowupMode.OneAtATime:
             if not self.is_empty():
@@ -137,21 +137,21 @@ class FollowupQueue:
 @dataclass
 class SteeringQueue:
     mode: SteeringMode
-    queue: Queue[BaseMessage] = field(default_factory=Queue)
+    queue: Queue[LLMMessage] = field(default_factory=Queue)
 
     def clear(self):
         self.queue = Queue()
 
-    async def enqueue(self, message: BaseMessage):
+    async def enqueue(self, message: LLMMessage):
         await self.queue.put(message)
 
     def is_empty(self) -> bool:
         return self.queue.empty()
 
-    def snapshot(self) -> list[BaseMessage]:
+    def snapshot(self) -> list[LLMMessage]:
         return list(self.queue._queue)  # type: ignore[attr-defined]
 
-    async def dequeue(self) -> list[BaseMessage]:
+    async def dequeue(self) -> list[LLMMessage]:
         messages = []
         if self.mode == SteeringMode.OneAtATime:
             if not self.is_empty():

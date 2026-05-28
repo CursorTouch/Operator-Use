@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, AsyncIterator
 from operator_use.inference.model.types import Model
 from operator_use.inference.types import LLMContext, LLMEvent, LLMOptions, Transport
-from operator_use.message.types import BaseMessage
+from operator_use.message.types import LLMMessage
 
 
 class BaseLLMAPI(ABC):

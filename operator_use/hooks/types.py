@@ -6,7 +6,7 @@ from typing import Any, Literal, TYPE_CHECKING
 from operator_use.subagent.types import SubagentStatus
 
 if TYPE_CHECKING:
-    from operator_use.message.types import BaseMessage, ToolCallContent, ToolResultContent
+    from operator_use.message.types import ToolCallContent, ToolResultContent
 
 
 # ============================================================================

@@ -26,7 +26,7 @@ from operator_use.inference.types import (
     normalize_structured_response_format,
 )
 from operator_use.message.types import (
-    BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
+    SystemMessage, UserMessage, AssistantMessage, ToolMessage,
     TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
 if TYPE_CHECKING:
@@ -185,7 +185,7 @@ async def resolve_project_id(access_token: str, base_url: str = _DEFAULT_BASE_UR
 
 
 def _messages_to_contents(
-    messages: list[BaseMessage],
+    messages: list[LLMMessage],
 ) -> tuple[str | None, list[dict[str, Any]]]:
     system: str | None = None
     raw: list[dict[str, Any]] = []

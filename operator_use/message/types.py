@@ -4,7 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, TYPE_CHECKING, Any, Optional, Annotated
+from typing import Literal, TYPE_CHECKING, Any, Optional, Annotated, cast
 from enum import Enum
 from PIL import Image
 from operator_use.inference.types import StopReason
@@ -124,7 +124,6 @@ class Role(str, Enum):
 
 @dataclass
 class BaseMessage:
-    role: Role
     contents: list[Content] = field(default_factory=list)
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float = field(default_factory=time.time)
@@ -132,7 +131,7 @@ class BaseMessage:
 
 @dataclass
 class SystemMessage(BaseMessage):
-    role: Literal[Role.SYSTEM] = Role.SYSTEM  # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal[Role.SYSTEM] = field(default=Role.SYSTEM, init=False)
 
     @classmethod
     def text(cls, content: str) -> SystemMessage:
@@ -141,7 +140,7 @@ class SystemMessage(BaseMessage):
 
 @dataclass
 class UserMessage(BaseMessage):
-    role: Literal[Role.USER] = Role.USER  # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal[Role.USER] = field(default=Role.USER, init=False)
 
     @classmethod
     def text(cls, content: str) -> UserMessage:
@@ -158,7 +157,7 @@ class UserMessage(BaseMessage):
 
 @dataclass
 class AssistantMessage(BaseMessage):
-    role: Literal[Role.ASSISTANT] = Role.ASSISTANT  # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal[Role.ASSISTANT] = field(default=Role.ASSISTANT, init=False)
     usage: Usage = field(default_factory=Usage)
     stop_reason: StopReason = StopReason.Stop
     error: str = ""
@@ -175,7 +174,7 @@ class AssistantMessage(BaseMessage):
 
 @dataclass
 class ToolMessage(BaseMessage):
-    role: Literal[Role.TOOL] = Role.TOOL  # pyright: ignore[reportIncompatibleVariableOverride]
+    role: Literal[Role.TOOL] = field(default=Role.TOOL, init=False)
 
     @classmethod
     def from_results(cls, results: list[ToolResultContent]) -> ToolMessage:
@@ -201,7 +200,7 @@ class CustomMessage:
     def from_session(cls, entry: CustomMessageEntry) -> CustomMessage:
         raw = entry.content
         if isinstance(raw, list):
-            contents = raw
+            contents: list[TextContent | ImageContent] = cast(list[TextContent | ImageContent], raw)
         elif isinstance(raw, str):
             contents = [TextContent(content=raw)]
         else:

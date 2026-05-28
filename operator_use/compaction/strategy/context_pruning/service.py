@@ -19,7 +19,7 @@ import dataclasses
 from typing import Optional, TYPE_CHECKING
 
 from operator_use.compaction.strategy.context_pruning.types import ContextPruningSettings
-from operator_use.message.types import BaseMessage, ToolMessage, ToolResultContent
+from operator_use.message.types import LLMMessage, ToolMessage, ToolResultContent
 
 if TYPE_CHECKING:
     from operator_use.engine.types import AbortSignal
@@ -37,9 +37,9 @@ class ContextPruner:
 
     def transform(
         self,
-        messages: list[BaseMessage],
+        messages: list[LLMMessage],
         signal: Optional[AbortSignal] = None,
-    ) -> list[BaseMessage]:
+    ) -> list[LLMMessage]:
         """TransformContextCallback — prune old tool results in-memory."""
         s = self._settings
         if not s.enabled:
@@ -66,7 +66,7 @@ class ContextPruner:
             else:
                 break
 
-        result: list[BaseMessage] = []
+        result: list[LLMMessage] = []
         for i, msg in enumerate(messages):
             if not isinstance(msg, ToolMessage) or i in protected:
                 result.append(msg)

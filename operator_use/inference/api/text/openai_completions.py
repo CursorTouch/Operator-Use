@@ -14,7 +14,7 @@ from operator_use.inference.types import (
     normalize_structured_response_format,
 )
 from operator_use.message.types import (
-    BaseMessage, SystemMessage, UserMessage, AssistantMessage, ToolMessage,
+    SystemMessage, UserMessage, AssistantMessage, ToolMessage,
     TextContent, ImageContent, ThinkingContent, ToolCallContent, ToolResultContent,
 )
 from typing import Optional, TYPE_CHECKING
@@ -91,7 +91,7 @@ def _assistant_content(content_items: list) -> tuple[str | None, list[dict[str, 
     return text, tool_calls
 
 
-def _messages_to_chat(messages: list[BaseMessage]) -> list[dict[str, Any]]:
+def _messages_to_chat(messages: list[LLMMessage]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for msg in messages:
         match msg:

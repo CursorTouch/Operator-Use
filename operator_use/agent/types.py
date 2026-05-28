@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
-from operator_use.message.types import BaseMessage
+from operator_use.message.types import LLMMessage
 from operator_use.session.types import MessageMeta
 
 if TYPE_CHECKING:
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class AgentContext:
     """Snapshot of everything the LLM receives for one turn."""
     system_prompt: str
-    messages: list[BaseMessage]
+    messages: list[LLMMessage]
     tools: list[Tool] = field(default_factory=list)
 
 
