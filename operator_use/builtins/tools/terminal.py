@@ -227,17 +227,13 @@ class TerminalTool(Tool):
 
             timed_out = False
             try:
-                await asyncio.wait_for(asyncio.shield(readers), timeout=float(timeout))
+                # Python 3.12+: wait_for cancels and fully awaits `readers` before
+                # raising TimeoutError — no shield needed and no manual cancel required.
+                await asyncio.wait_for(readers, timeout=float(timeout))
             except asyncio.TimeoutError:
                 timed_out = True
                 if self._manager is not None:
-                    # Stop the terminal's own readers so they don't race with the
-                    # watcher that ProcessManager will start.
-                    readers.cancel()
-                    try:
-                        await asyncio.wait_for(readers, timeout=0.5)
-                    except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
-                        pass
+                    # `readers` is already cancelled and done at this point.
                     await _flush_stream(force=True)
                     pre_captured = bytes(out_buf) + bytes(err_buf)
                     desc = (cmd[:80] + '...') if len(cmd) > 80 else cmd
@@ -262,12 +258,7 @@ class TerminalTool(Tool):
                     )
                 else:
                     await self._kill_process_group(process)
-                    # The pipes break when the process dies; give the readers a brief
-                    # window to flush whatever was already buffered before the kill.
-                    try:
-                        await asyncio.wait_for(readers, timeout=2.0)
-                    except (asyncio.TimeoutError, Exception):
-                        pass
+                    # readers is already cancelled (wait_for did it); nothing more to do.
 
             await process.wait()
             await _flush_stream(force=True)

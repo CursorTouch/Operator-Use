@@ -33,6 +33,10 @@ class CronJobStore:
             return self._store
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
+            if not isinstance(data, dict):
+                logger.warning('Cron store at %s has wrong format (expected object, got %s) — resetting', path, type(data).__name__)
+                self._store = CronStore()
+                return self._store
             jobs = [dict_to_job(j) for j in data.get('jobs', [])]
             self._store = CronStore(version=data.get('version', 1), jobs=jobs)
             return self._store

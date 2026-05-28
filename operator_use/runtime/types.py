@@ -177,6 +177,7 @@ class RuntimeContext:
             packages_dir=get_packages_dir(),
         )
         resource_loader = ResourceLoader(loader_opts)
+        resource_loader.set_active_profile(effective_profile)
         await resource_loader.reload()
 
         # ── Hooks ─────────────────────────────────────────────────────────────
@@ -284,14 +285,16 @@ class RuntimeContext:
 
         # Build a dedicated LLM for compaction if auxiliary.compaction is configured.
         _aux_compaction = settings_manager.get_auxiliary_task("compaction")
+        _compaction_model = _aux_compaction.model
+        _compaction_provider = _aux_compaction.provider
         compaction_llm = LLM(
-            model_id=_aux_compaction.model,
-            provider=_aux_compaction.provider,
+            model_id=_compaction_model or llm.model.id,
+            provider=_compaction_provider,
             models=text_models,
             providers=text_providers,
             apis=text_apis,
             auth_store=text_auth,
-        ) if (_aux_compaction.model or _aux_compaction.provider) else llm
+        ) if (_compaction_model or _compaction_provider) else llm
 
         def _resolve_summarization_settings() -> CompactionSettings:
             ss = settings_manager.get_compaction_summarization_settings()

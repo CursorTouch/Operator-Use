@@ -599,11 +599,12 @@ class Runtime:
 
         # Resolve profile LLM (use profile model override if specified)
         llm = self._context.llm
-        if profile.model_id:
+        _profile_model_id = profile.model_id
+        if _profile_model_id:
             try:
                 from operator_use.inference.api.text.service import LLM
                 llm = LLM(
-                    model_id=profile.model_id,
+                    model_id=_profile_model_id,
                     provider=profile.provider,
                     auth_store=llm._auth_store,
                 )
