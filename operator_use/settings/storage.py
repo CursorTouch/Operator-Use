@@ -33,17 +33,26 @@ class FileSettingsStorage(SettingsStorage):
             path.write_text("{}", encoding="utf-8")  
             path.chmod(0o600)  
       
-    def with_lock(self, scope: SCOPE, fn: Callable[[str | None], LockResult]) -> LockResult:  
-        path = self.global_settings_path if scope == SCOPE.GLOBAL else self.project_settings_path  
-        lock_path = path.with_suffix(".lock")  
-          
-        with FileLock(lock_path):  
-            self._ensure_file_exists(path)  
-            current = path.read_text(encoding="utf-8") if path.exists() else "{}"  
-            result = fn(current)  
-            if result.next is not None:  
-                path.write_text(result.next, encoding="utf-8")  
-            return result  
+    def with_lock(self, scope: SCOPE, fn: Callable[[str | None], LockResult]) -> LockResult:
+        path = self.global_settings_path if scope == SCOPE.GLOBAL else self.project_settings_path
+
+        # Never auto-create the project-level .operator/ directory.
+        # FileLock creates parent dirs automatically; guard against that by
+        # checking upfront.  If the directory doesn't already exist, treat
+        # project settings as empty and silently drop any writes.
+        if scope == SCOPE.PROJECT and not path.parent.exists():
+            result = fn(None)
+            return LockResult(result=result.result, next=None)
+
+        lock_path = path.with_suffix(".lock")
+
+        with FileLock(lock_path):
+            self._ensure_file_exists(path)
+            current = path.read_text(encoding="utf-8") if path.exists() else "{}"
+            result = fn(current)
+            if result.next is not None:
+                path.write_text(result.next, encoding="utf-8")
+            return result
   
 class InMemorySettingsStorage(SettingsStorage):  
     """In-memory storage backend for testing."""  
