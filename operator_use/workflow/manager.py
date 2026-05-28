@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import tempfile
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -153,7 +154,7 @@ class WorkflowManager:
         from operator_use.workflow.execute import execute
         from operator_use.workflow.journal import WorkflowJournal
 
-        runs_base = (self._workflows_dir / '.runs') if self._workflows_dir else Path.home() / '.operator' / 'workflows' / '.runs'
+        runs_base = (self._workflows_dir / '.runs') if self._workflows_dir else Path(tempfile.gettempdir()) / '.operator-workflow-runs'
         run_dir = runs_base / record.run_id
         run_dir.mkdir(parents=True, exist_ok=True)
 
