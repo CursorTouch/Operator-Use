@@ -102,7 +102,7 @@ class AuxiliaryTaskSettings:
 @dataclass
 class ComputerUseSettings:
     enabled: bool = True
-    use_vision: bool = False
+    use_screenshot: bool = False
     use_accessibility: bool = True
     use_annotation: bool = False
 
@@ -110,7 +110,8 @@ class ComputerUseSettings:
 @dataclass
 class BrowserUseSettings:
     enabled: bool = True
-    use_vision: bool = False
+    use_accessibility: bool = True
+    use_screenshot: bool = False
     headless: bool = False
     browser: Optional[Literal["chrome", "edge"]] = None   # "chrome" | "edge" | None (auto-detect)
     cdp_port: int = 9222

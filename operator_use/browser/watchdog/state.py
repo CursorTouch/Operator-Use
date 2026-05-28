@@ -41,21 +41,21 @@ class StateWatchdog(BaseWatchdog):
         self._dirty = True
         logger.debug('StateWatchdog invalidated state: %s', payload)
 
-    async def get_state(self, use_vision: bool = False, within_viewport: bool = True, as_bytes: bool = False) -> BrowserState | None:
+    async def get_state(self, use_screenshot: bool = False, use_accessibility: bool = True, within_viewport: bool = True, as_bytes: bool = False) -> BrowserState | None:
         if self.session._client is None or self.session._get_current_session_id() is None:
             return None
         if not self._dirty and self._cached_state is not None:
             return self._cached_state
         if self._inflight_capture is not None and not self._inflight_capture.done():
             return await self._inflight_capture
-        self._inflight_capture = asyncio.create_task(self._capture_state(use_vision=use_vision, within_viewport=within_viewport, as_bytes=as_bytes))
+        self._inflight_capture = asyncio.create_task(self._capture_state(use_screenshot=use_screenshot, use_accessibility=use_accessibility, within_viewport=within_viewport, as_bytes=as_bytes))
         try:
             return await self._inflight_capture
         finally:
             if self._inflight_capture is not None and self._inflight_capture.done():
                 self._inflight_capture = None
 
-    async def _capture_state(self, use_vision: bool = False, within_viewport: bool = True, as_bytes: bool = False) -> BrowserState | None:
+    async def _capture_state(self, use_screenshot: bool = False, use_accessibility: bool = True, within_viewport: bool = True, as_bytes: bool = False) -> BrowserState | None:
         if self.session._client is None or self.session._get_current_session_id() is None:
             return None
 
@@ -75,7 +75,7 @@ class StateWatchdog(BaseWatchdog):
 
         page = self.session.current_page()
         dom = DOM(session=self.session)
-        screenshot, dom_state = await dom.get_state(use_vision=use_vision, within_viewport=within_viewport, as_bytes=as_bytes)
+        screenshot, dom_state = await dom.get_state(use_screenshot=use_screenshot, use_accessibility=use_accessibility, within_viewport=within_viewport, as_bytes=as_bytes)
         tabs = await self.session.get_all_tabs()
         current_tab = await self.session.get_current_tab()
         state = BrowserState(

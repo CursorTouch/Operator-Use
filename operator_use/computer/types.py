@@ -56,7 +56,7 @@ class Window:
 class DesktopState:
     """Snapshot of the desktop returned by ``Desktop.get_state()``.
 
-    ``screenshot`` is ``None`` when ``use_vision=False`` was requested.
+    ``screenshot`` is ``None`` when ``use_screenshot=False`` was requested.
     ``tree_state`` is ``None`` when ``use_accessibility=False`` was requested
     or when the platform does not support an accessibility tree.
     """
@@ -126,7 +126,7 @@ class Desktop(ABC):
     def get_state(self, as_bytes: bool = False) -> DesktopState:
         """Return a full snapshot of the current desktop.
 
-        Uses the ``use_vision`` / ``use_accessibility`` / ``use_annotation``
+        Uses the ``use_screenshot`` / ``use_accessibility`` / ``use_annotation``
         flags set at construction time.
 
         Args:

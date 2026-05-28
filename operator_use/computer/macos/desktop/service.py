@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 class MacosDesktop(BaseDesktop):
     def __init__(
         self,
-        use_vision: bool = False,
+        use_screenshot: bool = False,
         use_annotation: bool = False,
         use_accessibility: bool = True,
     ):
-        self.use_vision = use_vision
+        self.use_screenshot = use_screenshot
         self.use_annotation = use_annotation
         self.use_accessibility = use_accessibility
         self.tree = Tree()
@@ -65,7 +65,7 @@ class MacosDesktop(BaseDesktop):
             if self.use_accessibility
             else None
         )
-        if self.use_vision:
+        if self.use_screenshot:
             if self.use_annotation and tree_state:
                 screenshot = self.get_annotated_screenshot(
                     nodes=tree_state.interactive_nodes,

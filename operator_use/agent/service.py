@@ -223,35 +223,51 @@ class Agent(ExtensionContext):
 
         These are never persisted to session history — the engine appends them
         to ctx_messages only for the current LLM call.
+
+        Controlled by settings:
+          use_screenshot   — capture and embed a screenshot in the message
+          use_accessibility — include tree/DOM state text (desktop) or DOM state (browser)
+          App/window/tab data is always included when the tool is open.
         """
+        from operator_use.settings.types import ComputerUseSettings, BrowserUseSettings
         msgs: list[LLMMessage] = []
         ctx = self._engine.tool_context
+        sm = ctx.settings_manager
+
+        # ── Desktop ──────────────────────────────────────────────────────────
         try:
             desktop = ctx.desktop
             if desktop is not None and desktop.is_open:
-                state = desktop.get_state()
+                cu = (sm.settings.computer_use if sm else None) or ComputerUseSettings()
+
+                state = desktop.get_state(as_bytes=False)
                 content=f"[Desktop state]\n{state.to_string()}"
-                if screenshot:=state.screenshot:
-                    msg=UserMessage.with_images(images=[screenshot], content=content)
-                else:
-                    msg=UserMessage.text(content)
-                msgs.append(msg)
+                if cu.use_screenshot and cu.use_accessibility and state.screenshot:
+                    msgs.append(UserMessage.with_images(images=[state.screenshot], content=content))
+                elif cu.use_accessibility:
+                    msgs.append(UserMessage.text(content=content))
+                elif cu.use_screenshot and state.screenshot:
+                    msgs.append(UserMessage.with_images(images=[state.screenshot], content=content))
         except Exception:
             pass
 
+        # ── Browser ──────────────────────────────────────────────────────────
         try:
             browser = ctx.browser
             if browser is not None and browser._client is not None:
-                state = await browser.get_state()
+                bu = (sm.settings.browser_use if sm else None) or BrowserUseSettings()
+                
+                state = await browser.get_state(as_bytes=False)
                 content=f"[Browser state]\n{state.to_string()}"
-                if screenshot:=state.screenshot:
-                    msg=UserMessage.with_images(images=[screenshot], content=content)
-                else:
-                    msg=UserMessage.text(content)
-                msgs.append(msg)
+                if bu.use_screenshot and bu.use_accessibility and state.screenshot:
+                    msgs.append(UserMessage.with_images(images=[state.screenshot], content=content))
+                elif bu.use_accessibility:
+                    msgs.append(UserMessage.text(content=content))
+                elif bu.use_screenshot and state.screenshot:
+                    msgs.append(UserMessage.with_images(images=[state.screenshot], content=content))
         except Exception:
             pass
-        
+
         return msgs
 
     # -------------------------------------------------------------------------

@@ -128,12 +128,17 @@ class DOM:
     def __init__(self, session: 'Browser'):
         self.session = session
 
-    async def get_state(self, use_vision: bool = False, within_viewport: bool = True, as_bytes: bool = False):
+    async def get_state(self, use_screenshot: bool = False, use_accessibility: bool = True, within_viewport: bool = True, as_bytes: bool = False):
         try:
             await self.session._wait_for_page(timeout=10.0)
             sid = self.session._get_current_session_id()
 
             t0 = time.perf_counter()
+
+            if not use_accessibility:
+                # Skip expensive DOM/AX capture; caller only wants basic tab info.
+                screenshot = await self.session.get_screenshot(as_bytes=as_bytes) if use_screenshot else None
+                return screenshot, DOMState(interactive=[], informative=[], scrollable=[], tree_root=None)
 
             snapshot, ax_result, viewport, dpr, scroll_pos = await asyncio.gather(
                 self.session.send('DOMSnapshot.captureSnapshot', {
@@ -173,7 +178,7 @@ class DOM:
 
             screenshot = None
             screenshot_capture_ms = 0.0
-            if use_vision and interactive:
+            if use_screenshot and interactive:
                 t1 = time.perf_counter()
                 # position:fixed in the mark JS is viewport-relative, so subtract scroll offset
                 boxes = [
@@ -192,7 +197,7 @@ class DOM:
                 f'DOM state: state_capture_ms={state_capture_ms:.1f} '
                 f'screenshot_capture_ms={screenshot_capture_ms:.1f} '
                 f'total_ms={state_capture_ms + screenshot_capture_ms:.1f} '
-                f'interactive={len(interactive)} scrollable={len(scrollable)} use_vision={use_vision}'
+                f'interactive={len(interactive)} scrollable={len(scrollable)} use_screenshot={use_screenshot}'
             )
 
         except Exception as e:

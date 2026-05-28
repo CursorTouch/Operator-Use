@@ -108,7 +108,7 @@ class Runtime:
             return None
         import operator_use.computer as computer_module
         return computer_module.Desktop(
-            use_vision=cu.use_vision,
+            use_screenshot=cu.use_screenshot,
             use_accessibility=cu.use_accessibility,
             use_annotation=cu.use_annotation,
         )
@@ -129,7 +129,8 @@ class Runtime:
         from operator_use.browser.client.config import BrowserConfig
         return Browser(
             config=BrowserConfig(
-                use_vision=bu.use_vision,
+                use_screenshot=bu.use_screenshot,
+                use_accessibility=bu.use_accessibility,
                 headless=bu.headless,
                 browser=bu.browser,
                 cdp_port=bu.cdp_port,

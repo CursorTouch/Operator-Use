@@ -980,10 +980,11 @@ class Browser:
             await self.init_tabs()
 
     async def get_state(self, as_bytes: bool = False) -> BrowserState:
-        use_vision = self.config.use_vision
+        use_screenshot = self.config.use_screenshot
+        use_accessibility = self.config.use_accessibility
         within_viewport = self.config.within_viewport
         if self._state_watchdog is not None:
-            state = await self._state_watchdog.get_state(use_vision=use_vision, within_viewport=within_viewport, as_bytes=as_bytes)
+            state = await self._state_watchdog.get_state(use_screenshot=use_screenshot, use_accessibility=use_accessibility, within_viewport=within_viewport, as_bytes=as_bytes)
             if state is not None:
                 return state
             if self._browser_state is not None:
@@ -992,7 +993,7 @@ class Browser:
         from operator_use.browser.dom import DOM
 
         dom = DOM(session=self)
-        screenshot, dom_state = await dom.get_state(use_vision=use_vision, within_viewport=within_viewport, as_bytes=as_bytes)
+        screenshot, dom_state = await dom.get_state(use_screenshot=use_screenshot, use_accessibility=use_accessibility, within_viewport=within_viewport, as_bytes=as_bytes)
         tabs = await self.get_all_tabs()
         current_tab = await self.get_current_tab()
         self._browser_state = BrowserState(

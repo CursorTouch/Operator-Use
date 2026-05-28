@@ -37,9 +37,9 @@ from operator_use.computer.types import Desktop as BaseDesktop
 
 class WindowsDesktop(BaseDesktop):
     def __init__(
-        self, use_vision: bool = False, use_annotation: bool = False, use_accessibility: bool = True
+        self, use_screenshot: bool = False, use_annotation: bool = False, use_accessibility: bool = True
     ):
-        self.use_vision = use_vision
+        self.use_screenshot = use_screenshot
         self.use_annotation = use_annotation
         self.use_accessibility = use_accessibility
         self.tree = Tree(self)
@@ -120,7 +120,7 @@ class WindowsDesktop(BaseDesktop):
         else:
             tree_state = TreeState()
 
-        if self.use_vision:
+        if self.use_screenshot:
             if self.use_annotation:
                 nodes = tree_state.interactive_nodes if tree_state else []
                 if nodes:
