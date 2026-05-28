@@ -1,14 +1,28 @@
 # User Profile
 
-Name: [Your name]
-Timezone: [Region/City — e.g. Asia/Kolkata]
-Work hours: [e.g. 9 AM – 7 PM weekdays]
+> Stable context about who you are talking to. Manually maintained — update when things change.
+> Safe to include in any context. Keep personal or sensitive details in MEMORY.md instead.
+
+---
+
+## Identity
+
+- **Name:** [Your name or what you want to be called]
+- **Timezone:** [Region/City — e.g. Asia/Kolkata]
+- **Work hours:** [e.g. 9 AM – 7 PM weekdays]
 
 ---
 
 ## Technical Background
 
-[Describe your experience level and domain — e.g. "10 years Python, comfortable with distributed systems, new to frontend."]
+[Your experience level and domain — e.g. "10 years Python, comfortable with distributed systems, new to frontend."]
+
+---
+
+## Current Projects & Focus
+
+- [Active project and what you are trying to achieve]
+- [Current priority or deadline]
 
 ---
 
@@ -28,15 +42,16 @@ Work hours: [e.g. 9 AM – 7 PM weekdays]
 
 ---
 
-## Preferred Tools & Stack
+## Stack & Tools
 
-- Language: [e.g. Python, TypeScript]
-- Framework: [e.g. FastAPI, Next.js]
-- Database: [e.g. PostgreSQL, SQLite]
-- Test runner: [e.g. pytest, vitest]
+- **Language:** [e.g. Python, TypeScript]
+- **Framework:** [e.g. FastAPI, Next.js]
+- **Database:** [e.g. PostgreSQL, SQLite]
+- **Test runner:** [e.g. pytest, vitest]
+- **OS / shell:** [e.g. macOS, zsh]
 
 ---
 
-## Current Focus
+## Key People
 
-- [e.g. "Building an AI agent harness — focus on runtime and extension system."]
+- [Teammates, clients, or collaborators the agent should know about]

@@ -1,36 +1,43 @@
 # Memory
 
-Stable facts that persist across sessions. Edit this file directly to add or remove entries.
-The agent reads this at the start of every session — keep it concise and factual.
+> Loaded into every session. Keep this under 3000 characters — distilled facts only, not a journal.
+> Update immediately when you learn something important, are corrected, or a decision is made.
+> Never store API keys, secrets, raw logs, or transient thoughts here.
 
 ---
 
-## Projects
+## Current Priorities
 
-<!-- Add one line per active project with location, stack, and key details. -->
-<!-- Example: -->
-<!-- - Operator (~/.program/...) — Python AI agent harness, pytest test suite, uv for deps -->
+- [What the user is focused on right now]
+- [Active project or goal]
 
 ---
 
-## Preferences
+## Key Decisions
 
-<!-- Tool preferences, workflow patterns, and decisions already made. -->
-<!-- Example: -->
-<!-- - Always use `uv run pytest` not bare `pytest` -->
-<!-- - Prefer Edit tool over Write for existing files -->
+- [YYYY-MM-DD]: [Decision and why it was made]
+
+---
+
+## Preferences & Habits
+
+- [Things the user likes or dislikes]
+- [Tools, workflows, or approaches they prefer]
+- [Things to never suggest or do]
 
 ---
 
 ## Lessons Learned
 
-<!-- Discovered workarounds, gotchas, and patterns worth remembering. -->
-<!-- Example: -->
-<!-- - Engine does not import from Agent — strict layering rule, never violate -->
-<!-- - Session writes are deferred until first AssistantMessage to allow rewind on failure -->
+- [Something that went wrong and what to do differently]
+- [A correction the user gave — write it here so it sticks]
 
 ---
 
-## Context
+## People & Context
 
-<!-- Anything else the agent should always know — active branches, pending decisions, etc. -->
+- [Key collaborators, teammates, or clients the user works with]
+
+---
+
+*Updated: [date]*
