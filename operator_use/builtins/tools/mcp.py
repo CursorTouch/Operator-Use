@@ -54,7 +54,7 @@ class MCPTool(Tool):
                 'When connected, MCP tools are available alongside built-in tools.'
             ),
             schema=_MCPSchema,
-            kind=ToolKind.Execute,
+            kind=ToolKind.MCP,
             execution_mode=ToolExecutionMode.Sequential,
         )
         self._manager = manager

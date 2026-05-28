@@ -14,6 +14,8 @@ On startup with `--profile <name>`, the runtime loads the matching profile. Suba
 
 ## AGENT.md format
 
+`AGENT.md` serves two purposes: the frontmatter configures the profile (model, tools, etc.) and the body is the **operation manual** — instructions for how the agent behaves in this profile. Identity and persona live in `SOUL.md`; stable user context lives in `USER.md`. The body governs scope, memory, style, safety, and task execution.
+
 ```markdown
 ---
 name: coder
@@ -23,8 +25,18 @@ provider: anthropic
 tools: read, edit, write, grep, glob, terminal
 ---
 
-You are a senior software engineer who writes clean, minimal code.
-Always prefer simple, readable solutions over clever ones.
+# Operation Manual
+
+## Scope Discipline
+Implement exactly what is requested. State assumptions before acting.
+Do not add unrequested refactors or features.
+
+## Writing Style
+Precise and minimal. No filler phrases. Match the developer's register.
+
+## Memory
+Update MEMORY.md immediately when you learn something new about the project
+or when corrected. Keep it under 3000 characters.
 ```
 
 ### Frontmatter fields
@@ -37,7 +49,7 @@ Always prefer simple, readable solutions over clever ones.
 | `provider` | No | LLM provider override, e.g. `anthropic` |
 | `tools` | No | Comma-separated tool allowlist; empty = all tools |
 
-The body becomes the custom system prompt. An empty body means "use the default system prompt."
+The body becomes the custom system prompt. An empty body means "use the default system prompt." A template for a complete operation manual is at `operator_use/templates/AGENT.md`.
 
 ## Per-profile resource layout
 
