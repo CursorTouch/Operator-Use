@@ -41,6 +41,7 @@ from operator_use.acp.manager import ACPSessionManager
 from operator_use.process.manager import ProcessManager
 from operator_use.settings.paths import (
     get_config_dir, get_acp_auth_path, get_packages_dir,
+    get_default_profile_dir,
 )
 
 
@@ -332,11 +333,14 @@ class RuntimeContext:
                 )
 
         # ── Session manager ───────────────────────────────────────────────────
-        # Profile sessions live in profiles/<name>/sessions/; fall back to
-        # the globally configured session_dir when no profile is active.
-        session_dir: Path | None = (
-            config.profile.sessions_dir if config.profile else settings_manager.get_session_dir()
-        )
+        # Sessions are always profile-scoped.  Named profiles use their own
+        # directory; when no profile is active fall back to the implicit
+        # "default" profile directory so nothing lands at the global root.
+        if config.profile:
+            session_dir: Path | None = config.profile.sessions_dir
+        else:
+            _custom = settings_manager.get_session_dir()
+            session_dir = _custom if _custom is not None else get_default_profile_dir() / 'sessions'
         if config.resume and not config.session_file and config.persist_session:
             session_manager = SessionManager.continue_recent(cwd, session_dir)
         else:
@@ -353,7 +357,7 @@ class RuntimeContext:
         auth_channel_manager = ChannelAuthManager(_ch_path) if _ch_path else None
         acp_auth_manager = ACPAuthManager(get_acp_auth_path())
         acp_session_manager = ACPSessionManager(
-            config.profile.acp_dir if config.profile else None
+            config.profile.acp_dir if config.profile else get_default_profile_dir() / 'acp'
         )
 
         # ── Compaction: inject session_id_provider and extra tools ───────────
@@ -366,7 +370,7 @@ class RuntimeContext:
         if hasattr(compaction, 'get_tools'):
             all_tools = all_tools + compaction.get_tools()  # type: ignore[union-attr]
         if settings_manager.get_cron_enabled():
-            cron = Cron(store_path=config.profile.crons_path if config.profile else get_config_dir() / 'crons.json')
+            cron = Cron(store_path=config.profile.crons_path if config.profile else get_default_profile_dir() / 'crons.json')
             # Wire cron into the tool instance from the resource loader — the loader
             # registers the module under a different name than the package import, so
             # importing via 'from operator_use.builtins.tools.cron import tool' would give
