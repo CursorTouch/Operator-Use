@@ -143,8 +143,9 @@ Agent sets four callbacks on `Engine.options` at construction time:
    When a profile is active, the footer expands to include:
    ```
    Profile directory: ~/.operator/profiles/<name>
+   Profile SOUL.md:   ~/.operator/profiles/<name>/SOUL.md    ← persona and identity
    Profile MEMORY.md: ~/.operator/profiles/<name>/MEMORY.md  ← long-term memory
-   Profile USER.md:   ~/.operator/profiles/<name>/USER.md    ← user preferences
+   Profile USER.md:   ~/.operator/profiles/<name>/USER.md    ← who you are talking to
    Profile skills directory: ~/.operator/profiles/<name>/skills
    Profile knowledge directory: ~/.operator/profiles/<name>/knowledge
    Profile temp directory: ~/.operator/profiles/<name>/temp  ← scratchpad / terminal CWD

@@ -50,10 +50,11 @@ class PromptTemplate:
             p = self.profile_dir
             profile_block = (
                 f"\n\n## Profile: {p}\n"
-                f"\n- {p / 'MEMORY.md'} — long-term memory (read/write to remember things across sessions)"
-                f"\n- {p / 'USER.md'} — user preferences and profile"
+                f"\n- {p / 'SOUL.md'} — your persona and identity (defines who you are, your tone, operating principles, and constraints)"
+                f"\n- {p / 'MEMORY.md'} — long-term memory; read at the start of sessions, write here to persist things across conversations"
+                f"\n- {p / 'USER.md'} — who you are talking to: the user's name, timezone, technical background, communication preferences, and things to avoid"
                 f"\n- {p / 'skills'} — skill guides, each as {{name}}/SKILL.md; scan before tasks and load with skill action=\"view\" when relevant"
-                f"\n- {p / 'knowledge'} — reference documents (read on demand when relevant to the task)"
+                f"\n- {p / 'knowledge'} — user-curated reference material (domain docs, API specs, guidelines, company knowledge, workflows); declared in index.yaml — read the relevant file(s) with the read tool when the task requires background context not in the conversation"
                 f"\n- {p / 'temp'} — scratchpad and working files; use as terminal CWD for intermediate output"
             )
         else:
