@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from operator_use.tool.types import Tool
 from operator_use.agent.service import Agent
 from operator_use.agent.types import AgentConfig
-from operator_use.agent.profile import AgentProfile
+from operator_use.agent.profile import AgentProfile, create_ephemeral_profile
 from operator_use.compaction.strategy.base import Compaction
 from operator_use.compaction.strategy.summarization.service import SummarizationCompaction
 from operator_use.compaction.strategy.types import CompactionSettings
@@ -41,7 +41,6 @@ from operator_use.acp.manager import ACPSessionManager
 from operator_use.process.manager import ProcessManager
 from operator_use.settings.paths import (
     get_config_dir, get_acp_auth_path, get_packages_dir,
-    get_default_profile_dir,
 )
 
 
@@ -148,6 +147,13 @@ class RuntimeContext:
         if settings_manager is None:
             settings_manager = SettingsManager.create(cwd, config_dir)
         SettingsManager.set_instance(settings_manager)
+
+        # ── Effective profile ─────────────────────────────────────────────────
+        # Every runtime always has a profile.  Named profiles come from the
+        # caller (--agent flag).  When none is provided (ephemeral REPL, base
+        # gateway/ACP runtime) we create a transient in-memory profile backed
+        # by a temp directory that is cleaned up on process exit.
+        effective_profile: AgentProfile = config.profile or create_ephemeral_profile()
 
         # ── Resource loader ───────────────────────────────────────────────────
         # Extensions must load before LLM so they can register custom providers.
@@ -334,13 +340,15 @@ class RuntimeContext:
 
         # ── Session manager ───────────────────────────────────────────────────
         # Sessions are always profile-scoped.  Named profiles use their own
-        # directory; when no profile is active fall back to the implicit
-        # "default" profile directory so nothing lands at the global root.
+        # directory under profiles/<name>/sessions/.  Ephemeral profiles use a
+        # tmpdir that is cleaned up on process exit, so nothing leaks to disk.
+        # A custom session_dir in settings overrides the profile default for
+        # named profiles only (ephemeral ones always use the tmpdir).
         if config.profile:
-            session_dir: Path | None = config.profile.sessions_dir
-        else:
             _custom = settings_manager.get_session_dir()
-            session_dir = _custom if _custom is not None else get_default_profile_dir() / 'sessions'
+            session_dir: Path | None = _custom if _custom is not None else effective_profile.sessions_dir
+        else:
+            session_dir = effective_profile.sessions_dir
         if config.resume and not config.session_file and config.persist_session:
             session_manager = SessionManager.continue_recent(cwd, session_dir)
         else:
@@ -353,12 +361,11 @@ class RuntimeContext:
 
         # ── Auth ─────────────────────────────────────────────────────────────
         # Channel auth is profile-specific; no global channels.json exists.
-        _ch_path = config.profile.auth_channels_path if config.profile else None
+        # Ephemeral profiles have no channels.json so auth_channel_manager is None.
+        _ch_path = effective_profile.auth_channels_path if config.profile else None
         auth_channel_manager = ChannelAuthManager(_ch_path) if _ch_path else None
         acp_auth_manager = ACPAuthManager(get_acp_auth_path())
-        acp_session_manager = ACPSessionManager(
-            config.profile.acp_dir if config.profile else get_default_profile_dir() / 'acp'
-        )
+        acp_session_manager = ACPSessionManager(effective_profile.acp_dir)
 
         # ── Compaction: inject session_id_provider and extra tools ───────────
         if hasattr(compaction, '_session_id_provider') and compaction._session_id_provider is None:  # type: ignore[union-attr]
@@ -370,7 +377,7 @@ class RuntimeContext:
         if hasattr(compaction, 'get_tools'):
             all_tools = all_tools + compaction.get_tools()  # type: ignore[union-attr]
         if settings_manager.get_cron_enabled():
-            cron = Cron(store_path=config.profile.crons_path if config.profile else get_default_profile_dir() / 'crons.json')
+            cron = Cron(store_path=effective_profile.crons_path)
             # Wire cron into the tool instance from the resource loader — the loader
             # registers the module under a different name than the package import, so
             # importing via 'from operator_use.builtins.tools.cron import tool' would give

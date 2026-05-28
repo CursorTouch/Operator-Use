@@ -29,20 +29,8 @@ def get_acp_auth_path() -> Path:
 
 # ── Profiles ──────────────────────────────────────────────────────────────────
 
-DEFAULT_PROFILE_NAME = "default"
-
-
 def get_profiles_dir() -> Path:
     return CONFIG_DIR_PATH / 'profiles'
-
-
-def get_default_profile_dir() -> Path:
-    """Return the directory for the implicit default profile.
-
-    Used when no named profile is active so that sessions, crons, and ACP
-    are still stored under a profile-scoped path rather than globally.
-    """
-    return get_profiles_dir() / DEFAULT_PROFILE_NAME
 
 
 # ── Global config ─────────────────────────────────────────────────────────────

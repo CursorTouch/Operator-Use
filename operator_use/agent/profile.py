@@ -44,6 +44,9 @@ Per-profile resources are looked up under the profile directory:
 
 from __future__ import annotations
 
+import atexit
+import tempfile
+import uuid
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -160,6 +163,39 @@ class AgentProfile(BaseModel):
     @property
     def auth_channels_path(self) -> Path:
         return self.profile_dir / 'auth' / 'channels.json'
+
+
+def create_ephemeral_profile() -> AgentProfile:
+    """Create a transient profile backed by a temporary directory.
+
+    Used when no named profile is active (ephemeral REPL session, base gateway/
+    ACP runtime).  The temporary directory is removed automatically when the
+    process exits via an atexit handler.
+
+    The profile is fully functional in memory — tools, crons, and ACP all work
+    normally.  Nothing survives process exit.
+    """
+    tmpdir = tempfile.mkdtemp(prefix='operator-ephemeral-')
+    atexit.register(_cleanup_tmpdir, tmpdir)
+
+    profile_dir = Path(tmpdir)
+    short_id = uuid.uuid4().hex[:8]
+    return AgentProfile(
+        name=f'ephemeral-{short_id}',
+        description='Ephemeral profile — in memory only, not persisted to disk.',
+        profile_dir=profile_dir,
+        system_prompt='',
+        tools=[],
+        file_path=profile_dir / AGENT_FILE_NAME,
+    )
+
+
+def _cleanup_tmpdir(path: str) -> None:
+    import shutil
+    try:
+        shutil.rmtree(path, ignore_errors=True)
+    except Exception:
+        pass
 
 
 def load_agent_profile_from_file(
