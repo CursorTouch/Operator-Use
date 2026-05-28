@@ -325,6 +325,7 @@ class Engine:
                             try:
                                 if _msg := await _fn():
                                     self.state.state_message = _msg
+                                    break
                             except Exception:
                                 pass
 
