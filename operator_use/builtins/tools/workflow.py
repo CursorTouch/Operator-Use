@@ -1,3 +1,4 @@
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -151,8 +152,7 @@ class WorkflowTool(Tool):
             description=(
                 'Create and run Python workflow files that orchestrate multi-agent pipelines.\n\n'
                 'Use action="create" to generate a new workflow from a description.\n'
-                'Workflows live in ~/.operator/agent/workflows/ (global) or '
-                '<project>/.operator/agent/workflows/ (project-level, takes priority).\n\n'
+                'Workflows are stored in the active profile\'s workflows/ directory.\n\n'
                 'After calling run, END YOUR TURN — the result is injected back automatically '
                 'when the workflow finishes.'
             ),
@@ -206,8 +206,8 @@ class WorkflowTool(Tool):
                         content=f'Generated code is invalid ({error}). Generated output:\n\n{code}',
                     )
 
-                profile = getattr(context, 'active_profile', None)
-                path = profile.workflows_dir if profile else (Path.home() / '.operator' / 'workflows')
+                profile = context.resource_loader._active_profile if context and context.resource_loader else None
+                path = profile.workflows_dir if profile else Path(tempfile.gettempdir()) / '.operator-workflows'
                 path.mkdir(parents=True, exist_ok=True)
                 workflow_path = path / f'{name}.py'
                 workflow_path.write_text(code, encoding='utf-8')
@@ -310,8 +310,8 @@ class WorkflowTool(Tool):
                         id=invocation.id,
                         content=(
                             'No workflow files found.\n'
-                            'Place .py files in ~/.operator/agent/workflows/ or <project>/.operator/agent/workflows/\n'
-                            'Or use action="create" to generate one.'
+                            'Place .py files in the active profile\'s workflows/ directory, '
+                            'or use action="create" to generate one.'
                         ),
                     )
                 lines = [f'Available workflows ({len(workflows)}):']

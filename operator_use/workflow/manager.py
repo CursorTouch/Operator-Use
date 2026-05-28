@@ -77,11 +77,12 @@ class WorkflowManager:
         """Start a workflow run in the background. Returns run_id immediately."""
         from operator_use.subagent.manager import _session_channel, _session_chat_id
 
-        path = self._loader.find(workflow_name)
+        path = self._loader.find(workflow_name) if self._loader else None
         if path is None:
+            location = str(self._workflows_dir) if self._workflows_dir else 'the active profile workflows/ directory'
             raise ValueError(
                 f"Workflow '{workflow_name}' not found. "
-                f"Place a .py file in ~/.operator/agent/workflows/ or <project>/.operator/agent/workflows/"
+                f"Place a .py file in {location}"
             )
 
         run_id = f'wf_{uuid.uuid4().hex[:8]}'

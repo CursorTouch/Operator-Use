@@ -405,91 +405,95 @@ class GoogleAntigravityAPI(BaseAPI):
                         yield ErrorEvent(reason=StopReason.Abort, error=f"HTTP {response.status_code}: {error_body}")
                         return
 
-                    async for line in response.aiter_lines():
-                        if self._cancelled():
-                            yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
-                            done = True
-                            break
-                        if not line.startswith("data: "):
-                            continue
-                        raw = line[6:].strip()
-                        if not raw or raw == "[DONE]":
-                            continue
+                    _lines = response.aiter_lines()
+                    try:
+                        async for line in _lines:
+                            if self._cancelled():
+                                yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
+                                done = True
+                                break
+                            if not line.startswith("data: "):
+                                continue
+                            raw = line[6:].strip()
+                            if not raw or raw == "[DONE]":
+                                continue
 
-                        try:
-                            chunk = json.loads(raw)
-                        except json.JSONDecodeError:
-                            continue
+                            try:
+                                chunk = json.loads(raw)
+                            except json.JSONDecodeError:
+                                continue
 
-                        # API wraps the response in a "response" key
-                        if "response" in chunk:
-                            chunk = chunk["response"]
+                            # API wraps the response in a "response" key
+                            if "response" in chunk:
+                                chunk = chunk["response"]
 
-                        candidates = chunk.get("candidates", [])
-                        if not candidates:
-                            continue
+                            candidates = chunk.get("candidates", [])
+                            if not candidates:
+                                continue
 
-                        candidate = candidates[0]
-                        content = candidate.get("content", {})
-                        for part in content.get("parts", []):
-                            if part.get("thought") and part.get("text"):
-                                if not thinking_started:
-                                    yield ThinkingStartEvent(thinking=None)
-                                    thinking_started = True
-                                delta = part["text"]
-                                thinking_buf += delta
-                                if part.get("thoughtSignature"):
+                            candidate = candidates[0]
+                            content = candidate.get("content", {})
+                            for part in content.get("parts", []):
+                                if part.get("thought") and part.get("text"):
+                                    if not thinking_started:
+                                        yield ThinkingStartEvent(thinking=None)
+                                        thinking_started = True
+                                    delta = part["text"]
+                                    thinking_buf += delta
+                                    if part.get("thoughtSignature"):
+                                        thinking_sig = part["thoughtSignature"]
+                                    yield ThinkingDeltaEvent(thinking=ThinkingContent(content=delta))
+                                elif part.get("thought") and part.get("thoughtSignature") and not part.get("text"):
+                                    # Gemini may send a signature-only thought part
                                     thinking_sig = part["thoughtSignature"]
-                                yield ThinkingDeltaEvent(thinking=ThinkingContent(content=delta))
-                            elif part.get("thought") and part.get("thoughtSignature") and not part.get("text"):
-                                # Gemini may send a signature-only thought part
-                                thinking_sig = part["thoughtSignature"]
-                            elif part.get("text"):
+                                elif part.get("text"):
+                                    if thinking_started:
+                                        yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf, signature=thinking_sig))
+                                        thinking_started = False
+                                        thinking_index += 1
+                                        thinking_buf = ""
+                                        thinking_sig = ""
+                                    if not text_started:
+                                        yield TextStartEvent(text=TextContent(content=""))
+                                        text_started = True
+                                    delta = part["text"]
+                                    text_buf += delta
+                                    yield TextDeltaEvent(text=TextContent(content=delta))
+                                elif part.get("functionCall"):
+                                    fc = part["functionCall"]
+                                    name = fc.get("name", "") or fc.get("id", "")
+                                    args_raw = fc.get("args", {})
+                                    try:
+                                        if isinstance(args_raw, str) and args_raw.strip():
+                                            args = json.loads(args_raw)
+                                        else:
+                                            args = args_raw if args_raw else {}
+                                    except json.JSONDecodeError:
+                                        args = {}
+                                    call_meta: dict[str, Any] = {}
+                                    part_sig = part.get("thoughtSignature")
+                                    if part_sig:
+                                        call_meta["thoughtSignature"] = part_sig
+                                    call_id = fc.get("id") or name
+                                    yield ToolCallStartEvent(tool_call=ToolCallContent(id=call_id, name=name))
+                                    yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=call_id))
+                                    yield ToolCallEndEvent(tool_call=ToolCallContent(id=call_id, name=name, args=args, metadata=call_meta))
+                                    tool_index += 1
+
+                            finish_reason = candidate.get("finishReason", "")
+                            if finish_reason and finish_reason not in ("", "FINISH_REASON_UNSPECIFIED"):
                                 if thinking_started:
                                     yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf, signature=thinking_sig))
-                                    thinking_started = False
                                     thinking_index += 1
-                                    thinking_buf = ""
-                                    thinking_sig = ""
-                                if not text_started:
-                                    yield TextStartEvent(text=TextContent(content=""))
-                                    text_started = True
-                                delta = part["text"]
-                                text_buf += delta
-                                yield TextDeltaEvent(text=TextContent(content=delta))
-                            elif part.get("functionCall"):
-                                fc = part["functionCall"]
-                                name = fc.get("name", "") or fc.get("id", "")
-                                args_raw = fc.get("args", {})
-                                try:
-                                    if isinstance(args_raw, str) and args_raw.strip():
-                                        args = json.loads(args_raw)
-                                    else:
-                                        args = args_raw if args_raw else {}
-                                except json.JSONDecodeError:
-                                    args = {}
-                                call_meta: dict[str, Any] = {}
-                                part_sig = part.get("thoughtSignature")
-                                if part_sig:
-                                    call_meta["thoughtSignature"] = part_sig
-                                call_id = fc.get("id") or name
-                                yield ToolCallStartEvent(tool_call=ToolCallContent(id=call_id, name=name))
-                                yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=call_id))
-                                yield ToolCallEndEvent(tool_call=ToolCallContent(id=call_id, name=name, args=args, metadata=call_meta))
-                                tool_index += 1
-
-                        finish_reason = candidate.get("finishReason", "")
-                        if finish_reason and finish_reason not in ("", "FINISH_REASON_UNSPECIFIED"):
-                            if thinking_started:
-                                yield ThinkingEndEvent(thinking=ThinkingContent(content=thinking_buf, signature=thinking_sig))
-                                thinking_index += 1
-                            if text_started:
-                                yield TextEndEvent(text=TextContent(content=text_buf))
-                                text_index += 1
-                            stop = StopReason.ToolCalls if tool_index > 0 else _STOP_REASON.get(finish_reason, StopReason.Stop)
-                            yield EndEvent(reason=stop)
-                            done = True
-                            break
+                                if text_started:
+                                    yield TextEndEvent(text=TextContent(content=text_buf))
+                                    text_index += 1
+                                stop = StopReason.ToolCalls if tool_index > 0 else _STOP_REASON.get(finish_reason, StopReason.Stop)
+                                yield EndEvent(reason=stop)
+                                done = True
+                                break
+                    finally:
+                        await _lines.aclose()
 
         except Exception as exc:
             yield ErrorEvent(reason=StopReason.Abort, error=str(exc))
