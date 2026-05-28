@@ -213,6 +213,12 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
             print(f"Error: profile '{agent}' not found. Available: {available}")
             return
 
+        # Apply CLI overrides onto the loaded profile (in memory only).
+        if model_id:
+            profile.model_id = model_id
+        if provider:
+            profile.provider = provider
+
     # Without --agent the REPL is ephemeral (no session saved to disk).
     # With --agent the session is persisted inside the profile's sessions/ dir.
     persist = profile is not None
@@ -230,7 +236,11 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     )
 
     label = f"agent: {profile.name}" if profile else "ephemeral"
-    print(f"Agent starting in {cwd}  (model: {config.model_id}, {label})")
+    if profile and profile.tools:
+        tools_label = f"tools: {', '.join(profile.tools)}"
+    else:
+        tools_label = "tools: all"
+    print(f"Agent starting in {cwd}  (model: {config.model_id}, {label}, {tools_label})")
     print("Type /help for commands. Esc = cancel agent, Ctrl-C twice or /quit = exit.\n")
 
     runtime = await Runtime.create(config)
