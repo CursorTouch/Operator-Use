@@ -5,32 +5,54 @@ import logging
 import os
 import time
 from pathlib import Path
+from typing import Awaitable, Callable
 from uuid import uuid4
 
 from operator_use.process.types import ProcessRecord, ProcessStatus
 
 logger = logging.getLogger(__name__)
 
-_MAX_BUFFER_BYTES = 1_000_000  # 1 MB cap per process in memory
+_MAX_BUFFER_BYTES = 1_000_000  # 1 MB cap per shell process in memory
+
+CompletionListener = Callable[[ProcessRecord], Awaitable[None] | None]
 
 
 class ProcessManager:
     """
-    Manages long-running background shell processes for the agent.
+    Manages long-running background processes for the agent.
 
-    Output (stdout + stderr) is captured via pipes and stored in an
-    in-memory ring buffer per process (capped at 1 MB). Nothing is
-    written to disk.
+    Two process types:
+      shell  — arbitrary shell commands; output captured in an in-memory ring
+               buffer (1 MB cap).  No stdin interaction.
+      agent  — spawns `operator acp serve` via ACPClient stdio; output written
+               to a disk log file under tasks_dir.  Supports multi-turn
+               interaction via write().
     """
 
-    def __init__(self, default_cwd: str | None = None) -> None:
+    def __init__(
+        self,
+        default_cwd: str | None = None,
+        tasks_dir: Path | None = None,
+    ) -> None:
         self._default_cwd = default_cwd or str(Path.cwd())
+        self._tasks_dir = tasks_dir
+        if tasks_dir is not None:
+            tasks_dir.mkdir(parents=True, exist_ok=True)
+
+        # shell process state
         self._records: dict[str, ProcessRecord] = {}
         self._subprocesses: dict[str, asyncio.subprocess.Process] = {}
         self._watchers: dict[str, asyncio.Task] = {}
         self._buffers: dict[str, bytearray] = {}
 
-    # ── Create ────────────────────────────────────────────────────────────────
+        # agent process state
+        self._agent_queues: dict[str, asyncio.Queue[str | None]] = {}
+        self._agent_session_tasks: dict[str, asyncio.Task] = {}
+
+        # shared
+        self._completion_listeners: dict[str, CompletionListener] = {}
+
+    # ── Shell: Create ─────────────────────────────────────────────────────────
 
     async def create(
         self,
@@ -44,6 +66,7 @@ class ProcessManager:
 
         record = ProcessRecord(
             id=pid,
+            type='shell',
             command=command,
             description=description,
             status=ProcessStatus.RUNNING,
@@ -69,13 +92,13 @@ class ProcessManager:
         self._subprocesses[pid] = proc
         self._buffers[pid] = bytearray()
         self._watchers[pid] = asyncio.create_task(
-            self._watch(pid, proc),
-            name=f'process:watch:{pid}',
+            self._watch_shell(pid, proc),
+            name=f'process:shell:{pid}',
         )
-        logger.debug('Process %s started: %s', pid, command)
+        logger.debug('Shell process %s started: %s', pid, command)
         return record
 
-    # ── Adopt ─────────────────────────────────────────────────────────────────
+    # ── Shell: Adopt ──────────────────────────────────────────────────────────
 
     async def adopt(
         self,
@@ -85,15 +108,13 @@ class ProcessManager:
         cwd: str,
         pre_captured: bytes = b'',
     ) -> ProcessRecord:
-        """
-        Take ownership of an already-running subprocess (e.g. one that timed
-        out in the terminal tool) and continue capturing its output.
-        """
+        """Take ownership of an already-running subprocess (e.g. terminal tool timeout)."""
         pid = f"p{uuid4().hex[:8]}"
         now = time.time()
 
         record = ProcessRecord(
             id=pid,
+            type='shell',
             command=command,
             description=description,
             status=ProcessStatus.RUNNING,
@@ -107,71 +128,86 @@ class ProcessManager:
         self._buffers[pid] = bytearray(pre_captured)
         self._watchers[pid] = asyncio.create_task(
             self._watch_adopted(pid, proc),
-            name=f'process:watch:{pid}',
+            name=f'process:adopted:{pid}',
         )
-        logger.debug('Process %s adopted: %s', pid, command)
+        logger.debug('Shell process %s adopted: %s', pid, command)
         return record
 
-    async def _watch_adopted(self, pid: str, proc: asyncio.subprocess.Process) -> None:
-        """Drain both stdout and stderr from an adopted subprocess."""
-        buf = self._buffers[pid]
+    # ── Agent: Create ─────────────────────────────────────────────────────────
 
-        async def _drain(stream) -> None:
-            if stream is None:
-                return
-            while True:
-                chunk = await stream.read(4096)
-                if not chunk:
-                    break
-                buf.extend(chunk)
-                if len(buf) > _MAX_BUFFER_BYTES:
-                    del buf[:len(buf) - _MAX_BUFFER_BYTES]
+    async def create_agent(
+        self,
+        prompt: str,
+        description: str,
+        provider: str,
+        model: str,
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+    ) -> ProcessRecord:
+        """Spawn a background agent via `operator acp serve` and send an initial prompt.
 
-        await asyncio.gather(_drain(proc.stdout), _drain(proc.stderr))
+        The ACP session is held open; use write() to send follow-up prompts.
+        Output is appended to a disk log file under tasks_dir.
+        """
+        pid = f"a{uuid4().hex[:8]}"
+        now = time.time()
 
-        return_code = await proc.wait()
-        record = self._records.get(pid)
+        output_file: Path | None = None
+        if self._tasks_dir is not None:
+            output_file = self._tasks_dir / f"{pid}.log"
+            output_file.write_text('', encoding='utf-8')
+
+        record = ProcessRecord(
+            id=pid,
+            type='agent',
+            command=None,
+            description=description,
+            status=ProcessStatus.RUNNING,
+            cwd=cwd or self._default_cwd,
+            created_at=now,
+            started_at=now,
+            prompt=prompt,
+            output_file=output_file,
+            env=env,
+        )
+
+        self._records[pid] = record
+
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        self._agent_queues[pid] = queue
+        await queue.put(prompt)
+
+        self._agent_session_tasks[pid] = asyncio.create_task(
+            self._run_agent_session(pid, provider, model, env),
+            name=f'process:agent:{pid}',
+        )
+        logger.debug('Agent process %s started | provider=%s model=%s', pid, provider, model)
+        return record
+
+    # ── Agent: Write ──────────────────────────────────────────────────────────
+
+    async def write(self, process_id: str, text: str) -> None:
+        """Send a follow-up prompt to a running agent process."""
+        record = self._records.get(process_id)
         if record is None:
-            return
-        record.ended_at = time.time()
-        record.return_code = return_code
-        if record.status == ProcessStatus.RUNNING:
-            record.status = ProcessStatus.COMPLETED if return_code == 0 else ProcessStatus.FAILED
-        self._subprocesses.pop(pid, None)
-        logger.debug('Process %s (adopted) exited with code %d', pid, return_code)
+            raise KeyError(f"No process with id '{process_id}'")
+        if record.type != 'agent':
+            raise ValueError(f"Process '{process_id}' is a shell process and does not accept input.")
+        if record.status != ProcessStatus.RUNNING:
+            raise ValueError(f"Process '{process_id}' is not running (status={record.status.value}).")
+        await self._agent_queues[process_id].put(text)
 
-    # ── Watch ─────────────────────────────────────────────────────────────────
-
-    async def _watch(self, pid: str, proc: asyncio.subprocess.Process) -> None:
-        buf = self._buffers[pid]
-        if proc.stdout is not None:
-            while True:
-                chunk = await proc.stdout.read(4096)
-                if not chunk:
-                    break
-                buf.extend(chunk)
-                if len(buf) > _MAX_BUFFER_BYTES:
-                    del buf[:len(buf) - _MAX_BUFFER_BYTES]
-
-        return_code = await proc.wait()
-        record = self._records.get(pid)
-        if record is None:
-            return
-        record.ended_at = time.time()
-        record.return_code = return_code
-        # Don't override KILLED status set by stop()
-        if record.status == ProcessStatus.RUNNING:
-            record.status = ProcessStatus.COMPLETED if return_code == 0 else ProcessStatus.FAILED
-        self._subprocesses.pop(pid, None)
-        logger.debug('Process %s exited with code %d', pid, return_code)
-
-    # ── Stop ──────────────────────────────────────────────────────────────────
+    # ── Shared: Stop ──────────────────────────────────────────────────────────
 
     async def stop(self, process_id: str) -> ProcessRecord:
         record = self._records.get(process_id)
         if record is None:
             raise KeyError(f"No process with id '{process_id}'")
 
+        if record.type == 'agent':
+            return await self._stop_agent(process_id, record)
+
+        # shell
         proc = self._subprocesses.get(process_id)
         if proc is not None:
             try:
@@ -184,9 +220,6 @@ class ProcessManager:
             except ProcessLookupError:
                 pass
 
-        # Mark killed before the watcher can touch the record, then let the
-        # watcher drain any remaining pipe output (process is dead so EOF
-        # arrives immediately). Shield so a timeout doesn't cancel it early.
         record.ended_at = time.time()
         record.status = ProcessStatus.KILLED
         self._subprocesses.pop(process_id, None)
@@ -204,10 +237,10 @@ class ProcessManager:
                 except (asyncio.CancelledError, Exception):
                     pass
 
-        logger.debug('Process %s killed', process_id)
+        logger.debug('Shell process %s killed', process_id)
         return record
 
-    # ── Query ─────────────────────────────────────────────────────────────────
+    # ── Shared: Query ─────────────────────────────────────────────────────────
 
     def get(self, process_id: str) -> ProcessRecord | None:
         return self._records.get(process_id)
@@ -219,11 +252,171 @@ class ProcessManager:
         return records
 
     def read_output(self, process_id: str, max_bytes: int = 12000) -> str:
+        record = self._records.get(process_id)
+        if record is None:
+            raise KeyError(f"No process with id '{process_id}'")
+
+        if record.type == 'agent':
+            if record.output_file is None or not record.output_file.exists():
+                return ''
+            content = record.output_file.read_text(encoding='utf-8', errors='replace')
+            return content[-max_bytes:] if len(content) > max_bytes else content
+
+        # shell — in-memory ring buffer
         buf = self._buffers.get(process_id)
         if buf is None:
-            raise KeyError(f"No process with id '{process_id}'")
+            raise KeyError(f"No buffer for process '{process_id}'")
         data = bytes(buf[-max_bytes:]) if len(buf) > max_bytes else bytes(buf)
         return data.decode('utf-8', errors='replace')
+
+    # ── Completion listeners ──────────────────────────────────────────────────
+
+    def register_completion_listener(self, listener: CompletionListener) -> Callable[[], None]:
+        """Register a callback fired when any process reaches a terminal state.
+        Returns an unregister callable."""
+        lid = uuid4().hex
+        self._completion_listeners[lid] = listener
+
+        def _unregister() -> None:
+            self._completion_listeners.pop(lid, None)
+
+        return _unregister
+
+    # ── Shell internals ───────────────────────────────────────────────────────
+
+    async def _watch_shell(self, pid: str, proc: asyncio.subprocess.Process) -> None:
+        buf = self._buffers[pid]
+        if proc.stdout is not None:
+            while True:
+                chunk = await proc.stdout.read(4096)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                if len(buf) > _MAX_BUFFER_BYTES:
+                    del buf[:len(buf) - _MAX_BUFFER_BYTES]
+
+        return_code = await proc.wait()
+        record = self._records.get(pid)
+        if record is None:
+            return
+        record.ended_at = time.time()
+        record.return_code = return_code
+        if record.status == ProcessStatus.RUNNING:
+            record.status = ProcessStatus.COMPLETED if return_code == 0 else ProcessStatus.FAILED
+        self._subprocesses.pop(pid, None)
+        logger.debug('Shell process %s exited with code %d', pid, return_code)
+        await self._notify_listeners(record)
+
+    async def _watch_adopted(self, pid: str, proc: asyncio.subprocess.Process) -> None:
+        buf = self._buffers[pid]
+
+        async def _drain(stream) -> None:
+            if stream is None:
+                return
+            while True:
+                chunk = await stream.read(4096)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                if len(buf) > _MAX_BUFFER_BYTES:
+                    del buf[:len(buf) - _MAX_BUFFER_BYTES]
+
+        await asyncio.gather(_drain(proc.stdout), _drain(proc.stderr))
+        return_code = await proc.wait()
+        record = self._records.get(pid)
+        if record is None:
+            return
+        record.ended_at = time.time()
+        record.return_code = return_code
+        if record.status == ProcessStatus.RUNNING:
+            record.status = ProcessStatus.COMPLETED if return_code == 0 else ProcessStatus.FAILED
+        self._subprocesses.pop(pid, None)
+        logger.debug('Adopted process %s exited with code %d', pid, return_code)
+        await self._notify_listeners(record)
+
+    # ── Agent internals ───────────────────────────────────────────────────────
+
+    async def _run_agent_session(
+        self,
+        pid: str,
+        provider: str,
+        model: str,
+        env: dict[str, str] | None,  # reserved for future env injection into acp serve
+    ) -> None:
+        from operator_use.acp.client import ACPClient
+
+        record = self._records[pid]
+        queue = self._agent_queues[pid]
+
+        self._append_output(record, f"[Agent started | provider={provider} model={model}]\n\n")
+
+        try:
+            client = ACPClient.stdio('operator', 'acp', 'serve', '--provider', provider, '--model', model)
+            async with client as c:
+                async with c.session() as sid:
+                    while True:
+                        prompt = await queue.get()
+                        if prompt is None:           # stop sentinel
+                            break
+                        self._append_output(record, f"[User]\n{prompt}\n\n")
+                        try:
+                            result = await c.run(prompt, sid)
+                            self._append_output(record, f"[Agent]\n{result}\n\n")
+                        except Exception as exc:
+                            self._append_output(record, f"[Error]\n{exc}\n\n")
+                            logger.warning('Agent process %s run error: %s', pid, exc)
+
+            record.status = ProcessStatus.COMPLETED
+
+        except asyncio.CancelledError:
+            record.status = ProcessStatus.KILLED
+        except Exception as exc:
+            logger.error('Agent process %s session failed: %s', pid, exc)
+            self._append_output(record, f"[Session error]\n{exc}\n")
+            record.status = ProcessStatus.FAILED
+        finally:
+            record.ended_at = time.time()
+            self._agent_queues.pop(pid, None)
+            self._agent_session_tasks.pop(pid, None)
+            logger.debug('Agent process %s finished | status=%s', pid, record.status)
+            await self._notify_listeners(record)
+
+    async def _stop_agent(self, process_id: str, record: ProcessRecord) -> ProcessRecord:
+        queue = self._agent_queues.get(process_id)
+        if queue is not None:
+            await queue.put(None)           # stop sentinel
+
+        session_task = self._agent_session_tasks.get(process_id)
+        if session_task and not session_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(session_task), timeout=5.0)
+            except (asyncio.TimeoutError, Exception):
+                session_task.cancel()
+                try:
+                    await session_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+
+        record.status = ProcessStatus.KILLED
+        record.ended_at = time.time()
+        logger.debug('Agent process %s stopped', process_id)
+        return record
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _append_output(self, record: ProcessRecord, text: str) -> None:
+        if record.output_file is not None:
+            with record.output_file.open('a', encoding='utf-8') as f:
+                f.write(text)
+
+    async def _notify_listeners(self, record: ProcessRecord) -> None:
+        for lid, listener in list(self._completion_listeners.items()):
+            try:
+                result = listener(record)
+                if asyncio.isfuture(result) or asyncio.iscoroutine(result):
+                    await result
+            except Exception:
+                logger.debug('Completion listener %s failed for process %s', lid, record.id, exc_info=True)
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
 
@@ -233,4 +426,10 @@ class ProcessManager:
             try:
                 await self.stop(pid)
             except Exception:
-                logger.debug('Error stopping process %s on close', pid, exc_info=True)
+                logger.debug('Error stopping shell process %s on close', pid, exc_info=True)
+
+        for pid in list(self._agent_session_tasks.keys()):
+            try:
+                await self._stop_agent(pid, self._records[pid])
+            except Exception:
+                logger.debug('Error stopping agent process %s on close', pid, exc_info=True)

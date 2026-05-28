@@ -44,6 +44,10 @@ def get_packages_dir() -> Path:
     return CONFIG_DIR_PATH / 'packages'
 
 
+def get_tasks_dir() -> Path:
+    return CONFIG_DIR_PATH / 'tasks'
+
+
 # ── Gateway ───────────────────────────────────────────────────────────────────
 
 def get_gateway_dir() -> Path:

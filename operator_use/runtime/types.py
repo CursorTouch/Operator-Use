@@ -393,7 +393,8 @@ class RuntimeContext:
             all_tools = [t for t in all_tools if t.name != 'cron']
 
         # ── Process manager ───────────────────────────────────────────────────
-        process_manager = ProcessManager(default_cwd=str(cwd))
+        from operator_use.settings.paths import get_tasks_dir
+        process_manager = ProcessManager(default_cwd=str(cwd), tasks_dir=get_tasks_dir())
         _process_tool = next((t for t in all_tools if t.name == 'process'), None)
         if _process_tool is not None:
             _process_tool._manager = process_manager  # type: ignore[attr-defined]

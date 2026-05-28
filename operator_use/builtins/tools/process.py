@@ -12,14 +12,16 @@ if TYPE_CHECKING:
 
 
 class ProcessSchema(BaseModel):
-    action: Literal['start', 'list', 'get', 'stop', 'output'] = Field(
+    action: Literal['start', 'spawn_agent', 'write', 'list', 'get', 'stop', 'output'] = Field(
         description=(
             'Action to perform:\n'
-            '  start  — launch a shell command as a background process\n'
-            '  list   — list all processes and their status\n'
-            '  get    — get full details of one process\n'
-            '  stop   — terminate a running process (SIGTERM → SIGKILL)\n'
-            '  output — read the last N bytes of a process log'
+            '  start        — launch a shell command as a background process\n'
+            '  spawn_agent  — spawn a background agent (operator acp serve) with an initial prompt\n'
+            '  write        — send a follow-up prompt to a running agent process\n'
+            '  list         — list all processes and their status\n'
+            '  get          — get full details of one process\n'
+            '  stop         — terminate a running process (SIGTERM → SIGKILL)\n'
+            '  output       — read the last N bytes of a process log'
         )
     )
     command: str | None = Field(
@@ -28,11 +30,11 @@ class ProcessSchema(BaseModel):
     )
     description: str | None = Field(
         default=None,
-        description="Short label for the process. Required for action='start'.",
+        description="Short label for the process. Required for action='start' and 'spawn_agent'.",
     )
     process_id: str | None = Field(
         default=None,
-        description="Process ID (e.g. 'p3f7e2c1'). Required for get, stop, output.",
+        description="Process ID. Required for get, stop, output, write.",
     )
     cwd: str | None = Field(
         default=None,
@@ -46,6 +48,18 @@ class ProcessSchema(BaseModel):
         default=12000,
         description="Maximum bytes of output to return for action='output'.",
     )
+    prompt: str | None = Field(
+        default=None,
+        description="Initial prompt for action='spawn_agent', or follow-up for action='write'.",
+    )
+    provider: str | None = Field(
+        default=None,
+        description="LLM provider for action='spawn_agent' (e.g. 'anthropic').",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Model ID for action='spawn_agent' (e.g. 'claude-sonnet-4-6').",
+    )
 
     @model_validator(mode='after')
     def _check_fields(self) -> 'ProcessSchema':
@@ -53,6 +67,15 @@ class ProcessSchema(BaseModel):
             missing = [f for f, v in [('command', self.command), ('description', self.description)] if not v]
             if missing:
                 raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='start'.")
+        elif self.action == 'spawn_agent':
+            missing = [f for f, v in [('prompt', self.prompt), ('description', self.description),
+                                       ('provider', self.provider), ('model', self.model)] if not v]
+            if missing:
+                raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='spawn_agent'.")
+        elif self.action == 'write':
+            missing = [f for f, v in [('process_id', self.process_id), ('prompt', self.prompt)] if not v]
+            if missing:
+                raise ValueError(f"{', '.join(repr(f) for f in missing)} required for action='write'.")
         elif self.action in {'get', 'stop', 'output'} and not self.process_id:
             raise ValueError(f"'process_id' is required for action='{self.action}'.")
         return self
@@ -76,9 +99,14 @@ class ProcessTool(Tool):
         super().__init__(
             name='process',
             description=(
-                'Manage long-running background shell processes. '
-                'Start a command and let it run without blocking the agent, '
-                'check its status, read its output, or stop it at any time.'
+                'Manage long-running background processes — both shell commands and AI agents.\n'
+                '  start       — launch a shell command in the background\n'
+                '  spawn_agent — spawn a background agent (operator acp serve) with an initial prompt; '
+                'output is written to a disk log file\n'
+                '  write       — send a follow-up prompt to a running agent process\n'
+                '  output      — read the process log (shell: memory buffer; agent: disk log)\n'
+                '  list/get    — inspect processes by status or id\n'
+                '  stop        — terminate a process'
             ),
             schema=ProcessSchema,
             kind=ToolKind.Execute,
@@ -123,6 +151,35 @@ class ProcessTool(Tool):
                         invocation.id,
                         f"Process started.\n{json.dumps(_format_record(record), indent=2)}",
                     )
+
+                case 'spawn_agent':
+                    prompt = params.get('prompt')
+                    description = params.get('description')
+                    provider = params.get('provider')
+                    model = params.get('model')
+                    if not all([prompt, description, provider, model]):
+                        return ToolResult.error(invocation.id, "'prompt', 'description', 'provider', and 'model' are required for action='spawn_agent'.")
+                    record = await manager.create_agent(
+                        prompt=prompt,
+                        description=description,
+                        provider=provider,
+                        model=model,
+                        cwd=params.get('cwd'),
+                    )
+                    return ToolResult.ok(
+                        invocation.id,
+                        f"Agent process spawned. Output will be written to disk.\n{json.dumps(_format_record(record), indent=2)}",
+                    )
+
+                case 'write':
+                    process_id = params.get('process_id')
+                    prompt = params.get('prompt')
+                    if not process_id:
+                        return ToolResult.error(invocation.id, "'process_id' is required for action='write'.")
+                    if not prompt:
+                        return ToolResult.error(invocation.id, "'prompt' is required for action='write'.")
+                    await manager.write(process_id, prompt)
+                    return ToolResult.ok(invocation.id, f"Prompt sent to agent process '{process_id}'.")
 
                 case 'list':
                     status_filter = params.get('status_filter')

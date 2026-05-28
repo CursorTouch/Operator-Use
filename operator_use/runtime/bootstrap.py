@@ -171,7 +171,7 @@ def bootstrap_global_dir(config_dir: Path | None = None) -> None:
     root = config_dir or get_config_dir()
 
     # Directories
-    for sub in ('auth', 'packages', 'profiles', 'gateway'):
+    for sub in ('auth', 'packages', 'profiles', 'gateway', 'tasks'):
         _mkdir(root / sub)
 
     # Global config files
