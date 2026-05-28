@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from operator_use.resource.types import ContextFile
     from operator_use.skill.types import Skill
 
 
@@ -59,13 +58,36 @@ def build_guidelines(extra: list[str]) -> str:
     return "\n".join(lines)
 
 
-def context_files_section(context_files: list[ContextFile]) -> str:
-    if not context_files:
-        return ""
-    parts = ["\n\n# Project Context\n\nProject-specific instructions and guidelines:\n"]
-    for cf in context_files:
-        parts.append(f"## {cf.path}\n\n{cf.content}\n")
-    return "\n".join(parts)
+
+def docs_section(docs_path: str) -> str:
+    return (
+        "\n\nOperator documentation (read only when asked about Operator internals, "
+        "architecture, or how to extend it):\n"
+        f"- Documentation: {docs_path}\n"
+        "- When asked about: turn flow/retry/compaction (agent.md), "
+        "LLM loop/tool execution (engine.md), "
+        "session JSONL/branching (session.md), "
+        "extension loading (extensions.md), "
+        "package install (packages.md), "
+        "event hooks (hooks.md), "
+        "channels/message bus (gateway.md), "
+        "models/providers (inference.md), "
+        "tool interface (tool.md), "
+        "skills format (skill.md), "
+        "slash commands (commands.md), "
+        "credentials/OAuth (auth.md), "
+        "agent profiles (profiles.md), "
+        "browser automation (browser.md), "
+        "desktop control (computer.md), "
+        "sandbox policy (sandbox.md), "
+        "knowledge base (knowledge.md), "
+        "multi-agent teams (team.md), "
+        "Python workflows (workflow.md), "
+        "ACP transports (acp.md)\n"
+        "- When working on Operator topics, read the relevant doc(s) and follow "
+        "cross-references before implementing\n"
+        "- Always read .md files completely and follow links to related docs"
+    )
 
 
 def escape_xml(text: str) -> str:

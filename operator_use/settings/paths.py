@@ -62,6 +62,15 @@ def get_gateway_stderr_path() -> Path:
     return get_gateway_dir() / 'gateway.err.log'
 
 
+# ── Docs (shipped with the package) ──────────────────────────────────────────
+
+_DOCS_ROOT = Path(__file__).parent.parent.parent / 'docs'
+
+
+def get_docs_dir() -> Path:
+    return _DOCS_ROOT
+
+
 # ── Builtins (shipped with the package) ───────────────────────────────────────
 
 _BUILTINS_ROOT = Path(__file__).parent.parent / 'builtins'

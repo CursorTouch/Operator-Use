@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import BaseModel, Field
 
-from operator_use.resource.types import ContextFile
 from operator_use.skill.types import Skill
 from operator_use.tool.types import Tool
 
@@ -15,9 +16,9 @@ class SystemPromptOptions(BaseModel):
     tools: list[Tool] = Field(default_factory=list)
     prompt_guidelines: list[str] = Field(default_factory=list)
     append_system_prompt: str | None = None
-    context_files: list[ContextFile] = Field(default_factory=list)
     skills: list[Skill] = Field(default_factory=list)
     soul_prompt: str | None = None
     user_profile: str | None = None
     agent_memory: str | None = None
     channel: str | None = None
+    profile_dir: Path | None = None

@@ -401,7 +401,6 @@ class Agent(ExtensionContext):
 
     def _rebuild_system_prompt(self, channel: str | None = None) -> str:
         skills, _ = self._resources.get_skills()
-        context_files = self._resources.get_context_files()
         custom_prompt = (
             self._active_profile.system_prompt
             if self._active_profile and self._active_profile.system_prompt
@@ -416,13 +415,13 @@ class Agent(ExtensionContext):
             tools=self._engine.state.tools,
             prompt_guidelines=self._config.prompt_guidelines,
             append_system_prompt=append_system_prompt,
-            context_files=context_files,
             skills=skills,
             soul_prompt=self._resources.get_soul_prompt(),
             user_profile=self._resources.get_user_profile(),
             agent_memory=self._resources.get_agent_memory(),
             channel=channel,
             session_id=self._session_manager.session_id,
+            profile_dir=self._active_profile.profile_dir if self._active_profile else None,
         ).build()
 
     def _register_message_handler(self, persisted_ids: list[str]) -> Callable:
