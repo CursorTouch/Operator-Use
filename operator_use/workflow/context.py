@@ -5,7 +5,7 @@ import asyncio
 import inspect
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Type
+from typing import TYPE_CHECKING, Any, Type, overload
 
 from pydantic import BaseModel
 
@@ -63,6 +63,11 @@ class WorkflowExecuteContext:
 
     # ── Workflow globals ───────────────────────────────────────────────────────
 
+    @overload
+    async def agent(self, prompt: str, schema: None = None, system: str | None = None, tools: list[str] | None = None, resume: bool = False) -> str: ...
+    @overload
+    async def agent(self, prompt: str, schema: Type[BaseModel], system: str | None = None, tools: list[str] | None = None, resume: bool = False) -> BaseModel: ...
+
     async def agent(
         self,
         prompt: str,
@@ -70,7 +75,7 @@ class WorkflowExecuteContext:
         system: str | None = None,
         tools: list[str] | None = None,
         resume: bool = False,
-    ):
+    ) -> str | BaseModel:
         """Run a single agent task. Returns str or a parsed Pydantic model if schema given."""
         opts = {'schema': schema.__name__ if schema else None, 'system': system}
         if resume:
