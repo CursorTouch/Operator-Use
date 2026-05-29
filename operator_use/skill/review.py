@@ -168,7 +168,15 @@ def spawn_skill_review(
         except Exception as exc:
             logger.warning('skill review thread error: %s', exc)
         finally:
-            loop.close()
+            # Close tracked async generators (e.g. httpx streaming responses)
+            # while the loop is still alive — asyncio.run does this for us, but a
+            # hand-rolled loop must, or their aclose() coroutines are left for the
+            # GC finalizer after loop.close() ("coroutine 'aclose' ... was never
+            # awaited" / "Task was destroyed but it is pending!").
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            finally:
+                loop.close()
 
     t = threading.Thread(target=_thread_target, daemon=True, name='skill-review')
     t.start()
