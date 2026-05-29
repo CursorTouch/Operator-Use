@@ -510,7 +510,8 @@ class RuntimeContext:
             cron=cron,
             hooks=hooks,
             auth_channel_manager=auth_channel_manager,
-            subagent_settings=SubagentSettings(),
+            subagent_settings=(settings_manager.get_subagent_settings()
+                               if settings_manager is not None else SubagentSettings()),
             mcp_manager=mcp_manager,
             memory_manager=memory_manager,
             acp_auth_manager=acp_auth_manager,

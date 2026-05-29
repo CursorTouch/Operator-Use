@@ -21,6 +21,7 @@ from operator_use.gateway.channels.types import (
     SlackChannelConfig, TwitchChannelConfig,
 )
 from operator_use.acp.types import ACPSettings
+from operator_use.subagent.types import SubagentSettings
 from operator_use.engine.types import SteeringMode, FollowupMode
 from operator_use.inference.types import Transport, ThinkingLevel
 
@@ -42,6 +43,7 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
 _PYDANTIC_FIELD_TYPES: dict[str, type] = {
     'channels': ChannelsSettings,
     'acp': ACPSettings,
+    'subagent': SubagentSettings,
 }
 
 
@@ -772,6 +774,10 @@ class SettingsManager:
     def get_subagents_enabled(self) -> bool:
         """Return whether subagent delegation is enabled (default: True)."""
         return self.settings.subagents_enabled if self.settings.subagents_enabled is not None else True
+
+    def get_subagent_settings(self) -> SubagentSettings:
+        """Resolve subagent tuning knobs from settings (defaults when unset)."""
+        return self.settings.subagent or SubagentSettings()
 
     def set_subagents_enabled(self, enabled: bool):
         """Enable or disable subagent delegation and persist to global settings."""

@@ -6,6 +6,7 @@ from operator_use.engine.types import SteeringMode, FollowupMode
 from operator_use.inference.types import Transport, ThinkingLevel
 from operator_use.gateway.channels.types import ChannelsSettings
 from operator_use.acp.types import ACPSettings
+from operator_use.subagent.types import SubagentSettings
 
 
 class SCOPE(str, Enum):
@@ -197,7 +198,8 @@ class Settings:
     # Feature flags
     enable_skill_commands: Optional[bool] = None
     cron_enabled: Optional[bool] = None
-    subagents_enabled: Optional[bool] = None
+    subagents_enabled: Optional[bool] = None   # on/off gate for subagent delegation
+    subagent: Optional[SubagentSettings] = None   # subagent tuning knobs (concurrency, retries, timeout, ...)
     workflows_enabled: Optional[bool] = None   # legacy flat flag; superseded by workflow.enabled
     workflow: Optional[WorkflowSettings] = None
     computer_use: Optional[ComputerUseSettings] = None
