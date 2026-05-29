@@ -78,11 +78,13 @@ class Runtime:
         self._configure_context(context)
 
     def _create_workflow_manager(self, context: RuntimeContext) -> WorkflowManager:
+        profile = context.resource_loader._active_profile
         return WorkflowManager(
             llm=context.llm,
             tools=context.engine.tools,
             bus=self.bus,
             workflow_dirs=context.resource_loader.get_workflow_dirs(),
+            runs_dir=profile.workflow_runs_dir if profile else None,
         )
 
     def _create_subagent_manager(self, context: RuntimeContext) -> SubagentManager:

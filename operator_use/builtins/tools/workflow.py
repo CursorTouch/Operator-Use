@@ -40,11 +40,12 @@ RULES:
 """
 
 
-async def _generate_workflow_code(llm, name: str, description: str) -> str:
+async def _generate_workflow_code(llm, name: str, description: str, deliver: bool = True) -> str:
     from operator_use.inference.types import LLMContext, TextDeltaEvent, ErrorEvent
     from operator_use.message.types import UserMessage
 
-    prompt = f'Generate a workflow named "{name}" that does the following:\n\n{description}'
+    deliver_line = '' if deliver else '\n    "deliver": False,'
+    prompt = f'Generate a workflow named "{name}" that does the following:\n\n{description}\n\nInclude in the meta dict:{deliver_line or " deliver defaults to true, no need to set it."}'
     events = await llm.invoke(LLMContext(
         messages=[UserMessage.text(prompt)],
         system_prompt=_GENERATION_SYSTEM_PROMPT,
@@ -117,6 +118,10 @@ class WorkflowSchema(BaseModel):
     run_id: str | None = Field(
         default=None,
         description='Run ID — required for status and cancel actions.',
+    )
+    deliver: bool = Field(
+        default=True,
+        description='(create action) Whether to inject the result back into the main agent when done. Default true.',
     )
 
     @model_validator(mode='after')
@@ -195,8 +200,9 @@ class WorkflowTool(Tool):
                 if llm is None:
                     return ToolResult.error(id=invocation.id, content='LLM context is not available.')
 
+                deliver = params.get('deliver', True)
                 try:
-                    code = await _generate_workflow_code(llm, name, description)
+                    code = await _generate_workflow_code(llm, name, description, deliver=deliver)
                 except Exception as exc:
                     return ToolResult.error(id=invocation.id, content=f'Code generation failed: {exc}')
 

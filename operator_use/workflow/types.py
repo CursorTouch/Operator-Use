@@ -47,6 +47,7 @@ class WorkflowMeta:
     description: str
     when_to_use: str | None = None
     phases: list[dict] = field(default_factory=list)
+    deliver: bool = True
 
 
 @dataclass
@@ -63,6 +64,7 @@ class WorkflowRunRecord:
     current_phase: str | None = None
     channel: str | None = None
     chat_id: str | None = None
+    deliver: bool = True
 
 
 class WorkflowJournal:
@@ -111,6 +113,7 @@ class Workflow(ABC):
     description: str
     when_to_use: str | None = None
     phases: list[dict] = []
+    deliver: bool = True
 
     @classmethod
     def meta(cls) -> WorkflowMeta:
@@ -119,6 +122,7 @@ class Workflow(ABC):
             description=cls.description,
             when_to_use=getattr(cls, 'when_to_use', None),
             phases=list(getattr(cls, 'phases', [])),
+            deliver=getattr(cls, 'deliver', True),
         )
 
     async def build_context(

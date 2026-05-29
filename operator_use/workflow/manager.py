@@ -37,11 +37,13 @@ class WorkflowManager:
         bus: Bus | None = None,
         workflows_dir: Path | None = None,
         workflow_dirs: list[Path] | None = None,
+        runs_dir: Path | None = None,
     ) -> None:
         self._llm = llm
         self._tools = [t for t in tools if t.name not in ('subagent', 'workflow')]
         self._bus = bus
         self._workflows_dir = workflows_dir
+        self._runs_dir = runs_dir
         # workflow_dirs (full list) takes precedence over the legacy workflows_dir scalar
         dirs: list[Path] = workflow_dirs if workflow_dirs is not None else (
             [workflows_dir] if workflows_dir else []
@@ -109,6 +111,18 @@ class WorkflowManager:
                 hint = f"Available: {', '.join(candidates)}" if candidates else "No workflows found."
                 raise ValueError(f"Workflow '{workflow_name}' not found. {hint}")
 
+        # Resolve deliver from meta before creating the record
+        if workflow_instance is not None:
+            deliver = workflow_instance.meta().deliver
+        elif path is not None:
+            from operator_use.workflow.execute import load_meta
+            try:
+                deliver = load_meta(path).deliver
+            except Exception:
+                deliver = True
+        else:
+            deliver = True
+
         invocation = WorkflowInvocation(workflow_name=workflow_name, args=args or {})
         record = WorkflowRunRecord(
             run_id=invocation.run_id,
@@ -117,6 +131,7 @@ class WorkflowManager:
             started_at=datetime.now(),
             channel=_session_channel.get(),
             chat_id=_session_chat_id.get(),
+            deliver=deliver,
         )
         self._records[invocation.run_id] = record
 
@@ -176,10 +191,12 @@ class WorkflowManager:
             record.finished_at = datetime.now()
             logger.error('[%s] workflow "%s" failed: %s', record.run_id, record.workflow_name, exc)
 
-        try:
-            await asyncio.shield(self._announce(record))
-        except Exception:
-            logger.exception('[%s] failed to announce workflow result', record.run_id)
+        self._write_log(record)
+        if record.deliver:
+            try:
+                await asyncio.shield(self._announce(record))
+            except Exception:
+                logger.exception('[%s] failed to announce workflow result', record.run_id)
 
     async def _run_class(
         self,
@@ -232,8 +249,7 @@ class WorkflowManager:
         from operator_use.workflow.execute import execute
         from operator_use.workflow.types import WorkflowJournal
 
-        runs_base = (self._workflows_dir / '.runs') if self._workflows_dir else Path(tempfile.gettempdir()) / '.operator-workflow-runs'
-        run_dir = runs_base / record.run_id
+        run_dir = (self._runs_dir / record.run_id) if self._runs_dir else (Path(tempfile.gettempdir()) / '.operator-workflow-runs' / record.run_id)
         run_dir.mkdir(parents=True, exist_ok=True)
 
         journal = WorkflowJournal(run_dir=run_dir)
@@ -252,6 +268,16 @@ class WorkflowManager:
         record.status = WorkflowStatus.completed
         record.finished_at = datetime.now()
         logger.info('[%s] workflow "%s" completed', record.run_id, record.workflow_name)
+
+    def _write_log(self, record: WorkflowRunRecord) -> None:
+        if self._runs_dir is None or not record.log_lines:
+            return
+        try:
+            log_path = self._runs_dir / f'{record.run_id}.log'
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text('\n'.join(record.log_lines), encoding='utf-8')
+        except Exception:
+            logger.warning('[%s] failed to write log file', record.run_id)
 
     async def _announce(self, record: WorkflowRunRecord) -> None:
         if not record.channel or not record.chat_id or self._bus is None:

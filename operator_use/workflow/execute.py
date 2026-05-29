@@ -31,6 +31,7 @@ def load_meta(path: Path) -> WorkflowMeta:
                         description=str(meta_dict.get('description', '')),
                         when_to_use=meta_dict.get('when_to_use'),
                         phases=list(meta_dict.get('phases', [])),
+                        deliver=bool(meta_dict.get('deliver', True)),
                     )
     return WorkflowMeta(name=path.stem, description='')
 
