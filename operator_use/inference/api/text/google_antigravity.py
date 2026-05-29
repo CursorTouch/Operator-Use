@@ -405,12 +405,16 @@ class GoogleAntigravityAPI(BaseAPI):
                         yield ErrorEvent(reason=StopReason.Abort, error=f"HTTP {response.status_code}: {error_body}")
                         return
 
-                    # Use aiter_bytes() directly to avoid the aiter_lines →
-                    # aiter_text → aiter_bytes wrapper chain. Python 3.14
-                    # requires every aclose() coroutine to be awaited; the
-                    # wrapper chain creates intermediate aclose() coroutines
-                    # that never get awaited, causing RuntimeWarning. One
-                    # generator + one explicit finally:aclose() is clean.
+                    # Use aiter_bytes() directly rather than the aiter_lines →
+                    # aiter_text → aiter_bytes wrapper chain: one iterator with
+                    # a single explicit finally:aclose() is easier to tear down
+                    # deterministically than several nested ones. Deterministic
+                    # cleanup of the whole generator chain on cancellation is
+                    # handled by the aclosing() wrappers at the consuming sites
+                    # (engine/service.py, inference/api/text/service.py); without
+                    # those, an early exit leaves this generator suspended inside
+                    # the httpx context managers and defers teardown to the GC
+                    # asyncgen finalizer ("Task was destroyed but it is pending!").
                     _bytes = response.aiter_bytes()
                     line_buf = ""
                     try:

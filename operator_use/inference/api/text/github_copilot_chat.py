@@ -170,69 +170,73 @@ class GitHubCopilotChatAPI(BaseAPI):
 
         yield StartEvent()
 
-        async for chunk in await self._client.chat.completions.create(**params, stream=True, stream_options={"include_usage": True}):
-            if self._cancelled():
-                yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
-                return
-            usage_data = getattr(chunk, 'usage', None)
-            if usage_data:
-                _input_tokens = getattr(usage_data, 'prompt_tokens', 0) or 0
-                _output_tokens = getattr(usage_data, 'completion_tokens', 0) or 0
-            choice = chunk.choices[0] if chunk.choices else None
-            if choice is None:
-                continue
+        # async with closes the SDK stream (and its httpx response) on every
+        # exit path — cancellation return or an upstream GeneratorExit — instead
+        # of leaving it to the GC asyncgen finalizer.
+        async with await self._client.chat.completions.create(**params, stream=True, stream_options={"include_usage": True}) as sdk_stream:
+            async for chunk in sdk_stream:
+                if self._cancelled():
+                    yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
+                    return
+                usage_data = getattr(chunk, 'usage', None)
+                if usage_data:
+                    _input_tokens = getattr(usage_data, 'prompt_tokens', 0) or 0
+                    _output_tokens = getattr(usage_data, 'completion_tokens', 0) or 0
+                choice = chunk.choices[0] if chunk.choices else None
+                if choice is None:
+                    continue
 
-            delta = choice.delta
+                delta = choice.delta
 
-            if delta.content:
-                if not text_started:
-                    yield TextStartEvent(text=TextContent(content=""))
-                    text_started = True
-                text_buf += delta.content
-                yield TextDeltaEvent(text=TextContent(content=delta.content))
+                if delta.content:
+                    if not text_started:
+                        yield TextStartEvent(text=TextContent(content=""))
+                        text_started = True
+                    text_buf += delta.content
+                    yield TextDeltaEvent(text=TextContent(content=delta.content))
 
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    idx = tc.index
-                    if idx not in tool_started:
-                        tool_started[idx] = True
-                        tool_bufs[idx] = ""
-                        tool_meta[idx] = {
-                            "id": tc.id or "",
-                            "name": tc.function.name or "" if tc.function else "",
-                        }
-                        yield ToolCallStartEvent(tool_call=ToolCallContent(
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_started:
+                            tool_started[idx] = True
+                            tool_bufs[idx] = ""
+                            tool_meta[idx] = {
+                                "id": tc.id or "",
+                                "name": tc.function.name or "" if tc.function else "",
+                            }
+                            yield ToolCallStartEvent(tool_call=ToolCallContent(
+                                    id=tool_meta[idx]["id"],
+                                    name=tool_meta[idx]["name"],
+                                ))
+                        if tc.function and tc.function.arguments:
+                            tool_bufs[idx] += tc.function.arguments
+                            yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=tool_meta[idx]["id"]))
+
+                if choice.finish_reason:
+                    if text_started:
+                        yield TextEndEvent(text=TextContent(content=text_buf))
+                        text_started = False
+                        text_buf = ""
+
+                    for idx in sorted(tool_started):
+                        args_str = tool_bufs[idx].strip()
+                        try:
+                            args = json.loads(args_str) if args_str else {}
+                        except json.JSONDecodeError:
+                            args = {}
+
+                        yield ToolCallEndEvent(tool_call=ToolCallContent(
                                 id=tool_meta[idx]["id"],
                                 name=tool_meta[idx]["name"],
+                                args=args,
                             ))
-                    if tc.function and tc.function.arguments:
-                        tool_bufs[idx] += tc.function.arguments
-                        yield ToolCallDeltaEvent(tool_call=ToolCallContent(id=tool_meta[idx]["id"]))
+                    tool_started.clear()
+                    tool_bufs.clear()
+                    tool_meta.clear()
 
-            if choice.finish_reason:
-                if text_started:
-                    yield TextEndEvent(text=TextContent(content=text_buf))
-                    text_started = False
-                    text_buf = ""
-
-                for idx in sorted(tool_started):
-                    args_str = tool_bufs[idx].strip()
-                    try:
-                        args = json.loads(args_str) if args_str else {}
-                    except json.JSONDecodeError:
-                        args = {}
-
-                    yield ToolCallEndEvent(tool_call=ToolCallContent(
-                            id=tool_meta[idx]["id"],
-                            name=tool_meta[idx]["name"],
-                            args=args,
-                        ))
-                tool_started.clear()
-                tool_bufs.clear()
-                tool_meta.clear()
-
-                stop_reason = _STOP_REASON.get(choice.finish_reason, StopReason.Stop)
-                yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
+                    stop_reason = _STOP_REASON.get(choice.finish_reason, StopReason.Stop)
+                    yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
     async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []

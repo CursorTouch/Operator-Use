@@ -4,6 +4,7 @@ import base64
 import json
 import re
 from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import aclosing
 from typing import Any
 
 import httpx
@@ -399,10 +400,6 @@ class OpenAICodexResponsesAPI(BaseAPI):
         super().__init__(options)
         self._http_url = _resolve_http_url(options.base_url)
         self._ws_url = _resolve_ws_url(options.base_url)
-        self._http_client = httpx.AsyncClient(
-            timeout=options.timeout.total_seconds(),
-            headers=options.headers or {},
-        )
 
     async def _stream_sse(
         self,
@@ -412,34 +409,41 @@ class OpenAICodexResponsesAPI(BaseAPI):
         body_bytes = json.dumps(body).encode()
         last_error: Exception | None = None
 
-        for attempt in range(_MAX_RETRIES + 1):
-            if attempt > 0:
-                await asyncio.sleep(_BASE_DELAY_S * (2 ** (attempt - 1)))
-            try:
-                async with self._http_client.stream(
-                    "POST", self._http_url, content=body_bytes, headers=headers,
-                ) as response:
-                    if self.options.on_response:
-                        self.options.on_response(APIResponse(response.status_code, dict(response.headers)))
+        # Per-call client in an async-with so the connection pool is always
+        # closed when the stream ends or is torn down — no persistent client
+        # left unclosed for the GC to warn about.
+        async with httpx.AsyncClient(
+            timeout=self.options.timeout.total_seconds(),
+            headers=self.options.headers or {},
+        ) as client:
+            for attempt in range(_MAX_RETRIES + 1):
+                if attempt > 0:
+                    await asyncio.sleep(_BASE_DELAY_S * (2 ** (attempt - 1)))
+                try:
+                    async with client.stream(
+                        "POST", self._http_url, content=body_bytes, headers=headers,
+                    ) as response:
+                        if self.options.on_response:
+                            self.options.on_response(APIResponse(response.status_code, dict(response.headers)))
 
-                    if not response.is_success:
-                        text = (await response.aread()).decode(errors="replace")
-                        if attempt < _MAX_RETRIES and _is_retryable(response.status_code, text):
-                            last_error = RuntimeError(f"HTTP {response.status_code}: {text}")
-                            continue
-                        raise RuntimeError(f"HTTP {response.status_code}: {text}")
+                        if not response.is_success:
+                            text = (await response.aread()).decode(errors="replace")
+                            if attempt < _MAX_RETRIES and _is_retryable(response.status_code, text):
+                                last_error = RuntimeError(f"HTTP {response.status_code}: {text}")
+                                continue
+                            raise RuntimeError(f"HTTP {response.status_code}: {text}")
 
-                    async for event in _process_events(_map_codex_events(_parse_sse(response))):
-                        yield event
-                    return
+                        async for event in _process_events(_map_codex_events(_parse_sse(response))):
+                            yield event
+                        return
 
-            except RuntimeError:
-                raise
-            except Exception as exc:
-                last_error = exc
-                if attempt < _MAX_RETRIES:
-                    continue
-                raise
+                except RuntimeError:
+                    raise
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < _MAX_RETRIES:
+                        continue
+                    raise
 
         raise last_error or RuntimeError("Failed after retries")
 
@@ -481,11 +485,16 @@ class OpenAICodexResponsesAPI(BaseAPI):
             stream_iter = self._stream_sse(body, headers)
 
         cancelled = False
-        async for event in stream_iter:
-            if self._cancelled():
-                cancelled = True
-                break
-            yield event
+        # aclosing() so breaking out on cancellation deterministically tears
+        # down the inner SSE/WS stream (and its httpx/websocket connection)
+        # here, instead of leaving it to the GC asyncgen finalizer
+        # ("Task was destroyed but it is pending!").
+        async with aclosing(stream_iter) as stream:
+            async for event in stream:
+                if self._cancelled():
+                    cancelled = True
+                    break
+                yield event
         if cancelled:
             yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
 
