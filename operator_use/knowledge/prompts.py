@@ -140,14 +140,22 @@ def dream_index(knowledge_dir: str, timestamp: str) -> str:
 
 # ── Query ─────────────────────────────────────────────────────────────────────
 
-def query_answer(knowledge_dir: str, question: str) -> str:
+def query_answer(knowledge_dir: str, question: str, pages: list[dict]) -> str:
+    if pages:
+        page_lines = '\n'.join(
+            f"  {p['path']}" + (f" — {p['preview']}" if p.get('preview') else '')
+            for p in pages
+        )
+        pages_block = f"Available pages (use absolute paths to read them):\n{page_lines}\n\n"
+    else:
+        pages_block = "No pages found in the knowledge base.\n\n"
     return (
-        f"Answer the following question using only the knowledge base at '{knowledge_dir}'.\n"
+        f"Answer the following question using only the knowledge base at '{knowledge_dir}'.\n\n"
+        f"{pages_block}"
         "Steps:\n"
-        "1. List the pages in the knowledge directory.\n"
-        "2. Read the pages most likely to contain the answer.\n"
-        "3. Answer the question based solely on what those pages say.\n"
-        "4. Cite which page each part of your answer comes from.\n"
-        "5. If the knowledge base does not contain enough information, say so explicitly.\n\n"
+        "1. Read the pages most likely to contain the answer using their full absolute paths.\n"
+        "2. Answer the question based solely on what those pages say.\n"
+        "3. Cite which page each part of your answer comes from.\n"
+        "4. If the knowledge base does not contain enough information, say so explicitly.\n\n"
         f"Question: {question}"
     )

@@ -116,7 +116,7 @@ class KnowledgeTool(Tool):
                 lines = [f"Knowledge pages in {knowledge_dir}:"]
                 for f in files:
                     preview = f.get('preview', '')
-                    lines.append(f"  {f['name']}" + (f" — {preview}" if preview else ''))
+                    lines.append(f"  {f['name']} ({f['path']})" + (f" — {preview}" if preview else ''))
                 return ToolResult.ok(invocation.id, '\n'.join(lines))
 
             case KnowledgeAction.query:
