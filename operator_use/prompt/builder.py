@@ -54,7 +54,8 @@ class PromptTemplate:
                 f"\n- {p / 'MEMORY.md'} — long-term memory; read at the start of sessions, write here to persist things across conversations"
                 f"\n- {p / 'USER.md'} — who you are talking to: the user's name, timezone, technical background, communication preferences, and things to avoid"
                 f"\n- {p / 'skills'} — skill guides, each as {{name}}/SKILL.md; scan before tasks and load with skill action=\"view\" when relevant"
-                f"\n- {p / 'knowledge'} — user-curated reference material (domain docs, API specs, guidelines, company knowledge, workflows); declared in index.yaml — read the relevant file(s) with the read tool when the task requires background context not in the conversation"
+                f"\n- {p / 'knowledge'} — user-curated reference material (domain docs, API specs, guidelines, company knowledge); declared in index.yaml — read the relevant file(s) with the read tool when the task requires background context not in the conversation"
+                f"\n- {p / 'workflows'} — reusable Python workflow scripts; each has a name and description — run with the workflow tool action=\"run\""
                 f"\n- {p / 'temp'} — scratchpad and working files; use as terminal CWD for intermediate output"
             )
         else:
