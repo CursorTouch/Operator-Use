@@ -33,8 +33,8 @@ class KnowledgeSchema(BaseModel):
             'Action to perform:\n'
             '  list    — list all pages with a one-line preview\n'
             '  search  — find pages containing a keyword (requires: query)\n'
-            '  add     — append content to a page, creating it if needed (requires: page, content)\n'
-            '  ingest  — synthesize a source file into knowledge pages (requires: source)\n'
+            '  add     — write content directly into a knowledge page without any intermediate file (requires: page, content); use this when you already have the content\n'
+            '  ingest  — synthesize an existing file on disk into knowledge pages (requires: source — must be an absolute path to a file that already exists); do NOT use write tool to create a temp file first — use add instead\n'
             '  lint    — check for contradictions and stale content\n'
             '  dream   — consolidate and deduplicate all pages\n'
             '  log     — return the audit log of past operations'
@@ -43,7 +43,7 @@ class KnowledgeSchema(BaseModel):
     query: str = Field(default='', description='Keyword(s) to search for.')
     page: str = Field(default='', description='Target page name (no extension) for add.')
     content: str = Field(default='', description='Text to append for add.')
-    source: str = Field(default='', description='Path to source file for ingest.')
+    source: str = Field(default='', description='Absolute path to an existing file on disk for ingest. Never create a temp file with the write tool — use add action instead.')
 
 
 KnowledgeSchema.model_rebuild()
