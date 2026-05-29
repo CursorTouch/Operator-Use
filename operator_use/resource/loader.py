@@ -309,6 +309,22 @@ class ResourceLoader(BaseResourceLoader):
             if section := knowledge.build_knowledge_for_prompt():
                 self._append_system_prompt.append(section)
 
+        # Workflows section from profile
+        if self._active_profile is not None:
+            from operator_use.workflow.loader import WorkflowLoader
+            loader = WorkflowLoader(self._active_profile.workflows_dir)
+            workflows = loader.list_with_meta()
+            if workflows:
+                lines = ['## Workflows\n', '<available_workflows>']
+                for _, meta in workflows:
+                    line = f'  <workflow name="{meta.name}" description="{meta.description}"'
+                    if meta.when_to_use:
+                        line += f' when_to_use="{meta.when_to_use}"'
+                    lines.append(line + ' />')
+                lines.append('</available_workflows>')
+                lines.append('\nUse the `workflow` tool with action="run" to execute a workflow.')
+                self._append_system_prompt.append('\n'.join(lines))
+
         if self._active_profile is not None:
             self._active_profile.temp_dir.mkdir(parents=True, exist_ok=True)
 
