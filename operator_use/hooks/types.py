@@ -337,6 +337,7 @@ class QueueUpdateEvent:
 @dataclass
 class ResourcesDiscoverResult:
     skill_paths: list[str] = field(default_factory=list)
+    workflow_paths: list[str] = field(default_factory=list)
 
 
 @dataclass

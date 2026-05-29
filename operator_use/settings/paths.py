@@ -102,3 +102,7 @@ def get_builtins_hooks_dir() -> Path:
 
 def get_builtins_subagents_dir() -> Path:
     return _BUILTINS_ROOT / 'subagents'
+
+
+def get_builtins_workflows_dir() -> Path:
+    return _BUILTINS_ROOT / 'workflows'

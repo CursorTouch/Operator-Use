@@ -81,6 +81,7 @@ class ResourceLoader(BaseResourceLoader):
         self._user_profile: str | None = None
         self._agent_memory: str | None = None
         self._extension_skill_paths: list[str] = []
+        self._extension_workflow_paths: list[str] = []
         self._subagent_profiles: list[SubagentProfile] = []
         self._agent_profiles: list[AgentProfile] = []
         self._package_command_dirs: list[Path] = []
@@ -132,12 +133,24 @@ class ResourceLoader(BaseResourceLoader):
         return self._agent_memory
 
     def extend_resources(self, paths: ResourceExtensionPaths) -> None:
-        """Called after resources_discover to add extension-provided skill paths."""
-        new_paths = [p for p in paths.skill_paths if p not in self._extension_skill_paths]
-        if not new_paths:
-            return
-        self._extension_skill_paths.extend(new_paths)
-        self._reload_skills()
+        """Called after resources_discover to add extension-provided skill and workflow paths."""
+        new_skill_paths = [p for p in paths.skill_paths if p not in self._extension_skill_paths]
+        if new_skill_paths:
+            self._extension_skill_paths.extend(new_skill_paths)
+            self._reload_skills()
+
+        new_wf_paths = [p for p in paths.workflow_paths if p not in self._extension_workflow_paths]
+        if new_wf_paths:
+            self._extension_workflow_paths.extend(new_wf_paths)
+
+    def get_workflow_dirs(self) -> list[Path]:
+        """Return all workflow directories: builtins + extension-contributed + profile."""
+        from operator_use.settings.paths import get_builtins_workflows_dir
+        dirs: list[Path] = [get_builtins_workflows_dir()]
+        dirs.extend(Path(p) for p in self._extension_workflow_paths)
+        if self._active_profile is not None:
+            dirs.append(self._active_profile.workflows_dir)
+        return dirs
 
     def get_subagent_profiles(self) -> list[SubagentProfile]:
         return self._subagent_profiles

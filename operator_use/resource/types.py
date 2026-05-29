@@ -30,6 +30,7 @@ class ContextFile(BaseModel):
 
 class ResourceExtensionPaths(BaseModel):
     skill_paths: list[str] = Field(default_factory=list)
+    workflow_paths: list[str] = Field(default_factory=list)
 
 
 # ============================================================================

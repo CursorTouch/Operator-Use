@@ -36,12 +36,17 @@ class WorkflowManager:
         tools: list[Tool],
         bus: Bus | None = None,
         workflows_dir: Path | None = None,
+        workflow_dirs: list[Path] | None = None,
     ) -> None:
         self._llm = llm
         self._tools = [t for t in tools if t.name not in ('subagent', 'workflow')]
         self._bus = bus
         self._workflows_dir = workflows_dir
-        self._loader = WorkflowLoader(workflows_dir) if workflows_dir else None
+        # workflow_dirs (full list) takes precedence over the legacy workflows_dir scalar
+        dirs: list[Path] = workflow_dirs if workflow_dirs is not None else (
+            [workflows_dir] if workflows_dir else []
+        )
+        self._loader: WorkflowLoader | None = WorkflowLoader(*dirs) if dirs else None
         self._subagent = Subagent(
             llm=llm,
             tools=self._tools,
@@ -64,10 +69,10 @@ class WorkflowManager:
         )
 
     def list_workflows(self):
-        return self._loader.list_with_meta()
+        return self._loader.list_with_meta() if self._loader else []
 
     def find_workflow(self, name: str) -> Path | None:
-        return self._loader.find(name)
+        return self._loader.find(name) if self._loader else None
 
     async def invoke(
         self,
@@ -86,8 +91,9 @@ class WorkflowManager:
         if path is None:
             candidates = [p.stem for p in self._loader.discover()]
             hint = f"Available: {', '.join(candidates)}" if candidates else "No workflow files found."
+            dirs_info = self._workflows_dir or '(no user workflows dir)'
             raise ValueError(
-                f"Workflow '{workflow_name}' not found in {self._workflows_dir}. {hint}"
+                f"Workflow '{workflow_name}' not found. {hint} (searched: {dirs_info})"
             )
 
         run_id = f'wf_{uuid.uuid4().hex[:8]}'
