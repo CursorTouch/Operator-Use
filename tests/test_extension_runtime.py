@@ -38,6 +38,7 @@ class FakeContext(ExtensionContext):
     async def new_session(self): pass
     async def fork(self, entry_id): pass
     async def switch_session(self, session_file): pass
+    def get_active_profile(self): return None
 
 
 def make_ext(path: str = "test.py") -> Extension:

@@ -34,9 +34,12 @@ class WaitTool(Tool):
             
         try:
             seconds = float(seconds)
-        except ValueError:
+        except (ValueError, TypeError):
             return ToolResult.error(id=invocation.id, content="Parameter 'seconds' must be a number.")
-            
+
+        if seconds <= 0:
+            return ToolResult.error(id=invocation.id, content="Parameter 'seconds' must be greater than 0.")
+
         await asyncio.sleep(seconds)
         return ToolResult.ok(id=invocation.id, content=f"Successfully waited for {seconds} seconds.")
 

@@ -146,19 +146,30 @@ async def test_agent_output_file_written(manager: ProcessManager) -> None:
 
 
 @pytest.mark.asyncio
-async def test_agent_write_before_stop(manager: ProcessManager) -> None:
+async def test_agent_write_before_stop(manager: ProcessManager, monkeypatch) -> None:
     """write() enqueues a follow-up prompt without error while agent is running."""
+    # Stub the ACP session so the process stays RUNNING deterministically instead of
+    # depending on a real `operator acp serve` connection (which fails without creds
+    # and makes this test race-dependent). It just drains the queue until the stop
+    # sentinel, leaving status=RUNNING for write().
+    async def _fake_session(pid, provider, model, env=None):
+        queue = manager._agent_queues[pid]
+        while await queue.get() is not None:
+            pass
+
+    monkeypatch.setattr(manager, '_run_agent_session', _fake_session)
+
     record = await manager.create_agent(
         prompt='first',
         description='write test',
         provider='anthropic',
         model='claude-sonnet-4-6',
     )
-    # Give the session task a moment to start
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(0.05)  # let the session task start
 
     # write() should not raise — it just enqueues
     await manager.write(record.id, 'second prompt')
+    assert record.status == ProcessStatus.RUNNING
 
     await manager.stop(record.id)
 

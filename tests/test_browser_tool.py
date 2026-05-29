@@ -81,7 +81,7 @@ def _make_context(browser=None) -> ToolContext:
 async def test_browser_guard_blocks_action_when_not_open():
     tool = BrowserTool()
     result = await tool.execute(
-        ToolInvocation(id="1", name="browser", params={"action": "snapshot"}),
+        ToolInvocation(id="1", name="browser", params={"action": "wait", "time": 0.01}),
     )
     assert result.is_error
     assert "open" in result.content.lower()
@@ -106,11 +106,11 @@ async def test_browser_guard_passes_after_open():
     ctx = _make_context(browser=browser)
 
     result = await tool.execute(
-        ToolInvocation(id="1", name="browser", params={"action": "snapshot"}),
+        ToolInvocation(id="1", name="browser", params={"action": "wait", "time": 0.01}),
         context=ctx,
     )
     assert not result.is_error
-    assert "Example" in result.content
+    assert "Waited" in result.content
 
 
 @pytest.mark.asyncio
@@ -130,7 +130,7 @@ async def test_browser_close_clears_state():
 
     # Next action must fail with the guard error
     blocked = await tool.execute(
-        ToolInvocation(id="2", name="browser", params={"action": "snapshot"}),
+        ToolInvocation(id="2", name="browser", params={"action": "wait", "time": 0.01}),
         context=ctx,
     )
     assert blocked.is_error

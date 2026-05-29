@@ -134,17 +134,19 @@ class TestBuildKnowledgeIndex:
         result = k.build_knowledge_index()
         assert 'faq' in result
 
-    def test_path_in_index(self, tmpdir):
+    def test_relative_path_in_index(self, tmpdir):
         (tmpdir / "guide.md").write_text("# Guide")
         k = Knowledge(tmpdir)
         result = k.build_knowledge_index()
-        assert str(tmpdir) in result
+        # Index lists docs by their path relative to the knowledge dir, not absolute.
+        assert 'path="guide.md"' in result
+        assert str(tmpdir) not in result
 
-    def test_grouped_by_top_level_dir(self, tmpdir):
+    def test_subdir_paths_included(self, tmpdir):
         sub = tmpdir / "products"
         sub.mkdir()
         (sub / "index.md").write_text("# Products")
         (sub / "widget.md").write_text("# Widget")
         k = Knowledge(tmpdir)
         result = k.build_knowledge_index()
-        assert '**products/**' in result
+        assert 'products/widget.md' in result

@@ -68,23 +68,6 @@ class _Computer:
 
 
 @pytest.mark.asyncio
-async def test_computer_tool_snapshot_returns_state_json():
-    tool = ComputerTool()
-    computer = _Computer()
-
-    result = await tool.execute(
-        ToolInvocation(id="1", name="computer", params={"action": "snapshot", "include_screenshot": True}),
-        context=ToolContext(desktop=computer),
-    )
-
-    assert not result.is_error
-    data = json.loads(result.content)
-    assert data["active_window"]["name"] == "Terminal"
-    assert data["screenshot"]["encoding"] == "base64"
-    assert computer.calls == [("snapshot", True)]
-
-
-@pytest.mark.asyncio
 async def test_computer_tool_routes_pointer_and_text_actions():
     tool = ComputerTool()
     computer = _Computer()

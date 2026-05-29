@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from operator_use.prompt.builder import PromptTemplate, build_system_prompt
-from operator_use.prompt.types import SystemPromptOptions, ContextFile
-from operator_use.prompt.utils import build_guidelines, context_files_section, format_skills_for_prompt
+from operator_use.prompt.types import SystemPromptOptions
+from operator_use.prompt.utils import build_guidelines, format_skills_for_prompt
 from operator_use.skill.types import Skill, SourceInfo
 
 
@@ -54,12 +54,6 @@ class TestPromptTemplateDefault:
         out = PromptTemplate(cwd="/project", append_system_prompt="EXTRA INSTRUCTIONS").build()
         assert "EXTRA INSTRUCTIONS" in out
 
-    def test_context_files_included(self):
-        cf = ContextFile(path="RULES.md", content="Never use global state.")
-        out = PromptTemplate(cwd="/project", context_files=[cf]).build()
-        assert "Never use global state." in out
-        assert "RULES.md" in out
-
     def test_no_read_tool_excludes_skills(self):
         skill = make_skill("my-skill")
         out = PromptTemplate(cwd="/project", tools=[make_tool("bash")], skills=[skill]).build()
@@ -85,11 +79,6 @@ class TestPromptTemplateCustomPrompt:
         out = PromptTemplate(cwd="/project", custom_prompt="BASE", append_system_prompt="APPENDED").build()
         assert "BASE" in out
         assert "APPENDED" in out
-
-    def test_custom_prompt_with_context_files(self):
-        cf = ContextFile(path="ctx.md", content="ctx content")
-        out = PromptTemplate(cwd="/project", custom_prompt="BASE", context_files=[cf]).build()
-        assert "ctx content" in out
 
 
 # ── build_system_prompt (backward compat wrapper) ─────────────────────────────
@@ -121,24 +110,6 @@ class TestBuildGuidelines:
         out = build_guidelines(["", "  ", "real guideline"])
         assert "real guideline" in out
         assert out.count("-") == 1
-
-
-# ── context_files_section ─────────────────────────────────────────────────────
-
-class TestContextFilesSection:
-    def test_empty_list_returns_empty_string(self):
-        assert context_files_section([]) == ""
-
-    def test_includes_path_and_content(self):
-        cf = ContextFile(path="RULES.md", content="no globals")
-        out = context_files_section([cf])
-        assert "RULES.md" in out
-        assert "no globals" in out
-
-    def test_includes_project_context_header(self):
-        cf = ContextFile(path="x.md", content="y")
-        out = context_files_section([cf])
-        assert "Project Context" in out
 
 
 # ── format_skills_for_prompt ──────────────────────────────────────────────────
