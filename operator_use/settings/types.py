@@ -118,6 +118,7 @@ class BrowserUseSettings:
     attach_to_existing: bool = False
     use_system_profile: bool = False
     user_data_dir: Optional[str] = None
+    profile_directory: str = "Default"   # Chrome profile to seed logins from ('Default', 'Profile 1', ...)
 
 
 @dataclass

@@ -81,6 +81,9 @@ class BrowserConfig:
     downloads_dir: str = platformdirs.user_downloads_dir()
     browser: Literal['chrome', 'edge'] | None = None
     user_data_dir: str | None = None
+    # Which Chrome profile subdirectory to seed logins from ('Default', 'Profile 1', ...).
+    # Only affects the copy/seed step; the launched browser always opens its own Default.
+    profile_directory: str = 'Default'
     # use_system_profile=True: copy real Chrome profile to temp on every launch (safe when Chrome is open)
     # user_data_dir set to a custom path: seeds from real Chrome profile on first run, then persists
     # user_data_dir=None: fresh temporary profile with no auth

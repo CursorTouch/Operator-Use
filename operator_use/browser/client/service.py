@@ -266,7 +266,10 @@ class Browser:
             pass
 
     def _copy_auth_files(self, src_profile_dir: str, dst_dir: str):
-        src_default = Path(src_profile_dir) / 'Default'
+        # Seed from the configured source profile ('Default', 'Profile 1', ...), but
+        # always land it in the destination's 'Default' since the launched browser
+        # opens Default (we never pass --profile-directory).
+        src_default = Path(src_profile_dir) / self.config.profile_directory
         dst_default = Path(dst_dir) / 'Default'
         dst_default.mkdir(parents=True, exist_ok=True)
 
