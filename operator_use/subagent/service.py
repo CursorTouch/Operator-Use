@@ -82,11 +82,11 @@ class Subagent:
         spawn_depth: int = 1,
     ) -> str:
         """Run an isolated single-task engine loop without record tracking or hooks."""
-        allowed = tools if tools is not None else [t for t in self._tools if t.name != 'subagent']
+        allowed_tools = tools if tools is not None else [t for t in self._tools if t.name != 'subagent']
         return await self._run_loop(
             task=task,
             system_prompt=system_prompt or _DEFAULT_SYSTEM_PROMPT,
-            tools=allowed,
+            tools=allowed_tools,
             max_iterations=self._settings.max_iterations,
             spawn_depth=spawn_depth,
         )
