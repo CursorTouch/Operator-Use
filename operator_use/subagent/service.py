@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -33,8 +34,15 @@ _DEFAULT_SYSTEM_PROMPT = (
     'You are a focused subagent. A task has been delegated to you by the main agent.\n'
     'Complete the task using your available tools. When finished, provide a clear, '
     'complete summary of your findings or results. Do not address the user directly — '
-    'your final response is relayed by the main agent.'
+    'your final response is relayed by the main agent.\n\n'
+    'Always use absolute paths with file tools. Relative paths resolve against the '
+    'current working directory, not against any profile or knowledge directory.'
 )
+
+
+def _build_system_prompt(custom: str | None = None) -> str:
+    base = custom or _DEFAULT_SYSTEM_PROMPT
+    return base + f'\n\nCurrent working directory: {os.getcwd()}'
 
 
 def _build_fork_messages(
@@ -85,7 +93,7 @@ class Subagent:
         allowed_tools = tools if tools is not None else [t for t in self._tools if t.name != 'subagent']
         return await self._run_loop(
             task=task,
-            system_prompt=system_prompt or _DEFAULT_SYSTEM_PROMPT,
+            system_prompt=_build_system_prompt(system_prompt),
             tools=allowed_tools,
             max_iterations=self._settings.max_iterations,
             spawn_depth=spawn_depth,
@@ -106,7 +114,7 @@ class Subagent:
             allowed_set = set(record.tool_names)
             allowed_tools = [t for t in allowed_tools if t.name in allowed_set]
 
-        system_prompt = record.system_prompt or _DEFAULT_SYSTEM_PROMPT
+        system_prompt = _build_system_prompt(record.system_prompt)
         max_iterations = self._settings.max_iterations
         timeout = self._settings.timeout
 

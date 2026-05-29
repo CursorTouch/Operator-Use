@@ -10,6 +10,7 @@ from operator_use.knowledge.service import Knowledge
 from operator_use.knowledge.workflows.dream import KnowledgeDreamWorkflow
 from operator_use.knowledge.workflows.ingest import KnowledgeIngestWorkflow
 from operator_use.knowledge.workflows.lint import KnowledgeLintWorkflow
+from operator_use.knowledge.workflows.query import KnowledgeQueryWorkflow
 from operator_use.tool.types import Tool, ToolInvocation, ToolKind, ToolResult
 from operator_use.workflow.types import WorkflowContext, WorkflowInvocation
 
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 
 class KnowledgeAction(StrEnum):
     list   = 'list'
-    search = 'search'
+    query  = 'query'
     add    = 'add'
     ingest = 'ingest'
     lint   = 'lint'
@@ -32,7 +33,7 @@ class KnowledgeSchema(BaseModel):
         description=(
             'Action to perform:\n'
             '  list    — list all pages with a one-line preview\n'
-            '  search  — find pages containing a keyword (requires: query)\n'
+            '  query   — answer a question using the knowledge base (requires: query)\n'
             '  add     — write content directly into a knowledge page without any intermediate file (requires: page, content); use this when you already have the content\n'
             '  ingest  — synthesize a source into knowledge pages (requires: source — accepts a URL, a file path, or raw text)\n'
             '  lint    — check for contradictions and stale content\n'
@@ -40,7 +41,7 @@ class KnowledgeSchema(BaseModel):
             '  log     — return the audit log of past operations'
         )
     )
-    query: str = Field(default='', description='Keyword(s) to search for.')
+    query: str = Field(default='', description='Question or keyword(s) for query.')
     page: str = Field(default='', description='Target page name (no extension) for add.')
     content: str = Field(default='', description='Text to append for add.')
     source: str = Field(default='', description=(
@@ -118,27 +119,18 @@ class KnowledgeTool(Tool):
                     lines.append(f"  {f['name']}" + (f" — {preview}" if preview else ''))
                 return ToolResult.ok(invocation.id, '\n'.join(lines))
 
-            case KnowledgeAction.search:
+            case KnowledgeAction.query:
                 if not params.query:
-                    return ToolResult.error(invocation.id, "search requires a query.")
-                if not knowledge_dir.exists():
-                    return ToolResult.ok(invocation.id, "Knowledge directory does not exist yet.")
-                q = params.query.lower()
-                results: list[str] = []
-                for path in sorted(knowledge_dir.rglob('*.md')):
-                    if path.name == 'log.md':
-                        continue
-                    try:
-                        text = path.read_text(encoding='utf-8')
-                        if q in text.lower():
-                            rel = path.relative_to(knowledge_dir).as_posix()
-                            matches = [l.strip() for l in text.splitlines() if q in l.lower()][:3]
-                            results.append(f"[{rel}]\n" + '\n'.join(f'  {l}' for l in matches))
-                    except Exception:
-                        pass
-                if not results:
-                    return ToolResult.ok(invocation.id, f"No pages match '{params.query}'.")
-                return ToolResult.ok(invocation.id, '\n\n'.join(results))
+                    return ToolResult.error(invocation.id, "query requires a question.")
+                if context is None:
+                    return ToolResult.error(invocation.id, "No tool context available.")
+                wf_ctx = _make_workflow_context(context)
+                result = await KnowledgeQueryWorkflow().execute(
+                    WorkflowInvocation(workflow_name='knowledge-query', args={
+                        'knowledge_dir': str(knowledge_dir), 'question': params.query,
+                    }), wf_ctx
+                )
+                return ToolResult.ok(invocation.id, result)
 
             case KnowledgeAction.add:
                 if not params.content:
