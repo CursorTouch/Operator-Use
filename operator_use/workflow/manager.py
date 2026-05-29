@@ -234,10 +234,12 @@ class WorkflowManager:
             record.finished_at = datetime.now()
             logger.error('[%s] workflow "%s" failed: %s', record.run_id, record.workflow_name, exc)
 
-        try:
-            await asyncio.shield(self._announce(record))
-        except Exception:
-            logger.exception('[%s] failed to announce workflow result', record.run_id)
+        self._write_log(record)
+        if record.deliver:
+            try:
+                await asyncio.shield(self._announce(record))
+            except Exception:
+                logger.exception('[%s] failed to announce workflow result', record.run_id)
 
     async def _run(
         self,
