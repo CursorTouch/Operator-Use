@@ -116,6 +116,8 @@ class BrowserUseSettings:
     browser: Optional[Literal["chrome", "edge"]] = None   # "chrome" | "edge" | None (auto-detect)
     cdp_port: int = 9222
     attach_to_existing: bool = False
+    use_system_profile: bool = False
+    user_data_dir: Optional[str] = None
 
 
 @dataclass

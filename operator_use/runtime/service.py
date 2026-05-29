@@ -142,6 +142,8 @@ class Runtime:
                 browser=bu.browser,
                 cdp_port=bu.cdp_port,
                 attach_to_existing=bu.attach_to_existing,
+                use_system_profile=getattr(bu, 'use_system_profile', False),
+                user_data_dir=getattr(bu, 'user_data_dir', None),
             ),
         )
 
