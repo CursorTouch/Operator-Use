@@ -44,7 +44,7 @@ or when corrected. Keep it under 3000 characters.
 | Field | Required | Description |
 |---|---|---|
 | `name` | Yes | Profile name (lowercase, max 64 chars) |
-| `description` | Yes | One-line description of the agent's role |
+| `description` | No | One-line description of the agent's role |
 | `model` | No | LLM model override, e.g. `claude-opus-4-7` |
 | `provider` | No | LLM provider override, e.g. `anthropic` |
 | `tools` | No | Comma-separated tool allowlist; empty = all tools |
@@ -84,6 +84,22 @@ Resource loading order (highest priority last):
 2. Global (`~/.operator/agent/`)
 3. Project (`<project>/.operator/agent/`)
 4. Profile (`~/.operator/profiles/<name>/`)
+
+## System prompt profile block
+
+When a profile is active, `PromptTemplate` injects a `## Profile` block into the system prompt that tells the agent where its key files live:
+
+```
+## Profile: ~/.operator/profiles/<name>
+
+- <profile>/SOUL.md        — your persona and identity (defines who you are, your tone, operating principles, and constraints)
+- <profile>/MEMORY.md      — long-term memory; read at the start of sessions, write here to persist things across conversations
+- <profile>/USER.md        — who you are talking to: name, timezone, technical background, communication preferences, and things to avoid
+- <profile>/skills         — skill guides, each as {name}/SKILL.md; scan before tasks and load with skill action="view" when relevant
+- <profile>/knowledge      — user-curated reference material (domain docs, API specs, guidelines, company knowledge); declared in index.yaml — read the relevant file(s) with the read tool when the task requires background context not in the conversation
+- <profile>/workflows      — reusable Python workflow scripts; each has a name and description — run with the workflow tool action="run"
+- <profile>/temp           — scratchpad and working files; use as terminal CWD for intermediate output
+```
 
 ## Settings overlay
 

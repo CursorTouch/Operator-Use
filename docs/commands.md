@@ -92,12 +92,14 @@ The `handler` receives the `CommandRegistry` (which carries a `registry.runtime`
 | `/auth` | — | Show authentication status for all providers (OAuth and API-key). |
 | `/compact [instructions]` | — | Run compaction immediately. Optional custom instructions override the default summarization prompt. |
 | `/cron [id]` | — | List scheduled cron jobs. Pass an ID prefix or name for details. |
+| `/loop [interval] [message]` | — | Repeat a prompt on a fixed interval. No args lists active loops; `stop <name\|id>` cancels one. |
 | `/new` | `/clear` | Start a new session (discards the current session history). |
 | `/reload` | — | Reload all resources (tools, skills, commands, extensions) while keeping the active session history intact. |
 | `/skills` | — | List all available skills. |
 | `/start` | — | Introduce the agent and display welcome/help instructions. |
 | `/steer <guidance>` | — | Inject guidance after the next tool call without interrupting the current turn. |
 | `/stop` | `/cancel` | Immediately cancel the current agent operation and halt execution. |
+| `/wiki [subcommand]` | — | Manage the profile knowledge base. Subcommands: `ingest`, `query`, `lint`, `dream`, `log`. No args lists pages. |
 | `/help` | `/?` | List all available commands with descriptions and aliases. |
 
 ### /login
@@ -154,6 +156,39 @@ Sends an abort signal to the running engine. The agent will halt execution immed
 ### /cron
 
 Lists all scheduled cron jobs in the system, grouped by active vs. disabled status. Pass a job ID prefix or name (e.g., `/cron my-job`) to view full details for a specific cron job (message, next run, last run status, last error, and creation timestamps).
+
+### /loop
+
+Repeats a user prompt on a fixed interval using the cron scheduler. Requires `cron_enabled: true` in settings.
+
+```
+/loop <interval> <message>    — start a loop
+/loop stop <name|id>          — stop a loop by name or ID prefix
+/loop                         — list all active loops
+```
+
+Supported interval units: `ms`, `s`, `m`, `h`, `d` (e.g. `30s`, `5m`, `2h`).
+
+Each loop is a cron job named `loop:<slug>`. Starting a loop with the same message slug replaces the existing one (no duplicates accumulate). Use `/loop stop` or the `/cron` command to cancel.
+
+### /wiki
+
+Manages the active profile's knowledge base. Requires an active profile (`--profile <name>`).
+
+```
+/wiki                      — list all knowledge pages with tags and always-load status
+/wiki ingest <source>      — synthesize a source into knowledge pages (runs in background)
+/wiki query <question>     — answer a question from the wiki using the agent
+/wiki lint                 — check for contradictions and stale content (runs in background)
+/wiki dream                — consolidate and deduplicate all pages (runs in background)
+/wiki log                  — print the audit log (log.md)
+```
+
+`ingest`, `lint`, and `dream` invoke `WorkflowManager` in the background; use `/workflows <run_id>` to check progress.
+
+`query` delegates directly to the runtime agent — it does **not** spawn a background workflow.
+
+The page listing reads `index.yaml` to show `always-load` and tag metadata alongside each page name.
 
 ## Extension commands
 

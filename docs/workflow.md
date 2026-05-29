@@ -6,12 +6,12 @@ Workflows are Python files that orchestrate multi-step tasks using a built-in as
 
 ```
 operator_use/workflow/
-  types.py      ← WorkflowMeta, WorkflowRunRecord, WorkflowStatus
+  types.py      ← WorkflowMeta, WorkflowRunRecord, WorkflowStatus, WorkflowContext,
+                  WorkflowInvocation, WorkflowJournal, Workflow (ABC)
   manager.py    ← WorkflowManager — discovery, invocation, status tracking
   load.py       ← WorkflowLoader — file discovery, meta parsing
-  execute.py    ← WorkflowContext, DSL globals injection
-  journal.py    ← per-run log
-  context.py    ← Budget, phase context manager
+  execute.py    ← DSL globals injection
+  context.py    ← WorkflowExecuteContext, Budget, phase context manager
 ```
 
 ## Workflow file format
@@ -84,10 +84,17 @@ print(result.title)
 # → returns run_id immediately
 
 # generate a new workflow from a description
-{ "action": "generate", "name": "summarize",
+{ "action": "create", "name": "summarize",
   "description": "Summarize a set of documents and produce key takeaways." }
 
+# generate a workflow that does NOT inject its result back into the session
+{ "action": "create", "name": "export-log",
+  "description": "Export session log to file.", "deliver": false }
+
 # list available workflows
+{ "action": "discover" }
+
+# list active and recent runs
 { "action": "list" }
 
 # check run status
@@ -95,7 +102,12 @@ print(result.title)
 
 # cancel a running workflow
 { "action": "cancel", "run_id": "<id>" }
+
+# permanently delete a workflow file
+{ "action": "delete", "name": "old-workflow" }
 ```
+
+Workflow files are stored in the active profile's `workflows/` directory (e.g. `~/.operator/profiles/<name>/workflows/`). When no profile is active, they fall back to a temporary directory.
 
 ## WorkflowRunRecord
 
@@ -114,11 +126,76 @@ class WorkflowRunRecord:
     current_phase: str | None
     channel: str | None          # reply channel (same pattern as SubagentManager)
     chat_id: str | None
+    deliver: bool = True         # inject result back into the calling session when done
 ```
+
+## `deliver` flag
+
+`WorkflowMeta.deliver` (default `True`) controls whether the workflow result is injected back into the calling session when the run completes. Set to `False` in `meta` for fire-and-forget workflows that write to files or external systems and don't need to report back:
+
+```python
+meta = {
+    "name": "export-log",
+    "description": "Export session log to a file.",
+    "deliver": False,
+}
+```
+
+When creating with the `workflow` tool, pass `"deliver": false` in the schema to embed this in the generated file.
 
 ## Code generation
 
-`{ "action": "generate" }` uses the LLM to write a new workflow file from a description, then saves it to the profile's `workflows/` directory. The generated file follows all DSL rules and is immediately available to run.
+`{ "action": "create" }` uses the LLM to write a new workflow file from a description, then saves it to the profile's `workflows/` directory. The generated file follows all DSL rules and is immediately available to run.
+
+## Class-based workflows (`Workflow` ABC)
+
+For programmatic workflows (not user-authored files), subclass `Workflow` from `operator_use.workflow.types`:
+
+```python
+from operator_use.workflow.types import Workflow, WorkflowContext, WorkflowInvocation
+
+class MyWorkflow(Workflow):
+    name = 'my-workflow'
+    description = 'Does something useful.'
+    when_to_use = 'User asks for something useful.'
+    phases = [
+        {'name': 'step1', 'description': 'First step'},
+        {'name': 'step2', 'description': 'Second step'},
+    ]
+
+    async def execute(self, invocation: WorkflowInvocation, workflow_context: WorkflowContext) -> str:
+        ctx = await self.build_context(invocation, workflow_context)
+        async with ctx.phase('step1'):
+            result = await ctx.agent('Do step 1.')
+        async with ctx.phase('step2'):
+            final = await ctx.agent(f'Do step 2 given: {result}')
+        return final
+```
+
+`build_context()` constructs a `WorkflowExecuteContext` (from `context.py`) with all DSL globals (`agent`, `phase`, `log`, `args`, etc.) plus a `WorkflowRunRecord` and `WorkflowJournal`. The underlying `Subagent` is filtered to exclude `subagent` and `workflow` tools to prevent recursive nesting.
+
+`WorkflowContext` (the lightweight dependency carrier):
+```python
+@dataclass
+class WorkflowContext:
+    llm: Any
+    tools: list
+```
+
+`WorkflowInvocation` (analogous to `ToolInvocation`):
+```python
+@dataclass
+class WorkflowInvocation:
+    workflow_name: str
+    args: dict[str, Any]    # keyword args for the workflow
+    run_id: str             # auto-generated if not provided
+```
+
+`WorkflowJournal` (write-through SHA-256-keyed cache, moved from `journal.py` into `types.py`):
+```python
+journal.get(prompt, opts)          # None if not cached
+journal.set(prompt, opts, result)  # write to memory and disk
+```
 
 ## Discovery
 
@@ -130,7 +207,7 @@ Workflow search paths (highest priority last):
 
 ## Execution isolation
 
-Each workflow run gets its own `WorkflowContext`. The `agent()` call runs a `Subagent` instance with the same tools as the parent agent (minus `subagent` and `workflow` to prevent recursive nesting). Results are delivered back via the message bus.
+Each workflow run gets its own `WorkflowExecuteContext`. The `agent()` call runs a `Subagent` instance with the same tools as the parent agent (minus `subagent` and `workflow` to prevent recursive nesting). Per-run state (log, journal) is stored under `<tmpdir>/.operator-workflow-runs/<run_id>/`. Results are delivered back via the message bus (unless `deliver=False`).
 
 ## Settings
 

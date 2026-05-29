@@ -1,12 +1,18 @@
 # Knowledge base
 
-Knowledge documents are markdown files that Operator injects into the system prompt. Documents can be pre-loaded directly into the prompt or listed as available for the agent to read on demand.
+Knowledge documents are markdown files that Operator injects into the system prompt. Documents can be pre-loaded directly into the prompt or listed as available for the agent to read on demand. The `knowledge` builtin tool provides agent-facing actions for querying, adding, and maintaining knowledge pages.
 
 ## Architecture
 
 ```
 operator_use/knowledge/
-  service.py    ← Knowledge class — index loading, discovery, system-prompt injection
+  service.py          ← Knowledge class — index loading, discovery, system-prompt injection
+  prompts.py          ← prompt templates used by knowledge workflows
+  workflows/
+    ingest.py         ← KnowledgeIngestWorkflow
+    query.py          ← KnowledgeQueryWorkflow
+    lint.py           ← KnowledgeLintWorkflow
+    dream.py          ← KnowledgeDreamWorkflow
 ```
 
 ## Index file (preferred)
@@ -118,8 +124,53 @@ When multiple knowledge directories are passed to `Knowledge(*dirs)`, entries ar
     reference.md
 ```
 
+## Knowledge tool
+
+The `knowledge` builtin tool (available when an active profile with a `knowledge/` directory exists) exposes knowledge operations directly to the agent.
+
+### Actions
+
+| Action | Required fields | Description |
+|---|---|---|
+| `list` | — | List all knowledge pages with a one-line preview and absolute path |
+| `query` | `query` | Answer a question using only pages in the knowledge base |
+| `add` | `content`, `page` (opt) | Append text directly to a knowledge page without any intermediate step |
+| `ingest` | `source` | Synthesize a source into knowledge pages |
+| `lint` | — | Check pages for contradictions and stale content |
+| `dream` | — | Consolidate and deduplicate all pages |
+| `log` | — | Return the audit log (`log.md`) |
+
+### Ingest sources
+
+The `ingest` action auto-detects the source type:
+
+| Source | Detection rule | Behaviour |
+|---|---|---|
+| YouTube URL | `youtube.com/` or `youtu.be/` in URL | Fetches metadata via `yt-dlp`; fetches transcript via `youtube-transcript-api` |
+| HTTP/S URL | Starts with `http://` or `https://` | Fetches web page content |
+| File path | Starts with `/`, `./`, `../`, `~`, or path exists on disk | Reads file from disk |
+| Raw text | Anything else | Content is used directly — no fetch step |
+
+Dependencies for YouTube ingest: `yt-dlp` and `youtube-transcript-api` must be installed.
+
+### Knowledge workflows
+
+All multi-step operations run as structured `Workflow` subclasses in `operator_use/knowledge/workflows/`. They are invoked inline (not as background tasks) when called from the `knowledge` tool.
+
+| Workflow class | `workflow_name` | Phases |
+|---|---|---|
+| `KnowledgeIngestWorkflow` | `knowledge-ingest` | read → synthesize → index |
+| `KnowledgeQueryWorkflow` | `knowledge-query` | answer |
+| `KnowledgeLintWorkflow` | `knowledge-lint` | scan → report |
+| `KnowledgeDreamWorkflow` | `knowledge-dream` | read → consolidate → index |
+
+### Prompts
+
+All LLM prompt strings used by the knowledge workflows are centralised in `operator_use/knowledge/prompts.py`. Workflow classes call functions like `ingest_read()`, `ingest_synthesize()`, `ingest_index()`, `query_answer()`, `lint_scan()`, `lint_report()`, `dream_read()`, `dream_consolidate()`, `dream_index()`.
+
 ## Related documents
 
 - [docs/profiles.md](./profiles.md) — Profile resource paths
 - [docs/skill.md](./skill.md) — Skills — similar discovery mechanism for behavioural guidance
 - [docs/agent.md](./agent.md) — System prompt construction
+- [docs/workflow.md](./workflow.md) — Workflow base class and execution model
