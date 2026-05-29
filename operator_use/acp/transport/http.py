@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import socket
 import uuid
@@ -62,6 +63,19 @@ class ACPHttpServer:
                 text='Invalid or missing Bearer token',
                 headers={'WWW-Authenticate': 'Bearer'},
             )
+
+    def _require_local(self, request: web.Request) -> None:
+        """Approval is the human-authorization gate, so only the operator on the
+        host may call it — restrict to loopback origins."""
+        remote = request.remote or ''
+        try:
+            addr = ipaddress.ip_address(remote)
+            mapped = getattr(addr, 'ipv4_mapped', None)
+            is_loopback = addr.is_loopback or (mapped is not None and mapped.is_loopback)
+        except ValueError:
+            is_loopback = False
+        if not is_loopback:
+            raise web.HTTPForbidden(text='Approval is only allowed from localhost')
 
     # ── SSE connection ────────────────────────────────────────────────────────
 
@@ -197,6 +211,7 @@ class ACPHttpServer:
 
     async def _handle_approve(self, request: web.Request) -> web.Response:
         """Step 2: admin approves a pending device code (called by the operator owner)."""
+        self._require_local(request)
         body = await request.json()
         device_code = body.get('device_code', '')
         token = self._device_flow.approve(device_code)

@@ -178,7 +178,9 @@ class SessionManager:
         return self._append_entry(entry)
 
     def get_current_channel(self) -> str | None:
-        for entry in reversed(self.entries):
+        # Walk the active branch (not the flat log) so a branch we navigated
+        # away from can't leak its channel into the current one.
+        for entry in reversed(self.get_branch()):
             if isinstance(entry, ChannelEntry):
                 return entry.name
         return None
@@ -244,7 +246,8 @@ class SessionManager:
         return self._append_entry(entry)
 
     def get_session_name(self) -> str | None:
-        for entry in reversed(self.entries):
+        # Branch-scoped, consistent with build_session_context / get_branch.
+        for entry in reversed(self.get_branch()):
             if isinstance(entry, SessionInfoEntry) and entry.name and entry.name.strip():
                 return entry.name.strip()
         return None
@@ -270,8 +273,10 @@ class SessionManager:
     def get_branch(self, from_id: str | None = None) -> list[SessionEntry]:
         """Return entries from root to the given id (or leaf_id), in root→leaf order."""
         path: list[SessionEntry] = []
+        seen: set[str] = set()
         cursor = from_id or self.leaf_id
-        while cursor:
+        while cursor and cursor not in seen:
+            seen.add(cursor)
             current_entry = self.by_id.get(cursor)
             if not current_entry:
                 break
