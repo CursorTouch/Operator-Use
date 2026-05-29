@@ -9,15 +9,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import tempfile
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from operator_use.subagent.service import Subagent
 from operator_use.subagent.types import SubagentSettings
-from operator_use.workflow.load import WorkflowLoader
-from operator_use.workflow.types import WorkflowRunRecord, WorkflowStatus
+from operator_use.workflow.types import Workflow
+from operator_use.workflow.loader import WorkflowLoader
+from operator_use.workflow.types import WorkflowContext, WorkflowInvocation, WorkflowRunRecord, WorkflowStatus
 
 if TYPE_CHECKING:
     from operator_use.bus.service import Bus
@@ -47,6 +47,7 @@ class WorkflowManager:
             [workflows_dir] if workflows_dir else []
         )
         self._loader: WorkflowLoader | None = WorkflowLoader(*dirs) if dirs else None
+        self._class_workflows: dict[str, Workflow] = {}
         self._subagent = Subagent(
             llm=llm,
             tools=self._tools,
@@ -68,8 +69,16 @@ class WorkflowManager:
             hooks=None,
         )
 
+    def register_workflow(self, workflow: Workflow) -> None:
+        """Register a class-based workflow. Takes precedence over same-named file-based ones."""
+        self._class_workflows[workflow.name] = workflow
+
     def list_workflows(self):
-        return self._loader.list_with_meta() if self._loader else []
+        file_based = self._loader.list_with_meta() if self._loader else []
+        shadowed = set(self._class_workflows)
+        file_based = [(p, m) for p, m in file_based if m.name not in shadowed]
+        class_based = [(None, w.meta()) for w in self._class_workflows.values()]
+        return class_based + file_based
 
     def find_workflow(self, name: str) -> Path | None:
         return self._loader.find(name) if self._loader else None
@@ -82,36 +91,45 @@ class WorkflowManager:
         """Start a workflow run in the background. Returns run_id immediately."""
         from operator_use.subagent.manager import _session_channel, _session_chat_id
 
-        if self._loader is None:
-            raise ValueError(
-                f"Workflow '{workflow_name}' not found — no workflows directory is configured."
-            )
+        # Resolve: class-based takes precedence over file-based
+        workflow_instance = self._class_workflows.get(workflow_name)
+        path: Path | None = None
 
-        path = self._loader.find(workflow_name)
-        if path is None:
-            candidates = [p.stem for p in self._loader.discover()]
-            hint = f"Available: {', '.join(candidates)}" if candidates else "No workflow files found."
-            dirs_info = self._workflows_dir or '(no user workflows dir)'
-            raise ValueError(
-                f"Workflow '{workflow_name}' not found. {hint} (searched: {dirs_info})"
-            )
+        if workflow_instance is None:
+            if self._loader is None:
+                raise ValueError(
+                    f"Workflow '{workflow_name}' not found — no workflows directory is configured."
+                )
+            path = self._loader.find(workflow_name)
+            if path is None:
+                candidates = (
+                    list(self._class_workflows)
+                    + [p.stem for p in self._loader.discover()]
+                )
+                hint = f"Available: {', '.join(candidates)}" if candidates else "No workflows found."
+                raise ValueError(f"Workflow '{workflow_name}' not found. {hint}")
 
-        run_id = f'wf_{uuid.uuid4().hex[:8]}'
+        invocation = WorkflowInvocation(workflow_name=workflow_name, args=args or {})
         record = WorkflowRunRecord(
-            run_id=run_id,
+            run_id=invocation.run_id,
             workflow_name=workflow_name,
             status=WorkflowStatus.running,
             started_at=datetime.now(),
             channel=_session_channel.get(),
             chat_id=_session_chat_id.get(),
         )
-        self._records[run_id] = record
+        self._records[invocation.run_id] = record
 
-        t = asyncio.create_task(self._run_and_announce(path, record, args or {}))
-        self._tasks[run_id] = t
-        t.add_done_callback(lambda _: self._tasks.pop(run_id, None))
+        if workflow_instance is not None:
+            t = asyncio.create_task(self._run_class_and_announce(workflow_instance, invocation, record))
+        else:
+            assert path is not None
+            t = asyncio.create_task(self._run_and_announce(path, record, args or {}))
 
-        return run_id
+        self._tasks[invocation.run_id] = t
+        t.add_done_callback(lambda _: self._tasks.pop(invocation.run_id, None))
+
+        return invocation.run_id
 
     def cancel(self, run_id: str) -> bool:
         t = self._tasks.get(run_id)
@@ -127,6 +145,54 @@ class WorkflowManager:
         return sorted(self._records.values(), key=lambda r: r.started_at, reverse=True)
 
     # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _make_workflow_context(self) -> WorkflowContext:
+        """Build a WorkflowContext from the manager's own llm and tools."""
+        return WorkflowContext(llm=self._llm, tools=self._tools)
+
+    async def _run_class_and_announce(
+        self,
+        workflow: Workflow,
+        invocation: WorkflowInvocation,
+        record: WorkflowRunRecord,
+    ) -> None:
+        try:
+            await asyncio.wait_for(
+                self._run_class(workflow, invocation, record),
+                timeout=1800.0,
+            )
+        except asyncio.CancelledError:
+            record.status = WorkflowStatus.cancelled
+            record.finished_at = datetime.now()
+            logger.info('[%s] workflow "%s" cancelled', record.run_id, record.workflow_name)
+        except asyncio.TimeoutError:
+            record.status = WorkflowStatus.failed
+            record.error = 'timed out after 1800s'
+            record.finished_at = datetime.now()
+            logger.warning('[%s] workflow "%s" timed out', record.run_id, record.workflow_name)
+        except Exception as exc:
+            record.status = WorkflowStatus.failed
+            record.error = f'{type(exc).__name__}: {exc}'
+            record.finished_at = datetime.now()
+            logger.error('[%s] workflow "%s" failed: %s', record.run_id, record.workflow_name, exc)
+
+        try:
+            await asyncio.shield(self._announce(record))
+        except Exception:
+            logger.exception('[%s] failed to announce workflow result', record.run_id)
+
+    async def _run_class(
+        self,
+        workflow: Workflow,
+        invocation: WorkflowInvocation,
+        record: WorkflowRunRecord,
+    ) -> None:
+        logger.info('[%s] workflow "%s" started (class-based)', record.run_id, record.workflow_name)
+        result = await workflow.execute(invocation, self._make_workflow_context())
+        record.result = result
+        record.status = WorkflowStatus.completed
+        record.finished_at = datetime.now()
+        logger.info('[%s] workflow "%s" completed', record.run_id, record.workflow_name)
 
     async def _run_and_announce(
         self,
@@ -162,16 +228,16 @@ class WorkflowManager:
         record: WorkflowRunRecord,
         args: dict[str, Any],
     ) -> None:
-        from operator_use.workflow.context import WorkflowContext
+        from operator_use.workflow.context import WorkflowExecuteContext
         from operator_use.workflow.execute import execute
-        from operator_use.workflow.journal import WorkflowJournal
+        from operator_use.workflow.types import WorkflowJournal
 
         runs_base = (self._workflows_dir / '.runs') if self._workflows_dir else Path(tempfile.gettempdir()) / '.operator-workflow-runs'
         run_dir = runs_base / record.run_id
         run_dir.mkdir(parents=True, exist_ok=True)
 
         journal = WorkflowJournal(run_dir=run_dir)
-        ctx = WorkflowContext(
+        ctx = WorkflowExecuteContext(
             record=record,
             subagent=self._subagent,
             llm=self._llm,

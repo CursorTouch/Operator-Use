@@ -1,4 +1,4 @@
-"""WorkflowContext — injects globals into workflow Python files at exec() time."""
+"""WorkflowExecuteContext — injects globals into workflow Python files at exec() time."""
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Type
 
 from pydantic import BaseModel
 
-from operator_use.workflow.journal import WorkflowJournal
+from operator_use.workflow.types import WorkflowJournal
 from operator_use.workflow.types import WorkflowRunRecord
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class Budget:
         return f'Budget(spent={self._spent}/{self.total})'
 
 
-class WorkflowContext:
+class WorkflowExecuteContext:
     """Holds all runtime state for one workflow run and exposes the workflow API."""
 
     def __init__(

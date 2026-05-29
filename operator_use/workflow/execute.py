@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from operator_use.workflow.types import WorkflowMeta
 
 if TYPE_CHECKING:
-    from operator_use.workflow.context import WorkflowContext
+    from operator_use.workflow.context import WorkflowExecuteContext
 
 
 def load_meta(path: Path) -> WorkflowMeta:
@@ -35,7 +35,7 @@ def load_meta(path: Path) -> WorkflowMeta:
     return WorkflowMeta(name=path.stem, description='')
 
 
-async def execute(path: Path, ctx: WorkflowContext) -> str:
+async def execute(path: Path, ctx: WorkflowExecuteContext) -> str:
     """Exec the workflow file and await its `run()` function. Returns the result string."""
     source = path.read_text(encoding='utf-8')
     code = compile(source, str(path), 'exec')
