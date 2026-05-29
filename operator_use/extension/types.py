@@ -146,6 +146,11 @@ class ExtensionContext(ABC):
         """Shut down the current session and resume one from a file."""
         ...
 
+    @abstractmethod
+    def get_active_profile(self) -> Any | None:
+        """Return the active AgentProfile, or None if no profile is loaded."""
+        ...
+
 
 # ============================================================================
 # Tool definition (used by extension authors)
@@ -192,7 +197,7 @@ class ExtensionTool(Tool):
         context: ToolContext | None = None,
     ) -> ToolResult:
         params = self._definition.parameters.model_validate(invocation.params)
-        return await self._definition.execute(params, invocation, self._ctx)
+        return await self._definition.execute(params, invocation, self._ctx, context)
 
 
 # ============================================================================
