@@ -33,9 +33,20 @@ class ProcessManager:
         self,
         default_cwd: str | None = None,
         tasks_dir: Path | None = None,
+        max_terminated: int = 100,
+        terminated_grace_s: float = 600.0,
     ) -> None:
         self._default_cwd = default_cwd or str(Path.cwd())
         self._tasks_dir = tasks_dir
+        # Cap on retained terminated processes so a long-lived gateway doesn't
+        # accumulate records/buffers (up to 1 MB each) without bound. Running
+        # processes are never evicted.
+        self._max_terminated = max_terminated
+        # Grace window before a finished process is eligible for eviction. The
+        # agent observes results by polling the process tool (there is no push
+        # notification), so a just-finished process must stay readable long
+        # enough to be polled — even if that means temporarily exceeding the cap.
+        self._terminated_grace_s = terminated_grace_s
         if tasks_dir is not None:
             tasks_dir.mkdir(parents=True, exist_ok=True)
 
@@ -417,6 +428,27 @@ class ProcessManager:
                     await result
             except Exception:
                 logger.debug('Completion listener %s failed for process %s', lid, record.id, exc_info=True)
+        self._prune_terminated()
+
+    def _prune_terminated(self) -> None:
+        """Evict the oldest terminated processes (and their buffers) once more
+        than _max_terminated have finished. Running processes are never evicted,
+        and a process that finished within the grace window is never evicted —
+        the agent polls to learn a process was killed and to read its output, so
+        a recently-finished one must stay readable even if that briefly exceeds
+        the cap."""
+        if self._max_terminated <= 0:
+            return
+        terminal = [r for r in self._records.values() if r.status != ProcessStatus.RUNNING]
+        excess = len(terminal) - self._max_terminated
+        if excess <= 0:
+            return
+        cutoff = time.time() - self._terminated_grace_s
+        evictable = [r for r in terminal if (r.ended_at or 0.0) < cutoff]
+        evictable.sort(key=lambda r: r.ended_at or 0.0)
+        for r in evictable[:excess]:
+            self._records.pop(r.id, None)
+            self._buffers.pop(r.id, None)
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
 

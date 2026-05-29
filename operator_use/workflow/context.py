@@ -110,7 +110,7 @@ class WorkflowExecuteContext:
             async with sem:
                 return await thunk()
 
-        return list(await asyncio.gather(*[_run(t) for t in thunks]))
+        return await self._gather_or_cancel([_run(t) for t in thunks])
 
     async def pipeline(self, items, *stages, concurrency: int = 5):
         """Pass each item through stages independently. Returns list of final values."""
@@ -127,7 +127,22 @@ class WorkflowExecuteContext:
                     item = await _apply(stage, item)
                 return item
 
-        return list(await asyncio.gather(*[_process(item) for item in items]))
+        return await self._gather_or_cancel([_process(item) for item in items])
+
+    @staticmethod
+    async def _gather_or_cancel(coros: list) -> list:
+        """gather() that cancels still-running siblings when one fails, instead
+        of leaving them orphaned (running on, with their results/exceptions
+        dropped). Re-raises the first error unchanged."""
+        tasks = [asyncio.ensure_future(c) for c in coros]
+        try:
+            return list(await asyncio.gather(*tasks))
+        except BaseException:
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
     @asynccontextmanager
     async def phase(self, name: str):

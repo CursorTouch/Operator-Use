@@ -30,7 +30,14 @@ class TaskPool:
         depends_on: list[str] | None = None,
     ) -> asyncio.Task:
         depends_on = depends_on or []
-        self._completion_events[task_id] = asyncio.Event()
+        # setdefault (not assignment): this task may already have an event that
+        # a previously-submitted dependent is awaiting — reuse it, don't replace
+        # it (the replacement would never get .set(), deadlocking the waiter).
+        self._completion_events.setdefault(task_id, asyncio.Event())
+        # Pre-register an event for every dependency so a dependent submitted
+        # *before* its dependency still waits, instead of silently running early.
+        for dep_id in depends_on:
+            self._completion_events.setdefault(dep_id, asyncio.Event())
         self._pending[task_id] = {'coro': coro, 'depends_on': depends_on}
         return asyncio.create_task(self._try_launch(task_id))
 
