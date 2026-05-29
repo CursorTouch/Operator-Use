@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -73,19 +72,6 @@ def _source_type(source: str) -> Literal['url', 'file', 'text']:
     return 'text'
 
 
-def _resolve_source(source: str, temp_dir: Path) -> tuple[str, Literal['url', 'file', 'text']]:
-    """Return (resolved_source, source_type).
-
-    For text content: writes to a temp file and returns its path so the
-    ingest workflow can read it as a normal file.
-    """
-    kind = _source_type(source)
-    if kind == 'text':
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        tmp = temp_dir / f'ingest_{uuid.uuid4().hex[:8]}.md'
-        tmp.write_text(source, encoding='utf-8')
-        return str(tmp), 'text'
-    return source, kind
 
 
 def _make_workflow_context(context: ToolContext) -> WorkflowContext:
@@ -184,12 +170,9 @@ class KnowledgeTool(Tool):
                     case KnowledgeAction.ingest:
                         if not params.source:
                             return ToolResult.error(invocation.id, "ingest requires a source (URL, file path, or text).")
-                        profile = getattr(getattr(context, 'resource_loader', None), '_active_profile', None)
-                        temp_dir = profile.temp_dir if profile else Path('/tmp')
-                        resolved, source_type = _resolve_source(params.source, temp_dir)
                         result = await KnowledgeIngestWorkflow().execute(
                             WorkflowInvocation(workflow_name='knowledge-ingest', args={
-                                **wf_args, 'source': resolved, 'source_type': source_type,
+                                **wf_args, 'source': params.source, 'source_type': _source_type(params.source),
                             }), wf_ctx
                         )
                     case KnowledgeAction.lint:

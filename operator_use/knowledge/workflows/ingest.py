@@ -20,12 +20,15 @@ class KnowledgeIngestWorkflow(Workflow):
         ctx = await self.build_context(invocation, workflow_context)
         source        = ctx.args.get('source', '')
         knowledge_dir = ctx.args.get('knowledge_dir', '')
+        source_type   = ctx.args.get('source_type', 'file')
 
-        async with ctx.phase('read'):
-            ctx.log(f'Reading source: {source}')
-            source_type = ctx.args.get('source_type', 'file')
-            read_prompt, read_tools = ingest_read(source, source_type)
-            source_content = await ctx.agent(read_prompt, tools=read_tools)
+        if source_type == 'text':
+            source_content = source
+        else:
+            async with ctx.phase('read'):
+                ctx.log(f'Reading source: {source}')
+                read_prompt, read_tools = ingest_read(source, source_type)
+                source_content = await ctx.agent(read_prompt, tools=read_tools)
 
         async with ctx.phase('synthesize'):
             ctx.log('Creating knowledge pages...')
