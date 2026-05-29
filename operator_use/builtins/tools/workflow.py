@@ -169,7 +169,7 @@ class WorkflowTool(Tool):
 
     def is_available(self, context) -> bool:
         sm = context.settings_manager
-        if sm is not None and sm.settings.workflows_enabled is False:
+        if sm is not None and not sm.get_workflows_enabled():
             return False
         return (self._manager or context.workflow_manager) is not None
 

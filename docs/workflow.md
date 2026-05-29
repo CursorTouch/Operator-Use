@@ -53,12 +53,13 @@ These names are injected at runtime — **do not import them**:
 
 | Global | Signature | Description |
 |---|---|---|
-| `agent` | `await agent(prompt, schema=None, system=None, tools=None, resume=False)` | Run an LLM agent call. Returns `str` (no schema) or a Pydantic model instance. |
-| `parallel` | `await parallel(*thunks, concurrency=5)` | Run zero-argument async callables concurrently; returns list of results. |
+| `agent` | `await agent(prompt, schema=None, system=None, tools=None, resume=False, stall_ms=180000, max_retries=5)` | Run an LLM agent call. Returns `str` (no schema) or a Pydantic model instance. A call that doesn't finish within `stall_ms` is cancelled and retried up to `max_retries` times, then raises `TimeoutError`. |
+| `parallel` | `await parallel(*thunks, concurrency=5, return_exceptions=False)` | Run zero-argument async callables concurrently; returns list of results. Default fail-fast (cancels siblings, re-raises); with `return_exceptions=True` it never rejects and each failed slot holds its exception. |
 | `pipeline` | `await pipeline(items, *stages, concurrency=5)` | Process items through a list of sync or async transform functions. |
+| `workflow` | `await workflow(name, args=None)` | Run another workflow inline and return its result. One level deep only; shares the caller's run record (unified log + shared agent-call cap). |
 | `phase` | `async with phase("name"):` | Label the current phase in the run status. |
 | `log` | `log("message")` | Append a timestamped line to the run log. |
-| `budget` | `budget.remaining()` / `budget.spent()` / `budget.exhausted()` | Track turn budget. |
+| `budget` | `budget.remaining()` / `budget.spent()` / `budget.exhausted()` | Soft, advisory turn budget for loop guards (not enforced — see Limits). |
 | `args` | `dict` | Key-value arguments passed at invocation. |
 
 ## `agent()` schema mode
@@ -75,6 +76,29 @@ class Summary(BaseModel):
 result: Summary = await agent("Summarise this document.", schema=Summary)
 print(result.title)
 ```
+
+## Nested workflows
+
+A workflow can run another inline via `workflow()` and use its result:
+
+```python
+async def run():
+    cleaned = await workflow("normalize", {"text": args["text"]})
+    return await agent(f"Summarise:\n{cleaned}")
+```
+
+Nesting is **one level deep only** — a nested workflow that calls `workflow()` again raises `RuntimeError`. The nested run shares the caller's run record, so its log lines and `agent()` calls are unified with the parent (and count against the same cap). Both file-based and class-based workflows can be invoked.
+
+## Limits & safety
+
+| Limit | Default | Behavior |
+|---|---|---|
+| `max_agent_calls` | `1000` | Hard runaway-loop guard. Once a run (including its nested workflows) has made this many `agent()` calls, the next one raises `WorkflowAgentCapError`. Override via `args["max_agent_calls"]`. |
+| `stall_ms` (per `agent()`) | `180000` | A call that doesn't finish in this window is cancelled and retried. |
+| `max_retries` (per `agent()`) | `5` | Stall retries before `agent()` raises `TimeoutError`. |
+| run wall-clock | `1800s` | Whole-run timeout enforced by `WorkflowManager`. |
+
+`budget` is **advisory only** — it is incremented per `agent()` call for use in loop conditions (`while budget.remaining() > 10: …`) but never auto-enforces. The hard stop is `max_agent_calls`.
 
 ## Tool actions
 
@@ -211,15 +235,28 @@ Each workflow run gets its own `WorkflowExecuteContext`. The `agent()` call runs
 
 ## Settings
 
+A structured `workflow` block sets per-run knob defaults (global and per-profile, via the settings merge). Explicit invocation `args` and per-call `agent(...)` params still override these.
+
 ```json
-{ "workflows_enabled": true }
+{
+  "workflow": {
+    "enabled": true,
+    "max_agent_calls": 1000,
+    "budget": 100,
+    "concurrency": 5,
+    "stall_ms": 180000,
+    "max_retries": 5
+  }
+}
 ```
 
-When `workflows_enabled` is `false`, the `workflow` tool is hidden from the LLM. Toggle via `control_center`:
+When `enabled` is `false`, the `workflow` tool is hidden from the LLM. `workflow.enabled` supersedes the legacy flat `workflows_enabled` flag (still read as a fallback when no `workflow` block is present). Toggle on/off via `control_center`:
 
 ```python
 { "action": "set", "key": "workflows_enabled", "value": true }
 ```
+
+Precedence for the knobs: **per-call `agent()`/`parallel()` argument → invocation `args` → `workflow` settings block → built-in default.**
 
 ## Related documents
 

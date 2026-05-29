@@ -122,6 +122,16 @@ class BrowserUseSettings:
 
 
 @dataclass
+class WorkflowSettings:
+    enabled: bool = True
+    max_agent_calls: int = 1000   # hard runaway-loop guard per run (incl. nested)
+    budget: int = 100             # advisory turn budget for loop guards
+    concurrency: int = 5          # default parallel()/pipeline() concurrency
+    stall_ms: int = 180000        # per-agent() stall timeout before retry
+    max_retries: int = 5          # stall retries before agent() raises
+
+
+@dataclass
 class AuxiliarySettings:
     compaction: Optional[AuxiliaryTaskSettings] = None
     branch_summary: Optional[AuxiliaryTaskSettings] = None
@@ -188,7 +198,8 @@ class Settings:
     enable_skill_commands: Optional[bool] = None
     cron_enabled: Optional[bool] = None
     subagents_enabled: Optional[bool] = None
-    workflows_enabled: Optional[bool] = None
+    workflows_enabled: Optional[bool] = None   # legacy flat flag; superseded by workflow.enabled
+    workflow: Optional[WorkflowSettings] = None
     computer_use: Optional[ComputerUseSettings] = None
     browser_use: Optional[BrowserUseSettings] = None
     unified_session: Optional[bool] = None       # share one session across all channels (default: True)

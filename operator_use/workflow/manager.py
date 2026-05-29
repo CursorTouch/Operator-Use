@@ -38,12 +38,15 @@ class WorkflowManager:
         workflows_dir: Path | None = None,
         workflow_dirs: list[Path] | None = None,
         runs_dir: Path | None = None,
+        run_defaults: dict[str, Any] | None = None,
     ) -> None:
         self._llm = llm
         self._tools = [t for t in tools if t.name not in ('subagent', 'workflow')]
         self._bus = bus
         self._workflows_dir = workflows_dir
         self._runs_dir = runs_dir
+        # Per-run knob defaults from settings; explicit invocation args override these.
+        self._run_defaults = run_defaults or {}
         # workflow_dirs (full list) takes precedence over the legacy workflows_dir scalar
         dirs: list[Path] = workflow_dirs if workflow_dirs is not None else (
             [workflows_dir] if workflows_dir else []
@@ -92,6 +95,9 @@ class WorkflowManager:
     ) -> str:
         """Start a workflow run in the background. Returns run_id immediately."""
         from operator_use.subagent.manager import _session_channel, _session_chat_id
+
+        # Settings-derived defaults under explicit invocation args.
+        args = {**self._run_defaults, **(args or {})}
 
         # Resolve: class-based takes precedence over file-based
         workflow_instance = self._class_workflows.get(workflow_name)
@@ -161,9 +167,55 @@ class WorkflowManager:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
-    def _make_workflow_context(self) -> WorkflowContext:
+    def _make_workflow_context(self, spawn_depth: int = 1) -> WorkflowContext:
         """Build a WorkflowContext from the manager's own llm and tools."""
-        return WorkflowContext(llm=self._llm, tools=self._tools)
+        return WorkflowContext(
+            llm=self._llm,
+            tools=self._tools,
+            nested_workflow=self._run_inline,
+            spawn_depth=spawn_depth,
+        )
+
+    async def _run_inline(self, name: str, args: dict[str, Any], spawn_depth: int, record: WorkflowRunRecord) -> str:
+        """Run another workflow inline and return its result (one level deep only).
+
+        Shares the caller's run record so logs and the agent()-call cap are unified."""
+        if spawn_depth > 2:
+            raise RuntimeError(
+                f"Nested workflow '{name}' rejected: workflows may nest only one level deep."
+            )
+
+        args = {**self._run_defaults, **(args or {})}
+        instance = self._class_workflows.get(name)
+        if instance is not None:
+            return await instance.execute(
+                WorkflowInvocation(workflow_name=name, args=args),
+                self._make_workflow_context(spawn_depth=spawn_depth),
+            )
+
+        path = self._loader.find(name) if self._loader else None
+        if path is None:
+            raise ValueError(f"Nested workflow '{name}' not found.")
+
+        from operator_use.workflow.context import WorkflowExecuteContext
+        from operator_use.workflow.execute import execute
+        from operator_use.workflow.types import WorkflowJournal
+
+        base = self._runs_dir if self._runs_dir else (Path(tempfile.gettempdir()) / '.operator-workflow-runs')
+        run_dir = base / record.run_id / f'nested-{name}'
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        child = WorkflowExecuteContext(
+            record=record,
+            subagent=self._subagent,
+            llm=self._llm,
+            tools=self._tools,
+            journal=WorkflowJournal(run_dir=run_dir),
+            args=args,
+            spawn_depth=spawn_depth,
+            nested_workflow=self._run_inline,
+        )
+        return await execute(path, child)
 
     async def _run_class_and_announce(
         self,
@@ -262,6 +314,7 @@ class WorkflowManager:
             tools=self._tools,
             journal=journal,
             args=args,
+            nested_workflow=self._run_inline,
         )
 
         logger.info('[%s] workflow "%s" started', record.run_id, record.workflow_name)

@@ -13,7 +13,7 @@ from operator_use.settings.types import (
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
     ImageSettings, STTSettings, TTSSettings, MemorySettings, ExtensionEntry,
     AuxiliarySettings, AuxiliaryTaskSettings, CuratorSettings,
-    BrowserUseSettings, ComputerUseSettings,
+    BrowserUseSettings, ComputerUseSettings, WorkflowSettings,
 )
 from operator_use.gateway.channels.types import (
     ChannelsSettings,
@@ -35,6 +35,7 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
     'curator': CuratorSettings,
     'browser_use': BrowserUseSettings,
     'computer_use': ComputerUseSettings,
+    'workflow': WorkflowSettings,
 }
 
 # Pydantic BaseModel fields — use model_validate() instead of **kwargs
@@ -779,7 +780,12 @@ class SettingsManager:
         self._save()
 
     def get_workflows_enabled(self) -> bool:
-        """Return whether workflow execution is enabled (default: True)."""
+        """Return whether workflow execution is enabled (default: True).
+
+        The nested workflow.enabled wins; the flat workflows_enabled is a fallback."""
+        wf = self.settings.workflow
+        if wf is not None:
+            return wf.enabled
         return self.settings.workflows_enabled if self.settings.workflows_enabled is not None else True
 
     def set_workflows_enabled(self, enabled: bool):
@@ -787,6 +793,18 @@ class SettingsManager:
         self.global_settings.workflows_enabled = enabled
         self._mark_modified("workflows_enabled")
         self._save()
+
+    def get_workflow_run_defaults(self) -> dict:
+        """Resolve per-run workflow knob defaults from settings (args still override)."""
+        from operator_use.settings.types import WorkflowSettings
+        wf = self.settings.workflow or WorkflowSettings()
+        return {
+            'max_agent_calls': wf.max_agent_calls,
+            'budget': wf.budget,
+            'concurrency': wf.concurrency,
+            'stall_ms': wf.stall_ms,
+            'max_retries': wf.max_retries,
+        }
 
     def get_computer_use_enabled(self) -> bool:
         """Return whether computer use (desktop control) is enabled (default: True)."""

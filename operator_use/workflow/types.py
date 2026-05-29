@@ -15,6 +15,10 @@ if TYPE_CHECKING:
     from operator_use.workflow.context import WorkflowExecuteContext
 
 
+class WorkflowAgentCapError(RuntimeError):
+    """Raised when a run exceeds its hard agent()-call cap (runaway-loop guard)."""
+
+
 @dataclass
 class WorkflowContext:
     """Carries the runtime dependencies a Workflow needs to execute.
@@ -24,6 +28,11 @@ class WorkflowContext:
     """
     llm: Any
     tools: list
+    # Runner for inline nested workflows: async (name, args, spawn_depth, record) -> str.
+    # Populated by WorkflowManager; None when no manager is available.
+    nested_workflow: Any = None
+    # Current nesting depth, threaded so the one-level-deep guard holds for class workflows.
+    spawn_depth: int = 1
 
 
 @dataclass
@@ -163,6 +172,8 @@ class Workflow(ABC):
             tools=tools,
             journal=WorkflowJournal(run_dir=run_dir),
             args=invocation.args,
+            spawn_depth=workflow_context.spawn_depth,
+            nested_workflow=workflow_context.nested_workflow,
         )
 
     @abstractmethod

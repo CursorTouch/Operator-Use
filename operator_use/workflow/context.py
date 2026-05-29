@@ -51,6 +51,7 @@ class WorkflowExecuteContext:
         journal: WorkflowJournal,
         args: dict[str, Any],
         spawn_depth: int = 1,
+        nested_workflow: Any = None,
     ) -> None:
         self._record = record
         self._subagent = subagent
@@ -59,14 +60,21 @@ class WorkflowExecuteContext:
         self._journal = journal
         self.args = args
         self._spawn_depth = spawn_depth
+        # Runs another workflow inline: async (name, args, spawn_depth, record) -> str
+        self._nested_workflow = nested_workflow
         self.budget = Budget(total=int(args.get('budget', 100)))
+        # Run-knob defaults (settings → seeded into args; per-call params still override).
+        self._max_agent_calls = int(args.get('max_agent_calls', 1000))
+        self._stall_ms = int(args.get('stall_ms', 180_000))
+        self._max_retries = int(args.get('max_retries', 5))
+        self._concurrency = int(args.get('concurrency', 5))
 
     # ── Workflow globals ───────────────────────────────────────────────────────
 
     @overload
-    async def agent(self, prompt: str, schema: None = None, system: str | None = None, tools: list[str] | None = None, resume: bool = False) -> str: ...
+    async def agent(self, prompt: str, schema: None = None, system: str | None = None, tools: list[str] | None = None, resume: bool = False, stall_ms: int | None = None, max_retries: int | None = None) -> str: ...
     @overload
-    async def agent(self, prompt: str, schema: Type[BaseModel], system: str | None = None, tools: list[str] | None = None, resume: bool = False) -> BaseModel: ...
+    async def agent(self, prompt: str, schema: Type[BaseModel], system: str | None = None, tools: list[str] | None = None, resume: bool = False, stall_ms: int | None = None, max_retries: int | None = None) -> BaseModel: ...
 
     async def agent(
         self,
@@ -75,24 +83,32 @@ class WorkflowExecuteContext:
         system: str | None = None,
         tools: list[str] | None = None,
         resume: bool = False,
+        stall_ms: int | None = None,
+        max_retries: int | None = None,
     ) -> str | BaseModel:
-        """Run a single agent task. Returns str or a parsed Pydantic model if schema given."""
+        """Run a single agent task. Returns str or a parsed Pydantic model if schema given.
+
+        A stalled call (no completion within `stall_ms`) is cancelled and retried up
+        to `max_retries` times before raising. Hard-capped by `max_agent_calls`.
+        `stall_ms`/`max_retries` default to the run's configured values when omitted."""
+        from operator_use.workflow.types import WorkflowAgentCapError
+
+        stall_ms = self._stall_ms if stall_ms is None else stall_ms
+        max_retries = self._max_retries if max_retries is None else max_retries
+
+        if self._record.agent_calls >= self._max_agent_calls:
+            raise WorkflowAgentCapError(
+                f'Workflow exceeded max agent() calls ({self._max_agent_calls}). '
+                f'Raise it via args["max_agent_calls"] if this is intentional.'
+            )
+
         opts = {'schema': schema.__name__ if schema else None, 'system': system}
         if resume:
             cached = self._journal.get(prompt, opts)
             if cached is not None:
                 return schema.model_validate(cached) if schema else cached
 
-        if schema is not None:
-            result = await self._agent_structured(prompt, schema, system)
-        else:
-            allowed = self._filter_tools(tools)
-            result = await self._subagent.run_single(
-                task=prompt,
-                system_prompt=system,
-                tools=allowed,
-                spawn_depth=self._spawn_depth,
-            )
+        result = await self._run_with_retry(prompt, schema, system, tools, stall_ms, max_retries)
 
         self._record.agent_calls += 1
         self.budget.add()
@@ -102,19 +118,51 @@ class WorkflowExecuteContext:
             self._journal.set(prompt, opts, serialized)
         return result
 
-    async def parallel(self, *thunks, concurrency: int = 5):
-        """Run async thunks concurrently (barrier — waits for all). Returns list of results."""
-        sem = asyncio.Semaphore(concurrency)
+    async def _run_with_retry(self, prompt, schema, system, tools, stall_ms: int, max_retries: int):
+        """Produce one agent result, retrying on stall (timeout) up to max_retries times."""
+        timeout = max(stall_ms, 1) / 1000
+        last_exc: BaseException | None = None
+        for attempt in range(max_retries + 1):
+            try:
+                if schema is not None:
+                    return await asyncio.wait_for(self._agent_structured(prompt, schema, system), timeout=timeout)
+                allowed = self._filter_tools(tools)
+                return await asyncio.wait_for(
+                    self._subagent.run_single(task=prompt, system_prompt=system, tools=allowed, spawn_depth=self._spawn_depth),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError as exc:
+                last_exc = exc
+                self.log(f'[agent] stalled after {stall_ms}ms (attempt {attempt + 1}/{max_retries + 1})'
+                         + ('; retrying' if attempt < max_retries else '; giving up'))
+        raise TimeoutError(f'agent() stalled after {max_retries + 1} attempts of {stall_ms}ms each') from last_exc
+
+    async def parallel(self, *thunks, concurrency: int | None = None, return_exceptions: bool = False):
+        """Run async thunks concurrently (barrier — waits for all). Returns list of results.
+
+        By default a failing thunk cancels its siblings and re-raises (fail-fast).
+        With return_exceptions=True the call never rejects: each failed thunk's slot
+        holds its exception instead, so partial results survive."""
+        sem = asyncio.Semaphore(self._concurrency if concurrency is None else concurrency)
 
         async def _run(thunk):
             async with sem:
                 return await thunk()
 
-        return await self._gather_or_cancel([_run(t) for t in thunks])
+        coros = [_run(t) for t in thunks]
+        if return_exceptions:
+            return list(await asyncio.gather(*coros, return_exceptions=True))
+        return await self._gather_or_cancel(coros)
 
-    async def pipeline(self, items, *stages, concurrency: int = 5):
+    async def workflow(self, name: str, args: dict[str, Any] | None = None) -> str:
+        """Run another workflow inline and return its result (one level deep only)."""
+        if self._nested_workflow is None:
+            raise RuntimeError('Nested workflows are not available in this context.')
+        return await self._nested_workflow(name, args or {}, self._spawn_depth + 1, self._record)
+
+    async def pipeline(self, items, *stages, concurrency: int | None = None):
         """Pass each item through stages independently. Returns list of final values."""
-        sem = asyncio.Semaphore(concurrency)
+        sem = asyncio.Semaphore(self._concurrency if concurrency is None else concurrency)
 
         async def _apply(stage, item):
             if inspect.iscoroutinefunction(stage):
@@ -193,6 +241,7 @@ class WorkflowExecuteContext:
             'agent':    self.agent,
             'parallel': self.parallel,
             'pipeline': self.pipeline,
+            'workflow': self.workflow,
             'phase':    self.phase,
             'log':      self.log,
             'budget':   self.budget,
