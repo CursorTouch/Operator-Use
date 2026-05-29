@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from operator_use.inference.api.text.service import LLM
 
 
 @dataclass
@@ -19,13 +22,14 @@ class MemoryOptions:
 
 
 @dataclass
-class MemoryRuntimeContext:
+class MemoryContext:
     cwd: Path | None = None
     session_id: str = ""
     user_id: str | None = None
     project_memory_dir: Path | None = None
     global_memory_dir: Path | None = None
     metadata: dict[str, Any] | None = None
+    llm: "LLM | None" = None
 
 
 @dataclass

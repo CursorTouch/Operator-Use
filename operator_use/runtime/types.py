@@ -36,7 +36,7 @@ from operator_use.mcp.manager import MCPManager
 from operator_use.memory.manager import MemoryManager
 from operator_use.memory.provider.registry import MemoryProviderRegistry
 from operator_use.memory.api.registry import MemoryAPIRegistry
-from operator_use.memory.types import MemoryOptions, MemoryRuntimeContext
+from operator_use.memory.types import MemoryOptions, MemoryContext
 from operator_use.acp.manager import ACPSessionManager
 from operator_use.peer.manager import PeerSessionManager
 from operator_use.process.manager import ProcessManager
@@ -435,11 +435,12 @@ class RuntimeContext:
                 if memory_settings.prefetch is not None:
                     memory_options.prefetch = memory_settings.prefetch
             try:
-                memory_manager.initialize(MemoryRuntimeContext(
+                memory_manager.initialize(MemoryContext(
                     cwd=cwd,
                     session_id=session_manager.session_id or "",
                     project_memory_dir=get_config_dir() / "memory",
                     global_memory_dir=get_config_dir() / "memory",
+                    llm=llm,
                 ))
             except ImportError:
                 memory_manager = None

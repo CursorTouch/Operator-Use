@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import Any
 
-from operator_use.memory.types import MemoryOptions, MemoryRuntimeContext, MemorySearchResult
+from operator_use.memory.types import MemoryOptions, MemoryContext, MemorySearchResult
 
 
 class BaseMemoryAPI(ABC):
@@ -16,9 +16,9 @@ class BaseMemoryAPI(ABC):
 
     def __init__(self, options: MemoryOptions | None = None) -> None:
         self.options = options or MemoryOptions()
-        self.context = MemoryRuntimeContext()
+        self.context = MemoryContext()
 
-    def initialize(self, context: MemoryRuntimeContext) -> None:
+    def initialize(self, context: MemoryContext) -> None:
         self.context = context
 
     async def prefetch(self, query: str, *, session_id: str = "") -> str:

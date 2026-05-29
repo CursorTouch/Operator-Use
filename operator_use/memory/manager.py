@@ -3,7 +3,7 @@ from __future__ import annotations
 from operator_use.memory.api.base import BaseMemoryAPI
 from operator_use.memory.api.registry import MemoryAPIRegistry
 from operator_use.memory.provider.registry import MemoryProviderRegistry
-from operator_use.memory.types import MemoryRuntimeContext
+from operator_use.memory.types import MemoryContext
 
 
 class MemoryManager:
@@ -24,7 +24,7 @@ class MemoryManager:
         self.provider_id = provider_id
         self.api: BaseMemoryAPI | None = None
 
-    def initialize(self, context: MemoryRuntimeContext) -> BaseMemoryAPI | None:
+    def initialize(self, context: MemoryContext) -> BaseMemoryAPI | None:
         if not self.provider_id:
             return None
 

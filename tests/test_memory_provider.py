@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from operator_use.memory import MemoryManager, MemoryRuntimeContext
+from operator_use.memory import MemoryManager, MemoryContext
 from operator_use.memory.api.mem0 import Mem0MemoryAPI
 from operator_use.memory.api.registry import MemoryAPIRegistry
 from operator_use.memory.api.supermemory import SupermemoryAPI
@@ -30,7 +30,7 @@ def test_memory_manager_initializes_active_provider(tmp_path):
     (memory_dir / "user.md").write_text("User likes direct answers.", encoding="utf-8")
 
     manager = MemoryManager(provider_id=None)
-    api = manager.initialize(MemoryRuntimeContext(project_memory_dir=memory_dir))
+    api = manager.initialize(MemoryContext(project_memory_dir=memory_dir))
 
     assert api is None
     assert manager.search("direct") == []
@@ -55,7 +55,7 @@ class _FakeMem0Client:
 async def test_mem0_prefetch_and_on_turn_complete_with_fake_client():
     client = _FakeMem0Client()
     api = Mem0MemoryAPI(options=MemoryOptions(user_id="u1"), client=client)
-    api.initialize(MemoryRuntimeContext(session_id="s1"))
+    api.initialize(MemoryContext(session_id="s1"))
 
     recalled = await api.prefetch("pytest")
     await api.on_turn_complete("use pytest", "ok", session_id="s1")
@@ -144,14 +144,14 @@ def test_memory_manager_uses_custom_registry(tmp_path):
         providers=provider_registry,
         apis=api_registry,
     )
-    api = manager.initialize(MemoryRuntimeContext())
+    api = manager.initialize(MemoryContext())
     assert isinstance(api, NullAPI)
 
 
 def test_memory_manager_rejects_unknown_provider_id():
     manager = MemoryManager(provider_id="does-not-exist")
     with pytest.raises(ValueError, match="not found"):
-        manager.initialize(MemoryRuntimeContext())
+        manager.initialize(MemoryContext())
 
 
 def test_custom_provider_unregister():
@@ -172,7 +172,7 @@ def test_custom_provider_unregister():
 async def test_supermemory_prefetch_and_on_turn_complete_with_fake_client():
     client = _FakeSupermemoryClient()
     api = SupermemoryAPI(options=MemoryOptions(user_id="u1"), client=client)
-    api.initialize(MemoryRuntimeContext(session_id="s1"))
+    api.initialize(MemoryContext(session_id="s1"))
 
     recalled = await api.prefetch("gateway")
     await api.on_turn_complete("remember gateway", "stored", session_id="s1")

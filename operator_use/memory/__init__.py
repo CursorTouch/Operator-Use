@@ -1,5 +1,5 @@
 from operator_use.memory.manager import MemoryManager
-from operator_use.memory.types import MemoryOptions, MemoryRuntimeContext, MemorySearchResult
+from operator_use.memory.types import MemoryOptions, MemoryContext, MemorySearchResult
 from operator_use.memory.provider.types import MemoryProvider
 from operator_use.memory.provider.registry import MemoryProviderRegistry
 from operator_use.memory.api.base import BaseMemoryAPI
@@ -12,6 +12,6 @@ __all__ = [
     "MemoryOptions",
     "MemoryProvider",
     "MemoryProviderRegistry",
-    "MemoryRuntimeContext",
+    "MemoryContext",
     "MemorySearchResult",
 ]

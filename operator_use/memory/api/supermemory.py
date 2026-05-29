@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 from operator_use.memory.api.base import BaseMemoryAPI
-from operator_use.memory.types import MemoryOptions, MemoryRuntimeContext, MemorySearchResult
+from operator_use.memory.types import MemoryOptions, MemoryContext, MemorySearchResult
 
 
 class SupermemoryAPI(BaseMemoryAPI):
@@ -14,11 +14,11 @@ class SupermemoryAPI(BaseMemoryAPI):
 
     def __init__(self, options: MemoryOptions | None = None, client: Any | None = None) -> None:
         self.options = options or MemoryOptions(api_key_env="SUPERMEMORY_API_KEY")
-        self.context = MemoryRuntimeContext()
+        self.context = MemoryContext()
         self._client = client
         self._container_tag = self.options.user_id or "operator-user"
 
-    def initialize(self, context: MemoryRuntimeContext) -> None:
+    def initialize(self, context: MemoryContext) -> None:
         super().initialize(context)
         self._container_tag = self.options.user_id or context.user_id or "operator-user"
         if self._client is None:
