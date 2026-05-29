@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
+import uuid
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,7 +35,7 @@ class KnowledgeSchema(BaseModel):
             '  list    — list all pages with a one-line preview\n'
             '  search  — find pages containing a keyword (requires: query)\n'
             '  add     — write content directly into a knowledge page without any intermediate file (requires: page, content); use this when you already have the content\n'
-            '  ingest  — synthesize an existing file on disk into knowledge pages (requires: source — must be an absolute path to a file that already exists); do NOT use write tool to create a temp file first — use add instead\n'
+            '  ingest  — synthesize a source into knowledge pages (requires: source — accepts a URL, a file path, or raw text)\n'
             '  lint    — check for contradictions and stale content\n'
             '  dream   — consolidate and deduplicate all pages\n'
             '  log     — return the audit log of past operations'
@@ -43,7 +44,12 @@ class KnowledgeSchema(BaseModel):
     query: str = Field(default='', description='Keyword(s) to search for.')
     page: str = Field(default='', description='Target page name (no extension) for add.')
     content: str = Field(default='', description='Text to append for add.')
-    source: str = Field(default='', description='Absolute path to an existing file on disk for ingest. Never create a temp file with the write tool — use add action instead.')
+    source: str = Field(default='', description=(
+        'Source for ingest — one of:\n'
+        '  URL  (https://...)  — web page to fetch and synthesize\n'
+        '  file (/path/to/file) — existing file on disk\n'
+        '  text (any other string) — raw text content to synthesize directly'
+    ))
 
 
 KnowledgeSchema.model_rebuild()
@@ -57,6 +63,29 @@ def _get_knowledge_dir(context: ToolContext | None) -> Path | None:
         return None
     profile = getattr(loader, '_active_profile', None)
     return profile.knowledge_dir if profile else None
+
+
+def _source_type(source: str) -> Literal['url', 'file', 'text']:
+    if source.startswith(('http://', 'https://')):
+        return 'url'
+    if source.startswith(('/', './', '../', '~')) or Path(source).exists():
+        return 'file'
+    return 'text'
+
+
+def _resolve_source(source: str, temp_dir: Path) -> tuple[str, Literal['url', 'file', 'text']]:
+    """Return (resolved_source, source_type).
+
+    For text content: writes to a temp file and returns its path so the
+    ingest workflow can read it as a normal file.
+    """
+    kind = _source_type(source)
+    if kind == 'text':
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        tmp = temp_dir / f'ingest_{uuid.uuid4().hex[:8]}.md'
+        tmp.write_text(source, encoding='utf-8')
+        return str(tmp), 'text'
+    return source, kind
 
 
 def _make_workflow_context(context: ToolContext) -> WorkflowContext:
@@ -154,9 +183,14 @@ class KnowledgeTool(Tool):
                 match params.action:
                     case KnowledgeAction.ingest:
                         if not params.source:
-                            return ToolResult.error(invocation.id, "ingest requires a source path.")
+                            return ToolResult.error(invocation.id, "ingest requires a source (URL, file path, or text).")
+                        profile = getattr(getattr(context, 'resource_loader', None), '_active_profile', None)
+                        temp_dir = profile.temp_dir if profile else Path('/tmp')
+                        resolved, source_type = _resolve_source(params.source, temp_dir)
                         result = await KnowledgeIngestWorkflow().execute(
-                            WorkflowInvocation(workflow_name='knowledge-ingest', args={**wf_args, 'source': params.source}), wf_ctx
+                            WorkflowInvocation(workflow_name='knowledge-ingest', args={
+                                **wf_args, 'source': resolved, 'source_type': source_type,
+                            }), wf_ctx
                         )
                     case KnowledgeAction.lint:
                         result = await KnowledgeLintWorkflow().execute(

@@ -23,7 +23,9 @@ class KnowledgeIngestWorkflow(Workflow):
 
         async with ctx.phase('read'):
             ctx.log(f'Reading source: {source}')
-            source_content = await ctx.agent(ingest_read(source), tools=['read'])
+            source_type = ctx.args.get('source_type', 'file')
+            read_prompt, read_tools = ingest_read(source, source_type)
+            source_content = await ctx.agent(read_prompt, tools=read_tools)
 
         async with ctx.phase('synthesize'):
             ctx.log('Creating knowledge pages...')
