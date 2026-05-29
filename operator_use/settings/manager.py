@@ -803,14 +803,7 @@ class SettingsManager:
     def get_workflow_run_defaults(self) -> dict:
         """Resolve per-run workflow knob defaults from settings (args still override)."""
         from operator_use.settings.types import WorkflowSettings
-        wf = self.settings.workflow or WorkflowSettings()
-        return {
-            'max_agent_calls': wf.max_agent_calls,
-            'budget': wf.budget,
-            'concurrency': wf.concurrency,
-            'stall_ms': wf.stall_ms,
-            'max_retries': wf.max_retries,
-        }
+        return (self.settings.workflow or WorkflowSettings()).run_defaults()
 
     def get_computer_use_enabled(self) -> bool:
         """Return whether computer use (desktop control) is enabled (default: True)."""

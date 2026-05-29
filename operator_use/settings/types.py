@@ -131,6 +131,16 @@ class WorkflowSettings:
     stall_ms: int = 180000        # per-agent() stall timeout before retry
     max_retries: int = 5          # stall retries before agent() raises
 
+    def run_defaults(self) -> dict:
+        """Per-run knob defaults seeded into a workflow run's args (args override)."""
+        return {
+            'max_agent_calls': self.max_agent_calls,
+            'budget': self.budget,
+            'concurrency': self.concurrency,
+            'stall_ms': self.stall_ms,
+            'max_retries': self.max_retries,
+        }
+
 
 @dataclass
 class AuxiliarySettings:

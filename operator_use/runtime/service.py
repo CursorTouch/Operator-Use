@@ -711,6 +711,32 @@ class Runtime:
         agent._runtime = self
         agent._active_profile = profile
 
+        # Per-profile subagent/workflow managers so profile-level settings (and the
+        # profile's own tools) take effect, instead of the shared global managers.
+        from operator_use.subagent.types import SubagentSettings
+        from operator_use.settings.types import WorkflowSettings
+        _sub_settings = (
+            profile_settings.subagent if (profile_settings and profile_settings.subagent is not None)
+            else self._context.subagent_settings
+        ) or SubagentSettings()
+        _wf_settings = (profile_settings.workflow if profile_settings else None) or WorkflowSettings()
+        subagent_manager = SubagentManager(
+            llm=llm,
+            tools=all_tools,
+            bus=self.bus,
+            settings=_sub_settings,
+            hooks=hooks,
+            profiles=resource_loader.get_subagent_profiles(),
+        )
+        workflow_manager = WorkflowManager(
+            llm=llm,
+            tools=all_tools,
+            bus=self.bus,
+            workflow_dirs=resource_loader.get_workflow_dirs(),
+            runs_dir=profile.workflow_runs_dir,
+            run_defaults=_wf_settings.run_defaults(),
+        )
+
         engine.tool_context = ToolContext(
             llm=llm,
             engine=engine,
@@ -719,8 +745,8 @@ class Runtime:
             resource_loader=resource_loader,
             extension_runtime=real_ext,
             hooks=hooks,
-            subagent_manager=self.subagent_manager,
-            workflow_manager=self.workflow_manager,
+            subagent_manager=subagent_manager,
+            workflow_manager=workflow_manager,
             bus=self.bus,
             cron=self._context.cron,
             mcp_manager=self.mcp_manager,
