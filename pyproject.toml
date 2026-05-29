@@ -45,6 +45,8 @@ dependencies = [
     "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
+    "yt-dlp>=2026.3.17",
+    "youtube-transcript-api>=1.2.4",
 ]
 
 [project.scripts]

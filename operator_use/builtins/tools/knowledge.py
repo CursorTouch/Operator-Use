@@ -46,6 +46,7 @@ class KnowledgeSchema(BaseModel):
     content: str = Field(default='', description='Text to append for add.')
     source: str = Field(default='', description=(
         'Source for ingest — one of:\n'
+        '  YouTube URL (youtube.com/... or youtu.be/...) — extract transcript and synthesize\n'
         '  URL  (https://...)  — web page to fetch and synthesize\n'
         '  file (/path/to/file) — existing file on disk\n'
         '  text (any other string) — raw text content to synthesize directly'
@@ -65,7 +66,9 @@ def _get_knowledge_dir(context: ToolContext | None) -> Path | None:
     return profile.knowledge_dir if profile else None
 
 
-def _source_type(source: str) -> Literal['url', 'file', 'text']:
+def _source_type(source: str) -> Literal['youtube', 'url', 'file', 'text']:
+    if 'youtube.com/' in source or 'youtu.be/' in source:
+        return 'youtube'
     if source.startswith(('http://', 'https://')):
         return 'url'
     if source.startswith(('/', './', '../', '~')) or Path(source).exists():
