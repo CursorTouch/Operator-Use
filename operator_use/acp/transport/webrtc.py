@@ -232,7 +232,9 @@ class ACPWebRTCServer:
             @channel.on('message')
             def on_message(message: Any) -> None:
                 _write_channel_message(bridge_writer, message)
-                asyncio.create_task(_drain_writer(bridge_writer))
+                drain_task = asyncio.create_task(_drain_writer(bridge_writer))
+                self._tasks.add(drain_task)
+                drain_task.add_done_callback(self._tasks.discard)
 
             forward_task = asyncio.create_task(
                 _forward_reader_to_channel(bridge_reader, channel),

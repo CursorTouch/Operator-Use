@@ -38,9 +38,13 @@ class SarvamAudioAPI(BaseAPI):
 
     def __init__(self, options: AudioOptions) -> None:
         super().__init__(options)
-        self._http = httpx.AsyncClient(
-            base_url=options.base_url or _BASE_URL,
-            timeout=options.timeout.total_seconds(),
+
+    def _new_client(self) -> httpx.AsyncClient:
+        # Per-call client (used inside `async with`) so its connection pool is
+        # always closed — no persistent client left unclosed for the GC.
+        return httpx.AsyncClient(
+            base_url=self.options.base_url or _BASE_URL,
+            timeout=self.options.timeout.total_seconds(),
         )
 
     def _auth_headers(self) -> dict[str, str]:
@@ -67,13 +71,14 @@ class SarvamAudioAPI(BaseAPI):
                 payload = modified
 
         try:
-            response = await self._http.post(
-                _TTS_ENDPOINT,
-                json=payload,
-                headers=self._auth_headers(),
-            )
-            response.raise_for_status()
-            data = response.json()
+            async with self._new_client() as http:
+                response = await http.post(
+                    _TTS_ENDPOINT,
+                    json=payload,
+                    headers=self._auth_headers(),
+                )
+                response.raise_for_status()
+                data = response.json()
 
             if self.options.on_response:
                 self.options.on_response(data)
@@ -117,14 +122,15 @@ class SarvamAudioAPI(BaseAPI):
                 data = modified
 
         try:
-            response = await self._http.post(
-                _STT_ENDPOINT,
-                data=data,
-                files=files,
-                headers=self._auth_headers(),
-            )
-            response.raise_for_status()
-            result = response.json()
+            async with self._new_client() as http:
+                response = await http.post(
+                    _STT_ENDPOINT,
+                    data=data,
+                    files=files,
+                    headers=self._auth_headers(),
+                )
+                response.raise_for_status()
+                result = response.json()
 
             if self.options.on_response:
                 self.options.on_response(result)

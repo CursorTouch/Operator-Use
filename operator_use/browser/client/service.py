@@ -81,6 +81,9 @@ class Browser:
         self._page_loading: dict[str, bool] = {}
         self._current_target_id: str | None = None
         self._browser_event_handlers: dict[str, list[Callable[[Any], Any]]] = {}
+        # Strong refs to fire-and-forget handler tasks: the loop only holds weak
+        # refs, so without this a handler task can be GC'd mid-flight.
+        self._handler_tasks: set[asyncio.Task] = set()
 
         self._browser_state: BrowserState | None = None
         self._page = Page(self)
@@ -467,7 +470,9 @@ class Browser:
         for handler in self._browser_event_handlers.get(key, []):
             try:
                 if inspect.iscoroutinefunction(handler):
-                    asyncio.create_task(handler(event_obj))
+                    task = asyncio.create_task(handler(event_obj))
+                    self._handler_tasks.add(task)
+                    task.add_done_callback(self._handler_tasks.discard)
                 else:
                     handler(event_obj)
             except Exception as e:

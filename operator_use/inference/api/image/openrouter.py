@@ -70,7 +70,6 @@ def _parse_usage(data: dict[str, Any]) -> Usage:
 class OpenRouterImageAPI(BaseImageAPI):
     def __init__(self, options: ImageOptions) -> None:
         super().__init__(options)
-        self._client = httpx.AsyncClient(timeout=options.timeout.total_seconds())
 
     async def generate(self, model: Model, context: ImageContext) -> GeneratedImage:
         headers: dict[str, str] = {
@@ -93,45 +92,48 @@ class OpenRouterImageAPI(BaseImageAPI):
         url = f"{(self.options.base_url or '').rstrip('/')}/chat/completions"
         last_error: Exception | None = None
 
-        for attempt in range(self.options.max_retries + 1):
-            if attempt > 0:
-                await asyncio.sleep(min(2 ** (attempt - 1), 30))
-            try:
-                response = await self._client.post(url, json=body, headers=headers)
+        # Per-call client so its connection pool is always closed when generate()
+        # returns — no persistent client left unclosed for the GC to warn about.
+        async with httpx.AsyncClient(timeout=self.options.timeout.total_seconds()) as client:
+            for attempt in range(self.options.max_retries + 1):
+                if attempt > 0:
+                    await asyncio.sleep(min(2 ** (attempt - 1), 30))
+                try:
+                    response = await client.post(url, json=body, headers=headers)
 
-                if self.options.on_response:
-                    self.options.on_response(response)
+                    if self.options.on_response:
+                        self.options.on_response(response)
 
-                if not response.is_success:
-                    text = response.text
-                    if attempt < self.options.max_retries and response.status_code in _RETRYABLE_STATUSES:
-                        last_error = RuntimeError(f"HTTP {response.status_code}: {text}")
-                        continue
+                    if not response.is_success:
+                        text = response.text
+                        if attempt < self.options.max_retries and response.status_code in _RETRYABLE_STATUSES:
+                            last_error = RuntimeError(f"HTTP {response.status_code}: {text}")
+                            continue
+                        return GeneratedImage(
+                            model_id=model.id, provider=model.provider,
+                            output=[], stop_reason=ImageStopReason.Error,
+                            error=f"HTTP {response.status_code}: {text}",
+                        )
+
+                    data = response.json()
                     return GeneratedImage(
-                        model_id=model.id, provider=model.provider,
-                        output=[], stop_reason=ImageStopReason.Error,
-                        error=f"HTTP {response.status_code}: {text}",
+                        model_id=model.id,
+                        provider=model.provider,
+                        output=_parse_output(data),
+                        stop_reason=ImageStopReason.Stop,
+                        usage=_parse_usage(data),
                     )
 
-                data = response.json()
-                return GeneratedImage(
-                    model_id=model.id,
-                    provider=model.provider,
-                    output=_parse_output(data),
-                    stop_reason=ImageStopReason.Stop,
-                    usage=_parse_usage(data),
-                )
-
-            except asyncio.CancelledError:
-                return GeneratedImage(
-                    model_id=model.id, provider=model.provider,
-                    output=[], stop_reason=ImageStopReason.Abort,
-                    error="Cancelled",
-                )
-            except Exception as exc:
-                last_error = exc
-                if attempt < self.options.max_retries:
-                    continue
+                except asyncio.CancelledError:
+                    return GeneratedImage(
+                        model_id=model.id, provider=model.provider,
+                        output=[], stop_reason=ImageStopReason.Abort,
+                        error="Cancelled",
+                    )
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < self.options.max_retries:
+                        continue
 
         return GeneratedImage(
             model_id=model.id, provider=model.provider,

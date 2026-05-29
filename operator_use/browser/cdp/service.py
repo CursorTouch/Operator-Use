@@ -40,6 +40,9 @@ class Client(Domains):
         self.id_counter: Annotated[int, add] = 0
         self.pending_requests: Dict[int, asyncio.Future] = {}
         self.event_handlers: Dict[str, List[Callable[[Any, Optional[str]], None | Awaitable[None]]]] = {}
+        # Strong refs to fire-and-forget handler tasks: the loop only holds weak
+        # refs, so without this a handler task can be GC'd mid-flight.
+        self._handler_tasks: set[asyncio.Task] = set()
         self.on_disconnect: Optional[Callable[[], Any]] = None
         
         if refresh:
@@ -177,7 +180,9 @@ class Client(Domains):
                     for handler in handlers:
                         try:
                             if inspect.iscoroutinefunction(handler):
-                                asyncio.create_task(handler(params,session_id))
+                                task = asyncio.create_task(handler(params,session_id))
+                                self._handler_tasks.add(task)
+                                task.add_done_callback(self._handler_tasks.discard)
                             else:
                                 handler(params,session_id)
                         except Exception as e:

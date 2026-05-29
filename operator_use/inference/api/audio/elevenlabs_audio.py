@@ -46,9 +46,13 @@ class ElevenLabsAudioAPI(BaseAPI):
 
     def __init__(self, options: AudioOptions) -> None:
         super().__init__(options)
-        self._http = httpx.AsyncClient(
-            base_url=options.base_url or _BASE_URL,
-            timeout=options.timeout.total_seconds(),
+
+    def _new_client(self) -> httpx.AsyncClient:
+        # Per-call client (used inside `async with`) so its connection pool is
+        # always closed — no persistent client left unclosed for the GC.
+        return httpx.AsyncClient(
+            base_url=self.options.base_url or _BASE_URL,
+            timeout=self.options.timeout.total_seconds(),
         )
 
     def _auth_headers(self) -> dict[str, str]:
@@ -85,13 +89,14 @@ class ElevenLabsAudioAPI(BaseAPI):
         body = payload.pop("body", body)
 
         try:
-            response = await self._http.post(
-                f"/v1/text-to-speech/{voice_id}",
-                params={"output_format": output_format},
-                json=body,
-                headers=self._auth_headers(),
-            )
-            response.raise_for_status()
+            async with self._new_client() as http:
+                response = await http.post(
+                    f"/v1/text-to-speech/{voice_id}",
+                    params={"output_format": output_format},
+                    json=body,
+                    headers=self._auth_headers(),
+                )
+                response.raise_for_status()
 
             if self.options.on_response:
                 self.options.on_response(response)
@@ -137,14 +142,15 @@ class ElevenLabsAudioAPI(BaseAPI):
                 data = {k: v for k, v in modified.items() if not k.startswith("_")}
 
         try:
-            response = await self._http.post(
-                "/v1/speech-to-text",
-                data=data,
-                files=files,
-                headers=self._auth_headers(),
-            )
-            response.raise_for_status()
-            result = response.json()
+            async with self._new_client() as http:
+                response = await http.post(
+                    "/v1/speech-to-text",
+                    data=data,
+                    files=files,
+                    headers=self._auth_headers(),
+                )
+                response.raise_for_status()
+                result = response.json()
 
             if self.options.on_response:
                 self.options.on_response(result)

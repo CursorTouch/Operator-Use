@@ -73,6 +73,14 @@ class RPCServer:
         self._pending_ui: dict[str, asyncio.Future] = {}
         self._unsub_hooks: Callable | None = None
         self._shutdown = False
+        # Strong refs to fire-and-forget tasks: the loop only holds weak refs,
+        # so without this a task awaiting I/O can be GC'd mid-flight.
+        self._tasks: set[asyncio.Task] = set()
+
+    def _spawn(self, coro: Any) -> None:
+        task = asyncio.create_task(coro)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -92,7 +100,7 @@ class RPCServer:
                 break
             line = raw.decode('utf-8', errors='replace').rstrip('\r\n')
             if line:
-                asyncio.create_task(self._handle_line(line))
+                self._spawn(self._handle_line(line))
 
         self._close()
 
@@ -192,7 +200,7 @@ class RPCServer:
                     await self._err(cmd_id, 'prompt', "'message' is required")
                     return
                 await self._ok(cmd_id, 'prompt')   # ack before async work
-                asyncio.create_task(
+                self._spawn(
                     self._runtime.user_input(message, PromptOptions(source='rpc'))
                 )
 

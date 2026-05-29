@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Literal
 
@@ -88,6 +89,9 @@ class ControlCenterTool(Tool):
             kind=ToolKind.Unknown,
             execution_mode=ToolExecutionMode.Sequential,
         )
+        # Strong refs to fire-and-forget tasks: the loop only holds weak refs,
+        # so without this a scheduled task can be GC'd mid-flight.
+        self._tasks: set[asyncio.Task] = set()
 
     def is_available(self, context: ToolContext) -> bool:
         return context.settings_manager is not None
@@ -330,10 +334,11 @@ class ControlCenterTool(Tool):
             )
         elif agent is not None:
             # Fallback: schedule a new turn with the error as user input
-            import asyncio
-            asyncio.get_event_loop().call_soon(
-                lambda: asyncio.ensure_future(agent.invoke(error_text))
-            )
+            def _spawn() -> None:
+                task = asyncio.ensure_future(agent.invoke(error_text))
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
+            asyncio.get_event_loop().call_soon(_spawn)
 
     def _snapshot_changes(self, context: ToolContext | None) -> dict[str, str]:
         """Read the content of every file modified since the last commit."""
