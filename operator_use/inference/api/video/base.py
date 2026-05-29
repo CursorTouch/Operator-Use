@@ -20,7 +20,8 @@ class BaseVideoAPI(ABC):
         self.options = options
 
     @abstractmethod
-    async def generate(self, model: Model, context: VideoContext) -> GeneratedVideo: ...
+    async def generate(self, model: Model, context: VideoContext) -> GeneratedVideo:
+        raise NotImplementedError
 
 
 # Backward-compat alias

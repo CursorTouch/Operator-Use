@@ -11,7 +11,8 @@ class BaseImageAPI(ABC):
         self.options = options
 
     @abstractmethod
-    async def generate(self, model: Model, context: ImageContext) -> GeneratedImage: ...
+    async def generate(self, model: Model, context: ImageContext) -> GeneratedImage:
+        raise NotImplementedError
 
 
 # Backward-compat alias

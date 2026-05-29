@@ -20,10 +20,16 @@ class BaseLLMAPI(ABC):
         return self.options.signal is not None and self.options.signal.is_set()
 
     @abstractmethod
-    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]: ...
+    async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:
+        # The unreachable `yield` marks this as an async-generator signature so
+        # callers (and type-checkers) treat stream() as returning an
+        # AsyncGenerator — which supports aclose() — rather than a coroutine.
+        raise NotImplementedError
+        yield  # type: ignore[unreachable]  # pragma: no cover
 
     @abstractmethod
-    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]: ...
+    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
+        raise NotImplementedError
 
 
 # Backward-compat alias (existing code imports BaseAPI from llm.api.base)

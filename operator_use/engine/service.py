@@ -1,6 +1,7 @@
 from __future__ import annotations
 from operator_use.message.types import ToolResultContent
 import asyncio
+from contextlib import aclosing
 from typing import TYPE_CHECKING, Optional, Callable, Coroutine, Literal
 from operator_use.hooks.service import Hooks
 from operator_use.engine.types import (
@@ -337,34 +338,40 @@ class Engine:
                         options=self.llm.api.options,
                     ))
 
-                async for event in self.llm.stream(LLMContext(
+                # aclosing() ensures the provider stream (and its underlying
+                # httpx connection) is torn down deterministically inside this
+                # task on cancellation/break — not deferred to the GC asyncgen
+                # finalizer, which races loop shutdown and emits
+                # "Task was destroyed but it is pending!".
+                async with aclosing(self.llm.stream(LLMContext(
                     messages=ctx_messages,
                     tools=self.state.tools,
                     system_prompt=self.state.system_prompt,
-                )):
-                    match event:
-                        case ToolCallEndEvent(tool_call=tool_call):
-                            tool_calls.append(tool_call)
-                            message.contents.append(tool_call)
-                        case TextDeltaEvent(text=text):
-                            await emit(MessageUpdateEvent(message=AssistantMessage(contents=[text])))
-                        case ThinkingDeltaEvent(thinking=thinking):
-                            await emit(MessageUpdateEvent(message=AssistantMessage(contents=[thinking])))
-                        case TextEndEvent(text=text):
-                            message.contents.append(text)
-                        case ThinkingEndEvent(thinking=thinking):
-                            message.contents.append(thinking)
-                        case ErrorEvent(reason=reason, error=error):
-                            message.stop_reason = reason
-                            message.error = error
-                        case EndEvent() as ev:
-                            message.stop_reason = ev.reason
-                            message.usage = Usage(
-                                input_tokens=ev.input_tokens,
-                                output_tokens=ev.output_tokens,
-                                cache_read_tokens=ev.cache_read_tokens,
-                                cache_write_tokens=ev.cache_write_tokens,
-                            )
+                ))) as stream:
+                    async for event in stream:
+                        match event:
+                            case ToolCallEndEvent(tool_call=tool_call):
+                                tool_calls.append(tool_call)
+                                message.contents.append(tool_call)
+                            case TextDeltaEvent(text=text):
+                                await emit(MessageUpdateEvent(message=AssistantMessage(contents=[text])))
+                            case ThinkingDeltaEvent(thinking=thinking):
+                                await emit(MessageUpdateEvent(message=AssistantMessage(contents=[thinking])))
+                            case TextEndEvent(text=text):
+                                message.contents.append(text)
+                            case ThinkingEndEvent(thinking=thinking):
+                                message.contents.append(thinking)
+                            case ErrorEvent(reason=reason, error=error):
+                                message.stop_reason = reason
+                                message.error = error
+                            case EndEvent() as ev:
+                                message.stop_reason = ev.reason
+                                message.usage = Usage(
+                                    input_tokens=ev.input_tokens,
+                                    output_tokens=ev.output_tokens,
+                                    cache_read_tokens=ev.cache_read_tokens,
+                                    cache_write_tokens=ev.cache_write_tokens,
+                                )
 
                 if self._hooks:
                     await self._hooks.emit(AfterProviderResponseEvent(

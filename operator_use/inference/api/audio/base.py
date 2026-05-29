@@ -17,10 +17,12 @@ class BaseAudioAPI(ABC):
         self.options = options
 
     @abstractmethod
-    async def synthesize(self, model: Model, context: TTSContext) -> SynthesizedAudio: ...
+    async def synthesize(self, model: Model, context: TTSContext) -> SynthesizedAudio:
+        raise NotImplementedError
 
     @abstractmethod
-    async def transcribe(self, model: Model, context: STTContext) -> TranscribedAudio: ...
+    async def transcribe(self, model: Model, context: STTContext) -> TranscribedAudio:
+        raise NotImplementedError
 
 
 # Backward-compat alias

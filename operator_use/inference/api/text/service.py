@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import aclosing
 from dataclasses import fields
 from operator_use.inference.model.registry import ModelRegistry
 from operator_use.inference.api.text.registry import LLMAPIRegistry
@@ -112,8 +113,13 @@ class LLM:
         )
 
         try:
-            async for event in self.api.stream(api_context, model=self.model):
-                yield event
+            # aclosing() guarantees the provider generator is closed within this
+            # task when the consumer stops early (break/cancellation), so httpx
+            # teardown completes before loop shutdown instead of being left to
+            # the GC asyncgen finalizer ("Task was destroyed but it is pending!").
+            async with aclosing(self.api.stream(api_context, model=self.model)) as stream:
+                async for event in stream:
+                    yield event
         except Exception as e:
             from operator_use.inference.types import ErrorEvent, StopReason
             yield ErrorEvent(reason=StopReason.Error, error=str(e))
