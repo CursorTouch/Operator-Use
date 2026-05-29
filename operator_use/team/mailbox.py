@@ -45,11 +45,27 @@ class TeamMailbox:
         return msg_id
 
     async def receive(self) -> list[MailboxMessage]:
-        """Return all pending messages and remove them from the inbox."""
-        messages = self._read_all()
-        for path in self._inbox.glob("*.json"):
+        """Return all pending messages and remove them from the inbox.
+
+        Reads and deletes each file in a single pass over one listing, so a
+        message that arrives after the listing is not deleted before it has
+        been read (a separate delete-all glob would lose it).
+        """
+        msgs: list[MailboxMessage] = []
+        for path in sorted(self._inbox.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                msgs.append(MailboxMessage(
+                    id=data["id"],
+                    type=data["type"],
+                    sender_id=data["sender_id"],
+                    content=data["content"],
+                    created_at=data["created_at"],
+                ))
+            except Exception:
+                pass
             path.unlink(missing_ok=True)
-        return messages
+        return msgs
 
     async def peek(self) -> list[MailboxMessage]:
         """Return all pending messages without removing them."""

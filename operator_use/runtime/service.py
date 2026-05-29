@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from operator_use.runtime.types import RuntimeConfig, RuntimeContext
@@ -75,6 +76,8 @@ class Runtime:
         }
         # Registry of built peer agents — populated lazily or by GatewayManager.
         self._peer_agents: dict[str, Agent] = {}
+        # Strong refs to fire-and-forget tasks (the loop only holds weak refs).
+        self._bg_tasks: set[asyncio.Task] = set()
         self._configure_context(context)
 
     def _create_workflow_manager(self, context: RuntimeContext) -> WorkflowManager:
@@ -762,12 +765,18 @@ class Runtime:
                 return
 
     def shutdown(self) -> None:
-        """Stop runtime-owned background services. Call when exiting the REPL."""
+        """Stop runtime-owned background services. Call when exiting the REPL.
+
+        Prefer ashutdown() where an await point is available — it deterministically
+        tears MCP servers down. This sync path can only fire-and-forget the
+        disconnect, which may not finish if the loop stops right after.
+        """
         if self._context.cron is not None:
             self._context.cron.stop()
         if self.mcp_manager is not None:
-            import asyncio
-            asyncio.get_event_loop().create_task(self.mcp_manager.disconnect_all())
+            task = asyncio.get_event_loop().create_task(self.mcp_manager.disconnect_all())
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     async def ashutdown(self) -> None:
         """Await full teardown of runtime-owned services."""

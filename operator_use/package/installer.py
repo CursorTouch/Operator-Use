@@ -31,6 +31,20 @@ def _slug_from_url(url: str) -> str:
     return slug  # e.g. "github.com/user/repo"
 
 
+def _git_install_path(url: str, packages_dir: Path) -> Optional[Path]:
+    """Resolve the on-disk install path for a clone URL, ensuring it stays
+    inside packages_dir/git. Returns None if the slug escapes that root
+    (e.g. via '..' segments or an absolute path), which would otherwise let a
+    crafted source clone to — or rmtree — an arbitrary directory."""
+    base = (packages_dir / "git").resolve()
+    candidate = (base / _slug_from_url(url)).resolve()
+    if candidate != base and base not in candidate.parents:
+        return None
+    if candidate == base:
+        return None  # empty slug — no repo segment
+    return candidate
+
+
 def _run(cmd: list[str], cwd: Path | None = None) -> tuple[int, str]:
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     return result.returncode, (result.stderr or result.stdout).strip()
@@ -38,7 +52,9 @@ def _run(cmd: list[str], cwd: Path | None = None) -> tuple[int, str]:
 
 def install_git(source: str, packages_dir: Path) -> InstallResult:
     url, ref = _parse_git_source(source)
-    install_path = packages_dir / "git" / _slug_from_url(url)
+    install_path = _git_install_path(url, packages_dir)
+    if install_path is None:
+        return InstallResult(package=None, error=f"Invalid package source path: {source!r}")
 
     if install_path.exists():
         if ref is None:
@@ -87,7 +103,9 @@ def remove_package(source: str, packages_dir: Path) -> tuple[bool, str]:
         return True, ""  # local — nothing to delete from disk
 
     url, _ = _parse_git_source(source)
-    install_path = packages_dir / "git" / _slug_from_url(url)
+    install_path = _git_install_path(url, packages_dir)
+    if install_path is None:
+        return False, f"Invalid package source path: {source!r}"
 
     if not install_path.exists():
         return True, ""

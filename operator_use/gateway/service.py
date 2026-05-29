@@ -80,18 +80,21 @@ class Gateway:
 
     # ── Channel management ────────────────────────────────────────────────────
 
+    def _spawn(self, coro) -> None:
+        # Retain a strong ref: the loop only holds a weak ref, so a discarded
+        # fire-and-forget task can be GC'd before it runs.
+        task = asyncio.get_event_loop().create_task(coro)
+        self._handler_tasks.add(task)
+        task.add_done_callback(self._handler_tasks.discard)
+
     def register(self, channel: BaseChannel) -> None:
         channel.bus = self._bus
         self._channels[channel.channel_id] = channel
-        asyncio.get_event_loop().create_task(
-            self.hooks.emit(ChannelConnectEvent(channel_id=channel.channel_id))
-        )
+        self._spawn(self.hooks.emit(ChannelConnectEvent(channel_id=channel.channel_id)))
 
     def unregister(self, channel_id: str) -> None:
         self._channels.pop(channel_id, None)
-        asyncio.get_event_loop().create_task(
-            self.hooks.emit(ChannelDisconnectEvent(channel_id=channel_id))
-        )
+        self._spawn(self.hooks.emit(ChannelDisconnectEvent(channel_id=channel_id)))
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -213,15 +216,7 @@ class Gateway:
 
         # Profile channels (format: '{profile_name}:{channel_type}') share one
         # session across all their channels and chat_ids.
-        colon = msg.channel.find(':')
-        if colon > 0:
-            profile_name = msg.channel[:colon]
-            if profile_name in self._profile_agents:
-                session_key = profile_name
-            else:
-                session_key = f"{msg.channel}:{msg.chat_id}"
-        else:
-            session_key = f"{msg.channel}:{msg.chat_id}"
+        session_key = self._session_key(msg.channel, msg.chat_id)
         entry = self._get_or_create_session(session_key, channel_id=msg.channel, chat_id=msg.chat_id)
 
         if entry.task is not None and not entry.task.done():
@@ -267,6 +262,17 @@ class Gateway:
             logger.warning("Gateway.send_file: unknown channel %r — dropping", channel_id)
 
     # ── Session management ────────────────────────────────────────────────────
+
+    def _session_key(self, channel_id: str, chat_id: str) -> str:
+        """Map a (channel, chat) to its session key. Profile channels
+        ('{profile}:{type}') share one session keyed by profile name; everything
+        else is keyed per channel+chat. Must match across handle/cancel paths."""
+        colon = channel_id.find(':')
+        if colon > 0:
+            profile_name = channel_id[:colon]
+            if profile_name in self._profile_agents:
+                return profile_name
+        return f"{channel_id}:{chat_id}"
 
     def _get_or_create_session(self, session_key: str, channel_id: str | None = None, chat_id: str | None = None) -> _SessionEntry:
         if session_key not in self._sessions:
@@ -320,7 +326,7 @@ class Gateway:
 
     async def cancel_session(self, channel_id: str, chat_id: str) -> None:
         """Hard-cancel an in-progress session and fire MessageCancelEvent."""
-        session_key = f"{channel_id}:{chat_id}"
+        session_key = self._session_key(channel_id, chat_id)
         entry = self._sessions.get(session_key)
         if entry is None or entry.task is None or entry.task.done():
             return

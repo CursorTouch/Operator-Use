@@ -153,6 +153,9 @@ class _TwitchBotImpl(twitch_commands.Bot if _TWITCHIO_AVAILABLE else object):
             initial_channels=[channel_name],
         )
         self._operator_channel = operator_channel
+        # Strong refs to fire-and-forget receive tasks: the loop only holds weak
+        # refs, so without this a task can be GC'd mid-flight.
+        self._tasks: set[asyncio.Task] = set()
         self._allow_from = allow_from
 
     async def event_ready(self) -> None:
@@ -167,12 +170,14 @@ class _TwitchBotImpl(twitch_commands.Bot if _TWITCHIO_AVAILABLE else object):
         text = (message.content or "").strip()
         if not text:
             return
-        asyncio.create_task(self._operator_channel.receive(IncomingMessage(
+        task = asyncio.create_task(self._operator_channel.receive(IncomingMessage(
             channel=self._operator_channel.channel_id,
             chat_id=self._operator_channel.channel_id,
             parts=[TextPart(text)],
             user_id=author,
         )))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     async def event_error(self, error: Exception, data: str = "") -> None:
         logger.error("Twitch bot error: %s", error, exc_info=True)

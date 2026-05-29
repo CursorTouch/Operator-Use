@@ -69,6 +69,17 @@ class EmailChannel(BaseChannel):
         self._thread_sender: dict[str, str] = {}
         # thread_id → subject
         self._thread_subject: dict[str, str] = {}
+        # Strong refs to fire-and-forget receive tasks scheduled from the IMAP
+        # poll thread: the loop only holds weak refs, so without this a task can
+        # be GC'd mid-flight.
+        self._tasks: set[asyncio.Task] = set()
+
+    def _spawn_receive(self, coro) -> None:
+        """Create and retain a task on the loop thread (called via
+        call_soon_threadsafe from the poll thread)."""
+        task = asyncio.ensure_future(coro)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     @property
     def channel_id(self) -> str:
@@ -149,7 +160,7 @@ class EmailChannel(BaseChannel):
         chat_id = thread_id or sender
 
         asyncio.get_event_loop().call_soon_threadsafe(
-            asyncio.ensure_future,
+            self._spawn_receive,
             self.receive(IncomingMessage(
                 channel=self._name,
                 chat_id=chat_id,

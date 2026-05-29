@@ -57,7 +57,7 @@ class PeerSessionManager:
 
     def get_session_id(self, profile_name: str) -> str | None:
         entry = self.get(profile_name)
-        return entry['session_id'] if entry else None
+        return entry.get('session_id') if entry else None
 
     def save(self, profile_name: str, session_id: str) -> None:
         """Create or update the bookmark for a peer.  No-op when no peer dir is set."""
