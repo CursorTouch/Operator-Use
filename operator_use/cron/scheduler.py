@@ -33,6 +33,12 @@ class CronScheduler:
         self.on_job = on_job
         self._task: asyncio.Task | None = None
         self._running = False
+        # Jobs currently executing — guards against re-firing a job whose
+        # handler outlasts a tick interval (next_run_at_ms isn't advanced until
+        # the handler completes in _mark_run).
+        self._inflight: set[str] = set()
+        # Strong refs to the per-job tasks (the loop only holds weak refs).
+        self._job_tasks: set[asyncio.Task] = set()
 
     # ── CRUD passthrough ──────────────────────────────────────────────────────
 
@@ -114,10 +120,19 @@ class CronScheduler:
         except Exception as e:
             logger.exception('Cron job failed | id=%s: %s', job.id, e)
             self._mark_run(job, 'failure', str(e))
+        finally:
+            # Released only after _mark_run has advanced next_run_at_ms, so the
+            # next tick won't re-select this job.
+            self._inflight.discard(job.id)
 
     async def _tick(self) -> None:
         for job in self._due_jobs():
-            asyncio.create_task(self._run_job(job))
+            if job.id in self._inflight:
+                continue
+            self._inflight.add(job.id)
+            task = asyncio.create_task(self._run_job(job))
+            self._job_tasks.add(task)
+            task.add_done_callback(self._job_tasks.discard)
 
     def _sleep_until_next(self) -> float:
         """Return seconds until the next due job, clamped between 1 and 60."""

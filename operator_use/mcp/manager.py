@@ -8,6 +8,7 @@ only visible to sessions that explicitly connected.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,17 @@ class MCPManager:
         self._tools: dict[str, list[MCPTool]] = {}
         self._connection_count: dict[str, int] = {}
         self._agent_connections: dict[str, set[str]] = {}  # agent_id -> set of server names
+        # Per-server locks serialise connect/disconnect: both check the ref count
+        # and then await (open/close the client), so without this two concurrent
+        # first-connects to the same server would each open a client, leaking one.
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def _lock_for(self, server_name: str) -> asyncio.Lock:
+        lock = self._locks.get(server_name)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[server_name] = lock
+        return lock
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
@@ -59,66 +71,68 @@ class MCPManager:
         """Connect agent to a server. Returns its tools. No-op if already connected."""
         from operator_use.mcp.tool import MCPTool as _MCPTool
 
-        if self.is_connected(agent_id, server_name):
-            logger.info('Agent %s already connected to MCP server %r', agent_id, server_name)
+        async with self._lock_for(server_name):
+            if self.is_connected(agent_id, server_name):
+                logger.info('Agent %s already connected to MCP server %r', agent_id, server_name)
+                return self._tools.get(server_name, [])
+
+            cfg = self._configs.get(server_name)
+            if cfg is None:
+                raise ValueError(f"No MCP server configured with name {server_name!r}")
+
+            first_connection = self._connection_count.get(server_name, 0) == 0
+            if first_connection:
+                client = await self._open_client(cfg)
+                try:
+                    raw_tools = await client.list_tools()
+                except Exception:
+                    await client.__aexit__(None, None, None)
+                    raise
+
+                mcp_tools = [
+                    _MCPTool(
+                        server_name=server_name,
+                        tool_name=t.name,
+                        description=t.description or '',
+                        input_schema=t.inputSchema,
+                        client=client,
+                    )
+                    for t in raw_tools
+                ]
+                self._clients[server_name] = client
+                self._tools[server_name] = mcp_tools
+                logger.info('MCP server %r opened — %d tool(s)', server_name, len(mcp_tools))
+
+            self._agent_connections.setdefault(agent_id, set()).add(server_name)
+            self._connection_count[server_name] = self._connection_count.get(server_name, 0) + 1
+            logger.info('Agent %s connected to MCP %r (refs=%d)', agent_id, server_name,
+                        self._connection_count[server_name])
             return self._tools.get(server_name, [])
-
-        cfg = self._configs.get(server_name)
-        if cfg is None:
-            raise ValueError(f"No MCP server configured with name {server_name!r}")
-
-        first_connection = self._connection_count.get(server_name, 0) == 0
-        if first_connection:
-            client = await self._open_client(cfg)
-            try:
-                raw_tools = await client.list_tools()
-            except Exception:
-                await client.__aexit__(None, None, None)
-                raise
-
-            mcp_tools = [
-                _MCPTool(
-                    server_name=server_name,
-                    tool_name=t.name,
-                    description=t.description or '',
-                    input_schema=t.inputSchema,
-                    client=client,
-                )
-                for t in raw_tools
-            ]
-            self._clients[server_name] = client
-            self._tools[server_name] = mcp_tools
-            logger.info('MCP server %r opened — %d tool(s)', server_name, len(mcp_tools))
-
-        self._agent_connections.setdefault(agent_id, set()).add(server_name)
-        self._connection_count[server_name] = self._connection_count.get(server_name, 0) + 1
-        logger.info('Agent %s connected to MCP %r (refs=%d)', agent_id, server_name,
-                    self._connection_count[server_name])
-        return self._tools.get(server_name, [])
 
     async def disconnect(self, agent_id: str, server_name: str) -> list[str]:
         """Disconnect agent from a server. Returns list of tool names that were removed."""
-        if server_name not in self._agent_connections.get(agent_id, set()):
-            raise ValueError(f"Agent {agent_id!r} is not connected to {server_name!r}")
+        async with self._lock_for(server_name):
+            if server_name not in self._agent_connections.get(agent_id, set()):
+                raise ValueError(f"Agent {agent_id!r} is not connected to {server_name!r}")
 
-        tool_names = [t.name for t in self._tools.get(server_name, [])]
-        self._agent_connections[agent_id].discard(server_name)
-        self._connection_count[server_name] -= 1
+            tool_names = [t.name for t in self._tools.get(server_name, [])]
+            self._agent_connections[agent_id].discard(server_name)
+            self._connection_count[server_name] -= 1
 
-        logger.info('Agent %s disconnected from MCP %r (refs=%d)', agent_id, server_name,
-                    self._connection_count[server_name])
+            logger.info('Agent %s disconnected from MCP %r (refs=%d)', agent_id, server_name,
+                        self._connection_count[server_name])
 
-        if self._connection_count[server_name] == 0:
-            client = self._clients.pop(server_name, None)
-            if client is not None:
-                try:
-                    await client.__aexit__(None, None, None)
-                except Exception as exc:
-                    logger.warning('Error closing MCP client for %r: %s', server_name, exc)
-            self._tools.pop(server_name, None)
-            logger.info('MCP server %r closed', server_name)
+            if self._connection_count[server_name] == 0:
+                client = self._clients.pop(server_name, None)
+                if client is not None:
+                    try:
+                        await client.__aexit__(None, None, None)
+                    except Exception as exc:
+                        logger.warning('Error closing MCP client for %r: %s', server_name, exc)
+                self._tools.pop(server_name, None)
+                logger.info('MCP server %r closed', server_name)
 
-        return tool_names
+            return tool_names
 
     async def disconnect_all(self, agent_id: str | None = None) -> None:
         """Disconnect all servers for an agent (or all agents if agent_id is None)."""
