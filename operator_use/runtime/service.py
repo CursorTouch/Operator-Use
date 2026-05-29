@@ -100,13 +100,18 @@ class Runtime:
             profiles=context.resource_loader.get_subagent_profiles(),
         )
 
-    def _create_desktop_instance(self, context: RuntimeContext):
-        """Instantiate a Desktop from settings, or None if computer-use is disabled."""
+    def _create_desktop_instance(self, context: RuntimeContext, settings_override=None):
+        """Instantiate a Desktop from settings, or None if computer-use is disabled.
+
+        Pass *settings_override* (e.g. profile-merged settings) to use it instead of
+        the global manager's settings."""
         sm = context.settings_manager
-        if sm is None:
+        if settings_override is not None:
+            s = settings_override
+        elif sm is not None:
+            s = sm.settings
+        else:
             return None
-        s = sm.settings
-        # Legacy flat flag still respected; new settings object takes precedence.
         cu = s.computer_use
         if cu is None:
             from operator_use.settings.types import ComputerUseSettings
@@ -120,12 +125,18 @@ class Runtime:
             use_annotation=cu.use_annotation,
         )
 
-    def _create_browser_instance(self, context: RuntimeContext):
-        """Instantiate a Browser from settings, or None if browser-use is disabled."""
+    def _create_browser_instance(self, context: RuntimeContext, settings_override=None):
+        """Instantiate a Browser from settings, or None if browser-use is disabled.
+
+        Pass *settings_override* (e.g. profile-merged settings) to use it instead of
+        the global manager's settings."""
         sm = context.settings_manager
-        if sm is None:
+        if settings_override is not None:
+            s = settings_override
+        elif sm is not None:
+            s = sm.settings
+        else:
             return None
-        s = sm.settings
         bu = s.browser_use
         if bu is None:
             from operator_use.settings.types import BrowserUseSettings
@@ -656,12 +667,18 @@ class Runtime:
         load_result = resource_loader.get_extensions()
         deferred = _DeferredExtensionRuntime(load_result)
 
-        compaction_settings = CmpSettings(enabled=False)
+        # Single, general profile-vs-global merge: the profile's settings.json
+        # overrides any key it specifies, everything else falls back to global.
+        profile_settings = None
         if self._context.settings_manager:
-            s = self._context.settings_manager.settings
+            profile_settings = self._context.settings_manager.settings_with_profile_overlay(profile.settings_path)
+
+        compaction_settings = CmpSettings(enabled=False)
+        if profile_settings is not None:
+            s = profile_settings
             if s.compaction and s.compaction.enabled is not None:
                 compaction_settings = CmpSettings(
-                    enabled=bool(s.compaction.enabled),
+                    enabled=s.compaction.enabled,
                     strategy=s.compaction.strategy,
                 )
         compaction = SummarizationCompaction(
@@ -702,8 +719,8 @@ class Runtime:
             cron=self._context.cron,
             mcp_manager=self.mcp_manager,
             memory_manager=self._context.memory_manager,
-            desktop=self._create_desktop_instance(self._context),
-            browser=self._create_browser_instance(self._context),
+            desktop=self._create_desktop_instance(self._context, profile_settings),
+            browser=self._create_browser_instance(self._context, profile_settings),
             process_manager=self._context.process_manager,
             settings_manager=self._context.settings_manager,
             auth_channel_manager=self._context.auth_channel_manager,

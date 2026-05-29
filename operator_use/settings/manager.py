@@ -13,6 +13,7 @@ from operator_use.settings.types import (
     RetrySettings, ProviderRetrySettings, ThinkingBudgetsSettings,
     ImageSettings, STTSettings, TTSSettings, MemorySettings, ExtensionEntry,
     AuxiliarySettings, AuxiliaryTaskSettings, CuratorSettings,
+    BrowserUseSettings, ComputerUseSettings,
 )
 from operator_use.gateway.channels.types import (
     ChannelsSettings,
@@ -32,6 +33,8 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
     'tts': TTSSettings,
     'memory': MemorySettings,
     'curator': CuratorSettings,
+    'browser_use': BrowserUseSettings,
+    'computer_use': ComputerUseSettings,
 }
 
 # Pydantic BaseModel fields — use model_validate() instead of **kwargs
@@ -179,6 +182,46 @@ class SettingsManager:
             else:
                 setattr(merged, key, value)
         return merged
+
+    @staticmethod
+    def _deep_merge_dicts(base: dict, override: dict) -> dict:
+        """Recursively merge *override* onto *base* at the raw-dict level.
+
+        Only keys present in *override* win; nested dicts merge key-by-key, so a
+        partial block (e.g. {"browser_use": {"attach_to_existing": true}}) overrides
+        just that key and leaves the rest of the base block intact. This is what
+        lets a profile specify a subset of fields without resetting the others to
+        their dataclass defaults (which dataclass-level merging cannot distinguish
+        from explicit values)."""
+        out = dict(base)
+        for key, value in override.items():
+            existing = out.get(key)
+            if isinstance(value, dict) and isinstance(existing, dict):
+                out[key] = SettingsManager._deep_merge_dicts(existing, value)
+            else:
+                out[key] = value
+        return out
+
+    def settings_with_profile_overlay(self, profile_settings_path: Path) -> Settings:
+        """Return the current merged settings with a profile's settings.json overlaid.
+
+        This is the single, general profile-vs-global merge: the profile's
+        settings.json may override any key (the whole block, partial nested blocks,
+        etc.) and unspecified keys keep their global/project value. The manager's own
+        state is never mutated — a fresh Settings is returned for the caller to use
+        for one profile agent."""
+        base_dict = SettingsManager._to_json_dict(self.settings)
+        try:
+            profile_dict = (
+                json.loads(profile_settings_path.read_text(encoding='utf-8'))
+                if profile_settings_path.exists() else {}
+            )
+        except Exception:
+            profile_dict = {}
+        if not isinstance(profile_dict, dict) or not profile_dict:
+            return copy.deepcopy(self.settings)
+        merged = SettingsManager._deep_merge_dicts(base_dict, profile_dict)
+        return SettingsManager._settings_from_dict(merged)
 
     def _mark_modified(self, field: str, nested_field: Optional[str] = None):
         """Record a global settings field (and optional nested key) as modified."""
