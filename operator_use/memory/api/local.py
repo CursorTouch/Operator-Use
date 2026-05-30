@@ -284,8 +284,15 @@ class LocalMemoryAPI(BaseMemoryAPI):
         self._persist_vectors()
 
     def _persist_vectors(self) -> None:
-        if self._vectors_path is not None:
-            self._vectors_path.write_text(json.dumps(self._vectors), encoding="utf-8")
+        if self._vectors_path is None:
+            return
+        if self._vectors:
+            body = "{\n" + ",\n".join(
+                f"  {json.dumps(k)}: {json.dumps(v)}" for k, v in self._vectors.items()
+            ) + "\n}"
+        else:
+            body = "{}"
+        self._vectors_path.write_text(body, encoding="utf-8")
 
 
 # ── module-level utilities ────────────────────────────────────────────────────
