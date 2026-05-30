@@ -26,6 +26,9 @@ class CompactionSettings(BaseModel):
     enabled: bool = True
     reserve_tokens: int = 16384
     keep_recent_tokens: int = 20000
+    # Alternative trigger: compact when context usage exceeds this fraction (0-1)
+    # of the model's context window. Takes priority over reserve_tokens when set.
+    trigger_percent: float | None = None
 
 
 class ContextUsageEstimate(BaseModel):

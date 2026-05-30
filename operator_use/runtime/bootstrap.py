@@ -24,7 +24,7 @@ _GLOBAL_SETTINGS = {
         "enabled": True,
         "strategy": "summarization",
         "strategies": {
-            "summarization": {"reserve_tokens": 50000}
+            "summarization": {"trigger_percent": 0.8}
         }
     },
     "memory": {

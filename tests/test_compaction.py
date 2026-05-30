@@ -81,6 +81,19 @@ class TestShouldCompact:
         c = Compaction(llm=FakeInvokeLLM(), settings=settings)
         assert not c.should_compact(context_tokens=9500, context_window=10000)
 
+    def test_trigger_percent_takes_priority_over_reserve_tokens(self):
+        # trigger_percent=0.8 → compact above 8000 of a 10000 window, ignoring reserve_tokens
+        settings = CompactionSettings(enabled=True, reserve_tokens=500, trigger_percent=0.8)
+        c = Compaction(llm=FakeInvokeLLM(), settings=settings)
+        assert c.should_compact(context_tokens=8500, context_window=10000)
+        assert not c.should_compact(context_tokens=7500, context_window=10000)
+
+    def test_trigger_percent_adapts_to_window_size(self):
+        settings = CompactionSettings(enabled=True, trigger_percent=0.8)
+        c = Compaction(llm=FakeInvokeLLM(), settings=settings)
+        assert c.should_compact(context_tokens=850_000, context_window=1_000_000)
+        assert not c.should_compact(context_tokens=750_000, context_window=1_000_000)
+
 
 # ── prepare ───────────────────────────────────────────────────────────────────
 

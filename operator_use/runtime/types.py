@@ -300,7 +300,9 @@ class RuntimeContext:
             ss = settings_manager.get_compaction_summarization_settings()
             return CompactionSettings(
                 enabled=_global_enabled and ss["enabled"],
-                strategy="summarization",
+                reserve_tokens=ss["reserve_tokens"],
+                keep_recent_tokens=ss["keep_recent_tokens"],
+                trigger_percent=ss["trigger_percent"],
             )
 
         compaction: Compaction

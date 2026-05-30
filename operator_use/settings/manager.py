@@ -537,6 +537,7 @@ class SettingsManager:
             "enabled": raw.get("enabled", True),
             "reserve_tokens": raw.get("reserve_tokens", 16384),
             "keep_recent_tokens": raw.get("keep_recent_tokens", 20000),
+            "trigger_percent": raw.get("trigger_percent", None),
         }
 
     def get_compaction_sliding_window_settings(self) -> dict:

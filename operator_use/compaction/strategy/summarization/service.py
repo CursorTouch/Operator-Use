@@ -50,6 +50,8 @@ class SummarizationCompaction(Compaction):
         settings = self._settings
         if not settings.enabled:
             return False
+        if settings.trigger_percent is not None:
+            return context_tokens > context_window * settings.trigger_percent
         return context_tokens > context_window - settings.reserve_tokens
 
     def prepare(self, path_entries: list[SessionEntry]) -> CompactionPreparation | None:
