@@ -87,11 +87,17 @@ def _atomic_write(path: Path, text: str) -> None:
     tmp.replace(path)
 
 
-_NO_PROFILE_ERROR = "Skill operations require an active profile. Start the agent with --profile."
+_NO_PROFILE_ERROR = "Skill operations require an active profile. Start the agent with --agent <profile>."
+
+
+def _active_profile(context=None):
+    """Resolve the active profile from the resource loader, matching other builtin tools."""
+    loader = getattr(context, 'resource_loader', None)
+    return getattr(loader, '_active_profile', None) if loader else None
 
 
 def _skill_dir(name: str, context=None) -> Path | None:
-    profile = getattr(context, 'active_profile', None)
+    profile = _active_profile(context)
     if profile is None:
         return None
     return profile.skills_dir / name
@@ -99,7 +105,7 @@ def _skill_dir(name: str, context=None) -> Path | None:
 
 def _skills_dir(context=None) -> Path | None:
     """Return the skills base directory for the current profile, or None when profileless."""
-    profile = getattr(context, 'active_profile', None)
+    profile = _active_profile(context)
     return profile.skills_dir if profile else None
 
 
