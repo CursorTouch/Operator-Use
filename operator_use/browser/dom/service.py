@@ -138,7 +138,7 @@ class DOM:
             if not use_accessibility:
                 # Skip expensive DOM/AX capture; caller only wants basic tab info.
                 screenshot = await self.session.get_screenshot(as_bytes=as_bytes) if use_screenshot else None
-                return screenshot, DOMState(interactive=[], informative=[], scrollable=[], tree_root=None)
+                return screenshot, DOMState(interactive_nodes=[], informative_nodes=[], scrollable_nodes=[], semantic_tree_root=None)
 
             snapshot, ax_result, viewport, dpr, scroll_pos = await asyncio.gather(
                 self.session.send('DOMSnapshot.captureSnapshot', {
@@ -188,9 +188,13 @@ class DOM:
                     for n in interactive
                 ]
                 await self.session.execute_script(_MARK_PAGE_JS.replace('BOXES', json.dumps(boxes)))
-                await sleep(0.1)
-                screenshot = await self.session.get_screenshot(as_bytes=as_bytes)
-                await self.session.execute_script(_UNMARK_PAGE_JS)
+                try:
+                    await sleep(0.1)
+                    screenshot = await self.session.get_screenshot(as_bytes=as_bytes)
+                finally:
+                    # Always strip the injected highlight overlays, even if the
+                    # screenshot step raised — otherwise the boxes stay on the page.
+                    await self.session.execute_script(_UNMARK_PAGE_JS)
                 screenshot_capture_ms = (time.perf_counter() - t1) * 1000
 
             print(

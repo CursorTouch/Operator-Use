@@ -89,6 +89,11 @@ class Browser:
         self._page = Page(self)
         self.crashed: bool = False
 
+        # Optional browser lifecycle hooks (on_screenshot/on_click/...). The hook
+        # system is not wired in this runtime, so this stays None and the guards
+        # in Page treat it as a no-op.
+        self.hooks: Any = None
+
         self._glow_active: bool = False
         self._glow_script_id: str | None = None
 
