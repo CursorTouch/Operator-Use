@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -12,6 +13,12 @@ class SubagentStatus(StrEnum):
     completed = 'completed'
     failed    = 'failed'
     cancelled = 'cancelled'
+
+
+# How a finished subagent's result is delivered back to its origin:
+#   agent   — re-enter the main agent's LLM loop (it summarizes / reacts)
+#   channel — raw result sent straight to the channel, no LLM turn
+DeliveryMode = Literal['agent', 'channel']
 
 
 @dataclass
@@ -37,6 +44,7 @@ class SubagentRecord:
     parent_messages: list | None = None  # effective parent history (fork only)
     parent_system_prompt: str | None = None  # parent system prompt (fork only)
     team_id: str | None = None           # team this subagent belongs to (if any)
+    deliver: DeliveryMode = 'agent'      # how _announce routes the result
 
 
 class SubagentSettings(BaseModel):

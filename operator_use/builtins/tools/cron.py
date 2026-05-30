@@ -73,8 +73,16 @@ class CronSchema(BaseModel):
     deliver: bool | None = Field(
         default=None,
         description=(
-            'If True, send message directly to the channel when the job fires (bypasses the agent). '
-            'If False (default), the job callback runs through the agent loop instead.'
+            'If True, send the result directly to the channel when the job fires (bypasses the agent). '
+            'If False (default), the result is routed through the agent loop instead.'
+        ),
+    )
+    profile: str | None = Field(
+        default=None,
+        description=(
+            'If set, the message is run on an isolated subagent with this named profile '
+            'instead of the main agent. Use the subagent tool (action="profiles") to see valid names. '
+            'Combine with deliver=True to post the subagent result straight to the channel.'
         ),
     )
 
@@ -109,6 +117,7 @@ def _format_job(job: CronJob) -> dict:
         'schedule': schedule_str,
         'message': job.payload.message,
         'deliver': job.payload.deliver,
+        'profile': job.payload.profile,
         'delete_after_run': job.delete_after_run,
         'next_run_at_ms': job.state.next_run_at_ms,
         'last_status': job.state.last_status,
@@ -200,6 +209,7 @@ class CronTool(Tool):
                             channel_id=params.get('channel_id'),
                             chat_id=params.get('chat_id'),
                             deliver=params.get('deliver') or False,
+                            profile=params.get('profile'),
                         ),
                         delete_after_run=params.get('delete_after_run', False),
                     )
@@ -235,12 +245,14 @@ class CronTool(Tool):
 
                     message = params.get('message')
                     deliver = params.get('deliver')
-                    if message or deliver is not None:
+                    profile = params.get('profile')
+                    if message or deliver is not None or profile is not None:
                         payload = CronPayload(
                             message=message or '',
                             channel_id=params.get('channel_id'),
                             chat_id=params.get('chat_id'),
                             deliver=deliver or False,
+                            profile=profile,
                         )
                     else:
                         payload = None

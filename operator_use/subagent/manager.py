@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 
 from operator_use.subagent.pool import TaskPool
 from operator_use.subagent.service import Subagent
-from operator_use.subagent.types import SubagentRecord, SubagentSettings, SubagentStatus
+from operator_use.subagent.types import DeliveryMode, SubagentRecord, SubagentSettings, SubagentStatus
 
 if TYPE_CHECKING:
     from operator_use.bus.service import Bus
@@ -101,15 +101,19 @@ class SubagentManager:
         parent_messages: list | None = None,
         parent_system_prompt: str | None = None,
         team_id: str | None = None,
+        deliver: DeliveryMode = 'agent',
+        channel: str | None = None,
+        chat_id: str | None = None,
     ) -> str:
         """Spawn a background subagent. Returns task_id immediately.
 
-        The channel + chat_id are read from the asyncio context variable set
-        by Gateway._run_session(). In CLI mode both will be None and the
-        result falls back to a direct agent.invoke() call.
+        The channel + chat_id default to the asyncio context variable set
+        by Gateway._run_session(); callers outside a session turn (e.g. cron)
+        pass them explicitly. In CLI mode both are None and the result falls
+        back to a direct agent.invoke() call.
         """
-        channel = _session_channel.get()
-        chat_id = _session_chat_id.get()
+        channel = channel or _session_channel.get()
+        chat_id = chat_id or _session_chat_id.get()
 
         if not fork:
             if not profile:
@@ -145,6 +149,7 @@ class SubagentManager:
             parent_messages=parent_messages,
             parent_system_prompt=parent_system_prompt,
             team_id=team_id,
+            deliver=deliver,
         )
         self._records[task_id] = record
 
@@ -205,9 +210,27 @@ class SubagentManager:
                 record.task_id, record.result,
             )
             return
+        if self._bus is None:
+            logger.warning(
+                '[%s] no bus available — result dropped. Result:\n%s',
+                record.task_id, record.result,
+            )
+            return
+
+        result_text = record.result or '(no output)'
+
+        from operator_use.bus.types import IncomingMessage, OutgoingMessage, TextPart
+
+        if record.deliver == 'channel':
+            await self._bus.publish_outgoing(OutgoingMessage(
+                channel=record.channel,
+                chat_id=record.chat_id,
+                parts=[TextPart(content=result_text)],
+                metadata={'_subagent_result': True, 'task_id': record.task_id},
+            ))
+            return
 
         status_label = record.status.value
-        result_text = record.result or f'(no output)'
         if record.status == SubagentStatus.completed:
             content = (
                 f'[Subagent result — task_id={record.task_id} label="{record.label}" status={status_label}]\n\n'
@@ -222,21 +245,13 @@ class SubagentManager:
                 f'Tell the user: task {record.task_id} ("{record.label}") {status_label}. '
                 f'Briefly explain what went wrong based on the output above.'
             )
-
-        if self._bus is not None:
-            from operator_use.bus.types import IncomingMessage, TextPart
-            await self._bus.publish_incoming(IncomingMessage(
-                channel=record.channel,
-                chat_id=record.chat_id,
-                parts=[TextPart(content=content)],
-                user_id='subagent',
-                metadata={'_subagent_result': True, 'task_id': record.task_id},
-            ))
-        else:
-            logger.warning(
-                '[%s] no bus available — result dropped. Result:\n%s',
-                record.task_id, record.result,
-            )
+        await self._bus.publish_incoming(IncomingMessage(
+            channel=record.channel,
+            chat_id=record.chat_id,
+            parts=[TextPart(content=content)],
+            user_id='subagent',
+            metadata={'_subagent_result': True, 'task_id': record.task_id},
+        ))
 
     def _check_for_cycles(self, new_id: str, depends_on: list[str]) -> None:
         visited: set[str] = set()

@@ -860,6 +860,20 @@ class Runtime:
         target_channel = channel_id or 'stdio'
         target_chat_id = chat_id or 'cli'
 
+        if job.payload.profile:
+            # Run the message on an isolated subagent. deliver=True sends the
+            # result straight to the channel; deliver=False routes it back
+            # through the main agent.
+            await self.subagent_manager.invoke(
+                task=job.payload.message,
+                label=job.name,
+                profile=job.payload.profile,
+                deliver='channel' if job.payload.deliver else 'agent',
+                channel=target_channel,
+                chat_id=target_chat_id,
+            )
+            return
+
         if job.payload.deliver:
             await self.bus.publish_outgoing(OutgoingMessage(
                 channel=target_channel,
