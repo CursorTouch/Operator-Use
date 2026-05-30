@@ -82,6 +82,13 @@ class MemoryConsolidateWorkflow(Workflow):
             encoding="utf-8",
         )
 
+        # Invalidate the embedding sidecar: consolidation merges/rewrites entries,
+        # so cached vectors (keyed by id) become stale or orphaned. Dropping it lets
+        # LocalMemoryAPI re-embed lazily on the next semantic search.
+        vectors_path = path.parent / "vectors.json"
+        if vectors_path.exists():
+            vectors_path.unlink()
+
         removed = len(entries) - len(merged)
         return (
             f"Consolidated '{store_path}': {len(entries)} → {len(merged)} entries "

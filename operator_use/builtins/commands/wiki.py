@@ -21,7 +21,7 @@ _USAGE = (
     "  /wiki ingest <source>    — synthesize source into wiki pages (background)\n"
     "  /wiki query <question>   — answer a question from the wiki\n"
     "  /wiki lint               — check for contradictions and stale content (background)\n"
-    "  /wiki consolidate        — consolidate and deduplicate all pages (background)\n"
+    "  /wiki dream              — consolidate and deduplicate all pages (a.k.a. consolidate; background)\n"
     "  /wiki log                — show the audit log"
 )
 
@@ -106,8 +106,8 @@ async def _handle_wiki(registry: CommandRegistry, args: list[str]) -> None:
             print(f"Error: {e}")
         return
 
-    # /wiki consolidate
-    if subcommand == 'consolidate':
+    # /wiki dream (a.k.a. consolidate)
+    if subcommand in ('dream', 'consolidate'):
         knowledge_dir = _get_knowledge_dir(registry)
         if knowledge_dir is None:
             print("No active profile — wiki requires a profile (start with --profile <name>).")
@@ -204,7 +204,7 @@ async def _handle_wiki(registry: CommandRegistry, args: list[str]) -> None:
         lines = [l for l in log_path.read_text(encoding='utf-8').splitlines() if l.strip()]
         if lines:
             print(_dim(f"Last entry: {lines[-1].strip()}"))
-    print(_dim("/wiki <ingest|query|lint|consolidate|log> for actions"))
+    print(_dim("/wiki <ingest|query|lint|dream|log> for actions"))
     print()
 
 
