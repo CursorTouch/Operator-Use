@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 __all__ = ["GoogleAntigravityAPI"]
 
-_SKIP_KEYS = {"title", "$schema", "$defs", "default", "prefixItems", "maxItems", "minItems"}
+_SKIP_KEYS = {"title", "$schema", "$defs", "default", "prefixItems", "maxItems", "minItems", "exclusiveMinimum", "exclusiveMaximum"}
 
 
 def _resolve_schema(schema: dict[str, Any]) -> dict[str, Any]:
