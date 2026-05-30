@@ -24,6 +24,21 @@ async def _dream(registry: CommandRegistry) -> None:
         return
 
     ctx = runtime._context
+
+    # Dreaming operates on the local memories.jsonl store. Other providers
+    # (mem0, supermemory) consolidate server-side, so there is nothing to do here.
+    manager = getattr(ctx, 'memory_manager', None)
+    if manager is None or manager.api is None:
+        print('Memory is not active. Enable a provider, e.g. "memory": {"provider": "local"} in settings.')
+        return
+    from operator_use.memory.api.local import LocalMemoryAPI
+    if not isinstance(manager.api, LocalMemoryAPI):
+        print(
+            f"Dreaming applies only to the local memory store; the active provider "
+            f"'{manager.provider_id}' consolidates server-side, so there's nothing to do here."
+        )
+        return
+
     loader = ctx.resource_loader
     profile = getattr(loader, '_active_profile', None) if loader else None
     if profile is None:
