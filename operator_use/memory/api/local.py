@@ -142,6 +142,23 @@ class LocalMemoryAPI(BaseMemoryAPI):
         self._save(entries)
         return True
 
+    def reindex(self) -> int:
+        """Rebuild the embedding sidecar from the current on-disk store.
+
+        Drops the in-memory vector cache and re-embeds every entry, then persists
+        vectors.json. Call after the store is rewritten externally (e.g. dreaming/
+        consolidation) so the live provider and sidecar match the merged store and
+        the next recall uses fresh vectors. Returns the number of vectors built.
+        """
+        self._vectors = {}
+        if self._ensure_model() is None:
+            # No embedder available — clear any stale sidecar to stay consistent.
+            if self._vectors_path is not None and self._vectors_path.exists():
+                self._vectors_path.unlink()
+            return 0
+        self._backfill_vectors(self._load())
+        return len(self._vectors)
+
     async def on_turn_complete(
         self, user_content: str, assistant_content: str, *, session_id: str = ""
     ) -> None:

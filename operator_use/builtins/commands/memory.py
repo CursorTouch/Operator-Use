@@ -65,6 +65,14 @@ async def _dream(registry: CommandRegistry) -> None:
         return
     print(result)
 
+    # Rebuild the embedding index from the consolidated store so the live provider
+    # and vectors.json are fresh — the next task's recall uses the post-dream vectors.
+    try:
+        n = manager.api.reindex()
+        print(f"Re-embedded {n} memories — recall is ready with fresh vectors.")
+    except Exception as e:
+        print(f"(note: could not rebuild the vector index: {e})")
+
 
 async def _handle_memory(registry: CommandRegistry, args: list[str]) -> None:
     subcommand = args[0].lower() if args else ''
