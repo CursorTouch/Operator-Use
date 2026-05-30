@@ -47,6 +47,7 @@ dependencies = [
     "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
     "yt-dlp>=2026.3.17",
     "youtube-transcript-api>=1.2.4",
+    "fastembed>=0.8.0",
 ]
 
 [project.scripts]

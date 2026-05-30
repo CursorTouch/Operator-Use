@@ -242,27 +242,6 @@ async def test_on_turn_complete_disabled_sync_turns(tmp_path):
     assert _read_store(tmp_path) == []
 
 
-# ── tool call handling ────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_handle_tool_call_store(tmp_path):
-    api = _make_api(tmp_path)
-    result = json.loads(await api.handle_tool_call("local_memory_store", {"content": "stored via tool"}))
-    assert result["ok"] is True
-    entries = _read_store(tmp_path)
-    assert entries[0]["content"] == "stored via tool"
-
-
-@pytest.mark.asyncio
-async def test_handle_tool_call_search(tmp_path):
-    api = _make_api(tmp_path)
-    await api.remember("Python concurrency model uses GIL")
-    result = json.loads(await api.handle_tool_call("local_memory_search", {"query": "Python GIL", "limit": 5}))
-    assert isinstance(result, list)
-    assert len(result) == 1
-    assert "GIL" in result[0]["content"]
-
-
 # ── registry ──────────────────────────────────────────────────────────────────
 
 def test_local_api_registered_in_builtins():

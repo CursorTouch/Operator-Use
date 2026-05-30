@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from typing import Any
 
@@ -89,42 +88,6 @@ class SupermemoryAPI(BaseMemoryAPI):
         content = f"User: {user_content}\nAssistant: {assistant_content}"
         metadata = {"source": "operator", "session_id": session_id} if session_id else {"source": "operator"}
         await asyncio.to_thread(self._add_content, content, metadata)
-
-    async def handle_tool_call(self, name: str, args: dict[str, Any], **kwargs: Any) -> str:
-        if name == "supermemory_search":
-            query = str(args.get("query", ""))
-            limit = int(args.get("limit", 5))
-            return json.dumps([r.__dict__ for r in self.search(query, limit=limit)])
-        if name == "supermemory_store":
-            content = str(args.get("content", ""))
-            source = await self.remember(content, {"source": "operator-tool"})
-            return json.dumps({"ok": bool(source), "source": source})
-        return await super().handle_tool_call(name, args, **kwargs)
-
-    def get_tool_schemas(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "name": "supermemory_search",
-                "description": "Search Supermemory long-term memory.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string"},
-                        "limit": {"type": "integer", "default": 5},
-                    },
-                    "required": ["query"],
-                },
-            },
-            {
-                "name": "supermemory_store",
-                "description": "Store a durable fact in Supermemory.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"content": {"type": "string"}},
-                    "required": ["content"],
-                },
-            },
-        ]
 
     def _create_client(self) -> Any:
         try:

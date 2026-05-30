@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from typing import Any
 
@@ -89,42 +88,6 @@ class Mem0MemoryAPI(BaseMemoryAPI):
             {"role": "assistant", "content": assistant_content},
         ]
         await asyncio.to_thread(self._add_messages, messages, session_id)
-
-    async def handle_tool_call(self, name: str, args: dict[str, Any], **kwargs: Any) -> str:
-        if name == "mem0_search":
-            query = str(args.get("query", ""))
-            limit = int(args.get("limit", 5))
-            return json.dumps([r.__dict__ for r in self.search(query, limit=limit)])
-        if name == "mem0_store":
-            content = str(args.get("content", ""))
-            source = await self.remember(content)
-            return json.dumps({"ok": bool(source), "source": source})
-        return await super().handle_tool_call(name, args, **kwargs)
-
-    def get_tool_schemas(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "name": "mem0_search",
-                "description": "Search Mem0 long-term memory.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string"},
-                        "limit": {"type": "integer", "default": 5},
-                    },
-                    "required": ["query"],
-                },
-            },
-            {
-                "name": "mem0_store",
-                "description": "Store a durable fact in Mem0 memory.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"content": {"type": "string"}},
-                    "required": ["content"],
-                },
-            },
-        ]
 
     def _create_client(self) -> Any:
         try:

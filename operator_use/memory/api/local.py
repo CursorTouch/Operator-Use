@@ -16,16 +16,27 @@ and in-session-only details. Output one fact per line, plain text, no bullets or
 numbering. If there is nothing worth remembering, output the single word NONE."""
 
 
+_DEFAULT_EMBED_MODEL = "BAAI/bge-small-en-v1.5"  # 384-dim, ~130MB, CPU-only
+
+
 class LocalMemoryAPI(BaseMemoryAPI):
     """File-backed memory provider. No external services or API keys required.
 
-    Stores facts as JSONL under root_dir/memories.jsonl. Retrieval uses
-    keyword-overlap scoring with a recency bias — no embeddings needed.
+    Stores facts as JSONL under root_dir/memories.jsonl. When ``fastembed`` is
+    available, retrieval ranks by embedding cosine similarity (local, no network)
+    blended with a recency bias; vectors are cached in a sidecar ``vectors.json``
+    so the JSONL stays human-readable and nothing is re-embedded on restart. If
+    fastembed is missing or fails to load, retrieval transparently falls back to
+    keyword-overlap scoring.
     """
 
     def __init__(self, options: MemoryOptions | None = None) -> None:
         super().__init__(options or MemoryOptions())
         self._store_path: Path | None = None
+        self._vectors_path: Path | None = None
+        self._vectors: dict[str, list[float]] = {}
+        self._model: Any = None
+        self._model_ready = False  # True once we've tried to load (success or failure)
 
     def initialize(self, context: MemoryContext) -> None:
         super().initialize(context)
@@ -37,6 +48,12 @@ class LocalMemoryAPI(BaseMemoryAPI):
             )
         self._store_path = Path(root) / "memories.jsonl"
         self._store_path.parent.mkdir(parents=True, exist_ok=True)
+        self._vectors_path = self._store_path.parent / "vectors.json"
+        if self._vectors_path.exists():
+            try:
+                self._vectors = json.loads(self._vectors_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                self._vectors = {}
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -55,17 +72,49 @@ class LocalMemoryAPI(BaseMemoryAPI):
         entries = self._load()
         if not entries:
             return []
+        if self._ensure_model() is None:
+            return self._keyword_search(query, entries, limit)
+        return self._semantic_search(query, entries, limit)
+
+    def _keyword_search(
+        self, query: str, entries: list[dict[str, Any]], limit: int
+    ) -> list[MemorySearchResult]:
         query_words = _tokenize(query)
-        scored: list[tuple[float, dict]] = []
         now_ts = datetime.now(timezone.utc).timestamp()
+        scored: list[tuple[float, dict]] = []
         for entry in entries:
-            content = entry.get("content", "")
-            overlap = _overlap_score(query_words, _tokenize(content))
+            overlap = _overlap_score(query_words, _tokenize(entry.get("content", "")))
             if overlap == 0.0:
                 continue
             age_days = (now_ts - entry.get("created_ts", now_ts)) / 86400
             recency = 1.0 / (1.0 + age_days / 30)  # half-weight at 30 days
             scored.append((overlap * 0.7 + recency * 0.3, entry))
+        return self._rank(scored, limit)
+
+    def _semantic_search(
+        self, query: str, entries: list[dict[str, Any]], limit: int
+    ) -> list[MemorySearchResult]:
+        import numpy as np
+
+        self._backfill_vectors(entries)
+        q_vec = np.asarray(self._embed(query))
+        min_relevance = float((self.options.config or {}).get("min_relevance", 0.5))
+        now_ts = datetime.now(timezone.utc).timestamp()
+        scored: list[tuple[float, dict]] = []
+        for entry in entries:
+            vec = self._vectors.get(entry.get("id", ""))
+            if not vec:
+                continue
+            sim = _cosine(q_vec, np.asarray(vec))
+            if sim < min_relevance:
+                continue
+            age_days = (now_ts - entry.get("created_ts", now_ts)) / 86400
+            recency = 1.0 / (1.0 + age_days / 30)  # half-weight at 30 days
+            scored.append((sim * 0.7 + recency * 0.3, entry))
+        return self._rank(scored, limit)
+
+    @staticmethod
+    def _rank(scored: list[tuple[float, dict]], limit: int) -> list[MemorySearchResult]:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [
             MemorySearchResult(
@@ -109,40 +158,6 @@ class LocalMemoryAPI(BaseMemoryAPI):
                 self._append(fact, source="compact")
         return ""
 
-    def get_tool_schemas(self) -> list[dict[str, Any]]:
-        return [
-            {
-                "name": "local_memory_search",
-                "description": "Search local long-term memory for relevant facts.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string"},
-                        "limit": {"type": "integer", "default": 5},
-                    },
-                    "required": ["query"],
-                },
-            },
-            {
-                "name": "local_memory_store",
-                "description": "Store a durable fact in local long-term memory.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"content": {"type": "string"}},
-                    "required": ["content"],
-                },
-            },
-        ]
-
-    async def handle_tool_call(self, name: str, args: dict[str, Any], **kwargs: Any) -> str:
-        if name == "local_memory_search":
-            results = self.search(str(args.get("query", "")), limit=int(args.get("limit", 5)))
-            return json.dumps([r.__dict__ for r in results])
-        if name == "local_memory_store":
-            entry_id = await self.remember(str(args.get("content", "")))
-            return json.dumps({"ok": bool(entry_id), "id": entry_id})
-        return await super().handle_tool_call(name, args, **kwargs)
-
     # ── internal helpers ──────────────────────────────────────────────────────
 
     def _load(self) -> list[dict[str, Any]]:
@@ -165,6 +180,10 @@ class LocalMemoryAPI(BaseMemoryAPI):
             "\n".join(json.dumps(e) for e in entries) + "\n",
             encoding="utf-8",
         )
+        live = {e.get("id") for e in entries}
+        if len(live) != len(self._vectors):
+            self._vectors = {k: v for k, v in self._vectors.items() if k in live}
+            self._persist_vectors()
 
     def _append(
         self,
@@ -191,6 +210,9 @@ class LocalMemoryAPI(BaseMemoryAPI):
             entry["metadata"] = metadata
         with self._store_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
+        if self._ensure_model() is not None:
+            self._vectors[entry_id] = list(self._embed(content))
+            self._persist_vectors()
         return entry_id
 
     async def _extract_facts(self, user_content: str, assistant_content: str) -> list[str]:
@@ -214,8 +236,48 @@ class LocalMemoryAPI(BaseMemoryAPI):
         except Exception:
             return []
 
+    # ── embedding helpers ─────────────────────────────────────────────────────
+
+    def _ensure_model(self) -> Any:
+        """Lazily load the fastembed model. Returns None if unavailable."""
+        if self._model_ready:
+            return self._model
+        self._model_ready = True
+        try:
+            from fastembed import TextEmbedding
+
+            model_name = (self.options.config or {}).get("embed_model", _DEFAULT_EMBED_MODEL)
+            self._model = TextEmbedding(model_name=model_name)
+        except Exception:
+            self._model = None
+        return self._model
+
+    def _embed(self, text: str) -> list[float]:
+        return next(iter(self._model.embed([text]))).tolist()
+
+    def _backfill_vectors(self, entries: list[dict[str, Any]]) -> None:
+        """Embed entries that have no cached vector (e.g. written before fastembed)."""
+        missing = [e for e in entries if e.get("id") and e["id"] not in self._vectors]
+        if not missing:
+            return
+        for vec, entry in zip(self._model.embed([e["content"] for e in missing]), missing):
+            self._vectors[entry["id"]] = vec.tolist()
+        self._persist_vectors()
+
+    def _persist_vectors(self) -> None:
+        if self._vectors_path is not None:
+            self._vectors_path.write_text(json.dumps(self._vectors), encoding="utf-8")
+
 
 # ── module-level utilities ────────────────────────────────────────────────────
+
+
+def _cosine(a: Any, b: Any) -> float:
+    import numpy as np
+
+    denom = float(np.linalg.norm(a) * np.linalg.norm(b))
+    return float(np.dot(a, b) / denom) if denom else 0.0
+
 
 def _tokenize(text: str) -> set[str]:
     import re
