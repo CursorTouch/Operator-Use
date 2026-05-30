@@ -8,6 +8,8 @@ from typing import Any
 
 from operator_use.memory.api.base import BaseMemoryAPI
 from operator_use.memory.types import MemoryContext, MemoryOptions, MemorySearchResult
+from operator_use.inference.types import LLMEvent, TextDeltaEvent
+
 
 _EXTRACT_SYSTEM = """\
 You are a memory extraction assistant. Given a conversation turn, extract every \
@@ -290,14 +292,12 @@ def _overlap_score(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
-def _collect_text(events: list[Any]) -> str:
-    parts: list[str] = []
-    for event in events:
-        data = getattr(event, "data", None)
-        text_obj = getattr(data, "text", None)
-        if text_obj is not None:
-            parts.append(getattr(text_obj, "content", ""))
-    return "".join(parts)
+def _collect_text(events: list[LLMEvent]) -> str:
+    # Reconstruct the streamed text from TextDelta events. (TextStart/TextEnd
+    # carry the same content and would double-count.)
+    return "".join(
+        event.text.content for event in events if isinstance(event, TextDeltaEvent)
+    )
 
 
 def _adjacent_pairs(messages: list[dict[str, Any]]) -> list[tuple[str, str]]:

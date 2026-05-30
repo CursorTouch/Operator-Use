@@ -180,24 +180,16 @@ async def test_prefetch_disabled_via_options(tmp_path):
 # ── on_turn_complete with fake LLM ────────────────────────────────────────────
 
 class _FakeLLM:
-    """Returns a fixed text response from invoke()."""
+    """Returns a fixed text response from invoke() as a real TextDelta event."""
 
     def __init__(self, text: str):
         self._text = text
 
     async def invoke(self, context):
-        from dataclasses import dataclass
+        from operator_use.inference.types import TextDeltaEvent
         from operator_use.message.types import TextContent
 
-        @dataclass
-        class _Data:
-            text: TextContent
-
-        @dataclass
-        class _Event:
-            data: _Data
-
-        return [_Event(data=_Data(text=TextContent(content=self._text)))]
+        return [TextDeltaEvent(text=TextContent(content=self._text))]
 
 
 @pytest.mark.asyncio
