@@ -143,13 +143,13 @@ class AnthropicClaudeCodeAPI(BaseAPI):
             "temperature": self.options.temperature,
         }
         if system:
-            params["system"] = system
+            params["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
         if self.options.thinking_level is not None:
             budgets = self.options.thinking_budgets or ThinkingBudgets()
             params["thinking"] = {"type": "enabled", "budget_tokens": budgets.get(self.options.thinking_level)}
-        
+
         if tools:
-            params["tools"] = [
+            tool_defs = [
                 {
                     "name": tool.name,
                     "description": tool.description,
@@ -157,6 +157,8 @@ class AnthropicClaudeCodeAPI(BaseAPI):
                 }
                 for tool in tools
             ]
+            tool_defs[-1]["cache_control"] = {"type": "ephemeral"}
+            params["tools"] = tool_defs
         return params
 
     def _sync_client(self) -> None:
