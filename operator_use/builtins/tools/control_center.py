@@ -14,7 +14,7 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 # Each entry: (getter_name, setter_name | None, description, reload_required)
 _KEYS: dict[str, tuple[str, str | None, str, bool]] = {
     # Feature toggles — require reload so the tool list is rebuilt
-    "cron_enabled":         ("get_cron_enabled",         "set_cron_enabled",         "Enable/disable the cron scheduler.",             True),
+    "cron":                 ("get_cron_enabled",         "set_cron_enabled",         "Enable/disable the cron scheduler.",             True),
     "subagents_enabled":    ("get_subagents_enabled",    "set_subagents_enabled",    "Enable/disable background subagent delegation.", True),
     "workflows_enabled":    ("get_workflows_enabled",    "set_workflows_enabled",    "Enable/disable workflow execution.",              True),
     "computer_use_enabled": ("get_computer_use_enabled", "set_computer_use_enabled", "Enable/disable desktop computer control.",       True),

@@ -358,7 +358,7 @@ class ExtensionAPI:
 
     @property
     def config(self) -> dict:
-        """Per-extension settings dict from extension_list in settings.json."""
+        """Per-extension settings dict from extensions.list in settings.json."""
         return self._extension.config
 
     def on(self, event: str, handler: EventHandler) -> None:

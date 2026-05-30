@@ -126,7 +126,7 @@ async def _handle_cron(registry: CommandRegistry, args: list[str]) -> None:
 
     cron = runtime._context.cron
     if cron is None:
-        print("Cron is disabled. Set cron_enabled=true in settings to enable it.")
+        print('Cron is disabled. Set cron.enabled=true in settings to enable it.')
         return
 
     jobs = cron.list_jobs()

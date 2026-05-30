@@ -14,6 +14,7 @@ from operator_use.settings.types import (
     ImageSettings, STTSettings, TTSSettings, MemorySettings, ExtensionEntry,
     AuxiliarySettings, AuxiliaryTaskSettings, CuratorSettings,
     BrowserUseSettings, ComputerUseSettings, WorkflowSettings,
+    CronSettings, ExtensionsSettings,
 )
 from operator_use.gateway.channels.types import (
     ChannelsSettings,
@@ -37,6 +38,7 @@ _NESTED_FIELD_TYPES: dict[str, type] = {
     'browser_use': BrowserUseSettings,
     'computer_use': ComputerUseSettings,
     'workflow': WorkflowSettings,
+    'cron': CronSettings,
 }
 
 # Pydantic BaseModel fields — use model_validate() instead of **kwargs
@@ -118,19 +120,14 @@ class SettingsManager:
         for key, value in data.items():
             if key not in valid_settings:
                 continue
+            if key == 'extensions':
+                continue  # handled below (nested list + legacy flat migration)
             if key in _PYDANTIC_FIELD_TYPES and isinstance(value, dict):
                 kwargs[key] = _PYDANTIC_FIELD_TYPES[key].model_validate(value)
             elif key in _NESTED_FIELD_TYPES and isinstance(value, dict):
                 nested_cls = _NESTED_FIELD_TYPES[key]
                 valid_nested = {f.name for f in dc.fields(nested_cls)}
                 kwargs[key] = nested_cls(**{k: v for k, v in value.items() if k in valid_nested})
-            elif key == 'extension_list' and isinstance(value, list):
-                valid_fields = {f.name for f in dc.fields(ExtensionEntry)}
-                entries = []
-                for item in value:
-                    if isinstance(item, dict):
-                        entries.append(ExtensionEntry(**{k: v for k, v in item.items() if k in valid_fields}))
-                kwargs[key] = entries
             elif key == 'retry' and isinstance(value, dict):
                 provider = value.get('provider')
                 if isinstance(provider, dict):
@@ -149,7 +146,33 @@ class SettingsManager:
                 kwargs[key] = AuxiliarySettings(**aux_kwargs)
             else:
                 kwargs[key] = value
+        # `extensions`: nested {enabled, list} or legacy flat bool + `extension_list`.
+        extensions = SettingsManager._parse_extensions(data)
+        if extensions is not None:
+            kwargs['extensions'] = extensions
         return Settings(**kwargs)
+
+    @staticmethod
+    def _parse_ext_entries(raw: Any) -> Optional[list[ExtensionEntry]]:
+        """Build ExtensionEntry list from raw dicts, or None when absent."""
+        if not isinstance(raw, list):
+            return None
+        valid = {f.name for f in dc.fields(ExtensionEntry)}
+        return [
+            ExtensionEntry(**{k: v for k, v in item.items() if k in valid})
+            for item in raw if isinstance(item, dict)
+        ]
+
+    @staticmethod
+    def _parse_extensions(data: dict) -> Optional[ExtensionsSettings]:
+        """Parse the extensions block: ``{"enabled": bool, "list": [...]}``."""
+        val = data.get('extensions')
+        if isinstance(val, dict):
+            return ExtensionsSettings(
+                enabled=val.get('enabled'),
+                list=SettingsManager._parse_ext_entries(val.get('list')),
+            )
+        return None
 
     @staticmethod
     def _load_from_storage(storage: SettingsStorage, scope: SCOPE) -> Settings:
@@ -622,22 +645,28 @@ class SettingsManager:
 
     def is_extensions_enabled(self) -> bool:
         """Return whether extensions are globally enabled (default True)."""
-        return self.settings.extensions if self.settings.extensions is not None else True
+        ext = self.settings.extensions
+        return ext.enabled if ext is not None and ext.enabled is not None else True
 
     def set_extensions_enabled(self, enabled: bool):
         """Set the global extension toggle and persist to global settings."""
-        self.global_settings.extensions = enabled
-        self._mark_modified("extensions")
+        ext = self.global_settings.extensions or ExtensionsSettings()
+        ext.enabled = enabled
+        self.global_settings.extensions = ext
+        self._mark_modified("extensions", "enabled")
         self._save()
 
     def get_extension_list(self) -> list[ExtensionEntry]:
         """Return the list of per-extension config entries."""
-        return self.settings.extension_list or []
+        ext = self.settings.extensions
+        return (ext.list if ext is not None else None) or []
 
     def set_extension_list(self, entries: list[ExtensionEntry]):
         """Set the per-extension config entries and persist to global settings."""
-        self.global_settings.extension_list = entries
-        self._mark_modified("extension_list")
+        ext = self.global_settings.extensions or ExtensionsSettings()
+        ext.list = entries
+        self.global_settings.extensions = ext
+        self._mark_modified("extensions", "list")
         self._save()
 
     def get_extension_paths(self) -> list[str]:
@@ -764,12 +793,15 @@ class SettingsManager:
 
     def get_cron_enabled(self) -> bool:
         """Return whether the cron scheduler is enabled (default: True)."""
-        return self.settings.cron_enabled if self.settings.cron_enabled is not None else True
+        cron = self.settings.cron
+        return cron.enabled if cron is not None and cron.enabled is not None else True
 
     def set_cron_enabled(self, enabled: bool):
         """Enable or disable the cron scheduler and persist to global settings."""
-        self.global_settings.cron_enabled = enabled
-        self._mark_modified("cron_enabled")
+        cron = self.global_settings.cron or CronSettings()
+        cron.enabled = enabled
+        self.global_settings.cron = cron
+        self._mark_modified("cron", "enabled")
         self._save()
 
     def get_subagents_enabled(self) -> bool:

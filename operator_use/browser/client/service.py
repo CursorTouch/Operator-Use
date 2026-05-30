@@ -529,6 +529,14 @@ class Browser:
         await self.send('Page.setLifecycleEventsEnabled', {'enabled': True}, session_id=session_id)
         await self.send('Target.setAutoAttach', {'autoAttach': True, 'waitForDebuggerOnStart': False, 'flatten': True}, session_id=session_id)
 
+        # Belt-and-suspenders against `debugger;` traps: enable the Debugger domain
+        # only to tell it to skip every pause, so our own session can never freeze.
+        try:
+            await self.send('Debugger.enable', {}, session_id=session_id)
+            await self.send('Debugger.setSkipAllPauses', {'skip': True}, session_id=session_id)
+        except Exception:
+            pass
+
         try:
             await self.send('Emulation.setUserAgentOverride', {
                 'userAgent': (

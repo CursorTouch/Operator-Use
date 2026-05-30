@@ -29,10 +29,15 @@ _GLOBAL_SETTINGS = {
     },
     "memory": {
         "enabled": True,
-        "provider": "local"
+        "provider": "local",
+        "prefetch": True
     },
-    "cron_enabled": True,
-    "extensions": True,
+    "cron": {
+        "enabled": True
+    },
+    "extensions": {
+        "enabled": True
+    },
     "curator": {
         "enabled": True,
         "interval_hours": 168,

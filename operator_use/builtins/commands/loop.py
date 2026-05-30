@@ -47,7 +47,7 @@ async def _handle_loop(registry: CommandRegistry, args: list[str]) -> None:
 
     cron = runtime._context.cron
     if cron is None:
-        print("Cron is disabled. Set cron_enabled=true in settings to enable loops.")
+        print('Cron is disabled. Set cron.enabled=true in settings to enable loops.')
         return
 
     # /loop — list active loops

@@ -37,6 +37,17 @@ class ExtensionEntry:
 
 
 @dataclass
+class CronSettings:
+    enabled: Optional[bool] = None
+
+
+@dataclass
+class ExtensionsSettings:
+    enabled: Optional[bool] = None                  # global on/off toggle for all extensions
+    list: Optional[list[ExtensionEntry]] = None     # per-extension config
+
+
+@dataclass
 class CompactionSettings:
     enabled: Optional[bool] = None
     strategy: Optional[str] = None          # active strategy: "summarization" | "sliding_window" | "lcm"
@@ -193,8 +204,7 @@ class Settings:
 
     # Resource paths
     packages: Optional[list[str]] = None
-    extensions: Optional[bool] = None          # global toggle for all extensions
-    extension_list: Optional[list[ExtensionEntry]] = None  # per-extension config
+    extensions: Optional[ExtensionsSettings] = None   # global toggle + per-extension config
     skills: Optional[list[str]] = None
     prompts: Optional[list[str]] = None
 
@@ -207,7 +217,7 @@ class Settings:
 
     # Feature flags
     enable_skill_commands: Optional[bool] = None
-    cron_enabled: Optional[bool] = None
+    cron: Optional[CronSettings] = None
     subagents_enabled: Optional[bool] = None   # on/off gate for subagent delegation
     subagent: Optional[SubagentSettings] = None   # subagent tuning knobs (concurrency, retries, timeout, ...)
     workflows_enabled: Optional[bool] = None   # legacy flat flag; superseded by workflow.enabled
