@@ -216,6 +216,7 @@ def bootstrap_profile(profile_dir: Path, name: str, description: str = '') -> No
         'sessions', 'tools', 'skills', 'extensions',
         'commands', 'hooks', 'subagents', 'knowledge',
         'temp', 'tasks', 'teams', 'acp', 'workflows', 'auth',
+        'memory',
     ):
         _mkdir(profile_dir / sub)
 

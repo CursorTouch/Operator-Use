@@ -36,7 +36,7 @@ Memory is **profile-scoped**. There is no global memory store shared across prof
 
 | Provider | API class | Requires |
 |---|---|---|
-| `local` | `LocalMemoryAPI` | Nothing — built-in, no API key |
+| `local` | `LocalMemoryAPI` | Nothing — built-in, no API key (`fastembed` ships by default for semantic search) |
 | `mem0` | `Mem0MemoryAPI` | `mem0ai` package + `MEM0_API_KEY` |
 | `supermemory` | `SupermemoryAPI` | `supermemory` package + `SUPERMEMORY_API_KEY` |
 
@@ -74,7 +74,10 @@ uv pip install ".[memory]"
 
 ## LocalMemoryAPI
 
-The built-in provider. No external service, no API key, no extra dependencies.
+The built-in provider. No external service and no API key. Semantic search uses
+`fastembed` (a local, CPU-only ONNX embedder) which ships as a core dependency,
+so semantic recall is on by default. If the embedder ever fails to load,
+retrieval degrades gracefully to keyword overlap.
 
 **Storage** — JSONL at `profile_dir/memory/memories.jsonl`. Each line is a JSON object:
 
@@ -82,25 +85,32 @@ The built-in provider. No external service, no API key, no extra dependencies.
 {"id": "<uuid hex>", "content": "...", "source": "turn|manual|compact", "created_at": "...", "created_ts": 1234567890.0}
 ```
 
+Embeddings are cached in a sidecar `profile_dir/memory/vectors.json` (keyed by
+entry id), so the JSONL stays human-readable and facts are never re-embedded on
+restart. Entries written before `fastembed` was present are embedded lazily on
+the first semantic search.
+
 **Fact extraction** — On `on_turn_complete`, the agent LLM is called with a short extraction prompt asking for durable facts from the turn. The response is split by line; `NONE` is treated as no facts worth storing.
 
-**Search** — Keyword overlap (Jaccard similarity between word sets) with a recency bias:
+**Search** — When `fastembed` is available, ranks by embedding cosine similarity
+blended with a recency bias; otherwise falls back to keyword overlap (Jaccard).
+The recency blend is identical either way:
 
 ```
-score = overlap × 0.7 + recency × 0.3
-recency = 1 / (1 + age_days / 30)   # half-weight at 30 days
+score = relevance × 0.7 + recency × 0.3   # relevance = cosine sim (or Jaccard overlap in fallback)
+recency = 1 / (1 + age_days / 30)          # half-weight at 30 days
 ```
 
-No embeddings or vector database required.
+In semantic mode, matches below a `min_relevance` floor (default `0.5`) are
+discarded, so an unrelated query returns nothing rather than weak noise. Both
+`min_relevance` and the embedding model (`embed_model`, default
+`BAAI/bge-small-en-v1.5`) can be set via the provider's `MemoryOptions.config`.
 
 **Prefetch** — Top-5 matches by score are formatted as a `## Recalled Memory` block and injected before each turn.
 
-**Tool schemas** exposed by `LocalMemoryAPI`:
-
-| Tool name | Purpose |
-|---|---|
-| `local_memory_search` | Search stored facts by query |
-| `local_memory_store` | Manually store a durable fact |
+Explicit search/store/forget is available through the provider-agnostic `memory`
+tool (see [Memory tool](#memory-tool)); `LocalMemoryAPI` does not expose its own
+per-provider tool schemas.
 
 ## Consolidation workflow
 
