@@ -27,6 +27,10 @@ _GLOBAL_SETTINGS = {
             "summarization": {"reserve_tokens": 50000}
         }
     },
+    "memory": {
+        "enabled": True,
+        "provider": "local"
+    },
     "cron_enabled": True,
     "extensions": True,
     "curator": {
