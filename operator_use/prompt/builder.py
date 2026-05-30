@@ -81,8 +81,23 @@ class PromptTemplate:
             if (has_read or has_skill_view) and self.skills
             else ""
         )
-        memory_section = f"\n\n# Memory\n\n{self.agent_memory}" if self.agent_memory else ""
-        user_section = f"\n\n# User Profile\n\n{self.user_profile}" if self.user_profile else ""
+        if self.agent_memory:
+            stripped_memory = self.agent_memory.lstrip()
+            if stripped_memory.startswith("# Memory"):
+                memory_section = f"\n\n{self.agent_memory}"
+            else:
+                memory_section = f"\n\n# Memory\n\n{self.agent_memory}"
+        else:
+            memory_section = ""
+
+        if self.user_profile:
+            stripped_user = self.user_profile.lstrip()
+            if stripped_user.startswith("# User Profile"):
+                user_section = f"\n\n{self.user_profile}"
+            else:
+                user_section = f"\n\n# User Profile\n\n{self.user_profile}"
+        else:
+            user_section = ""
         platform_section = channel_hint(self.channel)
 
         # SYSTEM.md / custom_prompt overrides the identity layer entirely.

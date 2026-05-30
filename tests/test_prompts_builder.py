@@ -64,6 +64,30 @@ class TestPromptTemplateDefault:
         out = PromptTemplate(cwd="/project", tools=[make_tool("read")], skills=[skill]).build()
         assert "my-skill" in out
 
+    def test_memory_header_not_duplicated_when_provided_in_agent_memory(self):
+        memory_with_header = "# Memory\n\n- Fact 1\n- Fact 2"
+        out = PromptTemplate(cwd="/project", agent_memory=memory_with_header).build()
+        assert out.count("# Memory") == 1
+        assert "Fact 1" in out
+
+    def test_memory_header_added_when_not_provided_in_agent_memory(self):
+        memory_without_header = "- Fact 1\n- Fact 2"
+        out = PromptTemplate(cwd="/project", agent_memory=memory_without_header).build()
+        assert out.count("# Memory") == 1
+        assert "Fact 1" in out
+
+    def test_user_profile_header_not_duplicated_when_provided_in_user_profile(self):
+        profile_with_header = "# User Profile\n\n- Name: Jeomon"
+        out = PromptTemplate(cwd="/project", user_profile=profile_with_header).build()
+        assert out.count("# User Profile") == 1
+        assert "Name: Jeomon" in out
+
+    def test_user_profile_header_added_when_not_provided_in_user_profile(self):
+        profile_without_header = "- Name: Jeomon"
+        out = PromptTemplate(cwd="/project", user_profile=profile_without_header).build()
+        assert out.count("# User Profile") == 1
+        assert "Name: Jeomon" in out
+
 
 class TestPromptTemplateCustomPrompt:
     def test_uses_custom_prompt_as_base(self):

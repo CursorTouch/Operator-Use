@@ -198,7 +198,7 @@ async def _wait_for_esc() -> None:
             pass
 
 
-async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', agent: str | None = None, resume: bool = False, system_prompt: str | None = None, prompt: str | None = None, session_file: str | None = None) -> None:
+async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandbox: str = 'off', agent: str | None = None, system_prompt: str | None = None, prompt: str | None = None, session_file: str | None = None) -> None:
     from pathlib import Path as _Path
     from operator_use.agent.profile import load_agent_profiles
     from operator_use.settings.paths import get_profiles_dir
@@ -219,17 +219,14 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
         if provider:
             profile.provider = provider
 
-    # Without --agent the REPL is ephemeral (no session saved to disk).
-    # With --agent the session is persisted inside the profile's sessions/ dir.
-    persist = profile is not None
+    # REPL sessions are always ephemeral — nothing is saved to disk.
 
     config = RuntimeConfig(
         cwd=cwd,
         model_id=model_id or 'claude-sonnet-4-6',
         provider=provider,
         sandbox=sandbox if sandbox != 'off' else None,
-        persist_session=persist,
-        resume=resume,
+        persist_session=False,
         system_prompt=system_prompt,
         session_file=_Path(session_file) if session_file else None,
         profile=profile,
@@ -309,6 +306,10 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     with patch_stdout(raw=True):
         while True:
             try:
+                try:
+                    termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+                except Exception:
+                    pass
                 user_input = (await session.prompt_async(ANSI(_cyan('\n[You] ')))).strip()
                 last_interrupt = False
             except EOFError:
@@ -397,12 +398,11 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
     default='off', show_default=True,
     help='Sandbox mode: strict=write-locked+OS sandbox; enforce=policy only; warn=log; off=disabled',
 )
-@click.option('--agent', default=None, help='Named agent profile to load (e.g. jarvis). Sessions are persisted. Without this flag the REPL runs ephemeral.')
-@click.option('--resume', is_flag=True, default=False, help='Resume the most recent session (requires --agent)')
+@click.option('--agent', default=None, help='Named agent profile to load (e.g. jarvis). The REPL is always ephemeral — nothing is saved to disk.')
 @click.option('--system-prompt', default=None, help='Override the default system prompt')
 @click.option('--prompt', default=None, help='Inject an initial message so the agent starts immediately.')
 @click.option('--session-file', default=None, hidden=True, help='Open a specific session file.')
-def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, agent: str | None, resume: bool, system_prompt: str | None, prompt: str | None, session_file: str | None) -> None:
+def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str, agent: str | None, system_prompt: str | None, prompt: str | None, session_file: str | None) -> None:
     """Start the interactive agent REPL.
 
     Without --agent the session is ephemeral (nothing saved to disk).
@@ -413,6 +413,6 @@ def repl(cwd: str | None, model: str | None, provider: str | None, sandbox: str,
 
     cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
     try:
-        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, agent=agent, resume=resume, system_prompt=system_prompt, prompt=prompt, session_file=session_file))
+        asyncio.run(_run_repl(cwd=cwd_path, model_id=model, provider=provider, sandbox=sandbox, agent=agent, system_prompt=system_prompt, prompt=prompt, session_file=session_file))
     except KeyboardInterrupt:
         pass
