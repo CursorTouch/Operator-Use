@@ -84,16 +84,16 @@ def lint_report(knowledge_dir: str, overview: str) -> str:
     )
 
 
-# ── Dream ─────────────────────────────────────────────────────────────────────
+# ── Consolidate ───────────────────────────────────────────────────────────────
 
-def dream_read(knowledge_dir: str) -> str:
+def consolidate_overview(knowledge_dir: str) -> str:
     return (
         f"List every .md file in '{knowledge_dir}' with: "
         "filename | one-sentence topic summary | approximate word count."
     )
 
 
-def dream_consolidate(knowledge_dir: str, overview: str) -> str:
+def consolidate_run(knowledge_dir: str, overview: str) -> str:
     return (
         f"Consolidate the knowledge base at '{knowledge_dir}'.\n\n"
         f"Current pages:\n{overview}\n\n"
@@ -114,7 +114,7 @@ def dream_consolidate(knowledge_dir: str, overview: str) -> str:
     )
 
 
-def dream_index(knowledge_dir: str, timestamp: str) -> str:
+def consolidate_index(knowledge_dir: str, timestamp: str) -> str:
     return (
         f"Rebuild the knowledge index and audit log in '{knowledge_dir}':\n\n"
         "1. List all topic folders (subdirectories) now present.\n"
@@ -127,7 +127,7 @@ def dream_index(knowledge_dir: str, timestamp: str) -> str:
         "   Remove entries for deleted folders. Preserve always_load and priority "
         "settings for existing entries.\n"
         f"4. Append to '{knowledge_dir}/log.md':\n"
-        f"   - {timestamp} | dream | consolidation pass completed\n"
+        f"   - {timestamp} | consolidate | consolidation pass completed\n"
         "5. Write both files."
     )
 

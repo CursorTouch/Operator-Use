@@ -4,96 +4,165 @@ The memory layer provides persistent, cross-session context that is separate fro
 
 ## Shape
 
-Memory mirrors the inference registry pattern:
-
 ```text
 operator_use/memory/
-  api/          # backend behavior implementations
-  provider/     # provider metadata and provider registry
-  manager.py    # active-provider orchestration
-  types.py      # shared config/runtime dataclasses
+  api/
+    base.py           ← BaseMemoryAPI — interface all backends implement
+    local.py          ← LocalMemoryAPI — built-in file-backed provider
+    mem0.py           ← Mem0MemoryAPI — optional Mem0 SDK adapter
+    supermemory.py    ← SupermemoryAPI — optional Supermemory SDK adapter
+    builtins.py       ← API name → class registry entries
+    registry.py       ← MemoryAPIRegistry
+  provider/
+    types.py          ← MemoryProvider descriptor
+    registry.py       ← MemoryProviderRegistry
+  workflows/
+    consolidate.py    ← MemoryConsolidateWorkflow — periodic deduplication
+  manager.py          ← MemoryManager — active-provider orchestration
+  types.py            ← MemoryOptions, MemoryContext, MemorySearchResult
 ```
 
-Memory providers are declared in `program/builtins/providers/memory.py`.
+## Scope
 
-| Provider | API | Notes |
+Memory is **profile-scoped**. There is no global memory store shared across profiles. Each active profile owns its memory independently:
+
+```
+~/.operator/profiles/<name>/memory/memories.jsonl
+```
+
+`MemoryContext.project_memory_dir` is set to `profile.memory_dir` at runtime. `LocalMemoryAPI` raises if no profile is active and no explicit `root_dir` is set in `MemoryOptions`.
+
+## Providers
+
+| Provider | API class | Requires |
 |---|---|---|
-| `mem0` | `Mem0MemoryAPI` | Optional Mem0 SDK adapter |
-| `supermemory` | `SupermemoryAPI` | Optional Supermemory SDK adapter |
+| `local` | `LocalMemoryAPI` | Nothing — built-in, no API key |
+| `mem0` | `Mem0MemoryAPI` | `mem0ai` package + `MEM0_API_KEY` |
+| `supermemory` | `SupermemoryAPI` | `supermemory` package + `SUPERMEMORY_API_KEY` |
+
+Providers are declared in `operator_use/builtins/providers/memory.py`.
 
 ## Settings
+
+Memory settings live in the profile's `settings.json` (not global — memory is profile-specific):
 
 ```json
 {
   "memory": {
     "enabled": true,
-    "provider": null,
-    "max_prompt_chars": 6000,
+    "provider": "local",
     "sync_turns": true,
-    "prefetch": true
+    "prefetch": true,
+    "max_prompt_chars": 6000
   }
 }
 ```
 
-Unset fields use defaults. `provider` selects one active external memory provider at a time; `null` disables provider-backed memory.
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `true` | Turns memory on/off entirely |
+| `provider` | `null` | Active provider id — `"local"`, `"mem0"`, `"supermemory"`, or `null` to disable |
+| `sync_turns` | `true` | Extract and store facts from each completed turn |
+| `prefetch` | `true` | Inject recalled memories before each turn |
+| `max_prompt_chars` | `6000` | Cap on recalled memory injected into the prompt |
 
-External providers are imported lazily. Install optional dependencies before selecting them:
+External providers need their SDK installed before selecting them:
 
 ```bash
 uv pip install ".[memory]"
 ```
 
-Environment variables:
+## LocalMemoryAPI
 
-| Provider | Env var |
+The built-in provider. No external service, no API key, no extra dependencies.
+
+**Storage** — JSONL at `profile_dir/memory/memories.jsonl`. Each line is a JSON object:
+
+```json
+{"id": "<uuid hex>", "content": "...", "source": "turn|manual|compact", "created_at": "...", "created_ts": 1234567890.0}
+```
+
+**Fact extraction** — On `on_turn_complete`, the agent LLM is called with a short extraction prompt asking for durable facts from the turn. The response is split by line; `NONE` is treated as no facts worth storing.
+
+**Search** — Keyword overlap (Jaccard similarity between word sets) with a recency bias:
+
+```
+score = overlap × 0.7 + recency × 0.3
+recency = 1 / (1 + age_days / 30)   # half-weight at 30 days
+```
+
+No embeddings or vector database required.
+
+**Prefetch** — Top-5 matches by score are formatted as a `## Recalled Memory` block and injected before each turn.
+
+**Tool schemas** exposed by `LocalMemoryAPI`:
+
+| Tool name | Purpose |
 |---|---|
-| `mem0` | `MEM0_API_KEY` |
-| `supermemory` | `SUPERMEMORY_API_KEY` |
+| `local_memory_search` | Search stored facts by query |
+| `local_memory_store` | Manually store a durable fact |
 
-## Why One Provider
+## Consolidation workflow
 
-Memory keeps one active backend behind a shared API, so deeper recall does not bloat prompts and tool lists with multiple competing provider surfaces.
+`MemoryConsolidateWorkflow` (`memory/workflows/consolidate.py`) is an internal workflow — not exposed to users via the `workflow` tool. Run it periodically to keep the store clean.
 
-## Tool
+**Invocation:**
 
-The built-in `memory` tool is provider-agnostic. It exposes one schema with an `action` field:
+```python
+from operator_use.memory.workflows.consolidate import MemoryConsolidateWorkflow
+from operator_use.workflow.types import WorkflowInvocation
+
+await MemoryConsolidateWorkflow().execute(
+    WorkflowInvocation(
+        workflow_name='memory-consolidate',
+        args={'store_path': str(profile.memory_dir / 'memories.jsonl')},
+    ),
+    workflow_context,
+)
+```
+
+**What it does:**
+1. Loads all entries from the JSONL store.
+2. Sends the full list to an agent with instructions to merge duplicates, remove superseded facts, and resolve contradictions.
+3. Agent returns a JSON array of surviving entries.
+4. Rewrites the JSONL in place with the consolidated result; adds a `consolidated_at` timestamp to each entry.
+
+## Lifecycle hooks
+
+`MemoryManager` forwards these hooks to the active provider when one is configured:
+
+| Hook | Trigger | Purpose |
+|---|---|---|
+| `prefetch(query)` | Before each turn | Return recalled context block |
+| `queue_prefetch(query)` | After a turn | Warm retrieval for the next turn |
+| `on_turn_complete(user, assistant)` | After each completed turn | Extract and persist durable facts |
+| `on_session_end(messages)` | Session shutdown | Final flush or extraction pass |
+| `on_pre_compact(messages)` | Before compaction | Preserve facts before context is discarded |
+| `on_memory_write(action, target, content)` | When `memory` tool writes | Mirror explicit writes into the store |
+| `shutdown()` | Runtime shutdown | Close provider resources |
+
+## Memory tool
+
+The `memory` builtin tool is provider-agnostic. It routes through `MemoryManager`:
 
 | Action | Required field | Purpose |
 |---|---|---|
-| `search` | `query` | Retrieve relevant long-term memories from the active provider |
-| `remember` | `content` | Store a durable fact through the active provider |
-| `forget` | `memory_id` | Remove a provider memory by ID when supported |
-
-The tool talks only to `MemoryManager`; provider-specific APIs stay inside the adapter.
-
-## Hooks
-
-Memory providers can implement lifecycle hooks. `MemoryManager` forwards these hooks when an active provider exists:
-
-| Hook | Intended call site | Purpose |
-|---|---|---|
-| `prefetch(query)` | Before a model/API turn | Return recalled context for the current turn |
-| `queue_prefetch(query)` | After a turn | Warm retrieval for the next turn |
-| `sync_turn(user, assistant)` | After a completed turn | Persist or extract useful turn memory |
-| `on_session_end(messages)` | Session shutdown/end | Final extraction or flush |
-| `on_pre_compact(messages)` | Before compaction | Preserve insights before context is discarded |
-| `on_memory_write(action, target, content)` | When the `memory` tool writes | Mirror explicit writes into provider storage |
-| `shutdown()` | Runtime shutdown | Close provider resources |
+| `search` | `query` | Retrieve relevant memories from the active provider |
+| `remember` | `content` | Store a durable fact |
+| `forget` | `memory_id` | Remove a memory by ID |
 
 ## Custom providers via extensions
-
-Extensions and packages can ship custom memory backends without modifying the core. Register a `MemoryProvider` descriptor and a `BaseMemoryAPI` subclass inside an extension factory:
 
 ```python
 from operator_use.memory.provider.types import MemoryProvider
 from operator_use.memory.api.base import BaseMemoryAPI
-from operator_use.memory.types import MemoryOptions, MemoryRuntimeContext
+from operator_use.memory.types import MemoryOptions
 
 class MyMemoryAPI(BaseMemoryAPI):
     async def prefetch(self, query, *, session_id="") -> str:
         return "recalled context for: " + query
 
-    async def sync_turn(self, user_content, assistant_content, *, session_id=""):
+    async def on_turn_complete(self, user_content, assistant_content, *, session_id=""):
         pass  # persist the turn
 
 def extension(api):
@@ -106,18 +175,10 @@ def extension(api):
     api.register_memory_api("my_memory_api", MyMemoryAPI)
 ```
 
-At startup `RuntimeContext.create()` seeds `MemoryProviderRegistry` and `MemoryAPIRegistry` from builtins, merges in all extension registrations, then passes both to `MemoryManager`. A user selects the custom provider in `settings.json`:
+Select it in the profile's `settings.json`:
 
 ```json
 { "memory": { "provider": "my-memory" } }
 ```
 
-See [extensions.md — Provider registration](./extensions.md#provider-registration) for the full pattern including inference providers and subagent profiles.
-
-## Next Integration Points
-
-Runtime integration should still wire:
-
-- `MemoryManager.prefetch(user_text)` before each turn
-- `MemoryManager.sync_turn(user, assistant)` after each completed response
-- `on_pre_compact()` before compaction discards old context
+See [extensions.md](./extensions.md) for the full provider registration pattern.

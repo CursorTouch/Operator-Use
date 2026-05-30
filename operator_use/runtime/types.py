@@ -438,8 +438,7 @@ class RuntimeContext:
                 memory_manager.initialize(MemoryContext(
                     cwd=cwd,
                     session_id=session_manager.session_id or "",
-                    project_memory_dir=get_config_dir() / "memory",
-                    global_memory_dir=get_config_dir() / "memory",
+                    project_memory_dir=effective_profile.memory_dir,
                     llm=llm,
                 ))
             except ImportError:

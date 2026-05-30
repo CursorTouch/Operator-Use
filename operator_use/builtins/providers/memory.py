@@ -14,4 +14,10 @@ providers = [
         api="supermemory",
         options=MemoryOptions(api_key_env="SUPERMEMORY_API_KEY"),
     ),
+    MemoryProvider(
+        id="local",
+        name="Local",
+        api="local",
+        options=MemoryOptions(),
+    ),
 ]

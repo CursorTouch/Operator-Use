@@ -133,6 +133,10 @@ class AgentProfile(BaseModel):
         return self.profile_dir / 'temp'
 
     @property
+    def memory_dir(self) -> Path:
+        return self.profile_dir / 'memory'
+
+    @property
     def tasks_dir(self) -> Path:
         return self.profile_dir / 'tasks'
 

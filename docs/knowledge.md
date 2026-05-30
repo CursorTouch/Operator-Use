@@ -12,7 +12,7 @@ operator_use/knowledge/
     ingest.py         ← KnowledgeIngestWorkflow
     query.py          ← KnowledgeQueryWorkflow
     lint.py           ← KnowledgeLintWorkflow
-    dream.py          ← KnowledgeDreamWorkflow
+    consolidate.py    ← KnowledgeConsolidateWorkflow
 ```
 
 ## Index file (preferred)
@@ -137,7 +137,7 @@ The `knowledge` builtin tool (available when an active profile with a `knowledge
 | `add` | `content`, `page` (opt) | Append text directly to a knowledge page without any intermediate step |
 | `ingest` | `source` | Synthesize a source into knowledge pages |
 | `lint` | — | Check pages for contradictions and stale content |
-| `dream` | — | Consolidate and deduplicate all pages |
+| `consolidate` | — | Consolidate and deduplicate all pages |
 | `log` | — | Return the audit log (`log.md`) |
 
 ### Ingest sources
@@ -147,11 +147,13 @@ The `ingest` action auto-detects the source type:
 | Source | Detection rule | Behaviour |
 |---|---|---|
 | YouTube URL | `youtube.com/` or `youtu.be/` in URL | Fetches metadata via `yt-dlp`; fetches transcript via `youtube-transcript-api` |
-| HTTP/S URL | Starts with `http://` or `https://` | Fetches web page content |
-| File path | Starts with `/`, `./`, `../`, `~`, or path exists on disk | Reads file from disk |
+| HTTP/S URL | Starts with `http://` or `https://` | Fetches page via `httpx`; converts HTML to Markdown via `markdownify` |
+| File path | Starts with `/`, `./`, `../`, `~`, or path exists on disk | Reads file directly from disk |
 | Raw text | Anything else | Content is used directly — no fetch step |
+| Unknown type | Explicit `source_type` not matching any above | Delegated to a sub-agent with general tools (`web_search`, `web_fetch`, `read`, `write`, `edit`) |
 
 Dependencies for YouTube ingest: `yt-dlp` and `youtube-transcript-api` must be installed.
+Dependencies for URL ingest: `httpx` and `markdownify` (both included in the default install).
 
 ### Knowledge workflows
 
@@ -162,11 +164,37 @@ All multi-step operations run as structured `Workflow` subclasses in `operator_u
 | `KnowledgeIngestWorkflow` | `knowledge-ingest` | read → synthesize → index |
 | `KnowledgeQueryWorkflow` | `knowledge-query` | answer |
 | `KnowledgeLintWorkflow` | `knowledge-lint` | scan → report |
-| `KnowledgeDreamWorkflow` | `knowledge-dream` | read → consolidate → index |
+| `KnowledgeConsolidateWorkflow` | `knowledge-consolidate` | read → consolidate → index |
 
 ### Prompts
 
-All LLM prompt strings used by the knowledge workflows are centralised in `operator_use/knowledge/prompts.py`. Workflow classes call functions like `ingest_read()`, `ingest_synthesize()`, `ingest_index()`, `query_answer()`, `lint_scan()`, `lint_report()`, `dream_read()`, `dream_consolidate()`, `dream_index()`.
+All LLM prompt strings used by the knowledge workflows are centralised in `operator_use/knowledge/prompts.py`:
+
+| Function | Used by |
+|---|---|
+| `ingest_fallback_read()` | `KnowledgeIngestWorkflow` — sub-agent fallback for unknown source types |
+| `ingest_synthesize()` | `KnowledgeIngestWorkflow` — synthesize phase |
+| `ingest_index()` | `KnowledgeIngestWorkflow` — index phase |
+| `query_answer()` | `KnowledgeQueryWorkflow` |
+| `lint_scan()` | `KnowledgeLintWorkflow` — scan phase |
+| `lint_report()` | `KnowledgeLintWorkflow` — report phase |
+| `consolidate_overview()` | `KnowledgeConsolidateWorkflow` — read phase |
+| `consolidate_run()` | `KnowledgeConsolidateWorkflow` — consolidate phase |
+| `consolidate_index()` | `KnowledgeConsolidateWorkflow` — index phase |
+
+## Wiki command
+
+`/wiki` is the interactive alias for knowledge base management:
+
+```
+/wiki ingest <source>    — ingest a URL, file, or YouTube link
+/wiki query <question>   — answer a question from the knowledge base
+/wiki lint               — check for contradictions and stale content
+/wiki consolidate        — consolidate and deduplicate all pages (background)
+/wiki log                — show the audit log
+```
+
+The `consolidate` subcommand runs as a background workflow via `WorkflowManager`.
 
 ## Related documents
 
@@ -174,3 +202,4 @@ All LLM prompt strings used by the knowledge workflows are centralised in `opera
 - [docs/skill.md](./skill.md) — Skills — similar discovery mechanism for behavioural guidance
 - [docs/agent.md](./agent.md) — System prompt construction
 - [docs/workflow.md](./workflow.md) — Workflow base class and execution model
+- [docs/memory.md](./memory.md) — Agent memory (separate from knowledge documents)

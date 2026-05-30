@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, Field
 
 from operator_use.knowledge.service import Knowledge
-from operator_use.knowledge.workflows.dream import KnowledgeDreamWorkflow
+from operator_use.knowledge.workflows.consolidate import KnowledgeConsolidateWorkflow
 from operator_use.knowledge.workflows.ingest import KnowledgeIngestWorkflow
 from operator_use.knowledge.workflows.lint import KnowledgeLintWorkflow
 from operator_use.knowledge.workflows.query import KnowledgeQueryWorkflow
@@ -24,7 +24,7 @@ class KnowledgeAction(StrEnum):
     add    = 'add'
     ingest = 'ingest'
     lint   = 'lint'
-    dream  = 'dream'
+    consolidate = 'consolidate'
     log    = 'log'
 
 
@@ -37,7 +37,7 @@ class KnowledgeSchema(BaseModel):
             '  add     — write content directly into a knowledge page without any intermediate file (requires: page, content); use this when you already have the content\n'
             '  ingest  — synthesize a source into knowledge pages (requires: source — accepts a URL, a file path, or raw text)\n'
             '  lint    — check for contradictions and stale content\n'
-            '  dream   — consolidate and deduplicate all pages\n'
+            '  consolidate — consolidate and deduplicate all pages\n'
             '  log     — return the audit log of past operations'
         )
     )
@@ -155,7 +155,7 @@ class KnowledgeTool(Tool):
                     return ToolResult.ok(invocation.id, "No log.md — knowledge base has not been ingested yet.")
                 return ToolResult.ok(invocation.id, log_path.read_text(encoding='utf-8'))
 
-            case KnowledgeAction.ingest | KnowledgeAction.lint | KnowledgeAction.dream:
+            case KnowledgeAction.ingest | KnowledgeAction.lint | KnowledgeAction.consolidate:
                 if context is None:
                     return ToolResult.error(invocation.id, "No tool context available.")
                 wf_ctx = _make_workflow_context(context)
@@ -174,9 +174,9 @@ class KnowledgeTool(Tool):
                         result = await KnowledgeLintWorkflow().execute(
                             WorkflowInvocation(workflow_name='knowledge-lint', args=wf_args), wf_ctx
                         )
-                    case KnowledgeAction.dream:
-                        result = await KnowledgeDreamWorkflow().execute(
-                            WorkflowInvocation(workflow_name='knowledge-dream', args=wf_args), wf_ctx
+                    case KnowledgeAction.consolidate:
+                        result = await KnowledgeConsolidateWorkflow().execute(
+                            WorkflowInvocation(workflow_name='knowledge-consolidate', args=wf_args), wf_ctx
                         )
                 return ToolResult.ok(invocation.id, result)
 

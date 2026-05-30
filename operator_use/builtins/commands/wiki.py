@@ -21,7 +21,7 @@ _USAGE = (
     "  /wiki ingest <source>    — synthesize source into wiki pages (background)\n"
     "  /wiki query <question>   — answer a question from the wiki\n"
     "  /wiki lint               — check for contradictions and stale content (background)\n"
-    "  /wiki dream              — consolidate and deduplicate all pages (background)\n"
+    "  /wiki consolidate        — consolidate and deduplicate all pages (background)\n"
     "  /wiki log                — show the audit log"
 )
 
@@ -106,8 +106,8 @@ async def _handle_wiki(registry: CommandRegistry, args: list[str]) -> None:
             print(f"Error: {e}")
         return
 
-    # /wiki dream
-    if subcommand == 'dream':
+    # /wiki consolidate
+    if subcommand == 'consolidate':
         knowledge_dir = _get_knowledge_dir(registry)
         if knowledge_dir is None:
             print("No active profile — wiki requires a profile (start with --profile <name>).")
@@ -117,10 +117,10 @@ async def _handle_wiki(registry: CommandRegistry, args: list[str]) -> None:
             print("WorkflowManager not available.")
             return
         try:
-            run_id = await manager.invoke('wiki-dream', args={
+            run_id = await manager.invoke('wiki-consolidate', args={
                 'knowledge_dir': str(knowledge_dir),
             })
-            print(f"Wiki dream started (run_id: {run_id}).")
+            print(f"Wiki consolidate started (run_id: {run_id}).")
             print(f"Use /workflows {run_id[:8]} to check progress.")
         except ValueError as e:
             print(f"Error: {e}")
@@ -204,12 +204,12 @@ async def _handle_wiki(registry: CommandRegistry, args: list[str]) -> None:
         lines = [l for l in log_path.read_text(encoding='utf-8').splitlines() if l.strip()]
         if lines:
             print(_dim(f"Last entry: {lines[-1].strip()}"))
-    print(_dim("/wiki <ingest|query|lint|dream|log> for actions"))
+    print(_dim("/wiki <ingest|query|lint|consolidate|log> for actions"))
     print()
 
 
 command = SlashCommandInfo(
     name='wiki',
-    description='Manage the wiki knowledge base. Subcommands: ingest, query, lint, dream, log.',
+    description='Manage the wiki knowledge base. Subcommands: ingest, query, lint, consolidate, log.',
     handler=_handle_wiki,
 )
