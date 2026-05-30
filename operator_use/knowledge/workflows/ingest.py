@@ -1,10 +1,33 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from operator_use.knowledge.prompts import ingest_index, ingest_read, ingest_synthesize
+from operator_use.knowledge.prompts import ingest_fallback_read, ingest_index, ingest_synthesize
 from operator_use.workflow.types import Workflow, WorkflowContext, WorkflowInvocation
+
+
+_BROWSER_UA = (
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) '
+    'Chrome/124.0.0.0 Safari/537.36'
+)
+
+
+def _fetch_url_content(url: str) -> str:
+    import httpx
+    from markdownify import markdownify as md
+
+    headers = {'User-Agent': _BROWSER_UA}
+    with httpx.Client(follow_redirects=True, timeout=30) as client:
+        response = client.get(url, headers=headers)
+        response.raise_for_status()
+    return md(response.text, heading_style='ATX', strip=['script', 'style'])
+
+
+def _fetch_file_content(path: str) -> str:
+    return Path(path).read_text(encoding='utf-8')
 
 
 def _extract_video_id(url: str) -> str:
@@ -77,11 +100,19 @@ class KnowledgeIngestWorkflow(Workflow):
         elif source_type == 'youtube':
             ctx.log(f'Fetching YouTube transcript: {source}')
             source_content = _fetch_youtube_content(source)
+        elif source_type == 'url':
+            ctx.log(f'Fetching URL: {source}')
+            source_content = _fetch_url_content(source)
+        elif source_type == 'file':
+            ctx.log(f'Reading file: {source}')
+            source_content = _fetch_file_content(source)
         else:
             async with ctx.phase('read'):
-                ctx.log(f'Reading source: {source}')
-                read_prompt, read_tools = ingest_read(source, source_type)
-                source_content = await ctx.agent(read_prompt, tools=read_tools)
+                ctx.log(f'Unknown source type "{source_type}", delegating to sub-agent: {source}')
+                source_content = await ctx.agent(
+                    ingest_fallback_read(source, source_type),
+                    tools=['web_search', 'web_fetch', 'read', 'write', 'edit'],
+                )
 
         async with ctx.phase('synthesize'):
             ctx.log('Creating knowledge pages...')

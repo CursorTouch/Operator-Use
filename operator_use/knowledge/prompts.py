@@ -20,18 +20,12 @@ Example structure for a topic 'self-improving-agents':
 
 # ── Ingest ────────────────────────────────────────────────────────────────────
 
-def ingest_read(source: str, source_type: str = 'file') -> tuple[str, list[str]]:
-    """Return (prompt, tools) for the read phase based on source type."""
-    if source_type == 'url':
-        return (
-            f"Fetch the page at '{source}' using the web_fetch tool and return "
-            "the full extracted text. Do not summarize.",
-            ['web_fetch'],
-        )
+def ingest_fallback_read(source: str, source_type: str) -> str:
+    """Prompt for the sub-agent fallback when source_type is unrecognised."""
     return (
-        f"Read the file at '{source}' and return its full content verbatim. "
-        "Do not summarize.",
-        ['read'],
+        f"Retrieve the content of '{source}' (source type: {source_type}) using "
+        "whatever tools are appropriate, then return the full extracted text verbatim. "
+        "Do not summarize."
     )
 
 
