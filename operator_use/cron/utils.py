@@ -27,6 +27,9 @@ def job_to_dict(job: CronJob) -> dict:
         },
         'payload': {
             'message': job.payload.message,
+            'channel_id': job.payload.channel_id,
+            'chat_id': job.payload.chat_id,
+            'deliver': job.payload.deliver,
         },
         'state': {
             'next_run_at_ms': job.state.next_run_at_ms,
@@ -56,6 +59,9 @@ def dict_to_job(d: dict) -> CronJob:
         ),
         payload=CronPayload(
             message=payload.get('message', ''),
+            channel_id=payload.get('channel_id'),
+            chat_id=payload.get('chat_id'),
+            deliver=payload.get('deliver', False),
         ),
         state=CronJobState(
             next_run_at_ms=state.get('next_run_at_ms'),
