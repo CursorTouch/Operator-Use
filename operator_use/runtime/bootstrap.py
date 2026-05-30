@@ -22,7 +22,10 @@ _GLOBAL_SETTINGS = {
     "default_model": "claude-sonnet-4-6",
     "compaction": {
         "enabled": True,
-        "strategy": "summarization"
+        "strategy": "summarization",
+        "strategies": {
+            "summarization": {"reserve_tokens": 50000}
+        }
     },
     "cron_enabled": True,
     "extensions": True,
