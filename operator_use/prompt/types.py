@@ -13,6 +13,7 @@ class SystemPromptOptions(BaseModel):
 
     cwd: str
     custom_prompt: str | None = None
+    operation_manual: str | None = None
     tools: list[Tool] = Field(default_factory=list)
     prompt_guidelines: list[str] = Field(default_factory=list)
     append_system_prompt: str | None = None

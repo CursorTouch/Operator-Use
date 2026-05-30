@@ -61,32 +61,12 @@ def build_guidelines(extra: list[str]) -> str:
 
 def docs_section(docs_path: str) -> str:
     return (
-        "\n\nOperator documentation (read only when asked about Operator internals, "
-        "architecture, or how to extend it):\n"
-        f"- Documentation: {docs_path}\n"
-        "- When asked about: turn flow/retry/compaction (agent.md), "
-        "LLM loop/tool execution (engine.md), "
-        "session JSONL/branching (session.md), "
-        "extension loading (extensions.md), "
-        "package install (packages.md), "
-        "event hooks (hooks.md), "
-        "channels/message bus (gateway.md), "
-        "models/providers (inference.md), "
-        "tool interface (tool.md), "
-        "skills format (skill.md), "
-        "slash commands (commands.md), "
-        "credentials/OAuth (auth.md), "
-        "agent profiles (profiles.md), "
-        "browser automation (browser.md), "
-        "desktop control (computer.md), "
-        "sandbox policy (sandbox.md), "
-        "knowledge base (knowledge.md), "
-        "multi-agent teams (team.md), "
-        "Python workflows (workflow.md), "
-        "ACP transports (acp.md)\n"
-        "- When working on Operator topics, read the relevant doc(s) and follow "
-        "cross-references before implementing\n"
-        "- Always read .md files completely and follow links to related docs"
+        "\n\nOperator's own internals are documented as markdown files in "
+        f"{docs_path} (one per subsystem, e.g. agent.md, engine.md, session.md, "
+        "gateway.md, inference.md, profiles.md). Only relevant when asked how "
+        "Operator works or how to extend it — in that case read the matching "
+        "doc(s) in full and follow their cross-references before implementing. "
+        "Otherwise ignore this directory."
     )
 
 
@@ -116,24 +96,12 @@ def format_skills_for_prompt(skills: list[Skill], available_tools: set[str] | No
     lines = [
         '',
         '',
-        '# Skills — FIRST PRIORITY (MANDATORY)',
+        '# Skills',
         '',
-        'CRITICAL: You have installed skills that provide specialized capabilities.',
-        'Before attempting ANY task — simple or complex — you MUST check if an installed skill handles it.',
-        '',
-        '## Rules (MUST follow in order)',
-        '1. ALWAYS scan the skill list below BEFORE taking ANY action on a user request',
-        '2. If a skill\'s description matches or partially matches the task, you MUST load its full',
-        '   instructions using the `skill` tool: `skill action="view" name="<name>"` — do this BEFORE anything else',
-        '3. Follow the loaded skill instructions EXACTLY — do NOT improvise or use alternative approaches',
-        '4. NEVER use general-purpose workarounds when a skill provides the right tool',
-        '5. If multiple skills could apply, load the most specific one first',
-        '6. Even for seemingly simple tasks, CHECK SKILLS FIRST — skills often handle edge cases',
-        '   and produce higher quality results than ad-hoc approaches',
-        '',
-        '## Enforcement',
-        '- If you skip checking skills and use a raw approach for a task that a skill handles,',
-        '  this is considered a FAILURE. Always check skills first.',
+        'Installed skills provide tested, higher-quality procedures for specific tasks.',
+        'Before starting a task, scan the list below. If a skill matches, load it with',
+        '`skill action="view" name="<name>"` and follow it rather than improvising. Prefer',
+        'the most specific match when several apply.',
         '',
         '<available_skills>',
     ]

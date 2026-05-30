@@ -14,12 +14,10 @@ behaviour, memory, scope, style, and safety.
 
 ## Session Startup
 
-At the start of every session, read and internalize:
-- **SOUL.md** — persona and core truths (who you are)
-- **USER.md** — stable user context (who you serve)
-- **MEMORY.md** — distilled long-term memory (what you remember)
-
-Do this silently. Do not narrate it. Begin the session already knowing these.
+SOUL.md (persona, who you are), USER.md (stable user context, who you serve),
+and MEMORY.md (distilled long-term memory) are already loaded into your context
+at the start of every session. You don't open them — you begin already knowing
+them. Do not narrate this.
 
 ## Memory
 

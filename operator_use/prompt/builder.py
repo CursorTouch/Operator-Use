@@ -18,6 +18,7 @@ class PromptTemplate:
         self,
         cwd: str,
         custom_prompt: str | None = None,
+        operation_manual: str | None = None,
         tools: list[Tool] | None = None,
         prompt_guidelines: list[str] | None = None,
         append_system_prompt: str | None = None,
@@ -31,6 +32,7 @@ class PromptTemplate:
     ) -> None:
         self.cwd = cwd
         self.custom_prompt = custom_prompt
+        self.operation_manual = operation_manual
         self.tools: list[Tool] = tools or []
         self.prompt_guidelines: list[str] = prompt_guidelines or []
         self.append_system_prompt = append_system_prompt
@@ -50,9 +52,8 @@ class PromptTemplate:
             p = self.profile_dir
             profile_block = (
                 f"\n\n## Profile: {p}\n"
-                f"\n- {p / 'SOUL.md'} — your persona and identity (defines who you are, your tone, operating principles, and constraints)"
-                f"\n- {p / 'MEMORY.md'} — long-term memory; read at the start of sessions, write here to persist things across conversations"
-                f"\n- {p / 'USER.md'} — who you are talking to: the user's name, timezone, technical background, communication preferences, and things to avoid"
+                f"\nYour persona (SOUL.md), the user profile (USER.md), and your long-term memory (MEMORY.md) are already loaded into this prompt — you do not need to open them."
+                f"\n- {p / 'MEMORY.md'} — write here to persist facts across sessions"
                 f"\n- {p / 'skills'} — skill guides, each as {{name}}/SKILL.md; scan before tasks and load with skill action=\"view\" when relevant"
                 f"\n- {p / 'knowledge'} — user-curated reference material (domain docs, API specs, guidelines, company knowledge); declared in index.yaml — read the relevant file(s) with the read tool when the task requires background context not in the conversation"
                 f"\n- {p / 'workflows'} — reusable Python workflow scripts; each has a name and description — run with the workflow tool action=\"run\""
@@ -100,16 +101,12 @@ class PromptTemplate:
             user_section = ""
         platform_section = channel_hint(self.channel)
 
-        # SYSTEM.md / custom_prompt overrides the identity layer entirely.
+        # Identity layer:
+        #   custom_prompt (SYSTEM.md) overrides identity entirely,
+        #   otherwise SOUL.md, otherwise the default persona.
         if self.custom_prompt:
-            return (
-                self.custom_prompt
-                + docs + append_section + memory_section + user_section
-                + skills_section + platform_section + footer
-            )
-
-        # Identity: SOUL.md if present, otherwise the default persona.
-        if self.soul_prompt:
+            identity = self.custom_prompt
+        elif self.soul_prompt:
             identity = self.soul_prompt
         else:
             guidelines = build_guidelines(self.prompt_guidelines)
@@ -117,8 +114,12 @@ class PromptTemplate:
             if guidelines:
                 identity += f"\n\nGuidelines:\n{guidelines}"
 
+        # The AGENT.md body is the operation manual — how the agent behaves.
+        # It sits alongside the identity, never replacing it.
+        manual_section = f"\n\n{self.operation_manual}" if self.operation_manual else ""
+
         return (
-            identity
+            identity + manual_section
             + docs + append_section + memory_section + user_section
             + skills_section + platform_section + footer
         )
@@ -128,6 +129,7 @@ def build_system_prompt(options: SystemPromptOptions) -> str:
     return PromptTemplate(
         cwd=options.cwd,
         custom_prompt=options.custom_prompt,
+        operation_manual=options.operation_manual,
         tools=options.tools,
         prompt_guidelines=options.prompt_guidelines,
         append_system_prompt=options.append_system_prompt,

@@ -2,7 +2,7 @@
 
 Each profile is a self-contained environment with its own system prompt, model/provider
 override, tool allowlist, and per-profile resource directories (tools, skills, knowledge,
-extensions, sessions) plus identity-file overrides (SOUL.md, USER.md, Memory.md).
+extensions, sessions) plus identity-file overrides (SOUL.md, USER.md, MEMORY.md).
 
 Discovery path: ~/.operator/profiles/<name>/AGENT.md
 

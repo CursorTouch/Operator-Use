@@ -105,6 +105,34 @@ class TestPromptTemplateCustomPrompt:
         assert "APPENDED" in out
 
 
+class TestPromptTemplateOperationManual:
+    def test_operation_manual_coexists_with_soul(self):
+        # The AGENT.md body must not clobber the SOUL.md persona.
+        out = PromptTemplate(
+            cwd="/project",
+            soul_prompt="I AM THE SOUL",
+            operation_manual="HOW I OPERATE",
+        ).build()
+        assert "I AM THE SOUL" in out
+        assert "HOW I OPERATE" in out
+
+    def test_operation_manual_appended_to_default_identity(self):
+        out = PromptTemplate(cwd="/project", operation_manual="HOW I OPERATE").build()
+        assert "You are a helpful assistant." in out
+        assert "HOW I OPERATE" in out
+
+    def test_system_prompt_overrides_soul_but_manual_remains(self):
+        out = PromptTemplate(
+            cwd="/project",
+            custom_prompt="SYSTEM OVERRIDE",
+            soul_prompt="I AM THE SOUL",
+            operation_manual="HOW I OPERATE",
+        ).build()
+        assert "SYSTEM OVERRIDE" in out
+        assert "I AM THE SOUL" not in out
+        assert "HOW I OPERATE" in out
+
+
 # ── build_system_prompt (backward compat wrapper) ─────────────────────────────
 
 class TestBuildSystemPrompt:

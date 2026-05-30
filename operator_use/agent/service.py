@@ -401,10 +401,13 @@ class Agent(ExtensionContext):
 
     def _rebuild_system_prompt(self, channel: str | None = None) -> str:
         skills, _ = self._resources.get_skills()
-        custom_prompt = (
+        # SYSTEM.md fully overrides identity; the AGENT.md body is the operation
+        # manual, which sits alongside SOUL.md rather than replacing it.
+        custom_prompt = self._resources.get_system_prompt()
+        operation_manual = (
             self._active_profile.system_prompt
             if self._active_profile and self._active_profile.system_prompt
-            else self._resources.get_system_prompt()
+            else None
         )
         append_parts = self._resources.get_append_system_prompt()
         append_system_prompt = "\n\n".join(append_parts) if append_parts else None
@@ -412,6 +415,7 @@ class Agent(ExtensionContext):
         return PromptTemplate(
             cwd=str(self._config.cwd),
             custom_prompt=custom_prompt,
+            operation_manual=operation_manual,
             tools=self._engine.state.tools,
             prompt_guidelines=self._config.prompt_guidelines,
             append_system_prompt=append_system_prompt,
