@@ -15,13 +15,13 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 _KEYS: dict[str, tuple[str, str | None, str, bool]] = {
     # Feature toggles — require reload so the tool list is rebuilt
     "cron":                 ("get_cron_enabled",         "set_cron_enabled",         "Enable/disable the cron scheduler.",             True),
-    "subagents_enabled":    ("get_subagents_enabled",    "set_subagents_enabled",    "Enable/disable background subagent delegation.", True),
-    "workflows_enabled":    ("get_workflows_enabled",    "set_workflows_enabled",    "Enable/disable workflow execution.",              True),
-    "computer_use_enabled": ("get_computer_use_enabled", "set_computer_use_enabled", "Enable/disable desktop computer control.",       True),
-    "browser_use_enabled":  ("get_browser_use_enabled",  "set_browser_use_enabled",  "Enable/disable browser automation.",             True),
-    "extensions_enabled":   ("is_extensions_enabled",   "set_extensions_enabled",   "Enable/disable all extensions globally.",        True),
-    "compaction_enabled":   ("get_compaction_enabled",  "set_compaction_enabled",   "Enable/disable context compaction.",             False),
-    "retry_enabled":        ("get_retry_enabled",        "set_retry_enabled",        "Enable/disable LLM request retries.",            False),
+    "subagent":             ("get_subagents_enabled",    "set_subagents_enabled",    "Enable/disable background subagent delegation.", True),
+    "workflow":             ("get_workflows_enabled",    "set_workflows_enabled",    "Enable/disable workflow execution.",              True),
+    "computer_use":         ("get_computer_use_enabled", "set_computer_use_enabled", "Enable/disable desktop computer control.",       True),
+    "browser_use":          ("get_browser_use_enabled",  "set_browser_use_enabled",  "Enable/disable browser automation.",             True),
+    "extensions":           ("is_extensions_enabled",   "set_extensions_enabled",   "Enable/disable all extensions globally.",        True),
+    "compaction":           ("get_compaction_enabled",  "set_compaction_enabled",   "Enable/disable context compaction.",             False),
+    "retry":                ("get_retry_enabled",        "set_retry_enabled",        "Enable/disable LLM request retries.",            False),
     # Model / provider — no reload needed; picked up at next turn
     "default_provider":     ("get_default_provider",    "set_default_provider",     "Default LLM provider (e.g. 'anthropic').",       False),
     "default_model":        ("get_default_model",        "set_default_model",        "Default model ID (e.g. 'claude-opus-4-7').",     False),

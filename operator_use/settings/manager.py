@@ -806,7 +806,8 @@ class SettingsManager:
 
     def get_subagents_enabled(self) -> bool:
         """Return whether subagent delegation is enabled (default: True)."""
-        return self.settings.subagents_enabled if self.settings.subagents_enabled is not None else True
+        sa = self.settings.subagent
+        return sa.enabled if sa is not None else True
 
     def get_subagent_settings(self) -> SubagentSettings:
         """Resolve subagent tuning knobs from settings (defaults when unset)."""
@@ -814,23 +815,23 @@ class SettingsManager:
 
     def set_subagents_enabled(self, enabled: bool):
         """Enable or disable subagent delegation and persist to global settings."""
-        self.global_settings.subagents_enabled = enabled
-        self._mark_modified("subagents_enabled")
+        sa = self.global_settings.subagent or SubagentSettings()
+        sa.enabled = enabled
+        self.global_settings.subagent = sa
+        self._mark_modified("subagent", "enabled")
         self._save()
 
     def get_workflows_enabled(self) -> bool:
-        """Return whether workflow execution is enabled (default: True).
-
-        The nested workflow.enabled wins; the flat workflows_enabled is a fallback."""
+        """Return whether workflow execution is enabled (default: True)."""
         wf = self.settings.workflow
-        if wf is not None:
-            return wf.enabled
-        return self.settings.workflows_enabled if self.settings.workflows_enabled is not None else True
+        return wf.enabled if wf is not None else True
 
     def set_workflows_enabled(self, enabled: bool):
         """Enable or disable workflow execution and persist to global settings."""
-        self.global_settings.workflows_enabled = enabled
-        self._mark_modified("workflows_enabled")
+        wf = self.global_settings.workflow or WorkflowSettings()
+        wf.enabled = enabled
+        self.global_settings.workflow = wf
+        self._mark_modified("workflow", "enabled")
         self._save()
 
     def get_workflow_run_defaults(self) -> dict:

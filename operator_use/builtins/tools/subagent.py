@@ -105,7 +105,7 @@ class SubagentTool(Tool):
 
     def is_available(self, context) -> bool:
         sm = context.settings_manager
-        if sm is not None and sm.settings.subagents_enabled is False:
+        if sm is not None and sm.get_subagents_enabled() is False:
             return False
         return (self._manager or context.subagent_manager) is not None
 

@@ -218,9 +218,7 @@ class Settings:
     # Feature flags
     enable_skill_commands: Optional[bool] = None
     cron: Optional[CronSettings] = None
-    subagents_enabled: Optional[bool] = None   # on/off gate for subagent delegation
-    subagent: Optional[SubagentSettings] = None   # subagent tuning knobs (concurrency, retries, timeout, ...)
-    workflows_enabled: Optional[bool] = None   # legacy flat flag; superseded by workflow.enabled
+    subagent: Optional[SubagentSettings] = None   # on/off gate + tuning knobs (concurrency, retries, timeout, ...)
     workflow: Optional[WorkflowSettings] = None
     computer_use: Optional[ComputerUseSettings] = None
     browser_use: Optional[BrowserUseSettings] = None

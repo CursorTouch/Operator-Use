@@ -40,6 +40,7 @@ class SubagentRecord:
 
 
 class SubagentSettings(BaseModel):
+    enabled: bool = True
     max_concurrent: int = 10
     max_iterations: int = 20
     max_spawn_depth: int = 3
