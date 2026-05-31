@@ -50,7 +50,7 @@ class RPCClient:
     # ------------------------------------------------------------------
 
     async def start(self) -> None:
-        args = [self._python, '-m', 'program.rpc', '--cwd', str(self._cwd)]
+        args = [self._python, '-m', 'operator_use.rpc', '--cwd', str(self._cwd)]
         if self._model_id:
             args += ['--model', self._model_id]
         if self._provider:

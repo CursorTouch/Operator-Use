@@ -14,7 +14,7 @@ def __getattr__(name: str):
     if name in _LAZY:
         import importlib
         return getattr(
-            importlib.import_module('program.gateway.channels.discord.service'), name
+            importlib.import_module('operator_use.gateway.channels.discord.service'), name
         )
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

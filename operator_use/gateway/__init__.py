@@ -24,16 +24,16 @@ from operator_use.bus.types import (
 # __getattr__ defers each channel import to first actual use.
 
 _LAZY: dict[str, tuple[str, str]] = {
-    'StdioChannel': ('program.gateway.channels.stdio', 'StdioChannel'),
-    'WebSocketChannel': ('program.gateway.channels.websocket', 'WebSocketChannel'),
-    'WebSocketServer': ('program.gateway.channels.websocket', 'WebSocketServer'),
-    'TelegramChannel': ('program.gateway.channels.telegram', 'TelegramChannel'),
-    'TelegramBot': ('program.gateway.channels.telegram', 'TelegramBot'),
-    'DiscordChannel': ('program.gateway.channels.discord', 'DiscordChannel'),
-    'DiscordBot': ('program.gateway.channels.discord', 'DiscordBot'),
-    'SlackChannel': ('program.gateway.channels.slack', 'SlackChannel'),
-    'SlackBot': ('program.gateway.channels.slack', 'SlackBot'),
-    'TwitchChannel': ('program.gateway.channels.twitch', 'TwitchChannel'),
+    'StdioChannel': ('operator_use.gateway.channels.stdio', 'StdioChannel'),
+    'WebSocketChannel': ('operator_use.gateway.channels.websocket', 'WebSocketChannel'),
+    'WebSocketServer': ('operator_use.gateway.channels.websocket', 'WebSocketServer'),
+    'TelegramChannel': ('operator_use.gateway.channels.telegram', 'TelegramChannel'),
+    'TelegramBot': ('operator_use.gateway.channels.telegram', 'TelegramBot'),
+    'DiscordChannel': ('operator_use.gateway.channels.discord', 'DiscordChannel'),
+    'DiscordBot': ('operator_use.gateway.channels.discord', 'DiscordBot'),
+    'SlackChannel': ('operator_use.gateway.channels.slack', 'SlackChannel'),
+    'SlackBot': ('operator_use.gateway.channels.slack', 'SlackBot'),
+    'TwitchChannel': ('operator_use.gateway.channels.twitch', 'TwitchChannel'),
 }
 
 if TYPE_CHECKING:

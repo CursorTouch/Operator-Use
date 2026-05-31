@@ -27,4 +27,4 @@ def __getattr__(name: str):
     if name in {'AuthCredential', 'OAuthCredential', 'APICredential', 'AuthStatus'}:
         from operator_use.auth import types
         return getattr(types, name)
-    raise AttributeError(f"module 'program.auth' has no attribute {name!r}")
+    raise AttributeError(f"module 'operator_use.auth' has no attribute {name!r}")

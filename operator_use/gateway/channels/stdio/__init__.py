@@ -9,7 +9,7 @@ def __getattr__(name: str):
     if name == 'StdioChannel':
         import importlib
         return importlib.import_module(
-            'program.gateway.channels.stdio.service'
+            'operator_use.gateway.channels.stdio.service'
         ).StdioChannel
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

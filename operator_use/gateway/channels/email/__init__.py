@@ -9,7 +9,7 @@ def __getattr__(name: str):
     if name == 'EmailChannel':
         import importlib
         return importlib.import_module(
-            'program.gateway.channels.email.service'
+            'operator_use.gateway.channels.email.service'
         ).EmailChannel
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
