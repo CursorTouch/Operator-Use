@@ -75,6 +75,19 @@ result = install_package("https://github.com/user/my-package", get_packages_dir(
 
 Git packages are cloned into `~/.operator/agent/packages/git/<host>/<path>/`. Subsequent installs of an unpinned package run `git pull`. Pinned packages (with a `@ref`) are never pulled.
 
+### PyPI packages
+
+```python
+result = install_package("pypi:my-tools", get_packages_dir())
+# or with a version spec (passed verbatim to pip):
+result = install_package("pypi:my-tools==1.2.3", get_packages_dir())
+result = install_package("pypi:my-tools>=1,<2", get_packages_dir())
+```
+
+PyPI packages are installed into `~/.operator/agent/packages/pypi/<name>/` via `uv pip install --target <dir>` (falling back to `python -m pip install --target <dir>` when `uv` is not on PATH). The target dir is wiped and reinstalled on each `install_package` call, so the install is always clean.
+
+Because the package's Python dependencies install **alongside** its resources in the same target dir, that dir is added to `sys.path` at load time so a bundled extension's `import` statements resolve. A PyPI package must therefore lay out its `operator.json` and resource directories (`extensions/`, `skills/`, …) at the **wheel root** (e.g. via hatchling `force-include`), so they land directly in the target dir next to the installed dependencies.
+
 ### Local packages
 
 ```python
@@ -203,6 +216,7 @@ Packages register custom inference and memory providers through extension files 
 
 | Format | Example | What happens |
 |---|---|---|
+| `pypi:<spec>` | `pypi:my-tools==1.2.3` | `uv pip install --target packages/pypi/<name>` |
 | `git:<host>/<path>` | `git:github.com/user/repo` | Cloned to packages/git/... |
 | `git:<host>/<path>@<ref>` | `git:github.com/user/repo@v1` | Cloned + ref checkout, never pulled |
 | `https://<url>` | `https://github.com/user/repo` | Treated as git |
@@ -221,6 +235,13 @@ Packages register custom inference and memory providers through extension files 
           operator.json
           extensions/
           skills/
+  pypi/
+    my-tools/              ← pip --target here
+      operator.json
+      extensions/
+      skills/
+      <dep>/               ← dependencies, added to sys.path
+      <dep>-<ver>.dist-info/
 ```
 
 Local packages are not copied — they are referenced from wherever they live on disk.

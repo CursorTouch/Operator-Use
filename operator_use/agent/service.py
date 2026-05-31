@@ -524,6 +524,7 @@ class Agent(ExtensionContext):
 
         # Build system prompt and allow extensions to override it
         self._system_prompt = self._rebuild_system_prompt(channel=opts.channel)
+        print(self._system_prompt)
         before_results = await self._extensions.emit(
             'before_agent_start',
             BeforeAgentStartEvent(prompt=user_input, system_prompt=self._system_prompt),

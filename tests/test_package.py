@@ -7,8 +7,8 @@ from unittest.mock import patch, MagicMock
 from operator_use.package.manifest import read_manifest, MANIFEST_FILE
 from operator_use.package.types import PackageManifest, InstalledPackage, LoadedPackages
 from operator_use.package.installer import (
-    install_local, install_git, install_package, remove_package,
-    _parse_git_source, _slug_from_url,
+    install_local, install_git, install_pypi, install_package, remove_package,
+    _parse_git_source, _slug_from_url, _parse_pypi_source, _pypi_install_path,
 )
 from operator_use.package.loader import load_packages_from_settings, resolve_install_path
 
@@ -276,6 +276,101 @@ class TestInstallGit:
         assert not any("pull" in cmd for cmd in calls)
 
 
+# ── pypi parsing ──────────────────────────────────────────────────────────────
+
+class TestPypiParsing:
+    def test_parse_bare_name(self):
+        assert _parse_pypi_source("pypi:my-tools") == ("my-tools", "my-tools")
+
+    def test_parse_pinned_version(self):
+        assert _parse_pypi_source("pypi:My_Tools==1.2.3") == ("My_Tools==1.2.3", "my-tools")
+
+    def test_parse_range_spec(self):
+        spec, name = _parse_pypi_source("pypi:pkg>=1,<2")
+        assert spec == "pkg>=1,<2"
+        assert name == "pkg"
+
+    def test_parse_extras(self):
+        spec, name = _parse_pypi_source("pypi:my-tools[all]==1.0")
+        assert spec == "my-tools[all]==1.0"
+        assert name == "my-tools"
+
+    def test_install_path_inside_pypi_root(self, tmp_path):
+        path = _pypi_install_path("my-tools", tmp_path / "packages")
+        assert path == (tmp_path / "packages" / "pypi" / "my-tools").resolve()
+
+    def test_install_path_rejects_empty_name(self, tmp_path):
+        assert _pypi_install_path("", tmp_path / "packages") is None
+
+    def test_install_path_rejects_escape(self, tmp_path):
+        # "_normalize" strips path chars, but guard directly against traversal
+        assert _pypi_install_path("../evil", tmp_path / "packages") is None
+
+
+# ── install_pypi (mocked) ─────────────────────────────────────────────────────
+
+class TestInstallPyPI:
+    def test_installs_and_reads_manifest(self, tmp_path):
+        packages_dir = tmp_path / "packages"
+
+        def fake_run(cmd, cwd=None, capture_output=False, text=False):
+            target = Path(cmd[cmd.index("--target") + 1])
+            target.mkdir(parents=True, exist_ok=True)
+            (target / MANIFEST_FILE).write_text(
+                json.dumps({"name": "pypi-pkg", "author": "jeomon"}), encoding="utf-8"
+            )
+            m = MagicMock(); m.returncode = 0; m.stderr = ""
+            return m
+
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
+            result = install_pypi("pypi:pypi-pkg==1.0", packages_dir)
+
+        assert result.success
+        assert result.package.manifest.name == "pypi-pkg"
+        assert result.package.install_path == (packages_dir / "pypi" / "pypi-pkg").resolve()
+
+    def test_returns_error_on_install_failure(self, tmp_path):
+        def fake_run(cmd, cwd=None, capture_output=False, text=False):
+            m = MagicMock(); m.returncode = 1; m.stderr = "No matching distribution"; m.stdout = ""
+            return m
+
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
+            result = install_pypi("pypi:nope", tmp_path / "packages")
+
+        assert not result.success
+        assert "No matching distribution" in result.error
+
+    def test_uses_uv_when_available(self, tmp_path):
+        calls = []
+
+        def fake_run(cmd, cwd=None, capture_output=False, text=False):
+            calls.append(cmd)
+            Path(cmd[cmd.index("--target") + 1]).mkdir(parents=True, exist_ok=True)
+            m = MagicMock(); m.returncode = 0; m.stderr = ""
+            return m
+
+        with patch("operator_use.package.installer.shutil.which", return_value="/usr/bin/uv"), \
+             patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
+            install_pypi("pypi:pkg", tmp_path / "packages")
+
+        assert calls[0][:3] == ["uv", "pip", "install"]
+
+    def test_falls_back_to_pip_without_uv(self, tmp_path):
+        calls = []
+
+        def fake_run(cmd, cwd=None, capture_output=False, text=False):
+            calls.append(cmd)
+            Path(cmd[cmd.index("--target") + 1]).mkdir(parents=True, exist_ok=True)
+            m = MagicMock(); m.returncode = 0; m.stderr = ""
+            return m
+
+        with patch("operator_use.package.installer.shutil.which", return_value=None), \
+             patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
+            install_pypi("pypi:pkg", tmp_path / "packages")
+
+        assert calls[0][1:4] == ["-m", "pip", "install"]
+
+
 # ── install_package dispatch ──────────────────────────────────────────────────
 
 class TestInstallPackageDispatch:
@@ -325,6 +420,21 @@ class TestInstallPackageDispatch:
             result = install_package("https://github.com/user/https-repo", packages_dir)
         assert result.success
 
+    def test_dispatches_pypi_for_pypi_prefix(self, tmp_path):
+        packages_dir = tmp_path / "packages"
+
+        def fake_run(cmd, cwd=None, capture_output=False, text=False):
+            target = Path(cmd[cmd.index("--target") + 1])
+            target.mkdir(parents=True, exist_ok=True)
+            (target / MANIFEST_FILE).write_text(json.dumps({"name": "p"}), encoding="utf-8")
+            m = MagicMock(); m.returncode = 0; m.stderr = ""
+            return m
+
+        with patch("operator_use.package.installer.subprocess.run", side_effect=fake_run):
+            result = install_package("pypi:p==1.0", packages_dir)
+        assert result.success
+        assert result.package.install_path == (packages_dir / "pypi" / "p").resolve()
+
 
 # ── remove_package ────────────────────────────────────────────────────────────
 
@@ -351,6 +461,16 @@ class TestRemovePackage:
         assert ok
         assert pkg.exists()  # not deleted — local packages are just dereferenced
 
+    def test_removes_pypi_package_dir(self, tmp_path):
+        packages_dir = tmp_path / "packages"
+        install_path = packages_dir / "pypi" / "my-tools"
+        install_path.mkdir(parents=True)
+        (install_path / "some_file.py").write_text("x")
+
+        ok, err = remove_package("pypi:my-tools==1.0", packages_dir)
+        assert ok
+        assert not install_path.exists()
+
 
 # ── load_packages_from_settings ───────────────────────────────────────────────
 
@@ -372,6 +492,23 @@ class TestLoadPackagesFromSettings:
         )
         assert loaded.packages == []
         assert loaded.extension_dirs == []
+
+    def test_pypi_package_dir_added_to_sys_path(self, tmp_path):
+        import sys
+        packages_dir = tmp_path / "packages"
+        install_path = packages_dir / "pypi" / "my-tools"
+        (install_path / "extensions").mkdir(parents=True)
+        (install_path / MANIFEST_FILE).write_text(json.dumps({"name": "my-tools"}), encoding="utf-8")
+
+        target = str(install_path)
+        assert target not in sys.path
+        try:
+            loaded = load_packages_from_settings(["pypi:my-tools"], packages_dir)
+            assert len(loaded.packages) == 1
+            assert target in sys.path
+        finally:
+            if target in sys.path:
+                sys.path.remove(target)
 
     def test_only_includes_dirs_that_exist(self, tmp_path):
         pkg = make_package(tmp_path, manifest={
@@ -436,6 +573,11 @@ class TestResolveInstallPath:
         packages_dir = tmp_path / "packages"
         path = resolve_install_path("https://github.com/user/repo", packages_dir)
         assert path == packages_dir / "git" / "github.com" / "user" / "repo"
+
+    def test_pypi_resolves_to_packages_pypi_dir(self, tmp_path):
+        packages_dir = tmp_path / "packages"
+        path = resolve_install_path("pypi:My_Tools==1.2.3", packages_dir)
+        assert path == packages_dir / "pypi" / "my-tools"
 
     def test_local_absolute_resolves_to_itself(self, tmp_path):
         packages_dir = tmp_path / "packages"

@@ -303,15 +303,18 @@ Control extensions in `~/.operator/settings.json`:
 
 ## Packages
 
-Packages bundle extensions, skills, and prompts for sharing. Install from git or a local path:
+Packages bundle extensions, skills, and prompts for sharing. Install from PyPI, git, or a local path:
 
 ```python
 from operator_use.package.installer import install_package
 from operator_use.settings.paths import get_packages_dir
 
+result = install_package("pypi:my-tools==1.2.3", get_packages_dir())
 result = install_package("git:github.com/jeomon/my-tools", get_packages_dir())
 result = install_package("/local/path/to/my-tools", get_packages_dir())
 ```
+
+PyPI packages are installed with `uv pip install --target` (falling back to `pip`) and must ship their `operator.json` and resource dirs at the wheel root. See [docs/packages.md](docs/packages.md).
 
 A package needs an `operator.json` manifest:
 
