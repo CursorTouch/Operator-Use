@@ -19,7 +19,7 @@ async def _handle_agent(registry: CommandRegistry, args: list[str]) -> None:
     if not args:
         if not profiles:
             print("No agent profiles found.")
-            print("Place AGENT.md files in ~/.operator/agent/agents/<name>/ to define profiles.")
+            print("Place AGENT.md files in ~/.operator/profiles/<name>/ to define profiles.")
             return
         print(f"Agent profiles ({len(profiles)}):")
         for name, p in sorted(profiles.items()):

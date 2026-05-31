@@ -1,10 +1,10 @@
 """TeamManager — persists team state across sessions.
 
 Teams are stored as JSON files at:
-  ~/.operator/agent/teams/<team_name>/team.json
+  ~/.operator/profiles/<name>/teams/<team_name>/team.json
 
 Each member can have an inbox at:
-  ~/.operator/agent/teams/<team_name>/agents/<agent_id>/inbox/
+  ~/.operator/profiles/<name>/teams/<team_name>/agents/<agent_id>/inbox/
 """
 
 from __future__ import annotations

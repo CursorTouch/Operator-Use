@@ -232,15 +232,15 @@ Hooks can be registered without writing an extension. `ResourceLoader` discovers
 | Directory | Path function | Purpose |
 |---|---|---|
 | `operator_use/builtins/hooks/` | `get_builtins_hooks_dir()` | Shipped built-in hooks |
-| `<project>/.operator/agent/hooks/` | `get_hooks_dir(cwd)` | Project-level hooks |
-| `~/.operator/agent/hooks/` | `get_hooks_dir()` | Global user hooks |
+| `~/.operator/profiles/<name>/hooks/` | `AgentProfile.hooks_dir` | Active profile's hooks |
+| `<project>/.operator/hooks/` | `<cwd>/.operator/hooks` | Project-level hooks (loaded when Operator runs in the repo) |
 
-All path functions are defined in `program/settings/paths.py`.
+Built-in path functions are defined in `operator_use/settings/paths.py`.
 
 A hook file must export `hooks` — a list of `(event_type, handler)` tuples:
 
 ```python
-# .operator/agent/hooks/logging.py
+# .operator/hooks/logging.py
 async def on_agent_end(event):
     print(f"Done: {len(event.messages)} messages")
 

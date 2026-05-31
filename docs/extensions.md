@@ -40,7 +40,7 @@ class Extension:
 An extension file must export a callable named `extension`. It receives an `ExtensionAPI` object and uses it to register handlers, tools, and commands:
 
 ```python
-# ~/.operator/agent/extensions/my_ext.py
+# ~/.operator/profiles/<name>/extensions/my_ext.py  (or <project>/.operator/extensions/my_ext.py)
 from pydantic import BaseModel
 from operator_use.extension.types import ToolDefinition
 from operator_use.tool.types import ToolResult
@@ -98,8 +98,8 @@ The factory may also be `async def extension(api)` for startup work such as fetc
 | Directory | Path function | Purpose |
 |---|---|---|
 | `operator_use/builtins/extensions/` | `get_builtins_extensions_dir()` | Shipped built-in extensions |
-| `<project>/.operator/agent/extensions/` | `get_extensions_dir(cwd)` | Project-level extensions |
-| `~/.operator/agent/extensions/` | `get_extensions_dir()` | Global user extensions |
+| `~/.operator/profiles/<name>/extensions/` | `AgentProfile.extensions_dir` | Active profile's extensions |
+| `<project>/.operator/extensions/` | `<cwd>/.operator/extensions` | Project-level extensions (loaded when Operator runs in the repo) |
 | Installed package `extensions/` dirs | `get_packages_dir()` | From packages in `settings.packages` |
 | `ResourceLoaderOptions.additional_extension_dirs` | — | Programmatically injected extras |
 
@@ -116,7 +116,7 @@ Extensions are configured in `settings.json` under `extension_list`. Each entry 
   "extensions": true,
   "extension_list": [
     {
-      "path": "~/.operator/agent/extensions/git_guard.py",
+      "path": "~/.operator/profiles/<name>/extensions/git_guard.py",
       "name": "git_guard",
       "enabled": true,
       "author": "jeomon",
@@ -127,7 +127,7 @@ Extensions are configured in `settings.json` under `extension_list`. Each entry 
       }
     },
     {
-      "path": "~/.operator/agent/extensions/noisy.py",
+      "path": "~/.operator/profiles/<name>/extensions/noisy.py",
       "name": "noisy",
       "enabled": false
     }

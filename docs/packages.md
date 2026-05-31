@@ -73,7 +73,7 @@ result = install_package("git:github.com/user/my-package@v1.0.0", get_packages_d
 result = install_package("https://github.com/user/my-package", get_packages_dir())
 ```
 
-Git packages are cloned into `~/.operator/agent/packages/git/<host>/<path>/`. Subsequent installs of an unpinned package run `git pull`. Pinned packages (with a `@ref`) are never pulled.
+Git packages are cloned into `~/.operator/packages/git/<host>/<path>/`. Subsequent installs of an unpinned package run `git pull`. Pinned packages (with a `@ref`) are never pulled.
 
 ### PyPI packages
 
@@ -84,7 +84,7 @@ result = install_package("pypi:my-tools==1.2.3", get_packages_dir())
 result = install_package("pypi:my-tools>=1,<2", get_packages_dir())
 ```
 
-PyPI packages are installed into `~/.operator/agent/packages/pypi/<name>/` via `uv pip install --target <dir>` (falling back to `python -m pip install --target <dir>` when `uv` is not on PATH). The target dir is wiped and reinstalled on each `install_package` call, so the install is always clean.
+PyPI packages are installed into `~/.operator/packages/pypi/<name>/` via `uv pip install --target <dir>` (falling back to `python -m pip install --target <dir>` when `uv` is not on PATH). The target dir is wiped and reinstalled on each `install_package` call, so the install is always clean.
 
 Because the package's Python dependencies install **alongside** its resources in the same target dir, that dir is added to `sys.path` at load time so a bundled extension's `import` statements resolve. A PyPI package must therefore lay out its `operator.json` and resource directories (`extensions/`, `skills/`, …) at the **wheel root** (e.g. via hatchling `force-include`), so they land directly in the target dir next to the installed dependencies.
 
@@ -227,7 +227,7 @@ Packages register custom inference and memory providers through extension files 
 ## Install path layout
 
 ```
-~/.operator/agent/packages/
+~/.operator/packages/
   git/
     github.com/
       user/

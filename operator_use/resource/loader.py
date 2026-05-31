@@ -17,7 +17,7 @@ from operator_use.commands.types import SlashCommandInfo
 from operator_use.hooks.loader import load_hooks, HookRegistration
 from operator_use.package.loader import load_packages_from_settings
 from operator_use.settings.paths import (
-    get_config_dir,
+    CONFIG_DIR_NAME,
     get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
     get_builtins_extensions_dir, get_builtins_hooks_dir, get_builtins_subagents_dir,
     get_profiles_dir,
@@ -95,6 +95,15 @@ class ResourceLoader(BaseResourceLoader):
         """Set or clear the active profile. Call reload() afterwards to apply."""
         self._active_profile = profile
 
+    def _project_resource_dir(self, name: str) -> Path | None:
+        """Project-local resource dir <cwd>/.operator/<name>, if it exists.
+
+        Lets a repo ship its own extensions/skills/tools/commands/subagents/
+        workflows/hooks under a flat .operator/ folder that loads automatically
+        when Operator runs in that repo."""
+        d = self._cwd / CONFIG_DIR_NAME / name
+        return d if d.is_dir() else None
+
     # -------------------------------------------------------------------------
     # Public interface
     # -------------------------------------------------------------------------
@@ -150,6 +159,8 @@ class ResourceLoader(BaseResourceLoader):
         dirs.extend(Path(p) for p in self._extension_workflow_paths)
         if self._active_profile is not None:
             dirs.append(self._active_profile.workflows_dir)
+        if project_wf := self._project_resource_dir('workflows'):
+            dirs.append(project_wf)
         return dirs
 
     def get_subagent_profiles(self) -> list[SubagentProfile]:
@@ -191,6 +202,9 @@ class ResourceLoader(BaseResourceLoader):
             if profile_ext.is_dir():
                 dirs.append(profile_ext)
 
+        if project_ext := self._project_resource_dir('extensions'):
+            dirs.append(project_ext)
+
         dirs.extend(self._additional_extension_dirs)
 
         if self._package_sources and self._packages_dir:
@@ -223,6 +237,9 @@ class ResourceLoader(BaseResourceLoader):
             if profile_skills.is_dir():
                 skill_paths.append(str(profile_skills))
 
+        if project_skills := self._project_resource_dir('skills'):
+            skill_paths.append(str(project_skills))
+
         skill_paths.extend(self._extension_skill_paths)
         skill_paths.extend(getattr(self, '_package_skill_paths', []))
 
@@ -244,6 +261,9 @@ class ResourceLoader(BaseResourceLoader):
             if profile_tools.is_dir():
                 dirs.append(profile_tools)
 
+        if project_tools := self._project_resource_dir('tools'):
+            dirs.append(project_tools)
+
         self._tools = load_tools(dirs).tools
 
     def _reload_commands(self) -> None:
@@ -253,6 +273,9 @@ class ResourceLoader(BaseResourceLoader):
             profile_cmds = self._active_profile.commands_dir
             if profile_cmds.is_dir():
                 dirs.append(profile_cmds)
+
+        if project_cmds := self._project_resource_dir('commands'):
+            dirs.append(project_cmds)
 
         dirs.extend(self._package_command_dirs)
         self._commands = load_commands(dirs).commands
@@ -264,6 +287,9 @@ class ResourceLoader(BaseResourceLoader):
             profile_hooks = self._active_profile.hooks_dir
             if profile_hooks.is_dir():
                 dirs.append(profile_hooks)
+
+        if project_hooks := self._project_resource_dir('hooks'):
+            dirs.append(project_hooks)
 
         self._hooks = load_hooks(dirs).hooks
 
@@ -282,6 +308,9 @@ class ResourceLoader(BaseResourceLoader):
             profile_sub = self._active_profile.subagents_dir
             if profile_sub.is_dir():
                 dirs.append(profile_sub)
+
+        if project_sub := self._project_resource_dir('subagents'):
+            dirs.append(project_sub)
 
         dirs.extend(self._package_subagent_dirs)
         self._subagent_profiles = load_profiles(dirs).profiles

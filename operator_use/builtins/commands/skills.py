@@ -32,7 +32,7 @@ async def _handle_skills(registry: CommandRegistry, _args: list[str]) -> None:
     source_order = ['user', 'project', 'path']
     sources_sorted = sorted(by_source.keys(), key=lambda s: source_order.index(s) if s in source_order else 99)
 
-    source_labels = {'user': 'Global (~/.operator/agent/skills/)', 'project': 'Project (.operator/agent/skills/)'}
+    source_labels = {'user': 'Global (~/.operator/profiles/<name>/skills/)', 'project': 'Project (.operator/skills/)'}
 
     total = len(skills)
     print(f"Skills ({total} loaded)\n")

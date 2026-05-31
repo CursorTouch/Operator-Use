@@ -52,7 +52,7 @@ async def _handle_workflows(registry: CommandRegistry, args: list[str]) -> None:
         workflows = manager.list_workflows()
         if not workflows:
             print('No workflow files found.')
-            print(_dim('Place .py files in ~/.operator/agent/workflows/ or <project>/.operator/agent/workflows/'))
+            print(_dim('Place .py files in ~/.operator/profiles/<name>/workflows/ or <project>/.operator/workflows/'))
             return
         print()
         print(_bold(f'Available workflows ({len(workflows)}):'))

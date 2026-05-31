@@ -266,7 +266,7 @@ operator --prompt "summarise everything in the docs folder"
 operator repl --prompt "run the test suite and fix any failures"
 
 # Resume a specific session (normally handled automatically by reboot)
-operator gateway run --session-file ~/.operator/agent/sessions/abc123.jsonl
+operator gateway run --session-file ~/.operator/profiles/<name>/sessions/abc123.jsonl
 ```
 
 ## Channel settings

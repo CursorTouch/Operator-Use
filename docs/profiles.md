@@ -79,11 +79,11 @@ Each profile has its own resource directory under `~/.operator/profiles/<name>/`
   crons.json        ← scheduled cron jobs
 ```
 
-Resource loading order (highest priority last):
+Resource loading order (builtin names always win on collision):
 1. Builtins
-2. Global (`~/.operator/agent/`)
-3. Project (`<project>/.operator/agent/`)
-4. Profile (`~/.operator/profiles/<name>/`)
+2. Active profile (`~/.operator/profiles/<name>/`)
+3. Project (`<project>/.operator/`)
+4. Installed packages (`settings.packages`)
 
 ## System prompt profile block
 

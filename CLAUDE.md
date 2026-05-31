@@ -72,11 +72,11 @@ Violating these breaks the architecture:
 
 **Add a builtin tool** → create `operator_use/builtins/tools/my_tool.py` exporting `tool = MyTool()`.
 
-**Add a user tool** → drop `my_tool.py` in `~/.operator/agent/tools/` or `<project>/.operator/agent/tools/`.
+**Add a user tool** → drop `my_tool.py` in a profile's `~/.operator/profiles/<name>/tools/` or, for a project, in `<project>/.operator/tools/` (loaded automatically when Operator runs in that repo).
 
 **Write an extension:**
 ```python
-# ~/.operator/agent/extensions/my_ext.py
+# ~/.operator/profiles/<name>/extensions/my_ext.py  (or <project>/.operator/extensions/my_ext.py)
 from pydantic import BaseModel
 from operator_use.extension.types import ToolDefinition
 from operator_use.tool.types import ToolResult
@@ -114,7 +114,7 @@ install_package("git:github.com/user/my-tools", get_packages_dir())
 # then add the source to settings_manager.set_packages([...])
 ```
 
-**Add a skill** → create `my-skill/SKILL.md` in `~/.operator/agent/skills/` with a `name` and `description` frontmatter block.
+**Add a skill** → create `my-skill/SKILL.md` in `~/.operator/profiles/<name>/skills/` (or `<project>/.operator/skills/`) with a `name` and `description` frontmatter block.
 
 **Add a slash command** → create `operator_use/builtins/commands/my_cmd.py` exporting `command = SlashCommandInfo(...)`.
 

@@ -47,15 +47,16 @@ Handlers are called with `(registry, args)`. If the handler returns a coroutine,
 | Directory | Path function | Purpose |
 |---|---|---|
 | `operator_use/builtins/commands/` | `get_builtins_commands_dir()` | Shipped built-in commands |
-| `<project>/.operator/agent/commands/` | `get_commands_dir(cwd)` | Project-level custom commands |
-| `~/.operator/agent/commands/` | `get_commands_dir()` | Global user commands |
+| `~/.operator/profiles/<name>/commands/` | `AgentProfile.commands_dir` | Active profile's commands |
+| `<project>/.operator/commands/` | `<cwd>/.operator/commands` | Project-level custom commands (loaded when Operator runs in the repo) |
+| Installed package `commands/` dirs | `get_packages_dir()` | From packages in `settings.packages` |
 
-All path functions are defined in `program/settings/paths.py`.
+Built-in path functions are defined in `operator_use/settings/paths.py`.
 
 A command file must export either `command = SlashCommandInfo(...)` or `commands = [SlashCommandInfo(...), ...]`.
 
 ```python
-# .operator/agent/commands/deploy.py
+# .operator/commands/deploy.py
 from operator_use.commands.types import SlashCommandInfo
 
 async def _handle_deploy(registry, args):

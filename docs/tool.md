@@ -229,8 +229,8 @@ Load errors are non-fatal: `LoadToolsResult.errors` accumulates `ToolError` obje
 | Directory | Path function | Purpose |
 |---|---|---|
 | `operator_use/builtins/tools/` | `get_builtins_tools_dir()` | Shipped built-in tools |
-| `<project>/.operator/agent/tools/` | `get_tools_dir(cwd)` | Project-level custom tools |
-| `~/.operator/agent/tools/` | `get_tools_dir()` | Global user tools |
+| `~/.operator/profiles/<name>/tools/` | `AgentProfile.tools_dir` | Active profile's tools |
+| `<project>/.operator/tools/` | `<cwd>/.operator/tools` | Project-level custom tools (loaded when Operator runs in the repo) |
 | `ResourceLoaderOptions.additional_tool_dirs` | — | Programmatically injected extras |
 
 All path functions are defined in `program/settings/paths.py`.

@@ -14,8 +14,8 @@ class ACPSessionManager:
 
     One JSON file per registered agent::
 
-        ~/.operator/agent/acp/codex.json
-        ~/.operator/agent/acp/claude-code.json
+        ~/.operator/profiles/<name>/acp/codex.json
+        ~/.operator/profiles/<name>/acp/claude-code.json
 
     Session lifecycle:
         - Created on first successful ACP connection to an agent.

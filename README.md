@@ -250,10 +250,10 @@ Enable in `settings.json`:
 
 ## Extensions
 
-Extensions are Python files that hook into agent lifecycle events, register tools, and add slash commands. Drop a `.py` file in `~/.operator/agent/extensions/` and it loads automatically on the next startup or `/reload`.
+Extensions are Python files that hook into agent lifecycle events, register tools, and add slash commands. Drop a `.py` file in `~/.operator/profiles/<name>/extensions/` (or `<project>/.operator/extensions/`) and it loads automatically on the next startup or `/reload`.
 
 ```python
-# ~/.operator/agent/extensions/my_ext.py
+# ~/.operator/profiles/<name>/extensions/my_ext.py
 from pydantic import BaseModel
 from operator_use.extension.types import ToolDefinition
 from operator_use.tool.types import ToolResult
@@ -285,14 +285,14 @@ Control extensions in `~/.operator/settings.json`:
   "extension_list": [
     {
       "name": "git_guard",
-      "path": "~/.operator/agent/extensions/git_guard.py",
+      "path": "~/.operator/profiles/<name>/extensions/git_guard.py",
       "enabled": true,
       "author": "jeomon",
       "settings": { "strict": true }
     },
     {
       "name": "noisy_ext",
-      "path": "~/.operator/agent/extensions/noisy_ext.py",
+      "path": "~/.operator/profiles/<name>/extensions/noisy_ext.py",
       "enabled": false
     }
   ]
@@ -333,7 +333,7 @@ Installed packages are tracked in `settings.packages`. Their resource dirs are m
 
 ## Skills
 
-Skills are markdown files injected into the system prompt. Place a `SKILL.md` in any directory inside `~/.operator/agent/skills/` or `<project>/.operator/agent/skills/`:
+Skills are markdown files injected into the system prompt. Place a `SKILL.md` in any directory inside `~/.operator/profiles/<name>/skills/` or `<project>/.operator/skills/`:
 
 ```markdown
 ---
@@ -427,10 +427,10 @@ The `memory` tool lets the agent search recalled context, store new facts, and r
 | `acp_agent` | Execute | Invoke a remote ACP agent |
 | `control_center` | Unknown | Read/write runtime settings, trigger reboot |
 
-Add custom tools by dropping a `.py` file in `~/.operator/agent/tools/` or `<project>/.operator/agent/tools/`:
+Add custom tools by dropping a `.py` file in `~/.operator/profiles/<name>/tools/` or `<project>/.operator/tools/`:
 
 ```python
-# .operator/agent/tools/my_tool.py
+# .operator/tools/my_tool.py
 from operator_use.tool.types import Tool, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 from pydantic import BaseModel
 
@@ -573,7 +573,7 @@ Circular delegation (A → B → A) is blocked automatically.
 | `/auth` | Show auth status for all providers |
 | `/help` | List all available commands |
 
-Add custom commands by placing a `.py` file in `~/.operator/agent/commands/` exporting a `SlashCommandInfo`.
+Add custom commands by placing a `.py` file in `~/.operator/profiles/<name>/commands/` (or `<project>/.operator/commands/`) exporting a `SlashCommandInfo`.
 
 ## Subagents
 
@@ -732,32 +732,28 @@ Key fields:
       tools/                ← per-profile tools
       skills/               ← per-profile skills
       extensions/           ← per-profile extensions
+      commands/             ← per-profile slash commands
+      hooks/                ← per-profile hooks
+      subagents/            ← per-profile subagent profiles
       knowledge/            ← per-profile knowledge docs
       workflows/            ← per-profile workflows
       teams/                ← team state
       acp/                  ← ACP session files
       peer/                 ← peer session bookmarks
       crons.json            ← cron job store
-  agent/
-    extensions/             ← global user extensions
-    tools/                  ← global user tools
-    skills/                 ← global user skills
-    commands/               ← global user commands
-    hooks/                  ← global user hooks
-    sessions/               ← sessions (no-profile fallback)
-    packages/               ← installed packages
-      git/github.com/...
-  knowledge/                ← global knowledge docs
-  packages/                 ← installed packages
+  packages/                 ← installed packages (git/ and pypi/)
 
-<project>/.operator/
+<project>/.operator/            ← loaded automatically when Operator runs in this repo
   settings.json             ← project-level settings (wins over global)
   SYSTEM.md                 ← custom system prompt
   APPEND_SYSTEM.md          ← appended to system prompt
-  agent/
-    extensions/             ← project-level extensions
-    tools/                  ← project-level tools
-    skills/                 ← project-level skills
+  extensions/               ← project-level extensions
+  tools/                    ← project-level tools
+  skills/                   ← project-level skills
+  commands/                 ← project-level slash commands
+  subagents/                ← project-level subagent profiles
+  workflows/                ← project-level workflows
+  hooks/                    ← project-level hooks
   knowledge/                ← project-level knowledge docs
 ```
 
