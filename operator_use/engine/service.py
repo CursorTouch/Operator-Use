@@ -18,7 +18,7 @@ from operator_use.inference.types import (
     ThinkingDeltaEvent, ThinkingEndEvent, ToolCallEndEvent, StopReason
 )
 from operator_use.tool.types import ToolContext, ToolExecutionMode, ToolInvocation, ToolResult
-from operator_use.message.types import AssistantMessage, ToolCallContent, Role, Usage
+from operator_use.message.types import AssistantMessage, ToolCallContent, Role, Usage, TextContent
 
 if TYPE_CHECKING:
     from operator_use.inference.api.text.service import LLM
@@ -226,6 +226,7 @@ class Engine:
                 id=tool_call.id, is_error=raw.is_error,
                 content=raw.content, metadata=raw.metadata,
                 terminate=raw.terminate,
+                terminate_message=raw.terminate_message,
             )
         except Exception as e:
             error = f"Tool '{tool_call.name}' execution failed:\n{e}"
@@ -407,6 +408,23 @@ class Engine:
 
                         # If every tool signalled terminate, stop without another LLM call.
                         if tool_results and all(r.terminate for r in tool_results):
+                            # Close the tool-use turn with a synthetic assistant message so
+                            # history never ends on a tool_result. Otherwise the next user
+                            # message lands as tool_use -> tool_result -> user (no assistant
+                            # turn between), an out-of-distribution shape that makes the model
+                            # emit garbage on the following turn (e.g. after a reboot resume).
+                            # Each terminating tool supplies its own closing line via
+                            # terminate_message; fall back to the raw result content.
+                            closing_text = "\n".join(
+                                (r.terminate_message or r.content)
+                                for r in tool_results
+                                if (r.terminate_message or r.content)
+                            )
+                            if closing_text:
+                                closing = AssistantMessage(contents=[TextContent(content=closing_text)])
+                                await emit(MessageStartEvent(message=closing))
+                                await emit(MessageEndEvent(message=closing))
+                                messages.append(closing)
                             await emit(TurnEndEvent(message=message, tool_results=tool_results))
                             break
 

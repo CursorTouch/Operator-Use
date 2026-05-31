@@ -83,6 +83,7 @@ class ToolResultContent:
     is_error: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
     terminate: bool = False
+    terminate_message: str | None = None
 
 
 Content = TextContent | ImageContent | AudioContent | ThinkingContent | ToolCallContent | ToolResultContent

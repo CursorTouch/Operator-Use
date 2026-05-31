@@ -218,7 +218,12 @@ class ControlCenterTool(Tool):
         msg = "Reboot complete. You are the new process. Resume normally from this point."
         if resume_prompt:
             msg += f'\nResume prompt: "{resume_prompt}"'
-        return ToolResult(id=invocation.id, content=msg, terminate=True)
+        return ToolResult(
+            id=invocation.id,
+            content=msg,
+            terminate=True,
+            terminate_message="Back up and running — ready for what's next.",
+        )
 
     async def _reboot(
         self,

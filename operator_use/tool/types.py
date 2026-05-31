@@ -80,6 +80,7 @@ class ToolResult:
     is_error: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
     terminate: bool = False
+    terminate_message: str | None = None
 
     @classmethod
     def ok(
