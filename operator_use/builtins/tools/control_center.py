@@ -210,8 +210,19 @@ class ControlCenterTool(Tool):
 
         snapshot = self._snapshot_changes(context)
 
+        # Capture the channel + chat this reboot was requested from so the resume
+        # prompt can be delivered back there instead of the default stdio terminal.
+        origin_channel = origin_chat = None
+        if resume_prompt:
+            try:
+                from operator_use.subagent.manager import _session_channel, _session_chat_id
+                origin_channel = _session_channel.get()
+                origin_chat = _session_chat_id.get()
+            except Exception:
+                pass
+
         async def _do_reboot() -> None:
-            await self._reboot(sm, resume_prompt, context, snapshot)
+            await self._reboot(sm, resume_prompt, context, snapshot, origin_channel, origin_chat)
 
         engine._deferred_fn = _do_reboot
 
@@ -231,6 +242,8 @@ class ControlCenterTool(Tool):
         resume_prompt: str | None,
         context: ToolContext | None,
         snapshot: dict,
+        origin_channel: str | None = None,
+        origin_chat: str | None = None,
     ) -> None:
         import os
         import sys
@@ -261,14 +274,14 @@ class ControlCenterTool(Tool):
                 pass
 
         # Build argv — pin cwd and session file so the new image resumes
-        # exactly where this one left off.
-        argv = list(sys.argv)
+        # exactly where this one left off. Strip any stale --prompt so a startup
+        # or previous-reboot prompt never replays; the resume prompt is passed via
+        # the environment below instead (see OPERATOR_PROMPT*).
+        argv = self._strip_flags(list(sys.argv), ("--prompt",))
         if "--cwd" not in argv:
             argv.extend(["--cwd", str(Path.cwd())])
         if session_file and "--session-file" not in argv:
             argv.extend(["--session-file", str(session_file)])
-        if resume_prompt and "--prompt" not in argv:
-            argv.extend(["--prompt", resume_prompt])
 
         # Replace this process image with a fresh one via exec.
         # This avoids all subprocess / process-group / SIGHUP / Conflict issues
@@ -279,7 +292,20 @@ class ControlCenterTool(Tool):
         #   - no os._exit() traceback leaking through the asyncio task stack
         # Strip OPERATOR_READY_FD from the environment — there is no parent
         # waiting for a "ready" signal when we exec in place.
-        env = {k: v for k, v in os.environ.items() if k != "OPERATOR_READY_FD"}
+        # Strip OPERATOR_READY_FD (no parent awaits us after exec-in-place) plus any
+        # stale prompt vars, then set fresh resume-prompt routing. Passing the prompt
+        # via the env (not argv) keeps it one-shot — it never lingers to replay on a
+        # later reboot, and carries the originating channel so the reply lands there.
+        env = {
+            k: v for k, v in os.environ.items()
+            if k not in ("OPERATOR_READY_FD", "OPERATOR_PROMPT", "OPERATOR_PROMPT_CHANNEL", "OPERATOR_PROMPT_CHAT")
+        }
+        if resume_prompt:
+            env["OPERATOR_PROMPT"] = resume_prompt
+            if origin_channel:
+                env["OPERATOR_PROMPT_CHANNEL"] = origin_channel
+            if origin_chat:
+                env["OPERATOR_PROMPT_CHAT"] = origin_chat
         try:
             os.execve(sys.executable, [sys.executable] + argv, env)
         except OSError as exc:
@@ -342,6 +368,19 @@ class ControlCenterTool(Tool):
         if context and context.session_manager:
             return str(getattr(context.session_manager, "cwd", None) or ".")
         return None
+
+    @staticmethod
+    def _strip_flags(argv: list[str], flags: tuple[str, ...]) -> list[str]:
+        """Drop each `--flag value` pair from argv (used to remove stale reboot flags)."""
+        out: list[str] = []
+        i = 0
+        while i < len(argv):
+            if argv[i] in flags:
+                i += 2  # skip the flag and its value
+                continue
+            out.append(argv[i])
+            i += 1
+        return out
 
 
 tool = ControlCenterTool()

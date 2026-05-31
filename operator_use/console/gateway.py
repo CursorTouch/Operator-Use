@@ -69,8 +69,15 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
     # Signal parent process (if launched via Popen reboot) that startup succeeded
     _signal_ready()
 
-    if options.prompt:
-        await _inject_prompt(options.prompt, runtime)
+    # Resume prompt: from --prompt, or from the environment when a reboot routed
+    # it back to its originating channel (OPERATOR_PROMPT*).
+    prompt = options.prompt or os.environ.get("OPERATOR_PROMPT")
+    if prompt:
+        await _inject_prompt(
+            prompt, runtime,
+            channel=os.environ.get("OPERATOR_PROMPT_CHANNEL"),
+            chat_id=os.environ.get("OPERATOR_PROMPT_CHAT"),
+        )
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -108,13 +115,17 @@ def _signal_ready() -> None:
         pass
 
 
-async def _inject_prompt(prompt: str, runtime) -> None:
-    """Publish an initial prompt into the stdio channel so the agent starts immediately."""
+async def _inject_prompt(prompt: str, runtime, channel: str | None = None, chat_id: str | None = None) -> None:
+    """Publish an initial prompt so the agent starts immediately.
+
+    Delivered to the channel/chat the prompt was routed to (e.g. the channel a
+    reboot was requested from); falls back to the stdio terminal.
+    """
     from operator_use.bus.types import IncomingMessage, TextPart
 
     await runtime.bus.publish_incoming(IncomingMessage(
-        channel="stdio",
-        chat_id="cli",
+        channel=channel or "stdio",
+        chat_id=chat_id or "cli",
         parts=[TextPart(content=prompt)],
         metadata={"source": "initial_prompt"},
     ))
