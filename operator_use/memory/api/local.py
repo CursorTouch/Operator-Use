@@ -325,13 +325,17 @@ def _collect_text(events: list[LLMEvent]) -> str:
 
 
 def _adjacent_pairs(messages: list[dict[str, Any]]) -> list[tuple[str, str]]:
-    """Yield (user_text, assistant_text) pairs from a raw message list."""
+    """Yield (user_text, assistant_text) pairs from a raw message list.
+
+    Handles both flat LLM-message dicts ({role, content}) and SessionEntry
+    model_dump dicts ({type, message: {role, contents}}).
+    """
     pairs: list[tuple[str, str]] = []
     i = 0
     while i < len(messages) - 1:
         m = messages[i]
         n = messages[i + 1]
-        if m.get("role") == "user" and n.get("role") == "assistant":
+        if _get_role(m) == "user" and _get_role(n) == "assistant":
             pairs.append((_message_text(m), _message_text(n)))
             i += 2
         else:
@@ -339,12 +343,34 @@ def _adjacent_pairs(messages: list[dict[str, Any]]) -> list[tuple[str, str]]:
     return pairs
 
 
+def _get_role(m: dict[str, Any]) -> str:
+    """Extract role from either a flat LLM-message dict or a SessionEntry dump."""
+    inner = m.get("message")
+    if isinstance(inner, dict):
+        return inner.get("role", "")
+    return m.get("role", "")
+
+
 def _message_text(msg: dict[str, Any]) -> str:
+    # SessionEntry dump: {type, message: {role, contents: [{type, content}]}}
+    inner = msg.get("message")
+    if isinstance(inner, dict):
+        contents = inner.get("contents", [])
+        if isinstance(contents, list):
+            return " ".join(
+                c.get("content", "")
+                for c in contents
+                if isinstance(c, dict) and c.get("type") == "text"
+            )
+        return str(contents)
+    # Flat LLM-message dict: {role, content}
     content = msg.get("content", "")
     if isinstance(content, str):
         return content
     if isinstance(content, list):
         return " ".join(
-            c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"
+            c.get("text", c.get("content", ""))
+            for c in content
+            if isinstance(c, dict) and c.get("type") == "text"
         )
     return str(content)

@@ -78,6 +78,9 @@ class Runtime:
         self._peer_agents: dict[str, Agent] = {}
         # Strong refs to fire-and-forget tasks (the loop only holds weak refs).
         self._bg_tasks: set[asyncio.Task] = set()
+        # Registered by run_gateway_foreground so ashutdown() stops channels
+        # before tearing down runtime services (proper reverse-startup order).
+        self._gateway_shutdown = None
         self._configure_context(context)
 
     def _create_workflow_manager(self, context: RuntimeContext) -> WorkflowManager:
@@ -662,11 +665,18 @@ class Runtime:
         # Persisted session in profile's sessions/ directory
         sessions_dir = profile.sessions_dir
         sessions_dir.mkdir(parents=True, exist_ok=True)
-        most_recent = find_most_recent_session(sessions_dir)
+        # Prefer the session file explicitly requested via --session-file (e.g. reboot)
+        # if it lives inside this profile's sessions directory, so reboots continue
+        # the same conversation instead of creating a new session.
+        explicit = self._config.session_file
+        if explicit is not None and explicit.parent.resolve() == sessions_dir.resolve():
+            session_file_to_use = explicit
+        else:
+            session_file_to_use = find_most_recent_session(sessions_dir)
         session_manager = SessionManager(
             cwd=sessions_dir,
             session_dir=sessions_dir,
-            session_file=most_recent,
+            session_file=session_file_to_use,
             persist=True,
         )
 
@@ -830,16 +840,41 @@ class Runtime:
             task.add_done_callback(self._bg_tasks.discard)
 
     async def ashutdown(self) -> None:
-        """Await full teardown of runtime-owned services."""
+        """Tear down in strict reverse-startup order.
+
+        Startup order (types.py / manager.py):
+          channels (Telegram polling) → gateway bus loops → cron →
+          process manager → MCP → memory
+
+        Shutdown must be the exact reverse so each layer stops before
+        the service it depends on is torn down.
+        """
+        # 1. Channels — stop Telegram/Discord/etc. polling first so no new
+        #    messages arrive and the bot token is released before a new
+        #    process can claim it (prevents Conflict errors on reboot).
+        if self._gateway_shutdown is not None:
+            try:
+                await self._gateway_shutdown()
+            except Exception:
+                pass
+            self._gateway_shutdown = None
+
+        # 2. Cron — no new jobs should fire after channels are stopped.
         if self._context.cron is not None:
             self._context.cron.stop()
+
+        # 3. Process manager — wait for in-flight subprocesses/subagents.
         if self._context.process_manager is not None:
             await self._context.process_manager.close()
+
+        # 4. MCP — disconnect external tool servers.
         if self.mcp_manager is not None:
             try:
                 await self.mcp_manager.disconnect_all()
             except Exception:
                 pass
+
+        # 5. Memory — flush any buffered facts to disk last.
         if self._context.memory_manager is not None:
             await self._context.memory_manager.shutdown()
 

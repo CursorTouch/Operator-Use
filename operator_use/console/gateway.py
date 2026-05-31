@@ -55,6 +55,11 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
     gateway_manager.start()
     await asyncio.sleep(0.5)
 
+    # Register gateway shutdown so runtime.ashutdown() stops channels first.
+    # This ensures Telegram polling stops before the new process starts,
+    # preventing the Conflict: terminated by other getUpdates error.
+    runtime._gateway_shutdown = gateway_manager.astop
+
     channel_ids = list(gateway_manager.gateway._channels.keys())
     channels_str = ", ".join(channel_ids) if channel_ids else "none"
     click.echo(f"Agent running in {options.cwd}  (model: {config.model_id})")
@@ -87,7 +92,6 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
             except (RuntimeError, ValueError):
                 pass
         click.echo("\nShutting down...")
-        await gateway_manager.astop()
         await runtime.ashutdown()
 
 

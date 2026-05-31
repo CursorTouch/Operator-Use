@@ -94,6 +94,7 @@ class Agent(ExtensionContext):
         )
 
         self._phase: str = "idle"
+        self._rebooting: bool = False
         self._active_profile: AgentProfile | None = None
         self._baseline_llm = engine.llm
         self._engine.options.before_tool_call = self._before_tool_call
@@ -508,6 +509,8 @@ class Agent(ExtensionContext):
     async def invoke(self, user_input: str, options: PromptOptions | None = None) -> None:
         """Run one user turn with retry on transient errors."""
         if self._phase != "idle":
+            if self._rebooting:
+                raise RuntimeError("Rebooting — please send your message again in a moment.")
             raise RuntimeError(f"Agent is busy (phase={self._phase!r}). Wait for the current operation to finish.")
 
         opts = options or PromptOptions()
@@ -610,6 +613,12 @@ class Agent(ExtensionContext):
         deferred = self._engine._deferred_fn
         if deferred is not None:
             self._engine._deferred_fn = None
+            # Block new invocations during the reboot window (spawning child +
+            # waiting for "ready" signal, up to 30 s).  Without this, a Telegram
+            # message arriving mid-reboot would be processed by the dying process,
+            # producing a garbage response that corrupts the session on restart.
+            self._rebooting = True
+            self._phase = "turn"
             await deferred()
             return  # deferred action takes over (e.g. sys.exit); don't continue
 

@@ -215,7 +215,7 @@ class ControlCenterTool(Tool):
 
         engine._deferred_fn = _do_reboot
 
-        msg = "Reboot scheduled — the process will restart once this turn is saved."
+        msg = "Reboot complete. You are the new process. Resume normally from this point."
         if resume_prompt:
             msg += f'\nResume prompt: "{resume_prompt}"'
         return ToolResult(id=invocation.id, content=msg, terminate=True)
@@ -227,9 +227,7 @@ class ControlCenterTool(Tool):
         context: ToolContext | None,
         snapshot: dict,
     ) -> None:
-        import asyncio
         import os
-        import subprocess
         import sys
         from pathlib import Path
 
@@ -246,99 +244,52 @@ class ControlCenterTool(Tool):
         except Exception:
             pass
 
-        # Build argv
+        # Stop the gateway (Telegram polling etc.) BEFORE spawning the child so
+        # there is never a window where both processes poll the same bot token.
+        # Telegram rejects concurrent getUpdates with a Conflict error.
+        agent = context.agent if context else None
+        runtime = getattr(agent, "_runtime", None) if agent else None
+        if runtime is not None:
+            try:
+                await runtime.ashutdown()
+            except Exception:
+                pass
+
+        # Build argv — pin cwd and session file so the new image resumes
+        # exactly where this one left off.
         argv = list(sys.argv)
+        if "--cwd" not in argv:
+            argv.extend(["--cwd", str(Path.cwd())])
         if session_file and "--session-file" not in argv:
             argv.extend(["--session-file", str(session_file)])
         if resume_prompt and "--prompt" not in argv:
             argv.extend(["--prompt", resume_prompt])
 
-        # Create ready pipe — child writes "ready" when gateway is up
-        read_fd, write_fd = os.pipe()
-        env = {**os.environ, "OPERATOR_READY_FD": str(write_fd)}
-
-        proc = subprocess.Popen(
-            [sys.executable] + argv,
-            env=env,
-            stderr=subprocess.PIPE,
-            pass_fds=(write_fd,),
-        )
-        os.close(write_fd)  # parent keeps only the read end
-
-        # Wait for ready signal using asyncio (non-blocking)
-        loop = asyncio.get_event_loop()
-        ready_future: asyncio.Future[bytes] = loop.create_future()
-
-        def _on_readable() -> None:
-            loop.remove_reader(read_fd)
-            try:
-                data = os.read(read_fd, 64)
-                if not ready_future.done():
-                    ready_future.set_result(data)
-            except Exception as exc:
-                if not ready_future.done():
-                    ready_future.set_exception(exc)
-
-        loop.add_reader(read_fd, _on_readable)
-
-        ready = False
+        # Replace this process image with a fresh one via exec.
+        # This avoids all subprocess / process-group / SIGHUP / Conflict issues
+        # that come from spawning a child and killing the parent:
+        #   - same PID, same terminal, same foreground process
+        #   - no SIGHUP sent to a child process group
+        #   - no window where two processes poll the same channel simultaneously
+        #   - no os._exit() traceback leaking through the asyncio task stack
+        # Strip OPERATOR_READY_FD from the environment — there is no parent
+        # waiting for a "ready" signal when we exec in place.
+        env = {k: v for k, v in os.environ.items() if k != "OPERATOR_READY_FD"}
         try:
-            data = await asyncio.wait_for(asyncio.shield(ready_future), timeout=30.0)
-            ready = data.strip() == b"ready"
-        except (asyncio.TimeoutError, Exception):
-            loop.remove_reader(read_fd)
-        finally:
-            try:
-                os.close(read_fd)
-            except OSError:
-                pass
-
-        if ready:
-            # New process is up — shut down this process cleanly
-            agent = context.agent if context else None
-            runtime = getattr(agent, "_runtime", None) if agent else None
-            if runtime is not None:
-                try:
-                    await asyncio.wait_for(runtime.ashutdown(), timeout=5.0)
-                except Exception:
-                    pass
-            sys.exit(0)
-
-        # Child failed — revert changes and inject an error message as a follow-up
-        # so the agent can diagnose and retry (we are already past the tool-result
-        # stage, so we cannot return a ToolResult here).
-        proc.terminate()
-        error_log = ""
-        try:
-            stderr_bytes, _ = proc.communicate(timeout=5.0)
-            error_log = stderr_bytes.decode("utf-8", errors="replace").strip()
-        except Exception:
-            pass
-
-        revert_msg = self._restore_snapshot(snapshot, context)
-
-        error_text = (
-            f"Reboot failed — new process exited before becoming ready.\n\n"
-            f"Error output:\n{error_log or '(none captured)'}\n\n"
-            f"{revert_msg}"
-            f"Fix the error and call reboot again."
-        )
-
-        # Inject as a follow-up user message so the agent sees the failure
-        agent = context.agent if context else None
-        engine = context.engine if context else None
-        if engine is not None and engine.state.follow_up_queue is not None:
-            from operator_use.message.types import UserMessage, TextContent
-            await engine.state.follow_up_queue.enqueue(
-                UserMessage(contents=[TextContent(content=error_text)])
+            os.execve(sys.executable, [sys.executable] + argv, env)
+        except OSError as exc:
+            revert_msg = self._restore_snapshot(snapshot, context)
+            error_text = (
+                f"Reboot failed — could not exec new process: {exc}\n\n"
+                f"{revert_msg}"
+                f"Fix the error and call reboot again."
             )
-        elif agent is not None:
-            # Fallback: schedule a new turn with the error as user input
-            def _spawn() -> None:
-                task = asyncio.ensure_future(agent.invoke(error_text))
-                self._tasks.add(task)
-                task.add_done_callback(self._tasks.discard)
-            asyncio.get_event_loop().call_soon(_spawn)
+            engine = context.engine if context else None
+            if engine is not None and engine.state.follow_up_queue is not None:
+                from operator_use.message.types import UserMessage, TextContent
+                await engine.state.follow_up_queue.enqueue(
+                    UserMessage(contents=[TextContent(content=error_text)])
+                )
 
     def _snapshot_changes(self, context: ToolContext | None) -> dict[str, str]:
         """Read the content of every file modified since the last commit."""
