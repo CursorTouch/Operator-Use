@@ -59,6 +59,7 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
     # This ensures Telegram polling stops before the new process starts,
     # preventing the Conflict: terminated by other getUpdates error.
     runtime._gateway_shutdown = gateway_manager.astop
+    runtime._gateway_hooks = gateway_manager.gateway.hooks
 
     channel_ids = list(gateway_manager.gateway._channels.keys())
     channels_str = ", ".join(channel_ids) if channel_ids else "none"

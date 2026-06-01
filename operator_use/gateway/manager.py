@@ -41,6 +41,14 @@ class GatewayManager:
         self._tasks: list[asyncio.Task] = []
         self._gateway_task: asyncio.Task | None = None
 
+        # Register resource-loader hooks (STT, TTS, etc.) on the gateway's own
+        # Hooks object so message:receive and message:send handlers fire correctly.
+        resource_loader = getattr(runtime, '_context', None)
+        resource_loader = getattr(resource_loader, 'resource_loader', None)
+        if resource_loader is not None:
+            for event_type, handler in resource_loader.get_hooks():
+                self.gateway.hooks.register(event_type, handler)
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self) -> None:

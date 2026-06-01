@@ -81,6 +81,7 @@ class Runtime:
         # Registered by run_gateway_foreground so ashutdown() stops channels
         # before tearing down runtime services (proper reverse-startup order).
         self._gateway_shutdown = None
+        self._gateway_hooks = None  # set by run_gateway_foreground after GatewayManager starts
         self._configure_context(context)
 
     def _create_workflow_manager(self, context: RuntimeContext) -> WorkflowManager:
@@ -298,6 +299,13 @@ class Runtime:
         hooks.clear()
         for event_type, handler in resource_loader.get_hooks():
             hooks.register(event_type, handler)
+
+        # Also re-register on the gateway's hooks object so message:receive /
+        # message:send hooks (STT, TTS) stay in sync after reload.
+        if self._gateway_hooks is not None:
+            self._gateway_hooks.clear()
+            for event_type, handler in resource_loader.get_hooks():
+                self._gateway_hooks.register(event_type, handler)
 
         # Rebuild the ExtensionRuntime with newly discovered extensions.
         from operator_use.extension.runtime import ExtensionRuntime
