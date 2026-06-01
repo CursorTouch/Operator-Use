@@ -30,6 +30,11 @@ class EditTool(Tool):
             kind=ToolKind.Write,
             execution_mode=ToolExecutionMode.Parallel,        )
 
+    def get_display_name(self, args: dict) -> str:
+        path = args.get('path', '') or ''
+        name = path.rsplit('/', 1)[-1] if path else ''
+        return f"Editing: {name}" if name else "Editing file"
+
     async def execute(
         self,
         invocation: ToolInvocation,

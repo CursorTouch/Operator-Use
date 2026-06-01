@@ -102,6 +102,19 @@ class TeamTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,
         )
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        team_name = args.get('team_name', '') or ''
+        member_name = args.get('member_name', '') or ''
+        if action == 'create': return f"Creating team: {team_name}" if team_name else "Creating team"
+        if action == 'spawn': return f"Spawning member: {member_name}" if member_name else "Spawning member"
+        if action == 'send': return f"Sending to: {member_name}" if member_name else "Sending to member"
+        if action == 'inbox': return f"Reading inbox: {member_name}" if member_name else "Reading inbox"
+        if action == 'status': return f"Team status: {team_name}" if team_name else "Team status"
+        if action == 'dissolve': return f"Dissolving: {team_name}" if team_name else "Dissolving team"
+        if action == 'list': return "Listing teams"
+        return "Team"
+
     def is_available(self, context: ToolContext) -> bool:
         return context.team_manager is not None
 

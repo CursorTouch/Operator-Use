@@ -19,6 +19,10 @@ class WaitTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,
         )
 
+    def get_display_name(self, args: dict) -> str:
+        seconds = args.get('seconds', '')
+        return f"Waiting {seconds}s" if seconds else "Waiting"
+
     async def execute(
         self,
         invocation: ToolInvocation,

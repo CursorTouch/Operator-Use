@@ -149,6 +149,11 @@ class TodoTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self.store = store or TodoStore()
 
+    def get_display_name(self, args: dict) -> str:
+        if args.get('todos') is None:
+            return "Reading tasks"
+        return "Updating tasks" if args.get('merge') else "Writing tasks"
+
     def format_for_injection(self) -> str | None:
         return self.store.format_for_injection()
 

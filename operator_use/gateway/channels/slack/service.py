@@ -360,7 +360,7 @@ class SlackChannel(BaseChannel):
             elif kind == 'tool_start' and self._show_tool_calls:
                 self._stop_thinking_stream(chat_id)
                 self._thinking_buffers.pop(chat_id, None)
-                name = metadata.get('name', '')
+                name = metadata.get('display_name', '') or metadata.get('name', '')
                 label = f"⚙️ `{name}`…"
                 existing_ts = self._tool_ts_map.get(chat_id)
                 if existing_ts is not None and client is not None:
@@ -390,7 +390,7 @@ class SlackChannel(BaseChannel):
                     except Exception:
                         pass
             elif kind == 'tool_end' and self._show_tool_calls:
-                name = metadata.get('name', '')
+                name = metadata.get('display_name', '') or metadata.get('name', '')
                 is_error = metadata.get('is_error', False)
                 if is_error:
                     result = str(metadata.get('result', ''))

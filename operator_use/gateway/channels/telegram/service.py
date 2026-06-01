@@ -346,7 +346,7 @@ class TelegramChannel(BaseChannel):
                 # Rolling tool-status: one message that updates as each tool runs.
                 # On a new tool_start we edit the existing status (replacing the previous
                 # ✅/❌ marker) or post a fresh one if none exists yet.
-                name = metadata.get('name', '')
+                name = metadata.get('display_name', '') or metadata.get('name', '')
                 label = f"⚙️ {name}…"
                 existing_id = self._tool_msg_ids.get(chat_id)
                 if existing_id is not None:
@@ -377,7 +377,7 @@ class TelegramChannel(BaseChannel):
                     except Exception:
                         pass
             elif kind == 'tool_end' and self._show_tool_calls:
-                name = metadata.get('name', '')
+                name = metadata.get('display_name', '') or metadata.get('name', '')
                 is_error = metadata.get('is_error', False)
                 if is_error:
                     result = str(metadata.get('result', ''))

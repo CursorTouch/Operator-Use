@@ -155,6 +155,19 @@ class ACPAgentTool(Tool):
         self._bus = bus
         self._agent = agent
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        agent = args.get('agent', '') or ''
+        task_id = args.get('task_id', '') or ''
+        if action == 'agents': return "Listing ACP agents"
+        if action == 'run': return f"Running ACP: {agent}" if agent else "Running ACP agent"
+        if action == 'spawn': return f"Spawning ACP: {agent}" if agent else "Spawning ACP session"
+        if action == 'send': return f"Sending to ACP: {agent}" if agent else "Sending to ACP"
+        if action == 'sessions': return "Listing ACP sessions"
+        if action == 'status': return f"ACP status: {task_id}" if task_id else "ACP status"
+        if action == 'cancel': return f"Cancelling ACP: {task_id}" if task_id else "Cancelling ACP"
+        return "ACP agent"
+
     async def execute(
         self,
         invocation: ToolInvocation,

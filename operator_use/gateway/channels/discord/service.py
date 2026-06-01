@@ -365,7 +365,7 @@ class DiscordChannel(BaseChannel):
                 self._stop_thinking_stream(chat_id)
                 self._thinking_buffers.pop(chat_id, None)
                 # Rolling tool-status: one message that updates as each tool runs.
-                name = metadata.get('name', '')
+                name = metadata.get('display_name', '') or metadata.get('name', '')
                 label = f"⚙️ `{name}`…"
                 existing = self._tool_messages.get(chat_id)
                 if existing is not None:
@@ -399,7 +399,7 @@ class DiscordChannel(BaseChannel):
                         except Exception:
                             pass
             elif kind == 'tool_end' and self._show_tool_calls:
-                name = metadata.get('name', '')
+                name = metadata.get('display_name', '') or metadata.get('name', '')
                 is_error = metadata.get('is_error', False)
                 if is_error:
                     result = str(metadata.get('result', ''))

@@ -27,6 +27,11 @@ class ReadTool(Tool):
             kind=ToolKind.Read,
             execution_mode=ToolExecutionMode.Parallel,        )
 
+    def get_display_name(self, args: dict) -> str:
+        path = args.get('path', '') or ''
+        name = path.rsplit('/', 1)[-1] if path else ''
+        return f"Reading: {name}" if name else "Reading file"
+
     async def execute(
         self,
         invocation: ToolInvocation,

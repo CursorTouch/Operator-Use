@@ -128,6 +128,30 @@ class BrowserTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,
         )
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        url = args.get('url', '') or ''
+        text = args.get('text', '') or ''
+        tab_mode = args.get('tab_mode', '') or ''
+        short_url = url[:50] if url else ''
+        if action == 'open': return "Opening browser"
+        if action == 'close': return "Closing browser"
+        if action == 'goto': return f"Navigating to: {short_url}" if short_url else "Navigating"
+        if action == 'back': return "Going back"
+        if action == 'forward': return "Going forward"
+        if action == 'click': return "Clicking"
+        if action == 'type': return f"Typing: {text[:30]}" if text else "Typing"
+        if action == 'key': return f"Key: {text}" if text else "Key press"
+        if action == 'scroll': return "Scrolling"
+        if action == 'scrape': return "Scraping page"
+        if action == 'script': return "Running script"
+        if action == 'download': return f"Downloading: {short_url}" if short_url else "Downloading"
+        if action == 'tab': return f"Tab: {tab_mode}" if tab_mode else "Tab"
+        if action == 'wait': return "Waiting"
+        if action == 'upload': return "Uploading file"
+        if action == 'menu': return "Selecting option"
+        return "Browser"
+
     def is_available(self, context: ToolContext) -> bool:
         if context.browser is None:
             return False

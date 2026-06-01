@@ -100,7 +100,7 @@ class TwitchChannel(BaseChannel):
         elif phase == StreamPhase.CHUNK:
             kind = metadata.get('kind')
             if kind == 'tool_start':
-                await self._send_raw(f"⚙️ {metadata.get('name', '')}…")
+                await self._send_raw(f"⚙️ {metadata.get('display_name', '') or metadata.get('name', '')}…")
             elif kind == 'tool_end' and metadata.get('is_error'):
                 await self._send_raw(f"⚠️ {metadata.get('result', '')}")
             else:

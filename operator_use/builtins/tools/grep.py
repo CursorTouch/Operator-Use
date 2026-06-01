@@ -43,8 +43,13 @@ class GrepTool(Tool):
             description="Search for text patterns in files. Supports regex or literal string matching with optional context lines.",
             schema=GrepSchema,
             kind=ToolKind.Read,
-            execution_mode=ToolExecutionMode.Parallel,        
+            execution_mode=ToolExecutionMode.Parallel,
             )
+
+    def get_display_name(self, args: dict) -> str:
+        pattern = args.get('pattern', '') or ''
+        short = pattern[:40] if len(pattern) > 40 else pattern
+        return f"Searching: {short}" if short else "Searching"
 
     async def execute(
         self,

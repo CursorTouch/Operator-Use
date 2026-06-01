@@ -198,6 +198,19 @@ class PeerAgentsTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,
         )
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        name = args.get('name', '') or ''
+        task_id = args.get('task_id', '') or ''
+        if action == 'list': return "Listing peers"
+        if action == 'run': return f"Running peer: {name}" if name else "Running peer"
+        if action == 'spawn': return f"Spawning peer: {name}" if name else "Spawning peer session"
+        if action == 'send': return f"Sending to peer: {name}" if name else "Sending to peer"
+        if action == 'sessions': return "Listing peer sessions"
+        if action == 'status': return f"Peer status: {task_id}" if task_id else "Peer status"
+        if action == 'cancel': return f"Cancelling peer: {task_id}" if task_id else "Cancelling peer"
+        return "Peer agent"
+
     def is_available(self, context: ToolContext) -> bool:
         # Only expose this tool when there is at least one peer profile to talk to.
         peers = context.peer_agents or {}

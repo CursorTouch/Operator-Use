@@ -41,6 +41,11 @@ class WebFetchTool(Tool):
             execution_mode=ToolExecutionMode.Parallel,        )
         self._llm = llm
 
+    def get_display_name(self, args: dict) -> str:
+        url = args.get('url', '') or ''
+        short = url[:50] if len(url) > 50 else url
+        return f"Fetching: {short}" if short else "Fetching URL"
+
     async def _extract_relevant(self, text: str, prompt: str, llm) -> str:
         truncated = text[:_EXTRACT_LIMIT] + "\n...[truncated]" if len(text) > _EXTRACT_LIMIT else text
         messages = [

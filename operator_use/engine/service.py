@@ -192,6 +192,7 @@ class Engine:
             )
 
         tool_call.kind = tool.kind
+        tool_call.metadata['display_name'] = tool.get_display_name(tool_call.args)
         ok, errors = tool.validate(params=tool_call.args)
         if not ok:
             content = f"Invalid parameters for '{tool_call.name}':\n{chr(10).join(errors)}"

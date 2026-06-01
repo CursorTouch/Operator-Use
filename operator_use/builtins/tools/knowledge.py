@@ -92,6 +92,20 @@ class KnowledgeTool(Tool):
             kind=ToolKind.Unknown,
         )
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        query = args.get('query', '') or ''
+        page = args.get('page', '') or ''
+        source = args.get('source', '') or ''
+        if action == 'list': return "Listing knowledge"
+        if action == 'query': return f"Querying: {query[:40]}" if query else "Querying knowledge"
+        if action == 'add': return f"Adding to: {page}" if page else "Adding knowledge"
+        if action == 'ingest': return f"Ingesting: {source[:40]}" if source else "Ingesting content"
+        if action == 'lint': return "Linting knowledge"
+        if action == 'consolidate': return "Consolidating knowledge"
+        if action == 'log': return "Knowledge log"
+        return "Knowledge"
+
     def is_available(self, context) -> bool:
         return _get_knowledge_dir(context) is not None
 

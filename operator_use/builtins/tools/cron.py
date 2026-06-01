@@ -139,6 +139,18 @@ class CronTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._cron = cron
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        name = args.get('name', '') or ''
+        job_id = args.get('job_id', '') or ''
+        if action == 'list': return "Listing jobs"
+        if action == 'add': return f"Scheduling: {name}" if name else "Adding job"
+        if action == 'update': return f"Updating job: {job_id}" if job_id else "Updating job"
+        if action == 'remove': return f"Removing job: {job_id}" if job_id else "Removing job"
+        if action == 'enable': return f"Enabling job: {job_id}" if job_id else "Enabling job"
+        if action == 'disable': return f"Disabling job: {job_id}" if job_id else "Disabling job"
+        return "Cron"
+
     def is_available(self, context) -> bool:
         sm = context.settings_manager
         if sm is not None and sm.get_cron_enabled() is False:

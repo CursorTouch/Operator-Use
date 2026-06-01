@@ -60,6 +60,11 @@ class TerminalTool(Tool):
         self._execute_path: str | None = None
         self._execute_command_prefix: str | None = None
 
+    def get_display_name(self, args: dict) -> str:
+        cmd = args.get('cmd', '') or ''
+        short = cmd[:50] if len(cmd) > 50 else cmd
+        return f"Running: {short}" if short else "Running command"
+
     async def _kill_process_group(self, process) -> None:
         """Terminate the subprocess and every child it spawned.
 

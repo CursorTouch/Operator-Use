@@ -61,6 +61,14 @@ class MCPTool(Tool):
         self._engine = engine
         self._agent_id = agent_id
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        server_name = args.get('server_name', '') or ''
+        if action == 'list': return "Listing MCP servers"
+        if action == 'connect': return f"Connecting: {server_name}" if server_name else "Connecting MCP"
+        if action == 'disconnect': return f"Disconnecting: {server_name}" if server_name else "Disconnecting MCP"
+        return "MCP"
+
     def is_available(self, context) -> bool:
         return (self._manager or context.mcp_manager) is not None
 

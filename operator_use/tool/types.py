@@ -142,12 +142,23 @@ class Tool(ABC):
         schema: Type[BaseModel],
         kind: ToolKind,
         execution_mode: ToolExecutionMode = ToolExecutionMode.Sequential,
+        display_name: str = "",
     ) -> None:
         self.name = name
         self.description = description
         self.schema = schema
         self.kind = kind
         self.execution_mode = execution_mode
+        self.display_name = display_name
+
+    def get_display_name(self, args: dict[str, Any]) -> str:
+        """Return a human-readable label for channel display based on call args.
+
+        Override in subclasses to produce intent-specific messages (e.g. "Changing
+        setting: memory" instead of "control_center"). Falls back to display_name
+        then name when not overridden.
+        """
+        return self.display_name or self.name
 
     def is_available(self, context: ToolContext) -> bool:
         """Return False to exclude this tool when its backing service is unavailable."""

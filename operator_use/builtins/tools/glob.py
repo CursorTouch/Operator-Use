@@ -26,6 +26,10 @@ class GlobTool(Tool):
             kind=ToolKind.Read,
             execution_mode=ToolExecutionMode.Parallel,        )
 
+    def get_display_name(self, args: dict) -> str:
+        pattern = args.get('pattern', '') or ''
+        return f"Searching: {pattern}" if pattern else "Searching files"
+
     async def execute(
         self,
         invocation: ToolInvocation,

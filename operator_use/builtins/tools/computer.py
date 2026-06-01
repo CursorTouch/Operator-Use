@@ -113,6 +113,28 @@ class ComputerTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,
         )
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        text = args.get('text', '') or ''
+        name = args.get('name', '') or ''
+        app_mode = args.get('app_mode', '') or ''
+        shortcut = args.get('shortcut', '') or ''
+        duration = args.get('duration', '')
+        if action == 'open': return "Opening desktop"
+        if action == 'close': return "Closing desktop"
+        if action == 'click': return "Clicking"
+        if action == 'type': return f"Typing: {text[:30]}" if text else "Typing"
+        if action == 'wait': return f"Waiting {duration}s" if duration else "Waiting"
+        if action == 'app':
+            if app_mode == 'launch': return f"Launching: {name}" if name else "Launching app"
+            if app_mode == 'switch': return f"Switching to: {name}" if name else "Switching app"
+            return f"App: {app_mode}" if app_mode else "App"
+        if action == 'scroll': return "Scrolling"
+        if action == 'move': return "Moving cursor"
+        if action == 'drag': return "Dragging"
+        if action == 'shortcut': return f"Shortcut: {shortcut}" if shortcut else "Shortcut"
+        return "Computer"
+
     def is_available(self, context: ToolContext) -> bool:
         if context.desktop is None:
             return False

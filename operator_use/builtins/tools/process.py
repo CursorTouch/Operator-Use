@@ -113,6 +113,20 @@ class ProcessTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._manager = manager
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        command = args.get('command', '') or ''
+        description = args.get('description', '') or ''
+        process_id = args.get('process_id', '') or ''
+        if action == 'start': return f"Starting: {description or command[:40]}" if (description or command) else "Starting process"
+        if action == 'spawn_agent': return f"Spawning agent: {description[:40]}" if description else "Spawning agent"
+        if action == 'write': return f"Writing to: {process_id}" if process_id else "Writing to process"
+        if action == 'list': return "Listing processes"
+        if action == 'get': return f"Getting process: {process_id}" if process_id else "Getting process"
+        if action == 'stop': return f"Stopping: {process_id}" if process_id else "Stopping process"
+        if action == 'output': return f"Reading output: {process_id}" if process_id else "Reading output"
+        return "Process"
+
     def is_available(self, context) -> bool:
         return (self._manager or context.process_manager) is not None
 

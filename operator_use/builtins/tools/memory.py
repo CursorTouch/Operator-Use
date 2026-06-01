@@ -60,6 +60,15 @@ class MemoryTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,
         )
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        query = args.get('query', '') or ''
+        if action == 'search': return f"Searching memories: {query[:40]}" if query else "Searching memories"
+        if action == 'remember': return "Saving memory"
+        if action == 'forget': return "Forgetting memory"
+        if action == 'reflect': return f"Reflecting: {query[:40]}" if query else "Reflecting"
+        return "Memory"
+
     def is_available(self, context) -> bool:
         sm = context.settings_manager
         if sm is not None and sm.settings.memory is not None and sm.settings.memory.enabled is False:

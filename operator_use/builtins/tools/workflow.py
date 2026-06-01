@@ -167,6 +167,19 @@ class WorkflowTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._manager = manager
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        name = args.get('name', '') or ''
+        run_id = args.get('run_id', '') or ''
+        if action == 'run': return f"Running workflow: {name}" if name else "Running workflow"
+        if action == 'list': return "Listing workflows"
+        if action == 'status': return f"Workflow status: {run_id}" if run_id else "Workflow status"
+        if action == 'cancel': return f"Cancelling workflow: {run_id}" if run_id else "Cancelling workflow"
+        if action == 'discover': return "Discovering workflows"
+        if action == 'create': return f"Creating workflow: {name}" if name else "Creating workflow"
+        if action == 'delete': return f"Deleting workflow: {name}" if name else "Deleting workflow"
+        return "Workflow"
+
     def is_available(self, context) -> bool:
         sm = context.settings_manager
         if sm is not None and not sm.get_workflows_enabled():

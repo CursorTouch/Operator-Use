@@ -20,6 +20,10 @@ class LsTool(Tool):
             kind=ToolKind.Read,
             execution_mode=ToolExecutionMode.Parallel,        )
 
+    def get_display_name(self, args: dict) -> str:
+        path = args.get('path', '.') or '.'
+        return f"Listing: {path}"
+
     async def execute(
         self,
         invocation: ToolInvocation,

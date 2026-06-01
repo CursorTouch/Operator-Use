@@ -93,6 +93,21 @@ class ControlCenterTool(Tool):
         # so without this a scheduled task can be GC'd mid-flight.
         self._tasks: set[asyncio.Task] = set()
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        key = args.get('key')
+        resume_prompt = args.get('resume_prompt')
+        if action == 'get':
+            return f"Reading setting: {key}" if key else "Reading settings"
+        if action == 'set':
+            return f"Changing setting: {key}" if key else "Changing setting"
+        if action == 'reboot':
+            if resume_prompt:
+                short = resume_prompt[:40].rstrip()
+                return f"Rebooting → {short}…"
+            return "Rebooting"
+        return "Settings"
+
     def is_available(self, context: ToolContext) -> bool:
         return context.settings_manager is not None
 
@@ -127,11 +142,17 @@ class ControlCenterTool(Tool):
     def _get(self, invocation: ToolInvocation, sm: Any, key: str | None) -> ToolResult:
         if key is not None:
             if key not in _KEYS:
-                return ToolResult.error(id=invocation.id, content=f"Unknown key {key!r}.")
+                return ToolResult.error(
+                    id=invocation.id, content=f"Unknown key {key!r}.",
+                    metadata={'display_name': f"Unknown setting: {key}"},
+                )
             getter, _setter, desc, reload_req = _KEYS[key]
             value = getattr(sm, getter)()
             row = {"key": key, "value": value, "description": desc, "reload_on_change": reload_req}
-            return ToolResult.ok(id=invocation.id, content=json.dumps(row, indent=2))
+            return ToolResult.ok(
+                id=invocation.id, content=json.dumps(row, indent=2),
+                metadata={'display_name': f"Read setting: {key}"},
+            )
 
         rows = []
         for k in _READABLE_KEYS:
@@ -147,7 +168,10 @@ class ControlCenterTool(Tool):
                 "readonly": setter is None,
                 "reload_on_change": reload_req,
             })
-        return ToolResult.ok(id=invocation.id, content=json.dumps(rows, indent=2))
+        return ToolResult.ok(
+            id=invocation.id, content=json.dumps(rows, indent=2),
+            metadata={'display_name': "Settings read"},
+        )
 
     async def _set(
         self,
@@ -171,7 +195,10 @@ class ControlCenterTool(Tool):
         try:
             getattr(sm, setter_name)(value)
         except Exception as exc:
-            return ToolResult.error(id=invocation.id, content=f"control_center: failed to set {key!r}: {exc}")
+            return ToolResult.error(
+                id=invocation.id, content=f"control_center: failed to set {key!r}: {exc}",
+                metadata={'display_name': f"Failed to change: {key}"},
+            )
 
         msg = f"Set {key!r} = {value!r}."
 
@@ -187,7 +214,10 @@ class ControlCenterTool(Tool):
             else:
                 msg += " (runtime unavailable — restart to apply change)"
 
-        return ToolResult.ok(id=invocation.id, content=msg)
+        return ToolResult.ok(
+            id=invocation.id, content=msg,
+            metadata={'display_name': f"Changed setting: {key}"},
+        )
 
     def _schedule_reboot(
         self,
@@ -206,6 +236,7 @@ class ControlCenterTool(Tool):
             return ToolResult.error(
                 id=invocation.id,
                 content="Reboot unavailable: no engine context.",
+                metadata={'display_name': "Reboot failed"},
             )
 
         snapshot = self._snapshot_changes(context)
@@ -229,11 +260,13 @@ class ControlCenterTool(Tool):
         msg = "Reboot complete. You are the new process. Resume normally from this point."
         if resume_prompt:
             msg += f'\nResume prompt: "{resume_prompt}"'
+        end_label = f"Rebooted → {resume_prompt[:40].rstrip()}…" if resume_prompt else "Rebooted"
         return ToolResult(
             id=invocation.id,
             content=msg,
             terminate=True,
             terminate_message="Back up and running — ready for what's next.",
+            metadata={'display_name': end_label},
         )
 
     async def _reboot(

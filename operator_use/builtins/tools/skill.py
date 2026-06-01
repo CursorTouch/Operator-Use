@@ -124,6 +124,18 @@ class SkillTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,
         )
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        name = args.get('name', '') or ''
+        if action == 'view': return f"Viewing skill: {name}" if name else "Viewing skill"
+        if action == 'create': return f"Creating skill: {name}" if name else "Creating skill"
+        if action == 'edit': return f"Editing skill: {name}" if name else "Editing skill"
+        if action == 'patch': return f"Patching skill: {name}" if name else "Patching skill"
+        if action == 'delete': return f"Deleting skill: {name}" if name else "Deleting skill"
+        if action == 'write_file': return f"Writing skill file: {name}" if name else "Writing skill file"
+        if action == 'remove_file': return f"Removing skill file: {name}" if name else "Removing skill file"
+        return "Skill"
+
     async def execute(
         self,
         invocation: ToolInvocation,

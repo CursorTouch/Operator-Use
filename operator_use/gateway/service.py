@@ -406,7 +406,8 @@ class Gateway:
         # Wrapped in lists/dicts for mutability inside the closure.
         _last_error: list[str] = ['']
         _retry_max: list[int] = [0]  # total attempts (max_retries + 1)
-        _tool_names: dict[str, str] = {}  # id → name, so tool_end can carry the name
+        _tool_names: dict[str, str] = {}         # id → name
+        _tool_display_names: dict[str, str] = {}  # id → display_name from tool_start
 
         async def _on_event(event) -> None:
             match event:
@@ -446,11 +447,12 @@ class Gateway:
 
                 case ToolExecutionStartEvent(tool_call=tc):
                     _tool_names[tc.id] = tc.name
+                    _tool_display_names[tc.id] = tc.metadata.get('display_name', '')
                     out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
                         stream_phase=StreamPhase.CHUNK,
-                        metadata={'kind': 'tool_start', 'name': tc.name, 'args': tc.args, 'id': tc.id, 'tool_kind': tc.kind.value if tc.kind else None},
+                        metadata={'kind': 'tool_start', 'name': tc.name, 'display_name': tc.metadata.get('display_name', ''), 'args': tc.args, 'id': tc.id, 'tool_kind': tc.kind.value if tc.kind else None},
                     )
                     await self._bus.publish_outgoing(out)
 
@@ -469,6 +471,9 @@ class Gateway:
                     # tool-status message to ✅ / ❌. ToolResultContent doesn't carry the
                     # tool name, so look it up from the id→name map populated on start.
                     name = _tool_names.pop(res.id, '')
+                    # Tools can set display_name in their result metadata to override the
+                    # end label (e.g. "Changed setting: memory" vs "control_center").
+                    display_name = res.metadata.get('display_name', '') or _tool_display_names.pop(res.id, '')
                     out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
@@ -476,6 +481,7 @@ class Gateway:
                         metadata={
                             'kind': 'tool_end',
                             'name': name,
+                            'display_name': display_name,
                             'is_error': res.is_error,
                             'result': str(res.content)[:300] if res.is_error else '',
                             'id': res.id,

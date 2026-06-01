@@ -25,6 +25,11 @@ class WriteTool(Tool):
             kind=ToolKind.Write,
             execution_mode=ToolExecutionMode.Parallel,        )
 
+    def get_display_name(self, args: dict) -> str:
+        path = args.get('path', '') or ''
+        name = path.rsplit('/', 1)[-1] if path else ''
+        return f"Writing: {name}" if name else "Writing file"
+
     async def execute(
         self,
         invocation: ToolInvocation,

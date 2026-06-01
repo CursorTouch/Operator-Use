@@ -103,6 +103,20 @@ class SubagentTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._manager = manager
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        label = args.get('label', '') or ''
+        task = args.get('task', '') or ''
+        task_id = args.get('task_id', '') or ''
+        if action == 'create':
+            short = label or (task[:40] if task else '')
+            return f"Spawning: {short}" if short else "Spawning subagent"
+        if action == 'list': return "Listing subagents"
+        if action == 'status': return f"Subagent status: {task_id}" if task_id else "Subagent status"
+        if action == 'cancel': return f"Cancelling subagent: {task_id}" if task_id else "Cancelling subagent"
+        if action == 'profiles': return "Listing profiles"
+        return "Subagent"
+
     def is_available(self, context) -> bool:
         sm = context.settings_manager
         if sm is not None and sm.get_subagents_enabled() is False:

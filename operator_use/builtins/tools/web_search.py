@@ -76,6 +76,14 @@ class WebSearchTool(Tool):
             kind=ToolKind.Web,
             execution_mode=ToolExecutionMode.Parallel,        )
 
+    def get_display_name(self, args: dict) -> str:
+        query = args.get('query', '') or ''
+        mode = args.get('mode', 'text') or 'text'
+        short = query[:40] if len(query) > 40 else query
+        if mode != 'text':
+            return f"Searching {mode}: {short}" if short else f"Searching {mode}"
+        return f"Searching: {short}" if short else "Searching"
+
     async def execute(
         self,
         invocation: ToolInvocation,

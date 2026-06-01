@@ -111,6 +111,17 @@ class SendTool(Tool):
             execution_mode=ToolExecutionMode.Sequential,        )
         self._bus = bus
 
+    def get_display_name(self, args: dict) -> str:
+        action = args.get('action', '')
+        path = args.get('path', '') or ''
+        emoji = args.get('emoji', '') or ''
+        if action == 'file':
+            name = path.rsplit('/', 1)[-1] if path else ''
+            return f"Sending file: {name}" if name else "Sending file"
+        if action == 'intermediate': return "Sending update"
+        if action == 'react': return f"Reacting: {emoji}" if emoji else "Reacting"
+        return "Sending"
+
     def is_available(self, context) -> bool:
         return (self._bus or context.bus) is not None
 
