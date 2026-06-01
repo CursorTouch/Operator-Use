@@ -35,6 +35,8 @@ from operator_use.engine.types import (
 )
 from operator_use.message.types import LLMMessage, ToolMessage
 
+USER_ABORT_MESSAGE = "[Operation interrupted by user]"
+
 
 class Engine:
     def __init__(
@@ -329,7 +331,7 @@ class Engine:
 
                 if signal.is_set():
                     end_reason = 'aborted'
-                    closing = AssistantMessage(contents=[TextContent(content="[Operation interrupted by user]")])
+                    closing = AssistantMessage(contents=[TextContent(content=USER_ABORT_MESSAGE)])
                     await emit(MessageStartEvent(message=closing))
                     await emit(MessageEndEvent(message=closing))
                     messages.append(closing)
@@ -392,7 +394,7 @@ class Engine:
                         # properly closed and the model sees the interruption context.
                         # No AgentErrorEvent → _run_with_retry sees no error and does
                         # not retry (retrying a deliberate abort makes no sense).
-                        closing = AssistantMessage(contents=[TextContent(content="[Operation interrupted by user]")])
+                        closing = AssistantMessage(contents=[TextContent(content=USER_ABORT_MESSAGE)])
                         await emit(MessageStartEvent(message=closing))
                         await emit(MessageEndEvent(message=closing))
                         messages.append(closing)
@@ -448,7 +450,7 @@ class Engine:
 
                         if signal.is_set():
                             end_reason = 'aborted'
-                            closing = AssistantMessage(contents=[TextContent(content="[Operation interrupted by user]")])
+                            closing = AssistantMessage(contents=[TextContent(content=USER_ABORT_MESSAGE)])
                             await emit(MessageStartEvent(message=closing))
                             await emit(MessageEndEvent(message=closing))
                             messages.append(closing)

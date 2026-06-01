@@ -223,13 +223,22 @@ class TelegramChannel(BaseChannel):
                     bot = self._app.bot
                     existing = self._live_msg_ids.get(chat_id)
                     if existing is None:
-                        try:
+                        # Shield the send + ID assignment so that if the task is
+                        # cancelled mid-request, the message ID is still recorded.
+                        # Without this, task.cancel() can interrupt after Telegram
+                        # creates the message but before the ID is saved, causing
+                        # the END phase to send a duplicate instead of editing.
+                        async def _send_and_record() -> None:
                             sent = await bot.send_message(
                                 int(chat_id),
                                 markdown_to_telegram_html(buffered),
                                 parse_mode="HTML",
                             )
                             self._live_msg_ids[chat_id] = sent.message_id
+                        try:
+                            await asyncio.shield(_send_and_record())
+                        except asyncio.CancelledError:
+                            raise
                         except Exception:
                             logger.exception("TelegramChannel: live send_message failed")
                         # Posting a real message clears the client-side typing
