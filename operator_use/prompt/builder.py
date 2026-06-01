@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -45,7 +45,6 @@ class PromptTemplate:
         self.profile_dir = profile_dir
 
     def build(self) -> str:
-        today = date.today().isoformat()
         cwd = self.cwd.replace("\\", "/")
         global_dir = get_config_dir()
         if self.profile_dir:
@@ -63,7 +62,7 @@ class PromptTemplate:
             profile_block = ""
         session_line = f"\nSession ID: {self.session_id}" if self.session_id else ""
         footer = (
-            f"\nCurrent date: {today}\nCurrent working directory: {cwd}"
+            f"\nCurrent working directory: {cwd}"
             f"\nGlobal directory: {global_dir}"
             + profile_block
             + session_line

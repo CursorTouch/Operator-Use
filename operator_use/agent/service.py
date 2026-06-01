@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -573,11 +573,27 @@ class Agent(ExtensionContext):
         user_message = UserMessage(contents=[TextContent(content=user_input)])
         user_entry_id = self._session_manager.append_message(user_message, meta=opts.meta)
 
-        # Build a context-only user message with recalled memory, current time, and any
-        # attached images prepended. This is never persisted — session history stays clean.
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        # Build a context-only user message with recalled memory, current datetime,
+        # and any injected hints. This is never persisted — session history stays clean.
+        now = datetime.now().astimezone()
+        time_str = now.strftime("%A, %-d %B %Y at %-I:%M %p %Z")
         prefix = f"<memory>\n{memory_context}\n</memory>\n\n" if memory_context else ""
-        prefix += f"<time>{now}</time>\n\n"
+        prefix += f"Current time: {time_str}\n\n"
+
+        # TTS hint — injected when TTS is enabled so the model knows to avoid markdown.
+        try:
+            from operator_use.settings.manager import SettingsManager
+            _sm = SettingsManager.get_instance()
+            _tts_enabled = (_sm.get_tts_settings().enabled if _sm else None)
+        except Exception:
+            _tts_enabled = None
+        if _tts_enabled:
+            prefix += (
+                "Note: Text-to-speech is enabled. Respond in plain, natural language "
+                "without markdown formatting (no **bold**, no bullet lists, no headers, "
+                "no code fences) so the response sounds natural when spoken.\n\n"
+            )
+
         ctx_contents: list = [TextContent(content=f"{prefix}{user_input}")]
         for img_path in opts.images:
             ctx_contents.append(ImageContent.from_file(img_path))
