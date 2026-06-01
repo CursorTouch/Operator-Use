@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from operator_use.inference.api.audio.service import AudioLLM
-from operator_use.inference.types import AudioFormat, TTSContext
+from operator_use.inference.types import AudioFormat, AudioStopReason, TTSContext
 
 _MEDIA_DIR = Path.home() / '.operator' / 'media'
 
@@ -50,8 +50,8 @@ async def _on_message_send(event) -> object:
 
     model_id = (aux_tts.model if aux_tts and aux_tts.model else "tts-1")
     provider = aux_tts.provider if aux_tts else None
-    voice = (tts.voice if tts else None)
-    speed = (tts.speed if tts else None)
+    voice = (tts.voice if tts else None) or "alloy"
+    speed = (tts.speed if tts else None) or 1.0
     language = tts.language if tts else None
 
     try:
@@ -63,6 +63,10 @@ async def _on_message_send(event) -> object:
             response_format=AudioFormat.MP3,
             language=language,
         ))
+        if result.stop_reason != AudioStopReason.Stop or not result.audio:
+            logger.warning("TTS hook: synthesis returned no audio (stop_reason=%s, error=%s)",
+                           result.stop_reason, result.error)
+            return None
         fmt_ext = _FORMAT_EXT.get(result.format, 'mp3')
         _MEDIA_DIR.mkdir(parents=True, exist_ok=True)
         audio_path = _MEDIA_DIR / f"tts_{int(time.time() * 1000)}.{fmt_ext}"
