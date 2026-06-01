@@ -329,7 +329,11 @@ class Engine:
 
                 if signal.is_set():
                     end_reason = 'aborted'
-                    await emit(TurnEndEvent(message=message, tool_results=tool_results))
+                    closing = AssistantMessage(contents=[TextContent(content="[Operation interrupted by user]")])
+                    await emit(MessageStartEvent(message=closing))
+                    await emit(MessageEndEvent(message=closing))
+                    messages.append(closing)
+                    await emit(TurnEndEvent(message=closing, tool_results=tool_results))
                     break
 
                 await emit(MessageStartEvent(message=message))
@@ -382,10 +386,24 @@ class Engine:
                     ))
 
                 match message.stop_reason:
-                    case StopReason.Error | StopReason.Abort:
-                        # Emit the real message so session persistence can record it
-                        # for the audit trail. It is filtered from LLM context by
-                        # strip_unusable_trailing_assistant (stop_reason != Stop).
+                    case StopReason.Abort:
+                        # User-initiated interrupt mid-stream. Emit a clean synthetic
+                        # closing message (not the raw partial) so the session is
+                        # properly closed and the model sees the interruption context.
+                        # No AgentErrorEvent → _run_with_retry sees no error and does
+                        # not retry (retrying a deliberate abort makes no sense).
+                        closing = AssistantMessage(contents=[TextContent(content="[Operation interrupted by user]")])
+                        await emit(MessageStartEvent(message=closing))
+                        await emit(MessageEndEvent(message=closing))
+                        messages.append(closing)
+                        end_reason = 'aborted'
+                        await emit(TurnEndEvent(message=closing, tool_results=tool_results))
+                        break
+
+                    case StopReason.Error:
+                        # LLM/provider error — emit the real message so session
+                        # persistence can record it for the audit trail. It is
+                        # filtered from LLM context by strip_unusable_trailing_assistant.
                         await emit(MessageEndEvent(message=message))
                         err_msg = message.error or f"Turn failed with reason: {message.stop_reason.value}"
                         end_reason = 'error'
@@ -430,6 +448,10 @@ class Engine:
 
                         if signal.is_set():
                             end_reason = 'aborted'
+                            closing = AssistantMessage(contents=[TextContent(content="[Operation interrupted by user]")])
+                            await emit(MessageStartEvent(message=closing))
+                            await emit(MessageEndEvent(message=closing))
+                            messages.append(closing)
                             await emit(TurnEndEvent(message=message, tool_results=tool_results))
                             break
 

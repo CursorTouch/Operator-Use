@@ -441,9 +441,11 @@ class Agent(ExtensionContext):
                 total = message.usage.input_tokens + message.usage.output_tokens
                 if total:
                     self._context_tokens = total
-                # Error/abort messages are held back — only written to session on
+                # Error messages are held back — only written to session on
                 # final failure so intermediate retry errors don't pollute the log.
-                if message.stop_reason in (StopReason.Error, StopReason.Abort):
+                # Abort is handled by the engine (synthetic closing message, stop_reason=Stop)
+                # so it never reaches this guard.
+                if message.stop_reason == StopReason.Error:
                     error_holder.clear()
                     error_holder.append(message)
                     return
