@@ -420,9 +420,27 @@ class SlackChannel(BaseChannel):
             self._stop_thinking_stream(chat_id)
             self._thinking_buffers.pop(chat_id, None)
             buffered = self._buffers.pop(chat_id, "")
-            # keep_typing leaves the live-streaming loop running so subsequent
-            # turns (e.g. after a tool call) stream into a new live message.
             keep_typing = metadata.get('keep_typing', False)
+            suppress_text = metadata.get('suppress_text', False)
+
+            # TTS will deliver audio — discard buffered text and do cleanup only.
+            if suppress_text and not keep_typing:
+                leftover = self._tool_ts_map.pop(chat_id, None)
+                if leftover is not None and client is not None:
+                    try:
+                        await client.chat_delete(channel=slack_channel_id, ts=leftover)
+                    except Exception:
+                        pass
+                if self._streaming:
+                    self._stop_live_streaming(chat_id)
+                    live_ts = self._live_ts_map.pop(chat_id, None)
+                    if live_ts is not None and client is not None:
+                        try:
+                            await client.chat_delete(channel=slack_channel_id, ts=live_ts)
+                        except Exception:
+                            pass
+                return
+
             # Final END — sweep any leftover tool-status message.
             if not keep_typing:
                 leftover = self._tool_ts_map.pop(chat_id, None)

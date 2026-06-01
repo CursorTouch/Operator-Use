@@ -406,6 +406,17 @@ class Gateway:
         """Invoke the agent and publish OutgoingMessage events to the bus."""
         from operator_use.agent.types import PromptOptions
 
+        # Pre-check TTS enablement so the END signal can suppress the text
+        # message when audio will be delivered instead.
+        try:
+            from operator_use.settings.manager import SettingsManager
+            _sm = SettingsManager.get_instance()
+            _tts = _sm.get_tts_settings() if _sm else None
+            _tts_enabled = _tts.enabled if _tts else None
+            tts_will_fire = _tts_enabled is True
+        except Exception:
+            tts_will_fire = False
+
         response_parts: list[str] = []
         # Tracks the last error text seen from the engine and retry metadata.
         # Wrapped in lists/dicts for mutability inside the closure.
@@ -460,6 +471,8 @@ class Gateway:
                     meta: dict = {'origin_message_id': message_id} if message_id else {}
                     if m.stop_reason != StopReason.Stop:
                         meta['keep_typing'] = True
+                    if tts_will_fire and m.stop_reason == StopReason.Stop:
+                        meta['suppress_text'] = True
                     out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
@@ -622,16 +635,44 @@ class Gateway:
             response_text=response_text,
             is_voice=is_voice,
         ))
+        tts_audio_sent = False
         for r in send_results:
             if isinstance(r, MessageSendResult) and r.parts:
                 channel = self._channels.get(channel_id)
                 if channel is not None:
+                    from operator_use.bus.types import AudioPart as _AudioPart
+                    audio_path = next(
+                        (p.audio for p in r.parts if isinstance(p, _AudioPart)), None
+                    )
                     audio_out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
                         parts=r.parts,
+                        metadata={'audio_path': audio_path} if audio_path else {},
                     )
                     await channel.send(audio_out)
+                    tts_audio_sent = True
+
+                    # Patch the assistant message in the session with the audio path.
+                    if audio_path:
+                        entry_id = getattr(agent, '_last_assistant_entry_id', None)
+                        if entry_id:
+                            from operator_use.session.types import MessageMeta, MessageAttachment
+                            agent._session_manager.patch_entry_meta(
+                                entry_id,
+                                MessageMeta(attachments=[MessageAttachment(path=audio_path, mime_type='audio/wav')]),
+                            )
+
+        # If TTS was expected but failed, fall back to sending the text directly
+        # so the user still gets a response.
+        if tts_will_fire and not tts_audio_sent and response_text:
+            channel = self._channels.get(channel_id)
+            if channel is not None:
+                await channel.send(OutgoingMessage(
+                    channel=channel_id,
+                    chat_id=chat_id,
+                    parts=[TextPart(response_text)],
+                ))
 
         # Publish DONE
         await self._bus.publish_outgoing(OutgoingMessage(

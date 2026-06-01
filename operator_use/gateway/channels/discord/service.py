@@ -436,9 +436,27 @@ class DiscordChannel(BaseChannel):
             buffered = self._buffers.pop(chat_id, "")
             reference = None
             origin_msg_id = metadata.get('origin_message_id')
-            # keep_typing: flush text but leave the indicator running (non-final
-            # stop reasons like tool_calls).
             keep_typing = metadata.get('keep_typing', False)
+            suppress_text = metadata.get('suppress_text', False)
+
+            # TTS will deliver audio — discard buffered text and do cleanup only.
+            if suppress_text and not keep_typing:
+                leftover = self._tool_messages.pop(chat_id, None)
+                if leftover is not None:
+                    try:
+                        await leftover.delete()
+                    except Exception:
+                        pass
+                if self._streaming:
+                    self._stop_live_streaming(chat_id)
+                    live_msg = self._live_messages.pop(chat_id, None)
+                    if live_msg is not None:
+                        try:
+                            await live_msg.delete()
+                        except Exception:
+                            pass
+                return
+
             # Final END — sweep any leftover tool-status message (model ended
             # without streaming text after the last tool).
             if not keep_typing:

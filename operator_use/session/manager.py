@@ -173,6 +173,15 @@ class SessionManager:
         entry = MessageEntry(message=message, parent_id=self.leaf_id, meta=meta)
         return self._append_entry(entry)
 
+    def patch_entry_meta(self, entry_id: str, meta: "MessageMeta") -> bool:
+        """Update the meta of an existing MessageEntry in-place and rewrite the session file."""
+        entry = self.by_id.get(entry_id)
+        if not isinstance(entry, MessageEntry):
+            return False
+        entry.meta = meta
+        self._rewrite_file()
+        return True
+
     def append_channel_entry(self, name: str, chat_id: str | None = None, user_id: str | None = None) -> str:
         entry = ChannelEntry(name=name, chat_id=chat_id, user_id=user_id, parent_id=self.leaf_id)
         return self._append_entry(entry)

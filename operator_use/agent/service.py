@@ -97,6 +97,7 @@ class Agent(ExtensionContext):
 
         self._phase: str = "idle"
         self._rebooting: bool = False
+        self._last_assistant_entry_id: str | None = None
         self._active_profile: AgentProfile | None = None
         self._baseline_llm = engine.llm
         self._engine.options.before_tool_call = self._before_tool_call
@@ -452,6 +453,7 @@ class Agent(ExtensionContext):
                     return
                 entry_id = self._session_manager.append_message(message)
                 persisted_ids.append(entry_id)
+                self._last_assistant_entry_id = entry_id
             elif message.role == Role.TOOL:
                 entry_id = self._session_manager.append_message(message)
                 persisted_ids.append(entry_id)

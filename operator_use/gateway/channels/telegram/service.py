@@ -445,10 +445,37 @@ class TelegramChannel(BaseChannel):
             buffered = self._buffers.pop(chat_id, "")
             reply_params = None
             origin_msg_id = metadata.get('origin_message_id')
+            keep_typing = metadata.get('keep_typing', False)
+            suppress_text = metadata.get('suppress_text', False)
+
+            # TTS will deliver audio — discard the buffered text and do cleanup only.
+            if suppress_text and not keep_typing:
+                self._stop_typing(chat_id)
+                leftover = self._tool_msg_ids.pop(chat_id, None)
+                if leftover is not None:
+                    try:
+                        await bot.delete_message(int(chat_id), leftover)
+                    except Exception:
+                        pass
+                if self._streaming:
+                    self._stop_live_streaming(chat_id)
+                    pending_send = self._live_send_tasks.pop(chat_id, None)
+                    if pending_send is not None and not pending_send.done():
+                        try:
+                            await asyncio.wait_for(asyncio.shield(pending_send), timeout=5.0)
+                        except Exception:
+                            pass
+                    live_msg_id = self._live_msg_ids.pop(chat_id, None)
+                    if live_msg_id is not None:
+                        try:
+                            await bot.delete_message(int(chat_id), live_msg_id)
+                        except Exception:
+                            pass
+                return
+
             # When keep_typing is set the model hit a non-final stop reason (e.g.
             # tool_calls): flush the buffered text but leave the typing/live-stream
             # task running so the indicator stays on through tool execution.
-            keep_typing = metadata.get('keep_typing', False)
             # Final END (stop_reason == Stop) — sweep any leftover tool-status
             # message in case the model finished without streaming text after the
             # last tool.
