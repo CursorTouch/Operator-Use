@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -570,14 +571,17 @@ class Agent(ExtensionContext):
         user_message = UserMessage(contents=[TextContent(content=user_input)])
         user_entry_id = self._session_manager.append_message(user_message, meta=opts.meta)
 
-        # Build a context-only user message with recalled memory prepended.
+        # Build a context-only user message with recalled memory and current time prepended.
         # This is never persisted — session history stays clean.
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         if memory_context:
             user_message = UserMessage(contents=[
-                TextContent(content=f"<memory>\n{memory_context}\n</memory>\n\n{user_input}")
+                TextContent(content=f"<memory>\n{memory_context}\n</memory>\n\n<time>{now}</time>\n\n{user_input}")
             ])
         else:
-            user_message = user_message
+            user_message = UserMessage(contents=[
+                TextContent(content=f"<time>{now}</time>\n\n{user_input}")
+            ])
 
         # Assemble tools: base tools + extension tools (base names take priority)
         base_tool_names = {t.name for t in self._engine.tools}
