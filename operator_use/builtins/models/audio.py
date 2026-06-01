@@ -36,7 +36,7 @@ models = [
     Model(id="scribe_v1",              name="Scribe v1",               provider="elevenlabs", cost=Cost(input=0.40), input=_AUDIO, output=_TEXT,  api="elevenlabs-audio"),
     Model(id="scribe_v2",              name="Scribe v2",               provider="elevenlabs", cost=Cost(input=0.40), input=_AUDIO, output=_TEXT,  api="elevenlabs-audio"),
     # Groq TTS
-    Model(id="canopylabs/orpheus-v1-english", name="Orpheus v1 English", provider="groq", cost=Cost(), input=_TEXT, output=_AUDIO, api="openai-audio", voices=_GROQ_VOICES),
+    Model(id="canopylabs/orpheus-v1-english", name="Orpheus v1 English", provider="groq", cost=Cost(), input=_TEXT, output=_AUDIO, api="openai-audio", voices=_GROQ_VOICES, tts_format="wav"),
     # Groq STT
     Model(id="whisper-large-v3",       name="Whisper Large v3",       provider="groq", cost=Cost(input=0.111), input=_AUDIO, output=_TEXT, api="openai-audio"),
     Model(id="whisper-large-v3-turbo", name="Whisper Large v3 Turbo", provider="groq", cost=Cost(input=0.04),  input=_AUDIO, output=_TEXT, api="openai-audio"),

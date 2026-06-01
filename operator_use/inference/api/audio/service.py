@@ -66,6 +66,11 @@ class AudioLLM:
         api_key = await self._auth_store.get_api_key(self.provider_id)
         if api_key:
             self.api.options.api_key = api_key
+        if self.model.tts_format:
+            from operator_use.inference.types import AudioFormat
+            fmt = AudioFormat(self.model.tts_format)
+            from dataclasses import replace
+            context = replace(context, response_format=fmt)
         return await self.api.synthesize(self.model, context)
 
     async def transcribe(self, context: STTContext) -> TranscribedAudio:

@@ -32,6 +32,7 @@ class Model:
     api: str | None = None
     base_url: str | None = None
     voices: list[str] = field(default_factory=list)
+    tts_format: str | None = None  # override response_format for TTS (e.g. "wav" for Groq)
 
     def get_name(self) -> str:
         return self.name
