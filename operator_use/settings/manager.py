@@ -1034,6 +1034,89 @@ class SettingsManager:
         """Return the resolved TTS settings, with empty defaults when unset."""
         return self.settings.tts or TTSSettings()
 
+    def _ensure_stt(self) -> STTSettings:
+        if self.global_settings.stt is None:
+            self.global_settings.stt = STTSettings()
+        self.settings.stt = self.global_settings.stt
+        return self.global_settings.stt
+
+    def _ensure_tts(self) -> TTSSettings:
+        if self.global_settings.tts is None:
+            self.global_settings.tts = TTSSettings()
+        self.settings.tts = self.global_settings.tts
+        return self.global_settings.tts
+
+    def _ensure_aux_stt(self) -> "AuxiliaryTaskSettings":
+        if self.global_settings.auxiliary is None:
+            self.global_settings.auxiliary = AuxiliarySettings()
+            self.settings.auxiliary = self.global_settings.auxiliary
+        if self.global_settings.auxiliary.stt is None:
+            self.global_settings.auxiliary.stt = AuxiliaryTaskSettings()
+        return self.global_settings.auxiliary.stt
+
+    def _ensure_aux_tts(self) -> "AuxiliaryTaskSettings":
+        if self.global_settings.auxiliary is None:
+            self.global_settings.auxiliary = AuxiliarySettings()
+            self.settings.auxiliary = self.global_settings.auxiliary
+        if self.global_settings.auxiliary.tts is None:
+            self.global_settings.auxiliary.tts = AuxiliaryTaskSettings()
+        return self.global_settings.auxiliary.tts
+
+    # STT
+    def get_stt_enabled(self) -> bool | None:
+        return (self.settings.stt or STTSettings()).enabled
+
+    def set_stt_enabled(self, enabled: bool | None) -> None:
+        self._ensure_stt().enabled = enabled
+        self._mark_modified("stt", "enabled")
+
+    def get_stt_model(self) -> str | None:
+        aux = self.settings.auxiliary
+        return (aux.stt.model if aux and aux.stt else None)
+
+    def set_stt_model(self, model: str) -> None:
+        self._ensure_aux_stt().model = model
+        self._mark_modified("auxiliary", "stt.model")
+
+    def get_stt_provider(self) -> str | None:
+        aux = self.settings.auxiliary
+        return (aux.stt.provider if aux and aux.stt else None)
+
+    def set_stt_provider(self, provider: str) -> None:
+        self._ensure_aux_stt().provider = provider
+        self._mark_modified("auxiliary", "stt.provider")
+
+    # TTS
+    def get_tts_enabled(self) -> bool | None:
+        return (self.settings.tts or TTSSettings()).enabled
+
+    def set_tts_enabled(self, enabled: bool | None) -> None:
+        self._ensure_tts().enabled = enabled
+        self._mark_modified("tts", "enabled")
+
+    def get_tts_voice(self) -> str | None:
+        return (self.settings.tts or TTSSettings()).voice
+
+    def set_tts_voice(self, voice: str) -> None:
+        self._ensure_tts().voice = voice
+        self._mark_modified("tts", "voice")
+
+    def get_tts_model(self) -> str | None:
+        aux = self.settings.auxiliary
+        return (aux.tts.model if aux and aux.tts else None)
+
+    def set_tts_model(self, model: str) -> None:
+        self._ensure_aux_tts().model = model
+        self._mark_modified("auxiliary", "tts.model")
+
+    def get_tts_provider(self) -> str | None:
+        aux = self.settings.auxiliary
+        return (aux.tts.provider if aux and aux.tts else None)
+
+    def set_tts_provider(self, provider: str) -> None:
+        self._ensure_aux_tts().provider = provider
+        self._mark_modified("auxiliary", "tts.provider")
+
     # ── Auxiliary models ──────────────────────────────────────────────────────
 
     def get_auxiliary_task(self, slot: str) -> AuxiliaryTaskSettings:

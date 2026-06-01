@@ -25,6 +25,15 @@ _KEYS: dict[str, tuple[str, str | None, str, bool]] = {
     # Model / provider — no reload needed; picked up at next turn
     "default_provider":     ("get_default_provider",    "set_default_provider",     "Default LLM provider (e.g. 'anthropic').",       False),
     "default_model":        ("get_default_model",        "set_default_model",        "Default model ID (e.g. 'claude-opus-4-7').",     False),
+    # STT — no reload needed; hooks read settings dynamically each message
+    "stt_enabled":          ("get_stt_enabled",          "set_stt_enabled",          "Enable/disable speech-to-text transcription.",   False),
+    "stt_model":            ("get_stt_model",             "set_stt_model",            "STT model ID (e.g. 'whisper-large-v3-turbo').",  False),
+    "stt_provider":         ("get_stt_provider",          "set_stt_provider",         "STT provider (e.g. 'groq', 'openai').",          False),
+    # TTS — no reload needed; hooks read settings dynamically each message
+    "tts_enabled":          ("get_tts_enabled",          "set_tts_enabled",          "Enable/disable text-to-speech synthesis.",        False),
+    "tts_voice":            ("get_tts_voice",             "set_tts_voice",            "TTS voice name (e.g. 'autumn', 'alloy').",       False),
+    "tts_model":            ("get_tts_model",             "set_tts_model",            "TTS model ID (e.g. 'canopylabs/orpheus-v1-english').", False),
+    "tts_provider":         ("get_tts_provider",          "set_tts_provider",         "TTS provider (e.g. 'groq', 'openai').",          False),
 }
 
 _READABLE_KEYS = sorted(_KEYS)
