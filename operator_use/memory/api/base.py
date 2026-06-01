@@ -33,6 +33,10 @@ class BaseMemoryAPI(ABC):
     def search(self, query: str, *, limit: int = 5) -> list[MemorySearchResult]:
         return []
 
+    async def reflect(self, query: str, *, session_id: str = "") -> str:
+        """Synthesize an answer across stored memories. Empty if unsupported."""
+        return ""
+
     async def remember(self, content: str, metadata: dict[str, Any] | None = None) -> str:
         await self.on_memory_write("remember", "", content, metadata)
         return ""

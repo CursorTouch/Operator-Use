@@ -13,6 +13,7 @@ class MemoryAction(str, Enum):
     search = "search"
     remember = "remember"
     forget = "forget"
+    reflect = "reflect"
 
 
 class MemorySchema(BaseModel):
@@ -21,10 +22,12 @@ class MemorySchema(BaseModel):
             "Memory action to perform:\n"
             "  search   — retrieve relevant long-term memories. Requires `query`.\n"
             "  remember — store a durable fact. Requires `content`.\n"
-            "  forget   — remove a memory by provider id when supported. Requires `memory_id`."
+            "  forget   — remove a memory by provider id when supported. Requires `memory_id`.\n"
+            "  reflect  — synthesize an answer across stored memories when the provider "
+            "supports it (e.g. Hindsight). Requires `query`."
         )
     )
-    query: str | None = Field(default=None, description="Search query. Required for action=search.")
+    query: str | None = Field(default=None, description="Search query. Required for action=search or action=reflect.")
     content: str | None = Field(default=None, description="Durable memory content. Required for action=remember.")
     memory_id: str | None = Field(default=None, description="Provider memory id. Required for action=forget.")
     limit: int = Field(default=5, ge=1, le=20, description="Maximum search results.")
@@ -33,6 +36,8 @@ class MemorySchema(BaseModel):
     def _check_action_fields(self) -> MemorySchema:
         if self.action == MemoryAction.search and not self.query:
             raise ValueError("'query' is required when action='search'")
+        if self.action == MemoryAction.reflect and not self.query:
+            raise ValueError("'query' is required when action='reflect'")
         if self.action == MemoryAction.remember and not self.content:
             raise ValueError("'content' is required when action='remember'")
         if self.action == MemoryAction.forget and not self.memory_id:
@@ -88,6 +93,11 @@ class MemoryTool(Tool):
                     if ok:
                         return ToolResult.ok(id=invocation.id, content="Memory forgotten.")
                     return ToolResult.error(id=invocation.id, content="memory: provider could not forget that memory.")
+                case MemoryAction.reflect:
+                    text = await manager.reflect(str(params.get("query", "")))
+                    if text.strip():
+                        return ToolResult.ok(id=invocation.id, content=text)
+                    return ToolResult.ok(id=invocation.id, content="No synthesis available (the active provider may not support reflect).")
                 case _:
                     return ToolResult.error(id=invocation.id, content=f"memory: unknown action '{action}'.")
         except Exception as exc:

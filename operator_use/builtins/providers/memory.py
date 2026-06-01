@@ -15,6 +15,30 @@ providers = [
         options=MemoryOptions(api_key_env="SUPERMEMORY_API_KEY"),
     ),
     MemoryProvider(
+        id="hindsight",
+        name="Hindsight",
+        api="hindsight",
+        options=MemoryOptions(
+            api_key_env="HINDSIGHT_API_KEY",
+            config={"bank_id": "operator", "budget": "mid", "prefetch_method": "recall"},
+        ),
+    ),
+    MemoryProvider(
+        id="holographic",
+        name="Holographic",
+        api="holographic",
+        options=MemoryOptions(config={"default_trust": 0.5}),
+    ),
+    MemoryProvider(
+        id="openviking",
+        name="OpenViking",
+        api="openviking",
+        options=MemoryOptions(
+            api_key_env="OPENVIKING_API_KEY",
+            config={"target_uri": "viking://memory/"},
+        ),
+    ),
+    MemoryProvider(
         id="local",
         name="Local",
         api="local",

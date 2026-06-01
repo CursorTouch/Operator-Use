@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 
 from operator_use.memory import MemoryManager, MemoryContext
+from operator_use.memory.api.hindsight import HindsightMemoryAPI
+from operator_use.memory.api.holographic import HolographicMemoryAPI
 from operator_use.memory.api.mem0 import Mem0MemoryAPI
+from operator_use.memory.api.openviking import OpenVikingMemoryAPI
 from operator_use.memory.api.registry import MemoryAPIRegistry
 from operator_use.memory.api.supermemory import SupermemoryAPI
 from operator_use.memory.types import MemoryOptions
@@ -15,6 +18,9 @@ def test_memory_api_registry_loads_builtins():
 
     assert registry.get("mem0") is Mem0MemoryAPI
     assert registry.get("supermemory") is SupermemoryAPI
+    assert registry.get("hindsight") is HindsightMemoryAPI
+    assert registry.get("holographic") is HolographicMemoryAPI
+    assert registry.get("openviking") is OpenVikingMemoryAPI
 
 
 def test_memory_provider_registry_loads_builtins():
@@ -22,6 +28,9 @@ def test_memory_provider_registry_loads_builtins():
 
     assert registry.get("mem0") is not None
     assert registry.get("supermemory") is not None
+    assert registry.get("hindsight") is not None
+    assert registry.get("holographic") is not None
+    assert registry.get("openviking") is not None
 
 
 def test_memory_manager_initializes_active_provider(tmp_path):
@@ -166,6 +175,139 @@ def test_custom_provider_unregister():
     assert registry.get("temp") is None
     # Builtins unaffected
     assert registry.get("mem0") is not None
+
+
+class _FakeRecallResult:
+    def __init__(self, text, type_="fact"):
+        self.text = text
+        self.type = type_
+
+
+class _FakeRecallResponse:
+    def __init__(self, results):
+        self.results = results
+
+
+class _FakeReflectResponse:
+    def __init__(self, text):
+        self.text = text
+
+
+class _FakeHindsightClient:
+    def __init__(self):
+        self.retain_calls = []
+
+    def recall(self, bank_id, query, budget=None, max_tokens=None):
+        return _FakeRecallResponse([_FakeRecallResult(f"Recalled {query}")])
+
+    def reflect(self, bank_id, query, budget=None):
+        return _FakeReflectResponse(f"Synthesis about {query} for {bank_id}")
+
+    def retain(self, bank_id, content, metadata=None):
+        self.retain_calls.append({"bank_id": bank_id, "content": content, "metadata": metadata})
+
+
+@pytest.mark.asyncio
+async def test_hindsight_recall_prefetch_and_retain_with_fake_client():
+    client = _FakeHindsightClient()
+    api = HindsightMemoryAPI(options=MemoryOptions(config={"bank_id": "ops"}), client=client)
+    api.initialize(MemoryContext(session_id="s1"))
+
+    recalled = await api.prefetch("gateway")
+    await api.on_turn_complete("remember gateway", "stored", session_id="s1")
+
+    assert "Relevant Hindsight memories" in recalled
+    assert "Recalled gateway" in recalled
+    assert client.retain_calls
+    assert client.retain_calls[0]["bank_id"] == "ops"
+    assert "remember gateway" in client.retain_calls[0]["content"]
+    assert client.retain_calls[0]["metadata"]["session_id"] == "s1"
+
+
+@pytest.mark.asyncio
+async def test_hindsight_reflect_prefetch_and_reflect_method():
+    client = _FakeHindsightClient()
+    api = HindsightMemoryAPI(
+        options=MemoryOptions(config={"bank_id": "ops", "prefetch_method": "reflect"}),
+        client=client,
+    )
+    api.initialize(MemoryContext())
+
+    recalled = await api.prefetch("Alice")
+    synthesized = await api.reflect("Alice")
+
+    assert "Hindsight synthesis" in recalled
+    assert "Synthesis about Alice for ops" in recalled
+    assert synthesized == "Synthesis about Alice for ops"
+
+
+@pytest.mark.asyncio
+async def test_holographic_store_search_forget_and_trust(tmp_path):
+    api = HolographicMemoryAPI(options=MemoryOptions(config={"db_path": str(tmp_path / "holo.db")}))
+    api.initialize(MemoryContext())
+
+    mid = await api.remember("The deploy script lives in scripts/deploy.sh")
+    await api.on_turn_complete("where are docs", "docs are in the docs/ directory", session_id="s1")
+
+    results = api.search("deploy script", limit=5)
+    assert results
+    assert any("deploy.sh" in r.content for r in results)
+    top = results[0]
+    assert top.metadata["trust"] >= 0.5  # default trust, possibly reinforced
+
+    # Recall reinforces trust: searching again raises the hit count.
+    api.search("deploy script", limit=5)
+    reinforced = api.search("deploy script", limit=5)[0]
+    assert reinforced.metadata["hits"] >= 2
+
+    assert await api.forget(mid) is True
+    assert await api.forget(mid) is False
+    await api.shutdown()
+
+
+class _FakeVikingResource:
+    def __init__(self, uri, score, l0):
+        self.uri = uri
+        self.score = score
+        self.l0 = l0
+
+
+class _FakeVikingFindResult:
+    def __init__(self, resources):
+        self.resources = resources
+
+
+class _FakeVikingClient:
+    def __init__(self):
+        self.remembered = []
+        self.initialized = False
+
+    def initialize(self):
+        self.initialized = True
+
+    def find(self, query, target_uri=None):
+        return _FakeVikingFindResult([
+            _FakeVikingResource("viking://memory/oauth", 0.85, f"Summary about {query}"),
+        ])
+
+    def remember(self, content, target=None):
+        self.remembered.append((content, target))
+        return {"uri": "viking://memory/new"}
+
+
+@pytest.mark.asyncio
+async def test_openviking_prefetch_and_remember_with_fake_client():
+    client = _FakeVikingClient()
+    api = OpenVikingMemoryAPI(client=client)
+    api.initialize(MemoryContext())
+
+    recalled = await api.prefetch("oauth flow")
+    await api.on_turn_complete("how does oauth work", "it uses tokens", session_id="s1")
+
+    assert "OpenViking context" in recalled
+    assert "Summary about oauth flow" in recalled
+    assert client.remembered
+    assert client.remembered[0][1] == "viking://memory/"
 
 
 @pytest.mark.asyncio

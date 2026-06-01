@@ -58,6 +58,11 @@ class MemoryManager:
             return []
         return self.api.search(query, limit=limit)
 
+    async def reflect(self, query: str, *, session_id: str = "") -> str:
+        if self.api is None:
+            return ""
+        return await self.api.reflect(query, session_id=session_id)
+
     async def remember(self, content: str, metadata: dict | None = None) -> str:
         if self.api is not None:
             return await self.api.remember(content, metadata)
