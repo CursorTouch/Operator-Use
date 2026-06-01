@@ -580,13 +580,22 @@ class Agent(ExtensionContext):
         prefix = f"<memory>\n{memory_context}\n</memory>\n\n" if memory_context else ""
         prefix += f"Current time: {time_str}\n\n"
 
-        # TTS hint — injected when TTS is enabled so the model knows to avoid markdown.
+        # Runtime context — model, TTS/STT state
         try:
             from operator_use.settings.manager import SettingsManager
             _sm = SettingsManager.get_instance()
             _tts_enabled = (_sm.get_tts_settings().enabled if _sm else None)
+            _stt_enabled = (_sm.get_stt_settings().enabled if _sm else None)
         except Exception:
             _tts_enabled = None
+            _stt_enabled = None
+
+        _current_model = self._engine.llm.model.id
+        _current_provider = self._engine.llm.model.provider
+        prefix += f"Current model: {_current_model} ({_current_provider})\n"
+        prefix += f"STT: {'enabled' if _stt_enabled else 'disabled'} | "
+        prefix += f"TTS: {'enabled' if _tts_enabled else 'disabled'}\n\n"
+
         if _tts_enabled:
             prefix += (
                 "Note: Text-to-speech is enabled. Respond in plain, natural language "

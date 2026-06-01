@@ -1,7 +1,8 @@
 from operator_use.inference.model.types import Cost, Model, Modality
 
-_TEXT       = [Modality.Text]
-_TEXT_IMAGE = [Modality.Text, Modality.Image]
+_TEXT            = [Modality.Text]
+_TEXT_IMAGE      = [Modality.Text, Modality.Image]
+_TEXT_IMAGE_VIDEO = [Modality.Text, Modality.Image, Modality.Video]
 
 models = [
     # OpenAI Codex (OAuth)
@@ -16,20 +17,20 @@ models = [
     Model(id="claude-sonnet-4-6",         name="Claude Sonnet 4.6", provider="anthropic-claude-code", cost=Cost(), thinking=True, context_window=200_000, input=_TEXT_IMAGE, output=_TEXT),
     Model(id="claude-haiku-4-5-20251001", name="Claude Haiku 4.5",  provider="anthropic-claude-code", cost=Cost(),               context_window=200_000, input=_TEXT_IMAGE, output=_TEXT),
     # Google Antigravity (OAuth — free IDE quota)
-    Model(id="gemini-3-flash",         name="Gemini 3 Flash",         provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="gemini-3.1-pro-preview", name="Gemini 3.1 Pro",       provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="gemini-3-flash-preview", name="Gemini 3 Flash",       provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="gemini-3.1-flash-lite",  name="Gemini 3.1 Flash Lite",provider="google-antigravity", cost=Cost(),               context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="gemini-2.5-pro",        name="Gemini 2.5 Pro",        provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="gemini-2.5-flash",      name="Gemini 2.5 Flash",      provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="gemini-2.5-flash-lite", name="Gemini 2.5 Flash Lite", provider="google-antigravity", cost=Cost(),               context_window=1_048_576, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="gemini-3-flash",         name="Gemini 3 Flash",         provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE_VIDEO, output=_TEXT),
+    Model(id="gemini-3.1-pro-preview", name="Gemini 3.1 Pro",         provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE_VIDEO, output=_TEXT),
+    Model(id="gemini-3-flash-preview", name="Gemini 3 Flash Preview",  provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE_VIDEO, output=_TEXT),
+    Model(id="gemini-3.1-flash-lite",  name="Gemini 3.1 Flash Lite",   provider="google-antigravity", cost=Cost(),               context_window=1_048_576, input=_TEXT_IMAGE_VIDEO, output=_TEXT),
+    Model(id="gemini-2.5-pro",         name="Gemini 2.5 Pro",          provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE_VIDEO, output=_TEXT),
+    Model(id="gemini-2.5-flash",       name="Gemini 2.5 Flash",        provider="google-antigravity", cost=Cost(), thinking=True, context_window=1_048_576, input=_TEXT_IMAGE_VIDEO, output=_TEXT),
+    Model(id="gemini-2.5-flash-lite",  name="Gemini 2.5 Flash Lite",   provider="google-antigravity", cost=Cost(),               context_window=1_048_576, input=_TEXT_IMAGE_VIDEO, output=_TEXT),
     # GitHub Copilot
     Model(id="gpt-4o",               name="GPT-4o",             provider="github-copilot", cost=Cost(),               context_window=128_000,   input=_TEXT_IMAGE, output=_TEXT),
     Model(id="gpt-4o-mini",          name="GPT-4o Mini",        provider="github-copilot", cost=Cost(),               context_window=128_000,   input=_TEXT_IMAGE, output=_TEXT),
     Model(id="o3-mini",              name="O3 Mini",            provider="github-copilot", cost=Cost(), thinking=True, context_window=200_000,   input=_TEXT,       output=_TEXT),
     Model(id="claude-3.5-sonnet",    name="Claude 3.5 Sonnet",  provider="github-copilot", cost=Cost(),               context_window=200_000,   input=_TEXT_IMAGE, output=_TEXT),
     Model(id="claude-3.7-sonnet",    name="Claude 3.7 Sonnet",  provider="github-copilot", cost=Cost(), thinking=True, context_window=200_000,   input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="gemini-2.0-flash-001", name="Gemini 2.0 Flash",   provider="github-copilot", cost=Cost(),               context_window=1_000_000, input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="gemini-2.0-flash-001", name="Gemini 2.0 Flash",   provider="github-copilot", cost=Cost(),               context_window=1_000_000, input=_TEXT_IMAGE_VIDEO, output=_TEXT),
     Model(id="grok-3",               name="Grok 3",             provider="github-copilot", cost=Cost(),               context_window=131_072,   input=_TEXT,       output=_TEXT),
     # OpenAI (API key)
     Model(id="gpt-5.5",      name="GPT-5.5",      provider="openai", cost=Cost(input=5.0,  output=30.0, cache_read=0.50),  thinking=True, context_window=1_050_000, input=_TEXT_IMAGE, output=_TEXT),
@@ -53,10 +54,10 @@ models = [
     Model(id="z-ai/glm-5.1",                              name="GLM-5.1",                 provider="nvidia", cost=Cost(), thinking=True, context_window=131_072,   input=_TEXT, output=_TEXT),
     Model(id="mistralai/mistral-medium-3.5-128b",         name="Mistral Medium 3.5 128B", provider="nvidia", cost=Cost(),               context_window=128_000,   input=_TEXT, output=_TEXT),
     Model(id="mistralai/mistral-small-4-119b-2603",       name="Mistral Small 4 119B",    provider="nvidia", cost=Cost(),               context_window=256_000,   input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="google/gemma-4-31b-it",                     name="Gemma 4 31B IT",          provider="nvidia", cost=Cost(),               context_window=131_072,   input=_TEXT, output=_TEXT),
+    Model(id="google/gemma-4-31b-it",                     name="Gemma 4 31B IT",          provider="nvidia", cost=Cost(),               context_window=131_072,   input=_TEXT_IMAGE_VIDEO, output=_TEXT),
     Model(id="minimaxai/minimax-m2.7",                    name="MiniMax M2.7",            provider="nvidia", cost=Cost(),               context_window=131_072,   input=_TEXT, output=_TEXT),
     Model(id="moonshotai/kimi-k2.6",                      name="Kimi K2.6",               provider="nvidia", cost=Cost(),               context_window=131_072,   input=_TEXT_IMAGE, output=_TEXT),
-    Model(id="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", name="Nemotron 3 Nano Omni", provider="nvidia", cost=Cost(),              context_window=131_072,   input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", name="Nemotron 3 Nano Omni", provider="nvidia", cost=Cost(),              context_window=131_072,   input=_TEXT_IMAGE_VIDEO, output=_TEXT),
     Model(id="nvidia/nemotron-3-super-120b-a12b",         name="Nemotron 3 Super 120B",   provider="nvidia", cost=Cost(),               context_window=1_000_000, input=_TEXT, output=_TEXT),
     # Groq (caps max_completion_tokens at 8192)
     Model(id="openai/gpt-oss-120b",                       name="GPT-OSS 120B",          provider="groq", cost=Cost(input=0.15,  output=0.60), thinking=True, context_window=131_072, max_tokens=8192, input=_TEXT, output=_TEXT),
@@ -114,7 +115,7 @@ models = [
     Model(id="deepseek-v4-pro:cloud",    name="DeepSeek V4 Pro Cloud", provider="ollama", cost=Cost(), thinking=True, context_window=1_000_000, input=_TEXT,       output=_TEXT),
     Model(id="deepseek-v4-flash:cloud",  name="DeepSeek V4 Flash Cloud", provider="ollama", cost=Cost(), thinking=True, context_window=1_000_000, input=_TEXT,       output=_TEXT),
     Model(id="deepseek-v3.2:cloud",      name="DeepSeek V3.2 Cloud",  provider="ollama", cost=Cost(), thinking=True, context_window=160_000,   input=_TEXT,       output=_TEXT),
-    Model(id="gemma4:31b-cloud",         name="Gemma 4 31B Cloud",    provider="ollama", cost=Cost(), thinking=True, context_window=256_000,   input=_TEXT_IMAGE, output=_TEXT),
+    Model(id="gemma4:31b-cloud",         name="Gemma 4 31B Cloud",    provider="ollama", cost=Cost(), thinking=True, context_window=256_000,   input=_TEXT_IMAGE_VIDEO, output=_TEXT),
     Model(id="glm-5.1:cloud",            name="GLM 5.1 Cloud",        provider="ollama", cost=Cost(), thinking=True, context_window=198_000,   input=_TEXT,       output=_TEXT),
     Model(id="minimax-m2.7:cloud",       name="MiniMax M2.7 Cloud",   provider="ollama", cost=Cost(), thinking=True, context_window=200_000,   input=_TEXT,       output=_TEXT),
     Model(id="kimi-k2.6:cloud",          name="Kimi K2.6 Cloud",      provider="ollama", cost=Cost(), thinking=True, context_window=256_000,   input=_TEXT_IMAGE, output=_TEXT),

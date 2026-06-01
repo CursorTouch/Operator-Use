@@ -36,7 +36,14 @@ _KEYS: dict[str, tuple[str, str | None, str, bool]] = {
     "tts_provider":         ("get_tts_provider",          "set_tts_provider",         "TTS provider (e.g. 'groq', 'openai').",          False),
 }
 
-_READABLE_KEYS = sorted(_KEYS)
+# Agent-level keys — read/written directly on the running agent, not via settings manager.
+# Each entry: (description,)
+_AGENT_KEYS: dict[str, str] = {
+    "model":    "Current session LLM model ID (e.g. 'claude-sonnet-4-6'). Takes effect next turn.",
+    "provider": "Current session LLM provider (e.g. 'anthropic'). Takes effect next turn.",
+}
+
+_READABLE_KEYS = sorted({**_KEYS, **_AGENT_KEYS})
 
 
 class ControlCenterSchema(BaseModel):
@@ -52,7 +59,10 @@ class ControlCenterSchema(BaseModel):
         default=None,
         description=(
             "Setting key. Required for action=set. Available keys:\n"
-            + "\n".join(f"  {k} — {_KEYS[k][2]}" for k in _READABLE_KEYS)
+            + "\n".join(
+                f"  {k} — {_KEYS[k][2]}" if k in _KEYS else f"  {k} — {_AGENT_KEYS[k]}"
+                for k in _READABLE_KEYS
+            )
         ),
     )
     value: Any | None = Field(
@@ -74,9 +84,9 @@ class ControlCenterSchema(BaseModel):
         if self.action == "set":
             if not self.key:
                 raise ValueError("'key' is required when action='set'")
-            if self.key not in _KEYS:
+            if self.key not in _KEYS and self.key not in _AGENT_KEYS:
                 raise ValueError(f"Unknown key {self.key!r}. Valid keys: {', '.join(_READABLE_KEYS)}")
-            if _KEYS[self.key][1] is None:
+            if self.key in _KEYS and _KEYS[self.key][1] is None:
                 raise ValueError(f"Key {self.key!r} is read-only.")
             if self.value is None:
                 raise ValueError("'value' is required when action='set'")
@@ -138,7 +148,7 @@ class ControlCenterTool(Tool):
 
         match params.action:
             case "get":
-                return self._get(invocation, sm, params.key)
+                return self._get(invocation, sm, params.key, context)
             case "set":
                 return await self._set(invocation, sm, params.key, params.value, context)
             case "reboot":
@@ -148,16 +158,32 @@ class ControlCenterTool(Tool):
 
     # ------------------------------------------------------------------
 
-    def _get(self, invocation: ToolInvocation, sm: Any, key: str | None) -> ToolResult:
+    def _get_agent_value(self, key: str, context: ToolContext | None) -> Any:
+        agent = context.agent if context else None
+        llm = getattr(getattr(agent, '_engine', None), 'llm', None)
+        if llm is None:
+            return None
+        if key == "model":
+            return llm.model.id
+        if key == "provider":
+            return llm.model.provider
+        return None
+
+    def _get(self, invocation: ToolInvocation, sm: Any, key: str | None, context: ToolContext | None = None) -> ToolResult:
         if key is not None:
-            if key not in _KEYS:
+            if key not in _KEYS and key not in _AGENT_KEYS:
                 return ToolResult.error(
                     id=invocation.id, content=f"Unknown key {key!r}.",
                     metadata={'display_name': f"Unknown setting: {key}"},
                 )
-            getter, _setter, desc, reload_req = _KEYS[key]
-            value = getattr(sm, getter)()
-            row = {"key": key, "value": value, "description": desc, "reload_on_change": reload_req}
+            if key in _AGENT_KEYS:
+                desc = _AGENT_KEYS[key]
+                value = self._get_agent_value(key, context)
+                row = {"key": key, "value": value, "description": desc}
+            else:
+                getter, _setter, desc, reload_req = _KEYS[key]
+                value = getattr(sm, getter)()
+                row = {"key": key, "value": value, "description": desc, "reload_on_change": reload_req}
             return ToolResult.ok(
                 id=invocation.id, content=json.dumps(row, indent=2),
                 metadata={'display_name': f"Read setting: {key}"},
@@ -165,18 +191,16 @@ class ControlCenterTool(Tool):
 
         rows = []
         for k in _READABLE_KEYS:
-            getter, setter, desc, reload_req = _KEYS[k]
             try:
-                value = getattr(sm, getter)()
+                if k in _AGENT_KEYS:
+                    value = self._get_agent_value(k, context)
+                    rows.append({"key": k, "value": value, "description": _AGENT_KEYS[k]})
+                else:
+                    getter, setter, desc, reload_req = _KEYS[k]
+                    value = getattr(sm, getter)()
+                    rows.append({"key": k, "value": value, "description": desc, "readonly": setter is None, "reload_on_change": reload_req})
             except Exception:
-                value = None
-            rows.append({
-                "key": k,
-                "value": value,
-                "description": desc,
-                "readonly": setter is None,
-                "reload_on_change": reload_req,
-            })
+                rows.append({"key": k, "value": None})
         return ToolResult.ok(
             id=invocation.id, content=json.dumps(rows, indent=2),
             metadata={'display_name': "Settings read"},
@@ -190,6 +214,10 @@ class ControlCenterTool(Tool):
         value: Any,
         context: ToolContext | None,
     ) -> ToolResult:
+        # Agent-level keys: swap the running LLM in-place
+        if key in _AGENT_KEYS:
+            return await self._set_agent_key(invocation, key, value, context)
+
         getter, setter_name, _desc, reload_required = _KEYS[key]  # type: ignore[index]
         assert setter_name is not None  # validated in schema
 
@@ -226,6 +254,48 @@ class ControlCenterTool(Tool):
         return ToolResult.ok(
             id=invocation.id, content=msg,
             metadata={'display_name': f"Changed setting: {key}"},
+        )
+
+    async def _set_agent_key(
+        self,
+        invocation: ToolInvocation,
+        key: str,
+        value: Any,
+        context: ToolContext | None,
+    ) -> ToolResult:
+        agent = context.agent if context else None
+        engine = getattr(agent, '_engine', None)
+        if engine is None:
+            return ToolResult.error(id=invocation.id, content="control_center: agent engine unavailable.")
+
+        current_llm = engine.llm
+        current_model_id = current_llm.model.id
+        current_provider = current_llm.model.provider
+
+        new_model_id = str(value) if key == "model" else current_model_id
+        new_provider = str(value) if key == "provider" else current_provider
+
+        try:
+            from operator_use.inference.api.text.service import LLM
+            engine.llm = LLM(
+                model_id=new_model_id,
+                provider=new_provider,
+                auth_store=current_llm._auth_store,
+            )
+            # Keep baseline in sync so reloads don't revert to the old model.
+            if agent is not None and hasattr(agent, '_baseline_llm'):
+                agent._baseline_llm = engine.llm
+        except Exception as exc:
+            return ToolResult.error(
+                id=invocation.id,
+                content=f"control_center: failed to switch {key!r} to {value!r}: {exc}",
+                metadata={'display_name': f"Failed to change: {key}"},
+            )
+
+        return ToolResult.ok(
+            id=invocation.id,
+            content=f"Switched to model={new_model_id!r}, provider={new_provider!r}. Takes effect next turn.",
+            metadata={'display_name': f"Changed {key}: {value}"},
         )
 
     def _schedule_reboot(
