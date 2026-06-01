@@ -1,3 +1,4 @@
+import re
 import zlib
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -5,11 +6,13 @@ from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMo
 
 MAX_TOOL_OUTPUT_LENGTH = 100000
 
-def _line_hash(line: str, line_num: int) -> str:
-    stripped = line.rstrip('\n\r').strip()
-    if not any(c.isalnum() for c in stripped):
-        return format(line_num % 256, '02x')
-    return format(zlib.crc32(stripped.encode('utf-8')) % 256, '02x')
+
+def _file_hash(content: str) -> str:
+    """4-hex whole-file hash. Trailing whitespace is stripped before hashing so
+    formatter runs don't invalidate the tag."""
+    normalized = re.sub(r'[ \t\r]+(?=\n|$)', '', content)
+    return format(zlib.crc32(normalized.encode('utf-8')) & 0xFFFF, '04X')
+
 
 class ReadSchema(BaseModel):
     path: str = Field(
@@ -25,14 +28,16 @@ class ReadSchema(BaseModel):
         description="Maximum number of lines to read.",
     )
 
+
 class ReadTool(Tool):
     def __init__(self):
         super().__init__(
             name="read",
             description=(
-                "Read a text file and return its contents. Each line is prefixed with "
-                "LINE:HASH| (e.g. '5:a3|def hello():') — use these anchors with edit_file "
-                "to make precise edits. Use offset/limit to read a slice of a large file."
+                "Read a text file. Returns a header line '¶PATH#TAG' followed by numbered "
+                "lines as 'LINE:content'. The TAG is a 4-hex whole-file hash — copy it "
+                "exactly into edit_file's file_hash field. Line numbers are 1-based and "
+                "refer to the original file; use them as-is in edits."
             ),
             schema=ReadSchema,
             kind=ToolKind.Read,
@@ -72,24 +77,24 @@ class ReadTool(Tool):
                 if b'\x00' in chunk:
                     return ToolResult.error(id=invocation.id, content=f"Cannot read binary file: {resolved_path}")
 
-            with open(resolved_path, "r", encoding="utf-8") as file:
-                lines = file.readlines()
+            raw = resolved_path.read_text(encoding="utf-8")
         except Exception as e:
             return ToolResult.error(id=invocation.id, content=f"Failed to read file: {resolved_path}. {e}")
 
+        tag = _file_hash(raw)
+        lines = raw.splitlines()
         total_lines = len(lines)
         start_idx = max(0, offset)
         end_idx = total_lines if limit is None else min(total_lines, start_idx + limit)
-        selected_lines = lines[start_idx:end_idx]
+        selected = lines[start_idx:end_idx]
 
-        numbered_lines = [
-            f"{start_idx + i + 1}:{_line_hash(line, start_idx + i + 1)}|{line.rstrip(chr(10) + chr(13))}"
-            for i, line in enumerate(selected_lines)
-        ]
-        content = "\n".join(numbered_lines)
+        header = f"¶{resolved_path}#{tag}"
+        numbered = "\n".join(f"{start_idx + i + 1}:{line}" for i, line in enumerate(selected))
+        output = header + "\n" + numbered
 
-        if len(content) > MAX_TOOL_OUTPUT_LENGTH:
-            content = content[:MAX_TOOL_OUTPUT_LENGTH] + "\n... [Output Truncated]"
-        return ToolResult.ok(id=invocation.id, content=content)
+        if len(output) > MAX_TOOL_OUTPUT_LENGTH:
+            output = output[:MAX_TOOL_OUTPUT_LENGTH] + "\n... [Output Truncated]"
+        return ToolResult.ok(id=invocation.id, content=output)
+
 
 tool = ReadTool()
