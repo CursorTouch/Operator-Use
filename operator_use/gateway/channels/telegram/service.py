@@ -6,7 +6,7 @@ from pathlib import Path
 
 from operator_use.gateway.channels.shutdown import quiet_library_logging
 from operator_use.gateway.types import BaseChannel
-from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
+from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, ImagePart, text_from_parts
 from operator_use.gateway.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, markdown_to_telegram_html, split_message
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class TelegramChannel(BaseChannel):
     """
     A single Telegram bot that handles all chats.
 
-    Supports text messages, voice notes, and audio files incoming.
+    Supports text messages, voice notes, audio files, and photos incoming.
     Outgoing supports text and audio (TTS) via direct send.
 
     Requires: pip install "python-telegram-bot>=20.0"
@@ -123,6 +123,23 @@ class TelegramChannel(BaseChannel):
                     logger.exception("TelegramChannel: failed to download audio message")
                     return
 
+            elif msg.photo:
+                try:
+                    _MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+                    # Telegram sends multiple sizes; pick the largest
+                    photo = msg.photo[-1]
+                    file = await ctx.bot.get_file(photo.file_id)
+                    path = _MEDIA_DIR / f"{photo.file_id[:20]}.jpg"
+                    await file.download_to_drive(str(path))
+                    caption = msg.caption.strip() if msg.caption else ""
+                    if caption:
+                        parts.append(TextPart(caption))
+                    parts.append(ImagePart(paths=[str(path)], mime_type="image/jpeg"))
+                    await ctx.bot.send_chat_action(msg.chat_id, ChatAction.TYPING)
+                except Exception:
+                    logger.exception("TelegramChannel: failed to download photo")
+                    return
+
             elif msg.text:
                 text = msg.text.strip()
                 if not text:
@@ -147,7 +164,7 @@ class TelegramChannel(BaseChannel):
             ))
 
         self._app.add_handler(MessageHandler(
-            filters.TEXT | filters.VOICE | filters.AUDIO,
+            filters.TEXT | filters.VOICE | filters.AUDIO | filters.PHOTO,
             _on_message,
         ))
 

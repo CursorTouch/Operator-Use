@@ -38,6 +38,7 @@ class PromptOptions(BaseModel):
     compaction_custom_instructions: str | None = None
     meta: MessageMeta | None = None
     channel: str | None = None
+    images: list[str] = []  # local file paths to attach as ImageContent
 
 
 @dataclass

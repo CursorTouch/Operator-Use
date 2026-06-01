@@ -548,11 +548,21 @@ class Gateway:
 
         # Build per-message meta: attachments from non-text parts, reply_to if present.
         from operator_use.session.types import MessageMeta, MessageAttachment
-        from operator_use.bus.types import AudioPart, FilePart
+        from operator_use.bus.types import AudioPart, FilePart, ImagePart
         attachments = [
             MessageAttachment(path=getattr(p, 'audio', None) or getattr(p, 'path', ''), mime_type=getattr(p, 'mime_type', None))
             for p in (parts or [])
             if isinstance(p, (AudioPart, FilePart))
+        ]
+        image_paths: list[str] = [
+            path
+            for p in (parts or [])
+            if isinstance(p, ImagePart) and p.paths
+            for path in p.paths
+        ]
+        attachments += [
+            MessageAttachment(path=path, mime_type="image/jpeg")
+            for path in image_paths
         ]
         reply_to = (msg_metadata or {}).get('reply_to')
         msg_meta = MessageMeta(
@@ -568,7 +578,7 @@ class Gateway:
 
         unsub = agent.hooks.subscribe(_on_event)
         try:
-            await agent.invoke(text, PromptOptions(source='interactive', meta=msg_meta, channel=channel_id))
+            await agent.invoke(text, PromptOptions(source='interactive', meta=msg_meta, channel=channel_id, images=image_paths))
         except Exception as exc:
             logger.exception("Gateway: agent.invoke failed for session %r", session_key)
             err_msg = _last_error[0] or str(exc)

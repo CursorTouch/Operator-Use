@@ -17,7 +17,7 @@ from operator_use.extension.types import (
     ContextEvent, ContextEventResult,
     SavePointEvent, SettledEvent, MessageEndEvent,
 )
-from operator_use.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent, LLMMessage
+from operator_use.message.types import AssistantMessage, UserMessage, TextContent, ImageContent, Role, ToolResultContent, LLMMessage
 from operator_use.inference.types import StopReason
 from operator_use.message.utils import strip_unusable_trailing_assistant
 from operator_use.tool.types import ToolInvocation, ToolResult
@@ -571,17 +571,15 @@ class Agent(ExtensionContext):
         user_message = UserMessage(contents=[TextContent(content=user_input)])
         user_entry_id = self._session_manager.append_message(user_message, meta=opts.meta)
 
-        # Build a context-only user message with recalled memory and current time prepended.
-        # This is never persisted — session history stays clean.
+        # Build a context-only user message with recalled memory, current time, and any
+        # attached images prepended. This is never persisted — session history stays clean.
         now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        if memory_context:
-            user_message = UserMessage(contents=[
-                TextContent(content=f"<memory>\n{memory_context}\n</memory>\n\n<time>{now}</time>\n\n{user_input}")
-            ])
-        else:
-            user_message = UserMessage(contents=[
-                TextContent(content=f"<time>{now}</time>\n\n{user_input}")
-            ])
+        prefix = f"<memory>\n{memory_context}\n</memory>\n\n" if memory_context else ""
+        prefix += f"<time>{now}</time>\n\n"
+        ctx_contents: list = [TextContent(content=f"{prefix}{user_input}")]
+        for img_path in opts.images:
+            ctx_contents.append(ImageContent.from_file(img_path))
+        user_message = UserMessage(contents=ctx_contents)
 
         # Assemble tools: base tools + extension tools (base names take priority)
         base_tool_names = {t.name for t in self._engine.tools}
