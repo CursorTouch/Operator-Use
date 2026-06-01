@@ -41,6 +41,10 @@ async def _on_message_send(event) -> object:
         tts = None
         aux_tts = None
 
+    # TTS is meaningless in the terminal REPL — skip it entirely.
+    if event.channel_id == 'stdio':
+        return None
+
     enabled = tts.enabled if tts else None
     if enabled is False:
         return None

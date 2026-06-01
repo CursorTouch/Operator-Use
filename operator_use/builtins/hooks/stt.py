@@ -49,6 +49,10 @@ async def _on_message_receive(event) -> object:
         stt = None
         aux_stt = None
 
+    # STT is meaningless in the terminal REPL — no audio can arrive there.
+    if event.channel_id == 'stdio':
+        return None
+
     if stt and stt.enabled is False:
         return None
 
