@@ -131,9 +131,14 @@ class Gateway:
         for entry in self._sessions.values():
             if entry.task is None or entry.task is current or entry.task.done():
                 continue
+            # Signal abort first so the engine can reach a check-point and write
+            # the synthetic closing message, then cancel so it doesn't spin forever.
             entry.agent.shutdown()
             entry.task.cancel()
             tasks.append(entry.task)
+        # Yield briefly so the engine's abort check-points can fire before the
+        # CancelledError is processed in the gather below.
+        await asyncio.sleep(0)
 
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)

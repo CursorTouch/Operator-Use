@@ -59,6 +59,7 @@ class TelegramChannel(BaseChannel):
         self._prev_tool_msg_ids: dict[str, int] = {}   # chat_id → tool-status msg from previous failed attempt
         self._thinking_buffers: dict[str, str] = {}    # chat_id → accumulated thinking text
         self._thinking_tasks: dict[str, asyncio.Task] = {}  # chat_id → debounced thinking-stream task
+        self._live_send_tasks: dict[str, asyncio.Task] = {}  # chat_id → in-flight first send_message task
 
     @property
     def channel_id(self) -> str:
@@ -223,11 +224,12 @@ class TelegramChannel(BaseChannel):
                     bot = self._app.bot
                     existing = self._live_msg_ids.get(chat_id)
                     if existing is None:
-                        # Shield the send + ID assignment so that if the task is
-                        # cancelled mid-request, the message ID is still recorded.
-                        # Without this, task.cancel() can interrupt after Telegram
-                        # creates the message but before the ID is saved, causing
-                        # the END phase to send a duplicate instead of editing.
+                        # Create an explicit Task for the first send so that:
+                        # 1. asyncio.shield keeps it running even when this loop is cancelled.
+                        # 2. The END phase can await the same Task to ensure the message_id
+                        #    is recorded before deciding whether to edit or send a new message.
+                        # Without tracking the Task, the END phase reads live_msg_ids while
+                        # _send_and_record is still in-flight → sees None → sends a duplicate.
                         async def _send_and_record() -> None:
                             sent = await bot.send_message(
                                 int(chat_id),
@@ -235,8 +237,10 @@ class TelegramChannel(BaseChannel):
                                 parse_mode="HTML",
                             )
                             self._live_msg_ids[chat_id] = sent.message_id
+                        inner = asyncio.ensure_future(_send_and_record())
+                        self._live_send_tasks[chat_id] = inner
                         try:
-                            await asyncio.shield(_send_and_record())
+                            await asyncio.shield(inner)
                         except asyncio.CancelledError:
                             raise
                         except Exception:
@@ -320,6 +324,7 @@ class TelegramChannel(BaseChannel):
             self._buffers[chat_id] = ""
             self._thinking_buffers.pop(chat_id, None)
             self._stop_thinking_stream(chat_id)
+            self._live_send_tasks.pop(chat_id, None)
             # Delete any live-stream message posted by a previous failed attempt so
             # it doesn't linger alongside the retry's fresh response.
             stale_live = self._live_msg_ids.pop(chat_id, None)
@@ -449,6 +454,15 @@ class TelegramChannel(BaseChannel):
                 if not keep_typing:
                     self._stop_live_streaming(chat_id)
                     self._stop_typing(chat_id)
+                # If the live loop was cancelled mid-first-send, the inner Task is still
+                # running and _live_msg_ids is not set yet.  Wait for it so we edit
+                # the existing message instead of sending a duplicate.
+                pending_send = self._live_send_tasks.pop(chat_id, None)
+                if pending_send is not None and not pending_send.done():
+                    try:
+                        await asyncio.wait_for(asyncio.shield(pending_send), timeout=10.0)
+                    except Exception:
+                        pass
                 live_msg_id = self._live_msg_ids.pop(chat_id, None)
                 if buffered.strip():
                     if live_msg_id is not None:
@@ -495,6 +509,7 @@ class TelegramChannel(BaseChannel):
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)
             self._stop_live_streaming(chat_id)
+            self._live_send_tasks.pop(chat_id, None)
             stale_live = self._live_msg_ids.pop(chat_id, None)
             if stale_live is not None:
                 try:

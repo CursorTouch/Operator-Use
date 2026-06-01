@@ -93,13 +93,29 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
     try:
         await stop.wait()
     finally:
+        # Replace signal handlers with a force-exit handler so a second Ctrl-C
+        # during shutdown exits immediately instead of raising KeyboardInterrupt
+        # mid-ashutdown and leaving Telegram polling locked.
+        def _force_exit(*_):
+            loop.call_soon_threadsafe(lambda: sys.exit(1))
+
         for sig in installed_handlers:
             try:
-                loop.remove_signal_handler(sig)
-            except (RuntimeError, ValueError):
-                pass
+                loop.add_signal_handler(sig, _force_exit)
+            except (NotImplementedError, RuntimeError, ValueError):
+                try:
+                    signal.signal(sig, lambda *_: sys.exit(1))
+                except Exception:
+                    pass
         click.echo("\nShutting down...")
-        await runtime.ashutdown()
+        try:
+            await runtime.ashutdown()
+        finally:
+            for sig in installed_handlers:
+                try:
+                    loop.remove_signal_handler(sig)
+                except (RuntimeError, ValueError):
+                    pass
 
 
 def _signal_ready() -> None:

@@ -198,6 +198,7 @@ class TestTelegramStreaming:
         ch._prev_tool_msg_ids = {}
         ch._thinking_buffers = {}
         ch._thinking_tasks = {}
+        ch._live_send_tasks = {}
         return ch
 
     def _mock_app(self):
