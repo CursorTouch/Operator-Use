@@ -383,11 +383,10 @@ class Engine:
 
                 match message.stop_reason:
                     case StopReason.Error | StopReason.Abort:
-                        # message=None on error/abort is load-bearing: Agent.process_events
-                        # uses `if message:` to decide history append, and we must NOT
-                        # persist failed turns (see commit 4f388eb). Consumers of
-                        # MessageEndEvent must guard for None.
-                        await emit(MessageEndEvent(message=None))
+                        # Emit the real message so session persistence can record it
+                        # for the audit trail. It is filtered from LLM context by
+                        # strip_unusable_trailing_assistant (stop_reason != Stop).
+                        await emit(MessageEndEvent(message=message))
                         err_msg = message.error or f"Turn failed with reason: {message.stop_reason.value}"
                         end_reason = 'error'
                         await emit(AgentErrorEvent(error=err_msg))

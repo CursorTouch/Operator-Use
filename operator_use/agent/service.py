@@ -17,6 +17,7 @@ from operator_use.extension.types import (
     SavePointEvent, SettledEvent, MessageEndEvent,
 )
 from operator_use.message.types import AssistantMessage, UserMessage, TextContent, Role, ToolResultContent, LLMMessage
+from operator_use.inference.types import StopReason
 from operator_use.message.utils import strip_unusable_trailing_assistant
 from operator_use.tool.types import ToolInvocation, ToolResult
 
@@ -429,7 +430,7 @@ class Agent(ExtensionContext):
             profile_dir=self._active_profile.profile_dir if self._active_profile else None,
         ).build()
 
-    def _register_message_handler(self, persisted_ids: list[str]) -> Callable:
+    def _register_message_handler(self, persisted_ids: list[str], error_holder: list[AssistantMessage]) -> Callable:
         """Register a message_end hook that persists messages and tracks token usage."""
         async def _on_message_end(event: MessageEndEvent) -> None:
             message = event.message
@@ -440,6 +441,12 @@ class Agent(ExtensionContext):
                 total = message.usage.input_tokens + message.usage.output_tokens
                 if total:
                     self._context_tokens = total
+                # Error/abort messages are held back — only written to session on
+                # final failure so intermediate retry errors don't pollute the log.
+                if message.stop_reason in (StopReason.Error, StopReason.Abort):
+                    error_holder.clear()
+                    error_holder.append(message)
+                    return
                 entry_id = self._session_manager.append_message(message)
                 persisted_ids.append(entry_id)
             elif message.role == Role.TOOL:
@@ -662,6 +669,7 @@ class Agent(ExtensionContext):
         base_delay_s = self._config.retry_base_delay_ms / 1000
 
         persisted_ids: list[str] = []
+        error_holder: list[AssistantMessage] = []
 
         for attempt in range(max_retries + 1):
             if attempt > 0:
@@ -673,7 +681,8 @@ class Agent(ExtensionContext):
                 await asyncio.sleep(delay)
 
             persisted_ids.clear()
-            unsubscribe = self._register_message_handler(persisted_ids)
+            error_holder.clear()
+            unsubscribe = self._register_message_handler(persisted_ids, error_holder)
             try:
                 await self._engine.run(ctx)
             finally:
@@ -702,8 +711,9 @@ class Agent(ExtensionContext):
                 # Keep tool calls/results already persisted — the next attempt
                 # rebuilds ctx from the session so the LLM sees the work already
                 # done and continues from where it left off rather than replaying
-                # from scratch. strip_unusable_trailing_assistant removes any
-                # dangling tool_call that never got a result (abort mid-tool).
+                # from scratch. The error message itself is discarded (held in
+                # error_holder but not written) so intermediate retry noise never
+                # lands in the session file.
                 session_ctx = self._session_manager.build_session_context()
                 ctx = AgentContext(
                     system_prompt=ctx.system_prompt,
@@ -715,14 +725,12 @@ class Agent(ExtensionContext):
                     RetryEndEvent(attempt=attempt, success=False, error=error),
                 )
             else:
-                # Permanent error, or retries exhausted. Fully non-destructive
-                # (same model as the engine): the session keeps every persisted
-                # message of this turn — user, assistant text, tool_call,
-                # tool_result, and the trailing error turn — so the record is
-                # complete and the user can send "continue". Any unusable
-                # trailing assistant turn is filtered out of the LLM context at
-                # turn-build time by strip_unusable_trailing_assistant(), not
-                # deleted from disk.
+                # Permanent error, or retries exhausted — write the final error
+                # assistant message to the session so the record is complete and
+                # the user can see what went wrong. It is filtered from LLM
+                # context at turn-build time by strip_unusable_trailing_assistant.
+                if error_holder:
+                    self._session_manager.append_message(error_holder[0])
                 detail = (
                     "permanent error, not retried"
                     if permanent

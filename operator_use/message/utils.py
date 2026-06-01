@@ -89,21 +89,27 @@ def strip_unusable_trailing_assistant(messages: list) -> list:
     Non-destructive: operates on the given list only (the caller's session
     record should stay append-only). Drops, from the end:
 
-    - an assistant message with no usable content (empty / error turn), and
+    - an assistant message whose stop_reason is not Stop (error/abort turns), and
+    - an assistant message with no usable content (empty turn), and
     - an assistant message containing tool_calls (a trailing assistant is by
       definition unanswered — no tool result follows it),
 
-    because providers reject dangling tool_calls and empty assistant turns. A
-    trailing assistant message with real text is a legitimately completed turn
-    and is kept.
+    because providers reject dangling tool_calls, empty assistant turns, and
+    partial error turns. A trailing assistant message with real text and a
+    successful stop reason is a legitimately completed turn and is kept.
     """
     from operator_use.message.types import Role, TextContent, ToolCallContent
+    from operator_use.inference.types import StopReason
 
     msgs = list(messages)
     while msgs:
         last = msgs[-1]
         if getattr(last, "role", None) != Role.ASSISTANT:
             break
+        stop_reason = getattr(last, "stop_reason", StopReason.Stop)
+        if stop_reason != StopReason.Stop:
+            msgs.pop()
+            continue
         contents = getattr(last, "contents", [])
         has_text = any(
             isinstance(c, TextContent) and c.content.strip() for c in contents
