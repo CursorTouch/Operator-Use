@@ -295,7 +295,15 @@ class ControlCenterTool(Tool):
         except Exception:
             pass
 
-        # Stop the gateway (Telegram polling etc.) BEFORE spawning the child so
+        # Let the bus drain so the channel can finish editing the tool-status message
+        # to ✅/❌ before we tear down the gateway. The tool_end event was published
+        # to the bus synchronously, but the channel's outgoing API call (Telegram
+        # editMessageText, Discord message.edit, etc.) is async and in-flight. Without
+        # this pause ashutdown() cancels those tasks before they complete, leaving the
+        # ⚙️ spinner stuck forever.
+        await asyncio.sleep(2.0)
+
+        # Stop the gateway channel pooling BEFORE spawning the child so
         # there is never a window where both processes poll the same bot token.
         # Telegram rejects concurrent getUpdates with a Conflict error.
         agent = context.agent if context else None
