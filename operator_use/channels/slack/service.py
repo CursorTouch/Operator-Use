@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-import re
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from operator_use.gateway.types import BaseChannel
 from operator_use.channels.shutdown import quiet_library_logging
+from operator_use.channels.shared import build_retry_label, format_thinking_label, COMMAND_NAME_RE
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from operator_use.commands.types import CommandParseResult
 from operator_use.channels.slack.utils import (
@@ -180,13 +180,11 @@ class SlackChannel(BaseChannel):
         finally:
             await self.disconnect()
 
-    _COMMAND_NAME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
-
     def _valid_commands(self) -> list[str]:
         return [
             name
             for name, _desc in self._commands
-            if self._COMMAND_NAME_RE.fullmatch(name)
+            if COMMAND_NAME_RE.fullmatch(name)
         ]
 
     def _register_slash_commands(self, app) -> None:
@@ -273,8 +271,6 @@ class SlackChannel(BaseChannel):
         if task:
             task.cancel()
 
-    _THINKING_MAX_CHARS = 800
-
     def _start_thinking_stream(self, chat_id: str, slack_channel_id: str, thread_ts: str | None, client) -> None:
         self._stop_thinking_stream(chat_id)
         latency = self._streaming_latency
@@ -284,10 +280,7 @@ class SlackChannel(BaseChannel):
             while True:
                 buffered = self._thinking_buffers.get(chat_id, "")
                 if buffered.strip() and client is not None:
-                    display = buffered[:self._THINKING_MAX_CHARS]
-                    if len(buffered) > self._THINKING_MAX_CHARS:
-                        display += "…"
-                    label = f"💭 {display}"
+                    label = format_thinking_label(buffered)
                     existing_ts = self._tool_ts_map.get(chat_id)
                     if existing_ts is not None:
                         try:
@@ -495,10 +488,7 @@ class SlackChannel(BaseChannel):
                 attempt = metadata.get('retry_attempt', 1)
                 total = metadata.get('retry_max', 1)
                 is_final = metadata.get('retry_final', False)
-                if is_final:
-                    label = f"❌ {text}" if total <= 1 else f"❌ {text}\n(failed after {total} attempt{'s' if total != 1 else ''})"
-                else:
-                    label = f"❌ {text}\n⏳ Retrying… ({attempt}/{total})"
+                label = build_retry_label(text, attempt, total, is_final)
                 if existing_ts is not None and client is not None:
                     try:
                         await client.chat_update(channel=slack_channel_id, ts=existing_ts, text=label)

@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-import re
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from operator_use.gateway.types import BaseChannel
 from operator_use.channels.shutdown import quiet_library_logging
+from operator_use.channels.shared import build_retry_label, format_thinking_label, COMMAND_NAME_RE
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from operator_use.commands.types import CommandParseResult
 from operator_use.channels.discord.utils import _MEDIA_DIR, is_audio_attachment, split_message
@@ -165,13 +165,11 @@ class DiscordChannel(BaseChannel):
         finally:
             await self.disconnect()
 
-    _COMMAND_NAME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
-
     def _valid_commands(self) -> list[tuple[str, str]]:
         return [
             (name, (desc or name)[:100])
             for name, desc in self._commands
-            if self._COMMAND_NAME_RE.fullmatch(name)
+            if COMMAND_NAME_RE.fullmatch(name)
         ]
 
     def _register_application_commands(self, tree) -> None:
@@ -293,8 +291,6 @@ class DiscordChannel(BaseChannel):
         if task:
             task.cancel()
 
-    _THINKING_MAX_CHARS = 800
-
     def _start_thinking_stream(self, chat_id: str) -> None:
         self._stop_thinking_stream(chat_id)
         latency = self._streaming_latency
@@ -305,10 +301,7 @@ class DiscordChannel(BaseChannel):
                 buffered = self._thinking_buffers.get(chat_id, "")
                 discord_ch = self._discord_channels.get(chat_id)
                 if buffered.strip() and discord_ch is not None:
-                    display = buffered[:self._THINKING_MAX_CHARS]
-                    if len(buffered) > self._THINKING_MAX_CHARS:
-                        display += "…"
-                    label = f"💭 {display}"
+                    label = format_thinking_label(buffered)
                     existing = self._tool_messages.get(chat_id)
                     if existing is not None:
                         try:
@@ -537,10 +530,7 @@ class DiscordChannel(BaseChannel):
                 attempt = metadata.get('retry_attempt', 1)
                 total = metadata.get('retry_max', 1)
                 is_final = metadata.get('retry_final', False)
-                if is_final:
-                    label = f"❌ {text}" if total <= 1 else f"❌ {text}\n(failed after {total} attempt{'s' if total != 1 else ''})"
-                else:
-                    label = f"❌ {text}\n⏳ Retrying… ({attempt}/{total})"
+                label = build_retry_label(text, attempt, total, is_final)
                 if existing is not None:
                     try:
                         await existing.edit(content=label)

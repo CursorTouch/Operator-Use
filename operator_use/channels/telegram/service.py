@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from operator_use.channels.shutdown import quiet_library_logging
+from operator_use.channels.shared import build_retry_label, format_thinking_label
 from operator_use.gateway.types import BaseChannel
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, ImagePart, text_from_parts
 from operator_use.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, markdown_to_telegram_html, split_message
@@ -291,8 +292,6 @@ class TelegramChannel(BaseChannel):
         if task:
             task.cancel()
 
-    _THINKING_MAX_CHARS = 800
-
     def _start_thinking_stream(self, chat_id: str) -> None:
         """Debounced loop that edits the shared rolling-status slot with streaming thinking text."""
         self._stop_thinking_stream(chat_id)
@@ -304,10 +303,7 @@ class TelegramChannel(BaseChannel):
                 buffered = self._thinking_buffers.get(chat_id, "")
                 if buffered.strip() and self._app is not None:
                     bot = self._app.bot
-                    display = buffered[:self._THINKING_MAX_CHARS]
-                    if len(buffered) > self._THINKING_MAX_CHARS:
-                        display += "…"
-                    label = f"💭 {display}"
+                    label = format_thinking_label(buffered)
                     existing_id = self._tool_msg_ids.get(chat_id)
                     if existing_id is not None:
                         try:
@@ -597,10 +593,7 @@ class TelegramChannel(BaseChannel):
                 attempt = metadata.get('retry_attempt', 1)
                 total = metadata.get('retry_max', 1)
                 is_final = metadata.get('retry_final', False)
-                if is_final:
-                    label = f"❌ {text}" if total <= 1 else f"❌ {text}\n(failed after {total} attempt{'s' if total != 1 else ''})"
-                else:
-                    label = f"❌ {text}\n⏳ Retrying… ({attempt}/{total})"
+                label = build_retry_label(text, attempt, total, is_final)
                 if existing_id is not None:
                     try:
                         await bot.edit_message_text(label, chat_id=int(chat_id), message_id=existing_id)

@@ -229,22 +229,44 @@ class Gateway:
             perm_fut.set_result(msg)
             return
 
+        # Check if this channel has a "direct handler" — a custom function
+        # registered to handle messages on its own, without going through
+        # the normal agent/session pipeline below.
+        # Think of it like a VIP shortcut: some channels (e.g. internal control
+        # channels or plugin-owned channels) don't need an AI agent to process
+        # their messages — they just want raw delivery to their own logic.
         handler = self._direct_handlers.get(msg.channel)
         if handler is not None:
+            # Found one — hand the message directly to it and stop here.
+            # Nothing else (session creation, hooks, STT, agent routing) runs.
             await handler(msg)
             return
 
+        # Pull in the AudioPart type so we can check whether this message
+        # contains voice/audio content (needed later for STT detection).
         from operator_use.bus.types import AudioPart
+
+        # Snapshot the message parts into a plain list so hooks can safely
+        # replace or transform them without mutating the original message.
         parts = list(msg.parts)
 
-        # ── message:receive hook — STT hooks detect AudioPart here and return
-        # transformed parts (AudioPart → TextPart). Reject/transform text also handled.
+        # Extract the plain text from this message (joining multiple text parts
+        # with newlines) so hooks can read/modify what the user said.
         text = "\n".join(p.content for p in parts if isinstance(p, TextPart))
+
+        # Check whether speech-to-text (STT) is turned on for this channel+chat.
+        # Hooks use this flag to decide if they should transcribe audio parts.
         stt_enabled = self._effective_media_enabled(
             'stt',
             channel_id=msg.channel,
             chat_id=msg.chat_id,
         )
+
+        # Fire the "message received" hook event. Any registered hook gets a chance
+        # to inspect the message and either:
+        #   • reject it  — block it entirely (e.g. spam filter)
+        #   • transform it — swap out parts/text (e.g. STT: audio → text)
+        #   • continue  — let it pass through unchanged
         results = await self.hooks.emit(
             MessageReceiveEvent(
                 channel_id=msg.channel,
@@ -255,11 +277,15 @@ class Gateway:
                 stt_enabled=stt_enabled,
             )
         )
+        # Process each hook's response and act on its decision.
         for r in results:
             if not isinstance(r, MessageReceiveResult):
                 continue
             match r.action:
                 case 'reject':
+                    # A hook said "don't process this message". If it gave a
+                    # reason, send that reason back to the user as a reply,
+                    # then stop — the agent never sees this message.
                     if r.reason:
                         ch = self._channels.get(msg.channel)
                         if ch is not None:
@@ -272,33 +298,54 @@ class Gateway:
                     logger.info("Gateway: message from %r rejected by hook", msg.channel)
                     return
                 case 'transform':
+                    # A hook rewrote the message (e.g. STT converted audio to text).
+                    # Update our local parts/text so the rest of the pipeline
+                    # works with the transformed version.
                     if r.parts is not None:
                         parts = r.parts
                     if r.text is not None:
                         text = r.text
                 case 'continue':
+                    # Hook is happy — nothing to change, keep going.
                     pass
 
-        # Re-extract text from parts in case STT hook replaced AudioPart with TextPart
+        # If a hook swapped the parts (e.g. audio → text), re-build the plain
+        # text string from the updated parts so the agent gets the transcript,
+        # not the original audio placeholder.
         if any(r for r in results if isinstance(r, MessageReceiveResult) and r.action == 'transform' and r.parts is not None):
             text = "\n".join(p.content for p in parts if isinstance(p, TextPart))
 
+        # Remember whether the *original* message had audio. This lets downstream
+        # code (e.g. TTS) know the user spoke rather than typed.
         is_voice = any(isinstance(p, AudioPart) for p in msg.parts)
 
+        # Check if the text is a slash-command (e.g. "/help", "/reset").
+        # If so, run the command handler and stop — the agent doesn't see it.
         parsed = parse_command(text)
         if parsed is not None:
             await self._run_command(msg.channel, msg.chat_id, parsed)
             return
 
-        # Profile channels (format: '{profile_name}:{channel_type}') share one
-        # session across all their channels and chat_ids.
+        # Build the session key for this conversation. Profile channels
+        # (format: 'profile_name:channel_type') intentionally share one session
+        # across all their sub-channels — so all of them talk to the same agent.
         session_key = self._session_key(msg.channel, msg.chat_id)
+
+        # Look up the existing session for this conversation, or create a fresh
+        # one if this is the first message in this channel+chat.
         entry = self._get_or_create_session(session_key, channel_id=msg.channel, chat_id=msg.chat_id)
 
         if entry.task is not None and not entry.task.done():
+            # The agent is already busy processing a previous message in this
+            # session. Instead of queuing a new run, we "steer" the running
+            # agent mid-stream — injecting the new user message so it can
+            # react to it without starting over.
             await entry.agent._engine.steer(UserMessage.text(text))
             return
 
+        # No active task — kick off a new agent run as a background asyncio task.
+        # The task processes the full message, streams replies back to the channel,
+        # and marks itself done when finished.
         entry.task = asyncio.create_task(
             self._run_session(
                 session_key, msg.channel, msg.chat_id, entry.agent, text,
@@ -323,18 +370,27 @@ class Gateway:
     ) -> None:
         """Send a local file to a channel/chat as an out-of-band message."""
         from operator_use.bus.types import FilePart
+
+        # Wrap the file path in a FilePart so the channel knows it's a file,
+        # not plain text. The channel driver handles the actual upload/delivery.
         parts: list = [FilePart(path=file_path, mime_type=mime_type)]
+
+        # Optionally attach a human-readable caption below the file.
         if caption:
             parts.append(TextPart(caption))
+
         msg = OutgoingMessage(
             channel=channel_id,
             chat_id=chat_id,
             parts=parts,
         )
+
         channel = self._channels.get(channel_id)
         if channel is not None:
             await channel.send(msg)
         else:
+            # The channel isn't registered — log a warning and drop the message
+            # rather than raising, so one bad send doesn't crash anything.
             logger.warning("Gateway.send_file: unknown channel %r — dropping", channel_id)
 
     # ── Session management ────────────────────────────────────────────────────
@@ -351,9 +407,12 @@ class Gateway:
         return f"{channel_id}:{chat_id}"
 
     def _get_or_create_session(self, session_key: str, channel_id: str | None = None, chat_id: str | None = None) -> _SessionEntry:
+        # If we've never seen this session key before, create a brand-new entry.
+        # This picks the right agent for the channel (profile agent or default).
         if session_key not in self._sessions:
             agent = self._resolve_agent_for_channel(channel_id)
             self._sessions[session_key] = _SessionEntry(agent=agent)
+        # Return the existing (or just-created) session entry.
         return self._sessions[session_key]
 
     def _resolve_agent_for_channel(self, channel_id: str | None) -> Agent:
@@ -363,14 +422,20 @@ class Gateway:
         Non-profile channels fall back to the runtime's unified/per-session logic.
         """
         if channel_id:
+            # Profile channels are named like 'myprofile:telegram'.
+            # Extract the prefix before the colon and check if a dedicated
+            # agent was registered for that profile name.
             colon = channel_id.find(':')
             if colon > 0:
                 profile_name = channel_id[:colon]
                 profile_agent = self._profile_agents.get(profile_name)
                 if profile_agent is not None:
+                    # This channel belongs to a profile — use its dedicated agent.
                     return profile_agent
 
-        # Fall back to original logic for non-profile channels
+        # Not a profile channel. Fall back to the runtime's session strategy:
+        # • unified_session_enabled → everyone shares one long-running agent
+        # • otherwise             → spin up a fresh agent per conversation
         if self._runtime.unified_session_enabled:
             agent = self._runtime.current_session
             if agent is None:
@@ -404,19 +469,29 @@ class Gateway:
         """Hard-cancel an in-progress session and fire MessageCancelEvent."""
         session_key = self._session_key(channel_id, chat_id)
         entry = self._sessions.get(session_key)
+
+        # Nothing to cancel if there's no session, no task, or the task already finished.
         if entry is None or entry.task is None or entry.task.done():
             return
+
+        # Signal the running task to stop.
         entry.task.cancel()
         try:
+            # Wait for the task to acknowledge the cancellation.
             await entry.task
         except (asyncio.CancelledError, Exception):
+            # Both CancelledError and any mid-cancel exception are expected — ignore them.
             pass
-        # Flush the channel buffer so the partial stream is cleared.
+
+        # Send a stream-END marker so the channel knows the partial response is over
+        # and can clean up its display (e.g. remove a "typing..." indicator).
         await self._bus.publish_outgoing(OutgoingMessage(
             channel=channel_id,
             chat_id=chat_id,
             stream_phase=StreamPhase.END,
         ))
+
+        # Notify any hooks that the message was cancelled (e.g. for logging/analytics).
         await self.hooks.emit(MessageCancelEvent(channel_id=channel_id, chat_id=chat_id))
 
     # ── Command runner ────────────────────────────────────────────────────────
@@ -427,14 +502,17 @@ class Gateway:
         /new from a profile channel resets that profile's session instead of
         the REPL session, since profile agents are independent of the runtime.
         """
-        # Intercept /new (and its alias /clear) for profile channels so it
-        # resets the profile's own session, not the main REPL session.
+        # Special case: /new and /clear on a profile channel should reset
+        # *that profile's* session, not the main REPL session.
+        # Without this, the global /new command would clear the wrong thing.
         if parsed.name in ('new', 'clear'):
             colon = channel_id.find(':')
             if colon > 0:
                 profile_name = channel_id[:colon]
                 if profile_name in self._profile_agents:
+                    # Reset this profile's conversation history and session file.
                     self.new_profile_session(profile_name)
+                    # Tell the user the slate is clean.
                     await self._bus.publish_outgoing(OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,
@@ -442,8 +520,10 @@ class Gateway:
                     ))
                     return
 
+        # For all other commands, run the command and capture its text output.
         output = await self.dispatch_command(parsed)
         if output:
+            # Send the command's output back to the user in the same channel.
             await self._bus.publish_outgoing(OutgoingMessage(
                 channel=channel_id,
                 chat_id=chat_id,
