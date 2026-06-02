@@ -39,8 +39,8 @@ class TestSlackStreaming:
     """SlackChannel.send() with streaming=True posts then edits via chat_update."""
 
     def _channel(self, latency: float = 0.05):
-        from operator_use.gateway.channels.slack.service import SlackChannel
-        with patch("operator_use.gateway.channels.slack.service._SLACK_AVAILABLE", True):
+        from operator_use.channels.slack.service import SlackChannel
+        with patch("operator_use.channels.slack.service._SLACK_AVAILABLE", True):
             ch = SlackChannel.__new__(SlackChannel)
             # bypass __init__ import guard
             from operator_use.gateway.types import BaseChannel
@@ -175,7 +175,7 @@ class TestTelegramStreaming:
     """TelegramChannel.send() with streaming=True calls send_message then edit_message_text."""
 
     def _channel(self, latency: float = 0.05):
-        from operator_use.gateway.channels.telegram.service import TelegramChannel
+        from operator_use.channels.telegram.service import TelegramChannel
         ch = TelegramChannel.__new__(TelegramChannel)
         from operator_use.gateway.types import BaseChannel
         BaseChannel.__init__(ch)
@@ -275,7 +275,7 @@ class TestDiscordStreaming:
     """DiscordChannel.send() with streaming=True sends then edits the live message."""
 
     def _channel(self, latency: float = 0.05):
-        from operator_use.gateway.channels.discord.service import DiscordChannel
+        from operator_use.channels.discord.service import DiscordChannel
         ch = DiscordChannel.__new__(DiscordChannel)
         from operator_use.gateway.types import BaseChannel
         BaseChannel.__init__(ch)

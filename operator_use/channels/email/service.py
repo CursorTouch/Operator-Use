@@ -13,7 +13,7 @@ from operator_use.bus.types import (
     IncomingMessage, OutgoingMessage, StreamPhase,
     TextPart, FilePart, text_from_parts,
 )
-from operator_use.gateway.channels.email.utils import (
+from operator_use.channels.email.utils import (
     is_noreply, extract_address, extract_text,
     thread_id_from, message_id_from, build_email,
 )

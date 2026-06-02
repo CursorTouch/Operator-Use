@@ -16,7 +16,7 @@ from operator_use.settings.types import (
     BrowserUseSettings, ComputerUseSettings, WorkflowSettings,
     CronSettings, ExtensionsSettings,
 )
-from operator_use.gateway.channels.types import (
+from operator_use.channels.types import (
     ChannelsSettings,
     WebSocketChannelConfig, TelegramChannelConfig, DiscordChannelConfig,
     SlackChannelConfig, TwitchChannelConfig,

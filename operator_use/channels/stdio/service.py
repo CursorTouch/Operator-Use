@@ -4,7 +4,7 @@ import sys
 
 from operator_use.gateway.types import BaseChannel
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, text_from_parts
-from operator_use.gateway.channels.stdio.utils import blue, yellow, grey, red
+from operator_use.channels.stdio.utils import blue, yellow, grey, red
 
 
 class StdioChannel(BaseChannel):

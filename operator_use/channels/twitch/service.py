@@ -4,9 +4,9 @@ import asyncio
 import logging
 
 from operator_use.gateway.types import BaseChannel
-from operator_use.gateway.channels.shutdown import quiet_library_logging
+from operator_use.channels.shutdown import quiet_library_logging
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, text_from_parts
-from operator_use.gateway.channels.twitch.utils import split_message
+from operator_use.channels.twitch.utils import split_message
 
 logger = logging.getLogger(__name__)
 

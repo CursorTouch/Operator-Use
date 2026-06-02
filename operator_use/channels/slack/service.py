@@ -7,10 +7,10 @@ import re
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from operator_use.gateway.types import BaseChannel
-from operator_use.gateway.channels.shutdown import quiet_library_logging
+from operator_use.channels.shutdown import quiet_library_logging
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from operator_use.commands.types import CommandParseResult
-from operator_use.gateway.channels.slack.utils import (
+from operator_use.channels.slack.utils import (
     _MEDIA_DIR, _MENTION_RE,
     is_audio_file, audio_ext_from_file, download_slack_file,
     emoji_to_slack_name, markdown_to_slack_mrkdwn, split_message,

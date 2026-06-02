@@ -7,10 +7,10 @@ import re
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from operator_use.gateway.types import BaseChannel
-from operator_use.gateway.channels.shutdown import quiet_library_logging
+from operator_use.channels.shutdown import quiet_library_logging
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, text_from_parts
 from operator_use.commands.types import CommandParseResult
-from operator_use.gateway.channels.discord.utils import _MEDIA_DIR, is_audio_attachment, split_message
+from operator_use.channels.discord.utils import _MEDIA_DIR, is_audio_attachment, split_message
 
 logger = logging.getLogger(__name__)
 

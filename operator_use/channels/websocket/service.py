@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from operator_use.gateway.types import BaseChannel
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, FilePart, text_from_parts
-from operator_use.gateway.channels.websocket.utils import (
+from operator_use.channels.websocket.utils import (
     MSG_TYPE_MESSAGE, MSG_TYPE_START, MSG_TYPE_CHUNK,
     MSG_TYPE_END, MSG_TYPE_DONE, MSG_TYPE_ERROR,
     MSG_TYPE_REACT, MSG_TYPE_FILE,

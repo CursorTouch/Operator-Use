@@ -114,7 +114,7 @@ class GatewayManager:
         auth,
     ) -> None:
         """Start individual channel tasks for a single profile."""
-        from operator_use.gateway.channels.types import ChannelsSettings
+        from operator_use.channels.types import ChannelsSettings
 
         if cfg.websocket.enabled:
             channel_name = f'{profile_name}:websocket'
@@ -224,7 +224,7 @@ class GatewayManager:
             return None
 
         try:
-            from operator_use.gateway.channels.types import ChannelsSettings
+            from operator_use.channels.types import ChannelsSettings
             return ChannelsSettings.model_validate(channels_data)
         except Exception as exc:
             logger.warning('Profile %r: invalid channels config: %s', profile.name, exc)
@@ -269,11 +269,11 @@ class GatewayManager:
             logger.error('Gateway channel %r crashed: %s', name, exc, exc_info=exc)
 
     async def _run_websocket(self, cfg) -> None:
-        from operator_use.gateway.channels.websocket import WebSocketServer
+        from operator_use.channels.websocket import WebSocketServer
         await WebSocketServer(self.gateway, host=cfg.host, port=cfg.port).start()
 
     async def _run_telegram(self, bot_token: str, tcfg, name: str = 'telegram') -> None:
-        from operator_use.gateway.channels.telegram import TelegramChannel
+        from operator_use.channels.telegram import TelegramChannel
         cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
         ch = TelegramChannel(
             token=bot_token,
@@ -290,7 +290,7 @@ class GatewayManager:
         await ch.connect()
 
     async def _run_discord(self, bot_token: str, dcfg, name: str = 'discord') -> None:
-        from operator_use.gateway.channels.discord import DiscordChannel
+        from operator_use.channels.discord import DiscordChannel
         cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
         ch = DiscordChannel(
             token=bot_token,
@@ -308,7 +308,7 @@ class GatewayManager:
         await ch.connect()
 
     async def _run_slack(self, bot_token: str, app_token: str, scfg, name: str = 'slack') -> None:
-        from operator_use.gateway.channels.slack import SlackChannel
+        from operator_use.channels.slack import SlackChannel
         cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
         ch = SlackChannel(
             bot_token=bot_token,
@@ -326,7 +326,7 @@ class GatewayManager:
         await ch.connect()
 
     async def _run_twitch(self, cfg, token: str, name: str | None = None) -> None:
-        from operator_use.gateway.channels.twitch import TwitchChannel
+        from operator_use.channels.twitch import TwitchChannel
         ch = TwitchChannel(
             token=token,
             nick=cfg.nick,
@@ -339,7 +339,7 @@ class GatewayManager:
         await ch.connect()
 
     async def _run_email(self, cfg, username: str, password: str, name: str = 'email') -> None:
-        from operator_use.gateway.channels.email import EmailChannel
+        from operator_use.channels.email import EmailChannel
         ch = EmailChannel(
             username=username,
             password=password,

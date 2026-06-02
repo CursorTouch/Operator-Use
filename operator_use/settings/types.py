@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional, Literal, Any
 from operator_use.engine.types import SteeringMode, FollowupMode
 from operator_use.inference.types import Transport, ThinkingLevel
-from operator_use.gateway.channels.types import ChannelsSettings
+from operator_use.channels.types import ChannelsSettings
 from operator_use.acp.types import ACPSettings
 from operator_use.subagent.types import SubagentSettings
 

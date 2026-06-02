@@ -4,10 +4,10 @@ import asyncio
 import logging
 from pathlib import Path
 
-from operator_use.gateway.channels.shutdown import quiet_library_logging
+from operator_use.channels.shutdown import quiet_library_logging
 from operator_use.gateway.types import BaseChannel
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, ImagePart, text_from_parts
-from operator_use.gateway.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, markdown_to_telegram_html, split_message
+from operator_use.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, markdown_to_telegram_html, split_message
 
 logger = logging.getLogger(__name__)
 
@@ -625,7 +625,7 @@ class TelegramChannel(BaseChannel):
                             [ReactionTypeEmoji(emoji)],
                         )
                     except Exception:
-                        logger.exception("TelegramChannel: set_message_reaction failed for %r", message_id)
+                        logger.debug("TelegramChannel: set_message_reaction failed for %r", message_id)
                 return
 
             # Direct send (out-of-band) — handles TTS audio, files, and plain text

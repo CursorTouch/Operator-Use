@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from operator_use.gateway.channels.telegram.types import TelegramChannelConfig
-from operator_use.gateway.channels.discord.types import DiscordChannelConfig
-from operator_use.gateway.channels.slack.types import SlackChannelConfig
-from operator_use.gateway.channels.websocket.types import WebSocketChannelConfig
-from operator_use.gateway.channels.twitch.types import TwitchChannelConfig
-from operator_use.gateway.channels.email.types import EmailChannelConfig
+from operator_use.channels.telegram.types import TelegramChannelConfig
+from operator_use.channels.discord.types import DiscordChannelConfig
+from operator_use.channels.slack.types import SlackChannelConfig
+from operator_use.channels.websocket.types import WebSocketChannelConfig
+from operator_use.channels.twitch.types import TwitchChannelConfig
+from operator_use.channels.email.types import EmailChannelConfig
 
 
 class ChannelsSettings(BaseModel):
