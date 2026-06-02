@@ -867,24 +867,31 @@ class Runtime:
                 pass
             self._gateway_shutdown = None
 
-        # 2. Cron — no new jobs should fire after channels are stopped.
+        # 2–5. Cron, process manager, MCP, and memory are all independent once
+        #      channels are stopped — shut them down concurrently.
         if self._context.cron is not None:
             self._context.cron.stop()
 
-        # 3. Process manager — wait for in-flight subprocesses/subagents.
-        if self._context.process_manager is not None:
-            await self._context.process_manager.close()
+        async def _close_process_manager() -> None:
+            if self._context.process_manager is not None:
+                await self._context.process_manager.close()
 
-        # 4. MCP — disconnect external tool servers.
-        if self.mcp_manager is not None:
-            try:
-                await self.mcp_manager.disconnect_all()
-            except Exception:
-                pass
+        async def _disconnect_mcp() -> None:
+            if self.mcp_manager is not None:
+                try:
+                    await self.mcp_manager.disconnect_all()
+                except Exception:
+                    pass
 
-        # 5. Memory — flush any buffered facts to disk last.
-        if self._context.memory_manager is not None:
-            await self._context.memory_manager.shutdown()
+        async def _shutdown_memory() -> None:
+            if self._context.memory_manager is not None:
+                await self._context.memory_manager.shutdown()
+
+        await asyncio.gather(
+            _close_process_manager(),
+            _disconnect_mcp(),
+            _shutdown_memory(),
+        )
 
     # -------------------------------------------------------------------------
     # Cron

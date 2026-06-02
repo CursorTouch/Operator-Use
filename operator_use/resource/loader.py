@@ -80,6 +80,7 @@ class ResourceLoader(BaseResourceLoader):
         self._soul_prompt: str | None = None
         self._user_profile: str | None = None
         self._agent_memory: str | None = None
+        self._tools_reference: str | None = None
         self._extension_skill_paths: list[str] = []
         self._extension_workflow_paths: list[str] = []
         self._subagent_profiles: list[SubagentProfile] = []
@@ -140,6 +141,9 @@ class ResourceLoader(BaseResourceLoader):
 
     def get_agent_memory(self) -> str | None:
         return self._agent_memory
+
+    def get_tools_reference(self) -> str | None:
+        return self._tools_reference
 
     def extend_resources(self, paths: ResourceExtensionPaths) -> None:
         """Called after resources_discover to add extension-provided skill and workflow paths."""
@@ -362,7 +366,9 @@ class ResourceLoader(BaseResourceLoader):
             self._soul_prompt = _read_optional_file(self._active_profile.soul_path)
             self._user_profile = _read_optional_file(self._active_profile.user_path)
             self._agent_memory = _read_optional_file(self._active_profile.memory_path)
+            self._tools_reference = _read_optional_file(self._active_profile.tools_path)
         else:
             self._soul_prompt = None
             self._user_profile = None
             self._agent_memory = None
+            self._tools_reference = None

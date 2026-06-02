@@ -97,6 +97,10 @@ class AgentProfile(BaseModel):
         return self.profile_dir / 'MEMORY.md'
 
     @property
+    def tools_path(self) -> Path:
+        return self.profile_dir / 'TOOLS.md'
+
+    @property
     def sessions_dir(self) -> Path:
         return self.profile_dir / 'sessions'
 

@@ -72,6 +72,9 @@ class BaseResourceLoader(ABC):
     def get_agent_memory(self) -> str | None: ...
 
     @abstractmethod
+    def get_tools_reference(self) -> str | None: ...
+
+    @abstractmethod
     def extend_resources(self, paths: ResourceExtensionPaths) -> None: ...
 
     @abstractmethod

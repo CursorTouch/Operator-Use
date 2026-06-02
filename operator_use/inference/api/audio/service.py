@@ -11,10 +11,21 @@ from operator_use.inference.types import AudioOptions, STTContext, SynthesizedAu
 
 
 class AudioLLM:
-    _models = ModelRegistry.from_audio_builtins()
-    _providers = AudioProviderRegistry.from_builtins()
-    _apis = AudioAPIRegistry.from_builtins()
-    _auth_store = ProviderAuthManager.create(TextProviderRegistry.from_builtins())
+    # Class-level registries — None until first use (lazy) or explicitly set by
+    # RuntimeContext.create(), whichever comes first. This avoids importing all
+    # audio provider SDKs (gemini, elevenlabs, …) at module import time.
+    _models: Optional[ModelRegistry] = None
+    _providers: Optional[AudioProviderRegistry] = None
+    _apis: Optional[AudioAPIRegistry] = None
+    _auth_store: Optional[ProviderAuthManager] = None
+
+    @classmethod
+    def _ensure_defaults(cls) -> None:
+        if cls._models is None:
+            cls._models = ModelRegistry.from_audio_builtins()
+            cls._providers = AudioProviderRegistry.from_builtins()
+            cls._apis = AudioAPIRegistry.from_builtins()
+            cls._auth_store = ProviderAuthManager.create(TextProviderRegistry.from_builtins())
 
     def __init__(
         self,
@@ -27,10 +38,14 @@ class AudioLLM:
         apis: Optional[AudioAPIRegistry] = None,
         auth_store: Optional[ProviderAuthManager] = None,
     ) -> None:
-        _models = models if models is not None else type(self)._models
-        _providers = providers if providers is not None else type(self)._providers
-        _apis = apis if apis is not None else type(self)._apis
-        self._auth_store = auth_store if auth_store is not None else type(self)._auth_store
+        type(self)._ensure_defaults()
+        # Capture to locals — Pyright narrows local variables after assert,
+        # but does not narrow class attribute access.
+        _models = models or type(self)._models
+        _providers = providers or type(self)._providers
+        _apis = apis or type(self)._apis
+        _auth = auth_store or type(self)._auth_store
+        assert _models is not None and _providers is not None and _apis is not None and _auth is not None
 
         model = _models.get(model_id, provider)
         if model is None:
@@ -47,6 +62,7 @@ class AudioLLM:
 
         self.model = model
         self.provider_id = prov.name
+        self._auth_store = _auth
 
         base_url = model.base_url or prov.base_url
         base_opts = AudioOptions(base_url=base_url)
@@ -63,6 +79,7 @@ class AudioLLM:
         return merged
 
     async def synthesize(self, context: TTSContext) -> SynthesizedAudio:
+        assert self._auth_store is not None
         api_key = await self._auth_store.get_api_key(self.provider_id)
         if api_key:
             self.api.options.api_key = api_key
@@ -74,6 +91,7 @@ class AudioLLM:
         return await self.api.synthesize(self.model, context)
 
     async def transcribe(self, context: STTContext) -> TranscribedAudio:
+        assert self._auth_store is not None
         api_key = await self._auth_store.get_api_key(self.provider_id)
         if api_key:
             self.api.options.api_key = api_key

@@ -244,13 +244,18 @@ class GatewayManager:
             logger.warning('Profile %r: could not parse auth/channels.json: %s', profile.name, exc)
             return auth
 
-        auth.telegram_token = data.get('telegram', {}).get('bot_token', '')
-        auth.discord_token = data.get('discord', {}).get('bot_token', '')
-        auth.slack_bot_token = data.get('slack', {}).get('bot_token', '')
-        auth.slack_app_token = data.get('slack', {}).get('app_token', '')
-        auth.twitch_token = data.get('twitch', {}).get('token', '')
-        auth.email_username = data.get('email', {}).get('username', '')
-        auth.email_password = data.get('email', {}).get('password', '')
+        import os
+
+        def _resolve(value: str, env_var: str) -> str:
+            return value or os.environ.get(env_var, '')
+
+        auth.telegram_token  = _resolve(data.get('telegram', {}).get('bot_token', ''),  'TELEGRAM_BOT_TOKEN')
+        auth.discord_token   = _resolve(data.get('discord',  {}).get('bot_token', ''),  'DISCORD_BOT_TOKEN')
+        auth.slack_bot_token = _resolve(data.get('slack',    {}).get('bot_token', ''),  'SLACK_BOT_TOKEN')
+        auth.slack_app_token = _resolve(data.get('slack',    {}).get('app_token', ''),  'SLACK_APP_TOKEN')
+        auth.twitch_token    = _resolve(data.get('twitch',   {}).get('token', ''),      'TWITCH_TOKEN')
+        auth.email_username  = _resolve(data.get('email',    {}).get('username', ''),   'EMAIL_USERNAME')
+        auth.email_password  = _resolve(data.get('email',    {}).get('password', ''),   'EMAIL_PASSWORD')
         return auth
 
     # ── Internal task helpers ─────────────────────────────────────────────────

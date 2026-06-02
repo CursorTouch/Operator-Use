@@ -21,5 +21,6 @@ class SystemPromptOptions(BaseModel):
     soul_prompt: str | None = None
     user_profile: str | None = None
     agent_memory: str | None = None
+    tools_reference: str | None = None
     channel: str | None = None
     profile_dir: Path | None = None

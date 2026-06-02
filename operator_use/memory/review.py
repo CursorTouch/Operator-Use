@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from operator_use.inference.api.text.service import LLM
@@ -123,6 +123,7 @@ def spawn_memory_review(
     messages: list[Any],
     memory_tool: Tool,
     memory_manager: MemoryManager,
+    on_complete: Callable[[], None] | None = None,
 ) -> None:
     """Spawn a daemon thread that runs the memory review loop."""
 
@@ -139,6 +140,11 @@ def spawn_memory_review(
                 loop.run_until_complete(loop.shutdown_asyncgens())
             finally:
                 loop.close()
+            if on_complete is not None:
+                try:
+                    on_complete()
+                except Exception:
+                    pass
 
     t = threading.Thread(target=_thread_target, daemon=True, name='memory-review')
     t.start()

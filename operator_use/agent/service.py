@@ -70,6 +70,7 @@ class Agent(ExtensionContext):
         self._config = config
         self._memory_manager = memory_manager
         self._system_prompt: str = ""
+        self._system_prompt_cache: dict[str | None, str] = {}
         self._context_tokens: int = 0
         self._context_window: int = config.context_window
         self._compact_requested: bool = False
@@ -204,6 +205,7 @@ class Agent(ExtensionContext):
 
     async def reload(self) -> None:
         await self._resources.reload()
+        self._system_prompt_cache.clear()
 
     async def wait_for_idle(self) -> None:
         await self._engine.wait_for_idle()
@@ -431,6 +433,7 @@ class Agent(ExtensionContext):
             soul_prompt=self._resources.get_soul_prompt(),
             user_profile=self._resources.get_user_profile(),
             agent_memory=self._resources.get_agent_memory(),
+            tools_reference=self._resources.get_tools_reference(),
             channel=channel,
             session_id=self._session_manager.session_id,
             profile_dir=self._active_profile.profile_dir if self._active_profile else None,
@@ -519,6 +522,7 @@ class Agent(ExtensionContext):
             messages=messages,
             memory_tool=memory_tool,
             memory_manager=self._memory_manager,
+            on_complete=self._system_prompt_cache.clear,
         )
 
     def _active_todo_injection(self) -> str | None:
@@ -552,15 +556,28 @@ class Agent(ExtensionContext):
         # Notify extensions of incoming input
         await self._extensions.emit('input', InputEvent(text=user_input, source=opts.source))
 
-        # Fetch recalled context from memory before building the system prompt
-        memory_context = ""
-        if self._memory_manager:
-            memory_context = await self._memory_manager.prefetch(
-                user_input, session_id=self._session_manager.session_id or ""
-            )
+        # Start memory prefetch as a background task so the sync prompt rebuild
+        # runs while the SQLite / vector search is in flight.
+        async def _prefetch() -> str:
+            if self._memory_manager:
+                return await self._memory_manager.prefetch(
+                    user_input, session_id=self._session_manager.session_id or ""
+                )
+            return ""
 
-        # Build system prompt and allow extensions to override it
-        self._system_prompt = self._rebuild_system_prompt(channel=opts.channel)
+        prefetch_task = asyncio.ensure_future(_prefetch())
+
+        # System prompt is cached per channel; only rebuilt after a resource
+        # reload or when the memory review background thread updates MEMORY.md.
+        cached_prompt = self._system_prompt_cache.get(opts.channel)
+        if cached_prompt is not None:
+            self._system_prompt = cached_prompt
+        else:
+            self._system_prompt = self._rebuild_system_prompt(channel=opts.channel)
+            self._system_prompt_cache[opts.channel] = self._system_prompt
+
+        memory_context = await prefetch_task
+
         before_results = await self._extensions.emit(
             'before_agent_start',
             BeforeAgentStartEvent(prompt=user_input, system_prompt=self._system_prompt),

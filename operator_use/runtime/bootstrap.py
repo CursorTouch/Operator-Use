@@ -119,15 +119,6 @@ _KNOWLEDGE_INDEX = """\
 
 
 
-def _agent_md(name: str, description: str) -> str:
-    return (
-        f"---\n"
-        f"name: {name}\n"
-        f"description: {description}\n"
-        f"---\n"
-    )
-
-
 _TEMPLATES_DIR = Path(__file__).parent / 'templates'
 
 def _read_template(name: str) -> str:
@@ -136,6 +127,15 @@ def _read_template(name: str) -> str:
         return path.read_text(encoding='utf-8')
     except Exception:
         return f'# {name.split(".")[0].capitalize()}\n'
+
+
+def _agent_md(name: str, description: str) -> str:
+    template = _read_template('AGENT.md')
+    return (
+        template
+        .replace('name: agent', f'name: {name}', 1)
+        .replace('description: One-line description of this agent\'s purpose.', f'description: {description}', 1)
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -237,6 +237,7 @@ def bootstrap_profile(profile_dir: Path, name: str, description: str = '') -> No
     _write_text(profile_dir / 'SOUL.md',   _read_template('SOUL.md'))
     _write_text(profile_dir / 'USER.md',   _read_template('USER.md'))
     _write_text(profile_dir / 'MEMORY.md', _read_template('MEMORY.md'))
+    _write_text(profile_dir / 'TOOLS.md',  _read_template('TOOLS.md'))
 
     # Config files
     _write_json(profile_dir / 'settings.json',           _PROFILE_SETTINGS)

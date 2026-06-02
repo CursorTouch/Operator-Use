@@ -26,6 +26,7 @@ class PromptTemplate:
         soul_prompt: str | None = None,
         user_profile: str | None = None,
         agent_memory: str | None = None,
+        tools_reference: str | None = None,
         channel: str | None = None,
         session_id: str | None = None,
         profile_dir: Path | None = None,
@@ -40,6 +41,7 @@ class PromptTemplate:
         self.soul_prompt = soul_prompt
         self.user_profile = user_profile
         self.agent_memory = agent_memory
+        self.tools_reference = tools_reference
         self.channel = channel
         self.session_id = session_id
         self.profile_dir = profile_dir
@@ -81,6 +83,19 @@ class PromptTemplate:
             if (has_read or has_skill_view) and self.skills
             else ""
         )
+
+        # TOOLS.md from the profile — full reference guide written at profile init.
+        # Falls back to a compact auto-generated list when the file is absent.
+        if self.tools_reference:
+            tools_section = f"\n\n{self.tools_reference}"
+        elif self.tools:
+            tool_lines = [
+                f"- **{t.name}** — {t.description.split(chr(10))[0].strip().rstrip('.')}"
+                for t in sorted(self.tools, key=lambda x: x.name)
+            ]
+            tools_section = "\n\n# Available Tools\n\n" + "\n".join(tool_lines)
+        else:
+            tools_section = ""
         if self.agent_memory:
             stripped_memory = self.agent_memory.lstrip()
             if stripped_memory.startswith("# Memory"):
@@ -120,7 +135,7 @@ class PromptTemplate:
         return (
             identity + manual_section
             + docs + append_section + memory_section + user_section
-            + skills_section + platform_section + footer
+            + skills_section + tools_section + platform_section + footer
         )
 
 
@@ -136,6 +151,7 @@ def build_system_prompt(options: SystemPromptOptions) -> str:
         soul_prompt=options.soul_prompt,
         user_profile=options.user_profile,
         agent_memory=options.agent_memory,
+        tools_reference=options.tools_reference,
         channel=options.channel,
         profile_dir=options.profile_dir,
     ).build()
