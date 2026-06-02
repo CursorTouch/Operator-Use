@@ -472,12 +472,19 @@ class Gateway:
                     # the engine emits message=None (filtered by the guard above), and
                     # the retry/final-error flow handles the indicator via ERROR.
                     #
-                    # Synthetic terminate messages (e.g. reboot) are emitted directly as
-                    # MessageStartEvent → MessageEndEvent with no MessageUpdateEvent in
-                    # between, so their text is never published as a CHUNK. Detect this
-                    # case (response_parts empty but message has text) and emit the text
-                    # now so the channel actually delivers it before the process exits.
-                    if not response_parts:
+                    if m.stop_reason is None:
+                        for content in m.contents:
+                            chunk_text = getattr(content, 'content', '')
+                            if chunk_text and getattr(content, 'type', '') == 'text':
+                                response_parts.append(chunk_text)
+                                await self._bus.publish_outgoing(OutgoingMessage(
+                                    channel=channel_id,
+                                    chat_id=chat_id,
+                                    parts=[TextPart(chunk_text)],
+                                    stream_phase=StreamPhase.CHUNK,
+                                    metadata={'kind': 'text'},
+                                ))
+                    elif not response_parts:
                         for content in m.contents:
                             chunk_text = getattr(content, 'content', '')
                             if chunk_text and getattr(content, 'type', '') == 'text':
@@ -490,7 +497,7 @@ class Gateway:
                                     metadata={'kind': 'text'},
                                 ))
                     meta: dict = {'origin_message_id': message_id} if message_id else {}
-                    if m.stop_reason != StopReason.Stop:
+                    if m.stop_reason not in (None, StopReason.Stop):
                         meta['keep_typing'] = True
                     if tts_will_fire and m.stop_reason == StopReason.Stop:
                         meta['suppress_text'] = True

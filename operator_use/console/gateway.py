@@ -52,8 +52,19 @@ async def run_gateway_foreground(options: GatewayOptions) -> None:
     )
     runtime = await Runtime.create(config)
     gateway_manager = GatewayManager(runtime)
+
+    startup_done = asyncio.Event()
+    from operator_use.hooks.types import GatewayStartupEvent
+    async def _on_startup(event) -> None:
+        if isinstance(event, GatewayStartupEvent):
+            startup_done.set()
+    gateway_manager.gateway.hooks.register('gateway:startup', _on_startup)
+
     gateway_manager.start()
-    await asyncio.sleep(0.5)
+    try:
+        await asyncio.wait_for(startup_done.wait(), timeout=15.0)
+    except asyncio.TimeoutError:
+        pass
 
     # Register gateway shutdown so runtime.ashutdown() stops channels first.
     # This ensures Telegram polling stops before the new process starts,
