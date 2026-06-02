@@ -27,9 +27,11 @@ class BaseLLMAPI(ABC):
         raise NotImplementedError
         yield  # type: ignore[unreachable]  # pragma: no cover
 
-    @abstractmethod
     async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
-        raise NotImplementedError
+        events: list[LLMEvent] = []
+        async for event in self.stream(context, model=model):
+            events.append(event)
+        return events
 
 
 # Backward-compat alias (existing code imports BaseAPI from llm.api.base)

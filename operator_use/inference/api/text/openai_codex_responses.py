@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+from operator_use.inference.api.text.utils import parse_tool_args
 import re
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import aclosing
@@ -342,10 +343,7 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncGenerat
         elif etype == "response.function_call_arguments.done":
             item_id = event.get("item_id", "")
             args_str = event.get("arguments", "").strip()
-            try:
-                args = json.loads(args_str) if args_str else {}
-            except json.JSONDecodeError:
-                args = {}
+            args = parse_tool_args(args_str)
 
             call_id = call_id_by_item.get(item_id, item_id)
             saw_tool_call = True
@@ -365,10 +363,7 @@ async def _process_events(events: AsyncIterator[dict[str, Any]]) -> AsyncGenerat
                 saw_tool_call = True
                 if call_id not in ended_calls:
                     args_str = (item.get("arguments") or "").strip()
-                    try:
-                        args = json.loads(args_str) if args_str else {}
-                    except json.JSONDecodeError:
-                        args = {}
+                    args = parse_tool_args(args_str)
                     if call_id not in started_calls:
                         started_calls.add(call_id)
                         yield ToolCallStartEvent(
@@ -497,9 +492,3 @@ class OpenAICodexResponsesAPI(BaseAPI):
                 yield event
         if cancelled:
             yield ErrorEvent(reason=StopReason.Abort, error="Cancelled")
-
-    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
-        events: list[LLMEvent] = []
-        async for event in self.stream(context, model=model):
-            events.append(event)
-        return events

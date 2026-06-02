@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+from operator_use.inference.api.text.utils import parse_tool_args
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from mistralai import Mistral
@@ -279,10 +280,7 @@ class MistralChatAPI(BaseAPI):
 
                         for idx in sorted(tool_started):
                             args_str = tool_bufs[idx].strip()
-                            try:
-                                args = json.loads(args_str) if args_str else {}
-                            except json.JSONDecodeError:
-                                args = {}
+                            args = parse_tool_args(args_str)
 
                             yield ToolCallEndEvent(tool_call=ToolCallContent(
                                     id=tool_meta[idx]["id"],
@@ -301,9 +299,3 @@ class MistralChatAPI(BaseAPI):
 
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Error, error=str(e))
-
-    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
-        events: list[LLMEvent] = []
-        async for event in self.stream(context, model=model):
-            events.append(event)
-        return events

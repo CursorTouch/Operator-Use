@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from operator_use.inference.api.text.utils import parse_tool_args
 import os
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any, Optional, TYPE_CHECKING
@@ -478,13 +479,7 @@ class GoogleAntigravityAPI(BaseAPI):
                                         fc = part["functionCall"]
                                         name = fc.get("name", "") or fc.get("id", "")
                                         args_raw = fc.get("args", {})
-                                        try:
-                                            if isinstance(args_raw, str) and args_raw.strip():
-                                                args = json.loads(args_raw)
-                                            else:
-                                                args = args_raw if args_raw else {}
-                                        except json.JSONDecodeError:
-                                            args = {}
+                                        args = parse_tool_args(args_raw)
                                         call_meta: dict[str, Any] = {}
                                         part_sig = part.get("thoughtSignature")
                                         if part_sig:
@@ -522,9 +517,3 @@ class GoogleAntigravityAPI(BaseAPI):
             if text_started:
                 yield TextEndEvent(text=TextContent(content=text_buf))
             yield EndEvent(reason=StopReason.Stop)
-
-    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
-        events: list[LLMEvent] = []
-        async for event in self.stream(context, model=model):
-            events.append(event)
-        return events

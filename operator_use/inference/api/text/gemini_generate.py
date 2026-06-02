@@ -230,9 +230,3 @@ class GeminiGenerateAPI(BaseAPI):
         if text_started:
             yield TextEndEvent(text=TextContent(content=text_buf))
         yield EndEvent(reason=StopReason.Stop, input_tokens=_input_tokens, output_tokens=_output_tokens)
-
-    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
-        events: list[LLMEvent] = []
-        async for event in self.stream(context, model=model):
-            events.append(event)
-        return events

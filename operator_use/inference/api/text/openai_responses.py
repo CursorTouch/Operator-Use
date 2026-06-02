@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+from operator_use.inference.api.text.utils import parse_tool_args
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from openai import AsyncOpenAI
@@ -199,10 +200,7 @@ class OpenAIResponsesAPI(BaseAPI):
                 elif etype == "response.function_call_arguments.done":
                     call_id = event.item_id
                     args_str = event.arguments.strip()
-                    try:
-                        args = json.loads(args_str) if args_str else {}
-                    except json.JSONDecodeError:
-                        args = {}
+                    args = parse_tool_args(args_str)
 
                     yield ToolCallEndEvent(tool_call=ToolCallContent(
                         id=call_id,
@@ -224,9 +222,3 @@ class OpenAIResponsesAPI(BaseAPI):
 
                 elif etype == "error":
                     yield ErrorEvent(reason=StopReason.Abort, error=str(event))
-
-    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
-        events: list[LLMEvent] = []
-        async for event in self.stream(context, model=model):
-            events.append(event)
-        return events

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+from operator_use.inference.api.text.utils import parse_tool_args
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from ollama import AsyncClient
@@ -171,13 +172,7 @@ class OllamaChatAPI(BaseAPI):
                     for i, tc in enumerate(msg.tool_calls):
                         fn = tc.function
                         args_raw = fn.arguments
-                        try:
-                            if isinstance(args_raw, str) and args_raw.strip():
-                                args = json.loads(args_raw)
-                            else:
-                                args = args_raw if args_raw else {}
-                        except json.JSONDecodeError:
-                            args = {}
+                        args = parse_tool_args(args_raw)
 
                         yield ToolCallStartEvent(tool_call=ToolCallContent(name=fn.name))
                         yield ToolCallEndEvent(tool_call=ToolCallContent(name=fn.name, args=args))
@@ -194,9 +189,3 @@ class OllamaChatAPI(BaseAPI):
 
         except Exception as e:
             yield ErrorEvent(reason=StopReason.Error, error=str(e))
-
-    async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
-        events: list[LLMEvent] = []
-        async for event in self.stream(context, model=model):
-            events.append(event)
-        return events
