@@ -21,9 +21,6 @@ class HolographicMemoryAPI(BaseMemoryAPI):
     self-reinforced: facts surfaced by recall gain a small trust bump, so facts
     that prove useful across sessions rise over time.
 
-    Note: this implements the substantive parts of Hermes's Holographic provider
-    (FTS5 store + trust scoring + recency). True HRR (Holographic Reduced
-    Representation) compositional algebra is not implemented.
     """
 
     def __init__(self, options: MemoryOptions | None = None) -> None:

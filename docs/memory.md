@@ -163,8 +163,7 @@ export HINDSIGHT_API_KEY=hsk_...
 
 ## HolographicMemoryAPI
 
-Self-contained local provider modeled on Hermes's Holographic store — **no
-external service, no API key, no network**. Facts are kept in a SQLite database
+Self-contained local provider — **no external service, no API key, no network**. Facts are kept in a SQLite database
 with an FTS5 full-text index, and each fact carries a **trust score** in `[0, 1]`.
 
 **Storage** — SQLite at `profile_dir/memory/holographic.db` (override with the

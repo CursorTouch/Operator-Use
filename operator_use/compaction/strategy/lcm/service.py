@@ -10,8 +10,7 @@ Instead of discarding old turns, LCM:
 
 Nothing is ever truly lost — the agent can always search back.
 
-Based on the LCM paper by Ehrlich & Blackman (Voltropy PBC, 2026)
-and the hermes-lcm plugin by stephenschoettler.
+Based on the LCM paper by Ehrlich & Blackman (Voltropy PBC, 2026).
 """
 from __future__ import annotations
 
