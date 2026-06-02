@@ -624,8 +624,17 @@ class Agent(ExtensionContext):
         try:
             from operator_use.settings.manager import SettingsManager
             _sm = SettingsManager.get_instance()
-            _tts_enabled = (_sm.get_tts_settings().enabled if _sm else None)
-            _stt_enabled = (_sm.get_stt_settings().enabled if _sm else None)
+            if _sm and self._active_profile:
+                # Apply profile-specific settings overlay
+                _effective_settings = _sm.settings_with_profile_overlay(self._active_profile.settings_path)
+                _tts_enabled = _effective_settings.tts.enabled if (_effective_settings and _effective_settings.tts) else None
+                _stt_enabled = _effective_settings.stt.enabled if (_effective_settings and _effective_settings.stt) else None
+            else:
+                # Fall back to global settings if no profile is active
+                _tts = _sm.get_tts_settings() if _sm else None
+                _stt = _sm.get_stt_settings() if _sm else None
+                _tts_enabled = _tts.enabled if _tts else None
+                _stt_enabled = _stt.enabled if _stt else None
         except Exception:
             _tts_enabled = None
             _stt_enabled = None
