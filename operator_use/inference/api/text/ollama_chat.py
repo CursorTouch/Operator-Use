@@ -193,7 +193,7 @@ class OllamaChatAPI(BaseAPI):
                     yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
         except Exception as e:
-            yield ErrorEvent(reason=StopReason.Abort, error=str(e))
+            yield ErrorEvent(reason=StopReason.Error, error=str(e))
 
     async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []

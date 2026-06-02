@@ -29,7 +29,7 @@ _STOP_REASON: dict[str, StopReason] = {
     "length": StopReason.Length,
     "model_length": StopReason.Length,
     "tool_calls": StopReason.ToolCalls,
-    "error": StopReason.Abort,
+    "error": StopReason.Error,
 }
 
 _MINIMAL_LEVELS = {ThinkingLevel.Low, ThinkingLevel.Minimal}
@@ -300,7 +300,7 @@ class MistralChatAPI(BaseAPI):
                         yield EndEvent(reason=stop_reason, input_tokens=_input_tokens, output_tokens=_output_tokens)
 
         except Exception as e:
-            yield ErrorEvent(reason=StopReason.Abort, error=str(e))
+            yield ErrorEvent(reason=StopReason.Error, error=str(e))
 
     async def invoke(self, context: LLMContext, model: Model) -> list[LLMEvent]:
         events: list[LLMEvent] = []
