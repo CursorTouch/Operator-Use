@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from operator_use.inference.provider.types import OAuthProvider
 from operator_use.inference.provider.oauth.pkce import generate_pkce
 from operator_use.inference.provider.oauth.types import OAuthAuthInfo, OAuthCredential, OAuthLoginCallbacks, OAuthPrompt, AbortSignal
+from operator_use.inference.provider.oauth.utils import parse_authorization_input, start_oauth_callback_server, await_oauth_code
 
 __all__ = ["OpenAICodexOAuthProvider"]
 
@@ -38,17 +39,6 @@ SCOPES = "openid profile email offline_access"
 JWT_CLAIM_PATH = "https://api.openai.com/auth"
 CALLBACK_HOST = None  # binds to all interfaces (IPv4 + IPv6)
 CALLBACK_PORT = 1455
-
-_SUCCESS_HTML = b"""<!DOCTYPE html><html><head><title>Auth complete</title></head><body>
-<h2>Authentication successful!</h2>
-<p>You can close this window and return to the application.</p>
-</body></html>"""
-
-_ERROR_HTML = b"""<!DOCTYPE html><html><head><title>Auth failed</title></head><body>
-<h2>Authentication failed</h2>
-<p>An error occurred. Please try again.</p>
-</body></html>"""
-
 
 def _create_state() -> str:
     return secrets.token_hex(16)
@@ -77,26 +67,6 @@ def _get_account_id(access_token: str) -> str | None:
     account_id = auth.get("chatgpt_account_id")
     return account_id if isinstance(account_id, str) and account_id else None
 
-
-def _parse_authorization_input(value: str) -> tuple[Optional[str], Optional[str]]:
-    """Parse code and state from a redirect URL, raw query string, or bare code."""
-    value = value.strip()
-    if not value:
-        return None, None
-    try:
-        parsed = urllib.parse.urlparse(value)
-        if parsed.scheme in ("http", "https"):
-            params = urllib.parse.parse_qs(parsed.query)
-            return params.get("code", [None])[0], params.get("state", [None])[0]
-    except Exception:
-        pass
-    if "#" in value:
-        code, state = value.split("#", 1)
-        return code or None, state or None
-    if "code=" in value:
-        params = urllib.parse.parse_qs(value)
-        return params.get("code", [None])[0], params.get("state", [None])[0]
-    return value, None
 
 
 def _build_authorization_url(challenge: str, state: str, originator: str) -> str:
@@ -193,51 +163,6 @@ def _parse_token_response(data: dict) -> tuple[str, str, int]:
     return access, refresh, expires_ms
 
 
-async def _start_local_server(state: str) -> tuple[asyncio.Server, asyncio.Future[str]]:
-    loop = asyncio.get_running_loop()
-    code_future: asyncio.Future[str] = loop.create_future()
-
-    async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        try:
-            raw = await reader.read(4096)
-            line = raw.decode(errors="replace").split("\r\n")[0]
-            parts = line.split(" ")
-            if len(parts) < 2:
-                writer.write(b"HTTP/1.1 400 Bad Request\r\n\r\n")
-                await writer.drain()
-                return
-
-            parsed = urllib.parse.urlparse(parts[1])
-            params = urllib.parse.parse_qs(parsed.query)
-
-            if parsed.path == "/auth/callback":
-                recv_state = params.get("state", [None])[0]
-                code = params.get("code", [None])[0]
-                if recv_state == state and code:
-                    writer.write(
-                        b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
-                        + _SUCCESS_HTML
-                    )
-                    if not code_future.done():
-                        code_future.set_result(code)
-                else:
-                    writer.write(
-                        b"HTTP/1.1 400 Bad Request\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
-                        + _ERROR_HTML
-                    )
-            else:
-                writer.write(b"HTTP/1.1 404 Not Found\r\n\r\n")
-
-            await writer.drain()
-        except Exception:
-            pass
-        finally:
-            writer.close()
-            await writer.wait_closed()
-
-    server = await asyncio.start_server(_handle, CALLBACK_HOST, CALLBACK_PORT)
-    return server, code_future
-
 
 async def login_openai_codex(
     callbacks: OAuthLoginCallbacks,
@@ -247,7 +172,7 @@ async def login_openai_codex(
     state = _create_state()
     url = _build_authorization_url(challenge, state, originator)
 
-    server, code_future = await _start_local_server(state)
+    server, code_future = await start_oauth_callback_server("/auth/callback", state, CALLBACK_HOST, CALLBACK_PORT)
     callbacks.on_auth(OAuthAuthInfo(
         url=url,
         instructions="A browser window should open. Complete login to finish.",
@@ -258,42 +183,13 @@ async def login_openai_codex(
     # tears down the stdin reader so nothing keeps consuming stdin after we
     # return. We await the cancelled tasks so that teardown completes before
     # control returns to the REPL.
-    code: Optional[str] = None
-    try:
-        if callbacks.on_manual_code_input:
-            browser_task = asyncio.ensure_future(code_future)
-            manual_task = asyncio.ensure_future(callbacks.on_manual_code_input())
-            done, pending = await asyncio.wait(
-                [browser_task, manual_task],
-                timeout=300,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for task in pending:
-                task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
-
-            if browser_task in done and not browser_task.cancelled() and browser_task.exception() is None:
-                code = browser_task.result()
-            elif manual_task in done and not manual_task.cancelled() and manual_task.exception() is None:
-                raw = manual_task.result()
-                parsed_code, parsed_state = _parse_authorization_input(raw)
-                if parsed_state and parsed_state != state:
-                    raise ValueError("State mismatch")
-                code = parsed_code
-        else:
-            try:
-                code = await asyncio.wait_for(asyncio.shield(code_future), timeout=300)
-            except asyncio.TimeoutError:
-                pass
-    finally:
-        server.close()
-        await server.wait_closed()
+    code, _ = await await_oauth_code(code_future, state, server, callbacks)
 
     if not code:
         raw = await callbacks.on_prompt(OAuthPrompt(
             message="Paste the authorization code (or full redirect URL):",
         ))
-        parsed_code, parsed_state = _parse_authorization_input(raw)
+        parsed_code, parsed_state = parse_authorization_input(raw)
         if parsed_state and parsed_state != state:
             raise ValueError("State mismatch")
         code = parsed_code
