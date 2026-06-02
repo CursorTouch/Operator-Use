@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from operator_use.inference.api.text.utils import parse_tool_args
+from operator_use.inference.api.text.utils import parse_tool_args, openai_user_content, openai_assistant_content, openai_messages_to_chat
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from openai import AsyncOpenAI
@@ -60,67 +60,6 @@ def _clean_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _user_content(content_items: list) -> str | list[dict[str, Any]]:
-    parts: list[dict[str, Any]] = []
-    for item in content_items:
-        match item:
-            case TextContent():
-                parts.append({"type": "text", "text": item.content})
-            case ImageContent():
-                for b64, mime in item.to_base64():
-                    url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
-                    parts.append({"type": "image_url", "image_url": {"url": url}})
-    if len(parts) == 1 and parts[0]["type"] == "text":
-        return parts[0]["text"]
-    return parts
-
-
-def _assistant_content(content_items: list) -> tuple[str | None, list[dict[str, Any]]]:
-    text_parts: list[str] = []
-    tool_calls: list[dict[str, Any]] = []
-    for item in content_items:
-        match item:
-            case TextContent():
-                text_parts.append(item.content)
-            case ToolCallContent():
-                tool_calls.append({
-                    "id": item.id,
-                    "type": "function",
-                    "function": {"name": item.name, "arguments": json.dumps(item.args)},
-                })
-    text = "".join(text_parts) or None
-    return text, tool_calls
-
-
-def _messages_to_chat(messages: list[LLMMessage]) -> list[dict[str, Any]]:
-    result: list[dict[str, Any]] = []
-    for msg in messages:
-        match msg:
-            case SystemMessage():
-                text = "\n".join(
-                    c.content for c in msg.contents if isinstance(c, TextContent)
-                )
-                result.append({"role": "system", "content": text})
-            case UserMessage():
-                result.append({"role": "user", "content": _user_content(msg.contents)})
-            case AssistantMessage():
-                text, tool_calls = _assistant_content(msg.contents)
-                entry: dict[str, Any] = {"role": "assistant"}
-                if text is not None:
-                    entry["content"] = text
-                if tool_calls:
-                    entry["tool_calls"] = tool_calls
-                result.append(entry)
-            case ToolMessage():
-                for content in msg.contents:
-                    if isinstance(content, ToolResultContent):
-                        result.append({
-                            "role": "tool",
-                            "tool_call_id": content.id,
-                            "content": content.content,
-                        })
-    return result
-
 
 def _response_format(response_format: Any | None) -> dict[str, Any] | None:
     structured = normalize_structured_response_format(response_format)
@@ -177,7 +116,7 @@ class OpenAICompletionsAPI(BaseAPI):
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
         if self.options.api_key:
             self._client.api_key = self.options.api_key
-        chat_messages = _messages_to_chat(context.messages)
+        chat_messages = openai_messages_to_chat(context.messages)
         if context.system_prompt:
             chat_messages = [{"role": "system", "content": context.system_prompt}] + chat_messages
         params = self._build_params(model, chat_messages, tools=context.tools or None)

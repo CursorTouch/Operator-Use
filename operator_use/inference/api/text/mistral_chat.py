@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from operator_use.inference.api.text.utils import parse_tool_args
+from operator_use.inference.api.text.utils import parse_tool_args, openai_user_content
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from mistralai import Mistral
@@ -36,20 +36,6 @@ _STOP_REASON: dict[str, StopReason] = {
 _MINIMAL_LEVELS = {ThinkingLevel.Low, ThinkingLevel.Minimal}
 
 
-def _user_content(content_items: list) -> str | list[dict[str, Any]]:
-    parts: list[dict[str, Any]] = []
-    for item in content_items:
-        match item:
-            case TextContent():
-                parts.append({"type": "text", "text": item.content})
-            case ImageContent():
-                for b64, mime in item.to_base64():
-                    url = b64 if b64.startswith("http") else f"data:{mime or 'image/png'};base64,{b64}"
-                    parts.append({"type": "image_url", "image_url": {"url": url}})
-    if len(parts) == 1 and parts[0]["type"] == "text":
-        return parts[0]["text"]
-    return parts
-
 
 def _messages_to_mistral(messages: list[LLMMessage]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
@@ -59,7 +45,7 @@ def _messages_to_mistral(messages: list[LLMMessage]) -> list[dict[str, Any]]:
                 text = "\n".join(c.content for c in msg.contents if isinstance(c, TextContent))
                 result.append({"role": "system", "content": text})
             case UserMessage():
-                result.append({"role": "user", "content": _user_content(msg.contents)})
+                result.append({"role": "user", "content": openai_user_content(msg.contents)})
             case AssistantMessage():
                 text_parts: list[str] = []
                 tool_calls: list[dict[str, Any]] = []

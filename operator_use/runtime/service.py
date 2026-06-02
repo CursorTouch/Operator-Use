@@ -417,6 +417,26 @@ class Runtime:
         sm.branch(from_entry_id)
         await self._emit_session_start('fork')
 
+    def _wire_optional_tools(self, engine) -> None:
+        """Attach MCP and ACP tools to an engine when their managers are available."""
+        if self.mcp_manager is not None:
+            from operator_use.builtins.tools.mcp import MCPTool
+            engine.add_tool(MCPTool(
+                manager=self.mcp_manager,
+                engine=engine,
+                agent_id=str(id(engine)),
+            ))
+        from operator_use.builtins.tools.acp_agent import ACPAgentTool
+        if self._context.acp_session_manager is not None and self._context.acp_auth_manager is not None:
+            engine.add_tool(ACPAgentTool(
+                registry=self._context.settings_manager.get_acp_agents() if self._context.settings_manager else [],
+                session_manager=self._context.acp_session_manager,
+                auth_manager=self._context.acp_auth_manager,
+                bus=self.bus,
+                agent=None,
+                settings_manager=self._context.settings_manager,
+            ))
+
     def create_session_agent(self) -> Agent:
         """
         Create an isolated agent for a new session (gateway channel or ACP).
@@ -449,27 +469,7 @@ class Runtime:
         load_result = self._context.resource_loader.get_extensions()
         deferred = _DeferredExtensionRuntime(load_result)
 
-        # Add a per-session MCP tool so each gateway session can independently
-        # connect/disconnect servers without affecting other sessions.
-        if self.mcp_manager is not None:
-            from operator_use.builtins.tools.mcp import MCPTool
-            engine.add_tool(MCPTool(
-                manager=self.mcp_manager,
-                engine=engine,
-                agent_id=str(id(engine)),
-            ))
-
-        # Add ACP agent tool if ACP services are available.
-        from operator_use.builtins.tools.acp_agent import ACPAgentTool
-        if self._context.acp_session_manager is not None and self._context.acp_auth_manager is not None:
-            engine.add_tool(ACPAgentTool(
-                registry=self._context.settings_manager.get_acp_agents() if self._context.settings_manager else [],
-                session_manager=self._context.acp_session_manager,
-                auth_manager=self._context.acp_auth_manager,
-                bus=self.bus,
-                agent=None,
-                settings_manager=self._context.settings_manager,
-            ))
+        self._wire_optional_tools(engine)
 
         agent = Agent(
             engine=engine,
@@ -548,24 +548,7 @@ class Runtime:
         load_result = self._context.resource_loader.get_extensions()
         deferred = _DeferredExtensionRuntime(load_result)
 
-        if self.mcp_manager is not None:
-            from operator_use.builtins.tools.mcp import MCPTool
-            engine.add_tool(MCPTool(
-                manager=self.mcp_manager,
-                engine=engine,
-                agent_id=str(id(engine)),
-            ))
-
-        from operator_use.builtins.tools.acp_agent import ACPAgentTool
-        if self._context.acp_session_manager is not None and self._context.acp_auth_manager is not None:
-            engine.add_tool(ACPAgentTool(
-                registry=self._context.settings_manager.get_acp_agents() if self._context.settings_manager else [],
-                session_manager=self._context.acp_session_manager,
-                auth_manager=self._context.acp_auth_manager,
-                bus=self.bus,
-                agent=None,
-                settings_manager=self._context.settings_manager,
-            ))
+        self._wire_optional_tools(engine)
 
         agent = Agent(
             engine=engine,
