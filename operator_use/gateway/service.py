@@ -649,13 +649,29 @@ class Gateway:
         # ── message:send hook — fired before DONE so TTS hooks can inject audio.
         # is_voice=True when the original message had an AudioPart, letting TTS hooks
         # gate synthesis on voice-originated messages only.
+        # tts_enabled is resolved from the active profile's settings overlay so profile-level
+        # TTS toggles are respected (the hook reads from the global settings manager which
+        # does not include the profile overlay).
         response_text = "".join(response_parts)
+        _tts_enabled: bool | None = None
+        try:
+            _profile = agent.get_active_profile() if hasattr(agent, 'get_active_profile') else None
+            if _profile is not None:
+                from operator_use.settings.manager import SettingsManager
+                _sm = SettingsManager.get_instance()
+                if _sm is not None:
+                    _ps = _sm.settings_with_profile_overlay(_profile.settings_path)
+                    if _ps.tts is not None:
+                        _tts_enabled = _ps.tts.enabled
+        except Exception:
+            pass
         send_results = await self.hooks.emit(MessageSendEvent(
             channel_id=channel_id,
             chat_id=chat_id,
             input_text=text,
             response_text=response_text,
             is_voice=is_voice,
+            tts_enabled=_tts_enabled,
         ))
         tts_audio_sent = False
         for r in send_results:

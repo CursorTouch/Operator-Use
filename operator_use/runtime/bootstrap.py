@@ -79,6 +79,8 @@ _CHANNELS_AUTH = {
 }
 
 _PROFILE_SETTINGS = {
+    "tts": {"enabled": False},
+    "stt": {"enabled": False},
     "channels": {
         "telegram":  {"enabled": False},
         "discord":   {"enabled": False},

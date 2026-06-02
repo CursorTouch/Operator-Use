@@ -45,7 +45,8 @@ async def _on_message_send(event) -> object:
     if event.channel_id == 'stdio':
         return None
 
-    enabled = tts.enabled if tts else None
+    # Profile-level override takes precedence over global settings.
+    enabled = event.tts_enabled if event.tts_enabled is not None else (tts.enabled if tts else None)
     if enabled is False:
         return None
     # enabled=None → only synthesize when the user spoke (voice-originated message)

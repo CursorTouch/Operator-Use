@@ -454,6 +454,7 @@ class MessageSendEvent:
     input_text: str = ''
     response_text: str = ''
     is_voice: bool = False
+    tts_enabled: bool | None = None  # None = use global default; set from profile overlay
 
 
 @dataclass
