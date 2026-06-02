@@ -27,6 +27,7 @@ from operator_use.compaction.strategy.utils import estimate_context_tokens, esti
 from operator_use.agent.utils import is_permanent_error
 from operator_use.agent.goals import GoalManager, judge_goal_with_llm
 from operator_use.skill.review import SkillReviewTracker, spawn_skill_review
+from operator_use.memory.review import MemoryReviewTracker, spawn_memory_review
 
 if TYPE_CHECKING:
     from operator_use.engine.service import Engine
@@ -75,6 +76,7 @@ class Agent(ExtensionContext):
         self._compact_options: CompactOptions | None = None
         self._runtime: Runtime | None = None
         self._skill_review = SkillReviewTracker()
+        self._memory_review = MemoryReviewTracker()
         def _make_judge_llm():
             try:
                 from operator_use.settings.manager import SettingsManager
@@ -297,6 +299,8 @@ class Agent(ExtensionContext):
     ) -> ToolInvocation | ToolResultContent | None:
         if invocation.name != 'skill':
             self._skill_review.on_tool_call()
+        if invocation.name != 'memory':
+            self._memory_review.on_tool_call()
 
         results = await self._extensions.emit(
             'tool_call',
@@ -499,6 +503,24 @@ class Agent(ExtensionContext):
             skill_view_tool=skill_tool,
         )
 
+    def _maybe_spawn_memory_review(self) -> None:
+        """Spawn a background thread to review the conversation and save memory facts."""
+        if self._memory_manager is None or self._memory_manager.api is None:
+            return
+        tools_by_name = {t.name: t for t in self._engine.state.tools}
+        memory_tool = tools_by_name.get('memory')
+        if memory_tool is None:
+            return
+        messages = list(self._engine.state.messages)
+        if not messages:
+            return
+        spawn_memory_review(
+            llm=self._engine.llm,
+            messages=messages,
+            memory_tool=memory_tool,
+            memory_manager=self._memory_manager,
+        )
+
     def _active_todo_injection(self) -> str | None:
         for tool in self._engine.state.tools:
             formatter = getattr(tool, 'format_for_injection', None)
@@ -670,6 +692,11 @@ class Agent(ExtensionContext):
         if self._skill_review.should_review():
             self._skill_review.reset()
             self._maybe_spawn_skill_review()
+
+        # Trigger background memory review if threshold reached
+        if self._memory_review.should_review():
+            self._memory_review.reset()
+            self._maybe_spawn_memory_review()
 
         # Trigger compaction if requested or context budget exceeded
         if self._compact_requested or self._compaction.should_compact(
