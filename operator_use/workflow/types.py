@@ -33,6 +33,9 @@ class WorkflowContext:
     nested_workflow: Any = None
     # Current nesting depth, threaded so the one-level-deep guard holds for class workflows.
     spawn_depth: int = 1
+    # Caller's run record — threaded into nested class-based workflows so logs
+    # and the agent()-call cap are unified with the parent run.
+    record: Any = None  # WorkflowRunRecord | None
 
 
 @dataclass
@@ -155,7 +158,7 @@ class Workflow(ABC):
             settings=SubagentSettings(),
         )
 
-        record = WorkflowRunRecord(
+        record = workflow_context.record or WorkflowRunRecord(
             run_id=invocation.run_id,
             workflow_name=invocation.workflow_name,
             status=WorkflowStatus.running,

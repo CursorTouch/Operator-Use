@@ -167,13 +167,14 @@ class WorkflowManager:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
-    def _make_workflow_context(self, spawn_depth: int = 1) -> WorkflowContext:
+    def _make_workflow_context(self, spawn_depth: int = 1, record: Any = None) -> WorkflowContext:
         """Build a WorkflowContext from the manager's own llm and tools."""
         return WorkflowContext(
             llm=self._llm,
             tools=self._tools,
             nested_workflow=self._run_inline,
             spawn_depth=spawn_depth,
+            record=record,
         )
 
     async def _run_inline(self, name: str, args: dict[str, Any], spawn_depth: int, record: WorkflowRunRecord) -> str:
@@ -190,7 +191,7 @@ class WorkflowManager:
         if instance is not None:
             return await instance.execute(
                 WorkflowInvocation(workflow_name=name, args=args),
-                self._make_workflow_context(spawn_depth=spawn_depth),
+                self._make_workflow_context(spawn_depth=spawn_depth, record=record),
             )
 
         path = self._loader.find(name) if self._loader else None

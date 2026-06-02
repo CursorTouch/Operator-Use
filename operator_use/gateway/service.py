@@ -6,6 +6,20 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable, Awaitable
 
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart
+
+# Pending permission futures: (channel, chat_id) → Future[IncomingMessage]
+# Populated by OperatorACPClient when awaiting a human permission decision.
+_PERMISSION_FUTURES: dict[tuple[str, str], asyncio.Future] = {}
+
+
+def register_permission_future(channel: str, chat_id: str, fut: asyncio.Future) -> None:
+    _PERMISSION_FUTURES[(channel, chat_id)] = fut
+
+
+def unregister_permission_future(channel: str, chat_id: str) -> None:
+    _PERMISSION_FUTURES.pop((channel, chat_id), None)
+
+
 from operator_use.commands.types import parse_command
 from operator_use.gateway.types import BaseChannel
 from operator_use.hooks.service import Hooks
@@ -164,6 +178,13 @@ class Gateway:
         Channels registered via register_direct_handler() bypass gateway session
         management entirely and are delivered straight to their handler.
         """
+        # Permission intercept: an OperatorACPClient is awaiting a human decision
+        # on this exact channel+chat. Resolve its Future and consume the message.
+        perm_fut = _PERMISSION_FUTURES.pop((msg.channel, msg.chat_id), None)
+        if perm_fut is not None and not perm_fut.done():
+            perm_fut.set_result(msg)
+            return
+
         handler = self._direct_handlers.get(msg.channel)
         if handler is not None:
             await handler(msg)

@@ -102,6 +102,11 @@ class WorkflowExecuteContext:
                 f'Raise it via args["max_agent_calls"] if this is intentional.'
             )
 
+        # Claim the slot before yielding to prevent concurrent parallel() calls
+        # from all passing the cap check before any of them increments the counter.
+        self._record.agent_calls += 1
+        self.budget.add()
+
         opts = {'schema': schema.__name__ if schema else None, 'system': system}
         if resume:
             cached = self._journal.get(prompt, opts)
@@ -109,9 +114,6 @@ class WorkflowExecuteContext:
                 return schema.model_validate(cached) if schema else cached
 
         result = await self._run_with_retry(prompt, schema, system, tools, stall_ms, max_retries)
-
-        self._record.agent_calls += 1
-        self.budget.add()
 
         if resume:
             serialized = result.model_dump() if isinstance(result, BaseModel) else result

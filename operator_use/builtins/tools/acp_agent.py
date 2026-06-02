@@ -80,9 +80,16 @@ class _ACPSchema(BaseModel):
     action: str = Field(
         description=(
             'agents   — list configured agents and their auth/session status.\n'
-            'run      — send a task (detached=False to block; detached=True returns immediately).\n'
-            'spawn    — create a named session; returns session_id for multi-turn use.\n'
-            'send     — send a follow-up into an existing session (requires session_id).\n'
+            'run      — send a task to an agent. For http/webrtc agents, automatically resumes '
+            '           the last saved session if one exists. For stdio agents each call spawns '
+            '           a fresh subprocess so prior session_ids are ignored. '
+            '           Use detached=False to block and get the result inline; '
+            '           detached=True (default) fires in the background.\n'
+            'spawn    — explicitly create a fresh session and get back a session_id. '
+            '           Only needed when you will drive a multi-turn conversation with send, '
+            '           or want a guaranteed fresh context.\n'
+            'send     — send a follow-up into an existing session (requires session_id from spawn). '
+            '           Always blocking — multi-turn conversations need the response inline.\n'
             'sessions — list all persisted ACP session bookmarks.\n'
             'status   — get detailed status of a detached run by task_id.\n'
             'cancel   — stop a running detached task by task_id.'
@@ -99,15 +106,20 @@ class _ACPSchema(BaseModel):
     session_id: Optional[str] = Field(
         default=None,
         description=(
-            'Session ID to resume.  Returned by spawn.  '
-            'Pass to run/send to continue a prior conversation.'
+            'Full session ID to resume (returned by spawn or listed by sessions action). '
+            'Pass to send to continue a spawned conversation. '
+            'For stdio agents, session IDs do not survive subprocess restarts — '
+            'omit this for run and let the tool manage sessions automatically.'
         ),
     )
     detached: bool = Field(
         default=True,
         description=(
+            'Only applies to action=run. '
             'If True (default), run in the background; result delivered as a follow-up message. '
-            'If False, block until done and return the result directly.'
+            'If False, block until the agent responds and return the result directly — '
+            'use only for short tasks; long tasks will block the operator (Esc cancels). '
+            'Ignored for spawn and send (spawn always returns session_id; send always blocks).'
         ),
     )
     task_id: Optional[str] = Field(
@@ -132,15 +144,16 @@ class ACPAgentTool(Tool):
             name='acp_agent',
             description=(
                 'Interact with remote ACP agents (built-in or configured in settings).\n\n'
+                '  run, agent=<n>, task=<t>                — send a task; auto-resumes last session.\n'
+                '  run, ..., detached=False                — block and return result inline.\n'
+                '  spawn, agent=<n>                        — create a fresh session (for explicit multi-turn use).\n'
+                '  send, agent=<n>, session_id=<id>, task=<t>  — continue a spawned session.\n'
                 '  agents                                  — list available agents\n'
-                '  run, agent=<n>, task=<t>                — dispatch a task\n'
-                '  spawn, agent=<n>                        — start a named persistent session\n'
-                '  send, agent=<n>, session_id=<id>, task=<t>  — continue a session\n'
                 '  sessions                                — view session bookmarks\n'
                 '  status, task_id=<id>                    — check a detached run\n'
                 '  cancel, task_id=<id>                    — stop a detached run\n\n'
-                'detached=True (default): result arrives as a follow-up message.\n'
-                'detached=False: blocks and returns the result directly.'
+                'For most tasks use run (it auto-resumes). '
+                'Only use spawn+send when you need an explicit fresh context or long multi-turn control.'
             ),
             schema=_ACPSchema,
             kind=ToolKind.Agent,
@@ -178,6 +191,9 @@ class ACPAgentTool(Tool):
         params = _ACPSchema.model_validate(invocation.params)
         caller_agent = self._agent or (context.agent if context else None)
         bus = self._bus or (context.bus if context else None)
+        from operator_use.subagent.manager import _session_channel, _session_chat_id
+        channel = _session_channel.get()
+        chat_id = _session_chat_id.get()
 
         match params.action:
 
@@ -232,7 +248,8 @@ class ACPAgentTool(Tool):
                 if config is None:
                     return ToolResult.error(invocation.id, self._unknown_agent(params.agent))
                 return await self._spawn(
-                    invocation.id, config, params.task, caller_agent, bus
+                    invocation.id, config, params.task, caller_agent, bus,
+                    channel=channel, chat_id=chat_id,
                 )
 
             # ── send ──────────────────────────────────────────────────────────
@@ -248,7 +265,8 @@ class ACPAgentTool(Tool):
                     return ToolResult.error(invocation.id, self._unknown_agent(params.agent))
                 # send is always blocking — multi-turn needs the response inline.
                 return await self._run_blocking(
-                    invocation.id, config, params.task, params.session_id, caller_agent
+                    invocation.id, config, params.task, params.session_id, caller_agent,
+                    bus=bus, channel=channel, chat_id=chat_id, signal=signal,
                 )
 
             # ── run ───────────────────────────────────────────────────────────
@@ -269,7 +287,8 @@ class ACPAgentTool(Tool):
                         invocation.id, config, params.task, session_id, caller_agent, bus
                     )
                 return await self._run_blocking(
-                    invocation.id, config, params.task, session_id, caller_agent
+                    invocation.id, config, params.task, session_id, caller_agent,
+                    bus=bus, channel=channel, chat_id=chat_id, signal=signal,
                 )
 
             case _:
@@ -287,14 +306,32 @@ class ACPAgentTool(Tool):
         task: str,
         session_id: str | None,
         caller_agent: Agent | None,
+        bus: Any = None,
+        channel: str | None = None,
+        chat_id: str | None = None,
+        signal: Any = None,
     ) -> ToolResult:
+        run_task = asyncio.create_task(
+            self._execute_task(config, task, session_id, bus=bus, channel=channel, chat_id=chat_id)
+        )
+        watcher: asyncio.Task | None = None
+        if signal is not None:
+            async def _abort_on_signal() -> None:
+                await signal.wait()
+                run_task.cancel()
+            watcher = asyncio.create_task(_abort_on_signal())
         try:
-            result_text, new_session_id = await self._execute_task(config, task, session_id)
+            result_text, new_session_id = await run_task
             self._session_manager.save(config.name, new_session_id)
             return ToolResult.ok(inv_id, result_text)
+        except asyncio.CancelledError:
+            return ToolResult.error(inv_id, f"Agent '{config.name}' run cancelled.")
         except Exception as exc:
             logger.exception('ACP blocking run failed | agent=%s', config.name)
             return ToolResult.error(inv_id, f"Agent '{config.name}' failed: {exc}")
+        finally:
+            if watcher is not None:
+                watcher.cancel()
 
     # ── Spawn ─────────────────────────────────────────────────────────────────
 
@@ -305,10 +342,13 @@ class ACPAgentTool(Tool):
         initial_task: str | None,
         caller_agent: Agent | None,
         bus: Bus | None,
+        channel: str | None = None,
+        chat_id: str | None = None,
     ) -> ToolResult:
         try:
             result_text, session_id = await self._execute_task(
-                config, initial_task or '', session_id=None, keep_alive=True
+                config, initial_task or '', session_id=None, keep_alive=True,
+                bus=bus, channel=channel, chat_id=chat_id,
             )
             self._session_manager.save(config.name, session_id)
             body = (
@@ -350,7 +390,9 @@ class ACPAgentTool(Tool):
 
         async def _run() -> None:
             try:
-                result_text, new_session_id = await self._execute_task(config, task, session_id)
+                result_text, new_session_id = await self._execute_task(
+                    config, task, session_id, bus=bus, channel=channel, chat_id=chat_id
+                )
                 self._session_manager.save(config.name, new_session_id)
                 record['status'] = 'done'
                 record['result'] = result_text
@@ -392,36 +434,46 @@ class ACPAgentTool(Tool):
         task: str,
         session_id: str | None,
         keep_alive: bool = False,
+        bus: Any = None,
+        channel: str | None = None,
+        chat_id: str | None = None,
     ) -> tuple[str, str]:
         """Connect, run the task, return (result_text, session_id)."""
-        from operator_use.acp.client import ACPClient
-
-        client = self._build_client(config)
+        client = self._build_client(config, bus=bus, channel=channel, chat_id=chat_id)
         async with client as c:
             async with c.session(resume_id=session_id, keep_alive=keep_alive) as sid:
-                result_text = await c.run(task, sid)
+                result_text = await c.run(task, sid) if task else ''
                 return result_text, sid
 
-    def _build_client(self, config: ACPAgentConfig):
+    def _build_client(
+        self,
+        config: ACPAgentConfig,
+        bus: Any = None,
+        channel: str | None = None,
+        chat_id: str | None = None,
+    ):
         from operator_use.acp.client import ACPClient
 
         match config.transport:
             case 'stdio':
                 if not config.command:
                     raise ValueError(f"ACP agent '{config.name}' requires a command for stdio transport")
-                args = list(config.args)
-                return ACPClient.stdio(config.command, *args)
+                client = ACPClient.stdio(config.command, *config.args)
             case 'http':
                 if not config.url:
                     raise ValueError(f"ACP agent '{config.name}' requires a url for http transport")
                 token = self._auth.get_token(config.name)
-                return ACPClient.http(config.url, token=token)
+                client = ACPClient.http(config.url, token=token)
             case 'webrtc':
                 if not config.url:
                     raise ValueError(f"ACP agent '{config.name}' requires a room in url for webrtc transport")
-                return ACPClient.webrtc(config.url)
+                client = ACPClient.webrtc(config.url)
             case _:
                 raise ValueError(f"Unknown ACP transport {config.transport!r} for agent '{config.name}'")
+
+        if bus and channel and chat_id:
+            client.with_context(bus=bus, channel=channel, chat_id=chat_id)
+        return client
 
     # ── Result delivery ───────────────────────────────────────────────────────
 
@@ -456,7 +508,7 @@ class ACPAgentTool(Tool):
             has_token = self._auth.has_token(name)
             session = self._session_manager.get(name)
             token_status = 'authenticated' if has_token else 'no credentials'
-            session_status = f"session {session['session_id'][:8]}…" if session else 'no session'
+            session_status = f"session {session['session_id']}" if session else 'no session'
             target = cfg.command or cfg.url or 'configured'
             lines.append(f"  {name}  [{cfg.transport}:{target}]  {token_status}  {session_status}")
         return '\n'.join(lines)

@@ -50,9 +50,17 @@ class OperatorACPClient:
     One instance is created per ``ACPClient`` session.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        bus: Any = None,
+        channel: str | None = None,
+        chat_id: str | None = None,
+    ) -> None:
         self._chunks: asyncio.Queue[str | None] = asyncio.Queue()
         self._conn: _AgentConn | None = None
+        self._bus = bus
+        self._channel = channel
+        self._chat_id = chat_id
 
     # ── SDK lifecycle ─────────────────────────────────────────────────────────
 
@@ -83,15 +91,7 @@ class OperatorACPClient:
         if text and kind in ('agent_message_chunk', 'agent_thought_chunk'):
             await self._chunks.put(text)
 
-    async def request_permission(
-        self,
-        options: list[PermissionOption],
-        session_id: str,
-        tool_call: Any,
-        **kwargs: Any,
-    ) -> RequestPermissionResponse:
-        # Prefer "allow_always" so the agent doesn't re-ask on every tool call.
-        # Falls back to "allow_once", then the first option available.
+    def _auto_approve(self, options: list[PermissionOption]) -> RequestPermissionResponse:
         for kind in ('allow_always', 'allow_once'):
             for opt in options:
                 if opt.kind == kind:
@@ -106,6 +106,77 @@ class OperatorACPClient:
                 outcome=AllowedOutcome(option_id=opt.option_id, outcome='selected')
             )
         return RequestPermissionResponse(outcome=DeniedOutcome(outcome='cancelled'))
+
+    async def request_permission(
+        self,
+        options: list[PermissionOption],
+        session_id: str,
+        tool_call: Any,
+        **kwargs: Any,
+    ) -> RequestPermissionResponse:
+        if not (self._bus and self._channel and self._chat_id):
+            return self._auto_approve(options)
+
+        # Build a human-readable prompt describing what the sub-agent wants to do.
+        import json as _json
+        tool_name = getattr(tool_call, 'tool_name', None) or getattr(tool_call, 'name', '') or 'unknown'
+        raw_input = getattr(tool_call, 'raw_input', None)
+        try:
+            input_preview = _json.dumps(raw_input)[:300] if raw_input is not None else ''
+        except Exception:
+            input_preview = str(raw_input)[:300]
+
+        option_lines = '\n'.join(
+            f"  {i + 1}. {opt.name}  [{opt.kind}]"
+            for i, opt in enumerate(options)
+        )
+        msg_text = (
+            f"[ACP Permission Request]\n"
+            f"Tool: {tool_name}\n"
+            + (f"Input: {input_preview}\n" if input_preview else "")
+            + f"\nOptions:\n{option_lines}\n\n"
+            f"Reply with the option number (1–{len(options)}) or 'deny' to reject."
+        )
+
+        from operator_use.bus.types import OutgoingMessage, TextPart, text_from_parts
+        await self._bus.publish_outgoing(OutgoingMessage(
+            channel=self._channel,
+            chat_id=self._chat_id,
+            parts=[TextPart(content=msg_text)],
+        ))
+
+        from operator_use.gateway.service import register_permission_future, unregister_permission_future
+        fut: asyncio.Future = asyncio.get_event_loop().create_future()
+        register_permission_future(self._channel, self._chat_id, fut)
+        try:
+            incoming = await asyncio.wait_for(asyncio.shield(fut), timeout=300.0)
+        except asyncio.TimeoutError:
+            return RequestPermissionResponse(outcome=DeniedOutcome(outcome='cancelled'))
+        finally:
+            unregister_permission_future(self._channel, self._chat_id)
+
+        reply = text_from_parts(incoming.parts).strip().lower()
+
+        # Numeric index match
+        for i, opt in enumerate(options):
+            if reply == str(i + 1):
+                if opt.kind in ('reject_once', 'reject_always'):
+                    return RequestPermissionResponse(outcome=DeniedOutcome(outcome='cancelled'))
+                return RequestPermissionResponse(outcome=AllowedOutcome(option_id=opt.option_id, outcome='selected'))
+
+        # Name / kind / option_id match
+        for opt in options:
+            if reply in (opt.option_id.lower(), opt.kind.lower(), opt.name.lower()):
+                if opt.kind in ('reject_once', 'reject_always'):
+                    return RequestPermissionResponse(outcome=DeniedOutcome(outcome='cancelled'))
+                return RequestPermissionResponse(outcome=AllowedOutcome(option_id=opt.option_id, outcome='selected'))
+
+        # Explicit deny words
+        if any(w in reply for w in ('deny', 'reject', 'no', 'cancel')):
+            return RequestPermissionResponse(outcome=DeniedOutcome(outcome='cancelled'))
+
+        # Ambiguous reply — default to first allow option
+        return self._auto_approve(options)
 
     async def write_text_file(
         self,
@@ -231,7 +302,7 @@ class ACPClient:
         self._token = _token
         self._conn: Any = None  # ClientSideConnection
         self._process: Any = None
-        self._acp_client = OperatorACPClient()
+        self._acp_client: OperatorACPClient = OperatorACPClient()
         self._session_id: str | None = None
         self._ctx: Any = None
         # HTTP transport resources
@@ -244,6 +315,17 @@ class ACPClient:
         self._webrtc_ws_task: asyncio.Task[None] | None = None
         self._webrtc_forward_task: asyncio.Task[None] | None = None
         self._webrtc_writer: asyncio.StreamWriter | None = None
+
+    def with_context(
+        self,
+        bus: Any = None,
+        channel: str | None = None,
+        chat_id: str | None = None,
+    ) -> ACPClient:
+        """Attach a permission context so the sub-agent's tool approvals are routed
+        back to the user on the given channel instead of being auto-approved."""
+        self._acp_client = OperatorACPClient(bus=bus, channel=channel, chat_id=chat_id)
+        return self
 
     # ── Context manager ───────────────────────────────────────────────────────
 
@@ -556,8 +638,13 @@ class ACPClient:
         import os as _os
         _cwd = cwd or _os.getcwd()
         if resume_id:
-            await self._conn.load_session(cwd=_cwd, session_id=resume_id)
-            session_id = resume_id
+            try:
+                await self._conn.load_session(cwd=_cwd, session_id=resume_id)
+                session_id = resume_id
+            except Exception:
+                # Session is stale (e.g. stdio subprocess restarted). Start fresh.
+                resp = await self._conn.new_session(cwd=_cwd)
+                session_id = resp.session_id
         else:
             resp = await self._conn.new_session(cwd=_cwd)
             session_id = resp.session_id
