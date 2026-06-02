@@ -19,7 +19,7 @@ from operator_use.extension.types import (
 )
 from operator_use.message.types import AssistantMessage, UserMessage, TextContent, ImageContent, Role, ToolResultContent, LLMMessage
 from operator_use.inference.types import StopReason
-from operator_use.message.utils import strip_unusable_trailing_assistant
+from operator_use.message.utils import strip_unusable_trailing_assistant, filter_empty_assistant_messages
 from operator_use.tool.types import ToolInvocation, ToolResult
 
 from operator_use.prompt.builder import PromptTemplate
@@ -607,6 +607,7 @@ class Agent(ExtensionContext):
         # rejects dangling tool_calls / empty assistant turns. Strip them from
         # the *context* only (mirrors the engine's run_continue() guard).
         base_messages = strip_unusable_trailing_assistant(base_messages)
+        base_messages = filter_empty_assistant_messages(base_messages)
 
         # Persist the user message once (not retried) — clean, no memory embedded
         user_message = UserMessage(contents=[TextContent(content=user_input)])
@@ -792,7 +793,7 @@ class Agent(ExtensionContext):
                 session_ctx = self._session_manager.build_session_context()
                 ctx = AgentContext(
                     system_prompt=ctx.system_prompt,
-                    messages=strip_unusable_trailing_assistant(session_ctx.messages),
+                    messages=filter_empty_assistant_messages(strip_unusable_trailing_assistant(session_ctx.messages)),
                     tools=ctx.tools,
                 )
                 await self._extensions.emit(

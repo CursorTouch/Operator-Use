@@ -83,6 +83,28 @@ def audio_to_base64(item: bytes | str) -> tuple[str, str]:
     return item, mime
 
 
+def filter_empty_assistant_messages(messages: list) -> list:
+    """Remove assistant messages with no usable content from anywhere in history.
+
+    An assistant message with empty contents (e.g. a persisted API error turn)
+    produces {"role": "assistant"} with neither content nor tool_calls, which
+    all providers reject with a 400. Filter them out before building LLM context.
+    """
+    from operator_use.message.types import Role, TextContent, ToolCallContent, ThinkingContent
+    result = []
+    for msg in messages:
+        if getattr(msg, 'role', None) == Role.ASSISTANT:
+            contents = getattr(msg, 'contents', [])
+            has_usable = any(
+                isinstance(c, (TextContent, ToolCallContent, ThinkingContent))
+                for c in contents
+            )
+            if not has_usable:
+                continue
+        result.append(msg)
+    return result
+
+
 def strip_unusable_trailing_assistant(messages: list) -> list:
     """Return messages with unusable trailing assistant turns removed.
 
