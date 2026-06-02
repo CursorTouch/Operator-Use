@@ -695,15 +695,18 @@ class Agent(ExtensionContext):
         # Session writes are now flushed — notify observers
         await self._extensions.emit('save_point', SavePointEvent())
 
-        # If a tool scheduled a deferred action (e.g. reboot), run it now — after
-        # the turn result is fully saved to the session JSONL.
+        # If a terminating tool scheduled a deferred action (e.g. reboot),
+        # allow extensions to dispatch final messages to channels BEFORE termination
         deferred = self._engine._deferred_fn
         if deferred is not None:
+            # Emit agent_end early so extensions can dispatch messages to channels
+            # before the deferred action (reboot) terminates the process
+            await self._extensions.emit(
+                'agent_end',
+                AgentEndEvent(messages=self._engine.state.messages),
+            )
+            # Now run the deferred action (this may call sys.exit)
             self._engine._deferred_fn = None
-            # Block new invocations during the reboot window (spawning child +
-            # waiting for "ready" signal, up to 30 s).  Without this, a Telegram
-            # message arriving mid-reboot would be processed by the dying process,
-            # producing a garbage response that corrupts the session on restart.
             self._rebooting = True
             self._phase = "turn"
             await deferred()
