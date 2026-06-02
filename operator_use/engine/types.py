@@ -108,14 +108,14 @@ class Options:
 
 
 @dataclass
-class FollowupQueue:
-    mode: FollowupMode
+class _MessageQueue:
+    mode: FollowupMode | SteeringMode
     queue: Queue[LLMMessage] = field(default_factory=Queue)
 
-    def clear(self):
+    def clear(self) -> None:
         self.queue = Queue()
 
-    async def enqueue(self, message: LLMMessage):
+    async def enqueue(self, message: LLMMessage) -> None:
         await self.queue.put(message)
 
     def is_empty(self) -> bool:
@@ -125,8 +125,8 @@ class FollowupQueue:
         return list(self.queue._queue)  # type: ignore[attr-defined]
 
     async def dequeue(self) -> list[LLMMessage]:
-        messages = []
-        if self.mode == FollowupMode.OneAtATime:
+        messages: list[LLMMessage] = []
+        if self.mode.value == "one_at_a_time":
             if not self.is_empty():
                 messages.append(await self.queue.get())
         else:
@@ -136,30 +136,12 @@ class FollowupQueue:
 
 
 @dataclass
-class SteeringQueue:
-    mode: SteeringMode
-    queue: Queue[LLMMessage] = field(default_factory=Queue)
+class FollowupQueue(_MessageQueue):
+    mode: FollowupMode  # type: ignore[assignment]
 
-    def clear(self):
-        self.queue = Queue()
 
-    async def enqueue(self, message: LLMMessage):
-        await self.queue.put(message)
-
-    def is_empty(self) -> bool:
-        return self.queue.empty()
-
-    def snapshot(self) -> list[LLMMessage]:
-        return list(self.queue._queue)  # type: ignore[attr-defined]
-
-    async def dequeue(self) -> list[LLMMessage]:
-        messages = []
-        if self.mode == SteeringMode.OneAtATime:
-            if not self.is_empty():
-                messages.append(await self.queue.get())
-        else:
-            while not self.is_empty():
-                messages.append(await self.queue.get())
-        return messages
+@dataclass
+class SteeringQueue(_MessageQueue):
+    mode: SteeringMode  # type: ignore[assignment]
 
 

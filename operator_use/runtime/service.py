@@ -43,13 +43,7 @@ class Runtime:
         self._context = context
         self._config = config
         self.bus = bus or Bus()
-        self.commands = CommandRegistry(
-            runtime=self,
-            discovered=self._context.resource_loader.get_commands(),
-        )
-        self.commands.register_from_extensions(
-            self._context.extension_runtime.get_commands()
-        )
+        self._rebuild_commands()
         # Give the agent a back-reference so ctx.new_session() / fork() / switch_session() work
         if context.agent is not None:
             context.agent._runtime = self
@@ -393,8 +387,7 @@ class Runtime:
         sm.branch(from_entry_id)
         await self._emit_session_start('fork')
 
-    def _reinit_after_context_create(self) -> None:
-        """Rebuild runtime state that depends on a freshly created context."""
+    def _rebuild_commands(self) -> None:
         self.commands = CommandRegistry(
             runtime=self,
             discovered=self._context.resource_loader.get_commands(),
@@ -402,12 +395,22 @@ class Runtime:
         self.commands.register_from_extensions(
             self._context.extension_runtime.get_commands()
         )
+
+    def _reinit_after_context_create(self) -> None:
+        """Rebuild runtime state that depends on a freshly created context."""
+        self._rebuild_commands()
         if self._context.agent is not None:
             self._context.agent._runtime = self
         self.mcp_manager = self._context.mcp_manager
         self.subagent_manager = self._create_subagent_manager(self._context)
         self.workflow_manager = self._create_workflow_manager(self._context)
         self._configure_context(self._context)
+
+    def _wire_agent_extensions(self, agent: Agent, load_result, hooks) -> None:
+        from operator_use.extension.runtime import ExtensionRuntime
+        real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
+        agent._extensions = real_ext
+        agent._runtime = self
 
     def _wire_optional_tools(self, engine) -> None:
         """Attach MCP and ACP tools to an engine when their managers are available."""
@@ -441,7 +444,6 @@ class Runtime:
         from operator_use.engine.service import Engine
         from operator_use.engine.types import Options
         from operator_use.session.manager import SessionManager
-        from operator_use.extension.runtime import ExtensionRuntime
         from operator_use.runtime.types import _DeferredExtensionRuntime
 
         hooks = Hooks()
@@ -472,9 +474,8 @@ class Runtime:
             config=self._context.agent._config,
         )
 
-        real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
-        agent._extensions = real_ext
-        agent._runtime = self
+        self._wire_agent_extensions(agent, load_result, hooks)
+        real_ext = agent._extensions  # type: ignore[assignment]
         engine.tool_context = ToolContext(
             llm=self._context.llm,
             engine=engine,
@@ -516,7 +517,6 @@ class Runtime:
         from operator_use.engine.service import Engine
         from operator_use.engine.types import Options
         from operator_use.session.manager import SessionManager
-        from operator_use.extension.runtime import ExtensionRuntime
         from operator_use.runtime.types import _DeferredExtensionRuntime
 
         hooks = Hooks()
@@ -551,9 +551,8 @@ class Runtime:
             config=self._context.agent._config,
         )
 
-        real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
-        agent._extensions = real_ext
-        agent._runtime = self
+        self._wire_agent_extensions(agent, load_result, hooks)
+        real_ext = agent._extensions  # type: ignore[assignment]
         engine.tool_context = ToolContext(
             llm=self._context.llm,
             engine=engine,
@@ -594,7 +593,6 @@ class Runtime:
         from operator_use.engine.service import Engine
         from operator_use.engine.types import Options
         from operator_use.session.manager import SessionManager
-        from operator_use.extension.runtime import ExtensionRuntime
         from operator_use.resource.loader import ResourceLoader
         from operator_use.resource.types import ResourceLoaderOptions
         from operator_use.compaction.strategy.summarization.service import SummarizationCompaction
@@ -699,9 +697,8 @@ class Runtime:
             config=config,
         )
 
-        real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
-        agent._extensions = real_ext
-        agent._runtime = self
+        self._wire_agent_extensions(agent, load_result, hooks)
+        real_ext = agent._extensions  # type: ignore[assignment]
         agent._active_profile = profile
 
         # Per-profile subagent/workflow managers so profile-level settings (and the

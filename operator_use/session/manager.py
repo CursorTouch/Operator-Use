@@ -72,10 +72,7 @@ class SessionManager:
             )
             self.session_id = session_id
             self.entries = [header]
-            self.by_id.clear()
-            self.labels_by_id.clear()
-            self.label_timestamps_by_id.clear()
-            self.leaf_id = None
+            self._clear_indexes()
             self.flushed = False
             if self.persist:
                 self._rewrite_file()
@@ -101,10 +98,7 @@ class SessionManager:
 
         self.session_id = session_id
         self.entries = [header]
-        self.by_id.clear()
-        self.labels_by_id.clear()
-        self.label_timestamps_by_id.clear()
-        self.leaf_id = None
+        self._clear_indexes()
         self.flushed = False
 
         if self.persist:
@@ -119,11 +113,14 @@ class SessionManager:
         lines = [entry.model_dump_json(exclude_none=True) + "\n" for entry in self.entries]
         self.session_file.write_text("".join(lines), encoding="utf-8")
 
-    def _build_index(self):
+    def _clear_indexes(self) -> None:
         self.by_id.clear()
         self.labels_by_id.clear()
         self.label_timestamps_by_id.clear()
         self.leaf_id = None
+
+    def _build_index(self):
+        self._clear_indexes()
 
         for entry in self.entries:
             if isinstance(entry, SessionHeader):
