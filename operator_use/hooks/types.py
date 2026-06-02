@@ -436,6 +436,7 @@ class MessageReceiveEvent:
     user_id: str = ''
     text: str = ''
     parts: list = field(default_factory=list)  # list[ContentPart]
+    stt_enabled: bool | None = None  # None = use global default; set from profile overlay
 
 
 @dataclass

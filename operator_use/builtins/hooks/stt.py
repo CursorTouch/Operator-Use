@@ -53,7 +53,9 @@ async def _on_message_receive(event) -> object:
     if event.channel_id == 'stdio':
         return None
 
-    if stt and stt.enabled is False:
+    # Profile-level override takes precedence over global settings.
+    enabled = event.stt_enabled if event.stt_enabled is not None else (stt.enabled if stt else None)
+    if enabled is False:
         return None
 
     model_id = (aux_stt.model if aux_stt and aux_stt.model else "whisper-1")

@@ -92,6 +92,50 @@ class Gateway:
         directly, bypassing gateway session management entirely."""
         self._direct_handlers[channel_id] = handler
 
+    def _profile_agent_for_channel(self, channel_id: str | None) -> Agent | None:
+        if not channel_id:
+            return None
+        colon = channel_id.find(':')
+        if colon <= 0:
+            return None
+        return self._profile_agents.get(channel_id[:colon])
+
+    def _effective_media_enabled(
+        self,
+        kind: str,
+        *,
+        channel_id: str | None = None,
+        chat_id: str | None = None,
+        agent: Agent | None = None,
+    ) -> bool | None:
+        try:
+            from operator_use.settings.manager import SettingsManager
+            settings_mgr = SettingsManager.get_instance()
+            if settings_mgr is None:
+                return None
+
+            resolved_agent = agent
+            if resolved_agent is None and channel_id is not None and chat_id is not None:
+                entry = self._sessions.get(self._session_key(channel_id, chat_id))
+                resolved_agent = entry.agent if entry else None
+            if resolved_agent is None:
+                resolved_agent = self._profile_agent_for_channel(channel_id)
+
+            profile = (
+                resolved_agent.get_active_profile()
+                if resolved_agent is not None and hasattr(resolved_agent, 'get_active_profile')
+                else None
+            )
+            if profile is not None:
+                settings = settings_mgr.settings_with_profile_overlay(profile.settings_path)
+            else:
+                settings = settings_mgr.settings
+
+            media_settings = getattr(settings, kind, None)
+            return media_settings.enabled if media_settings else None
+        except Exception:
+            return None
+
     # ── Channel management ────────────────────────────────────────────────────
 
     def _spawn(self, coro) -> None:
@@ -196,6 +240,11 @@ class Gateway:
         # ── message:receive hook — STT hooks detect AudioPart here and return
         # transformed parts (AudioPart → TextPart). Reject/transform text also handled.
         text = "\n".join(p.content for p in parts if isinstance(p, TextPart))
+        stt_enabled = self._effective_media_enabled(
+            'stt',
+            channel_id=msg.channel,
+            chat_id=msg.chat_id,
+        )
         results = await self.hooks.emit(
             MessageReceiveEvent(
                 channel_id=msg.channel,
@@ -203,6 +252,7 @@ class Gateway:
                 user_id=msg.user_id,
                 text=text,
                 parts=parts,
+                stt_enabled=stt_enabled,
             )
         )
         for r in results:
@@ -429,14 +479,8 @@ class Gateway:
 
         # Pre-check TTS enablement so the END signal can suppress the text
         # message when audio will be delivered instead.
-        try:
-            from operator_use.settings.manager import SettingsManager
-            _sm = SettingsManager.get_instance()
-            _tts = _sm.get_tts_settings() if _sm else None
-            _tts_enabled = _tts.enabled if _tts else None
-            tts_will_fire = _tts_enabled is True
-        except Exception:
-            tts_will_fire = False
+        tts_enabled = self._effective_media_enabled('tts', agent=agent)
+        tts_will_fire = tts_enabled is True
 
         response_parts: list[str] = []
         # Tracks the last error text seen from the engine and retry metadata.
@@ -660,25 +704,13 @@ class Gateway:
         # TTS toggles are respected (the hook reads from the global settings manager which
         # does not include the profile overlay).
         response_text = "".join(response_parts)
-        _tts_enabled: bool | None = None
-        try:
-            _profile = agent.get_active_profile() if hasattr(agent, 'get_active_profile') else None
-            if _profile is not None:
-                from operator_use.settings.manager import SettingsManager
-                _sm = SettingsManager.get_instance()
-                if _sm is not None:
-                    _ps = _sm.settings_with_profile_overlay(_profile.settings_path)
-                    if _ps.tts is not None:
-                        _tts_enabled = _ps.tts.enabled
-        except Exception:
-            pass
         send_results = await self.hooks.emit(MessageSendEvent(
             channel_id=channel_id,
             chat_id=chat_id,
             input_text=text,
             response_text=response_text,
             is_voice=is_voice,
-            tts_enabled=_tts_enabled,
+            tts_enabled=tts_enabled,
         ))
         tts_audio_sent = False
         for r in send_results:
