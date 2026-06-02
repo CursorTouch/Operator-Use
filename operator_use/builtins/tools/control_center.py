@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -14,26 +15,32 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 # Each entry: (getter_name, setter_name | None, description, reload_required)
 _KEYS: dict[str, tuple[str, str | None, str, bool]] = {
     # Feature toggles — require reload so the tool list is rebuilt
-    "cron":                 ("get_cron_enabled",         "set_cron_enabled",         "Enable/disable the cron scheduler.",             True),
-    "subagent":             ("get_subagents_enabled",    "set_subagents_enabled",    "Enable/disable background subagent delegation.", True),
-    "workflow":             ("get_workflows_enabled",    "set_workflows_enabled",    "Enable/disable workflow execution.",              True),
-    "computer_use":         ("get_computer_use_enabled", "set_computer_use_enabled", "Enable/disable desktop computer control.",       True),
-    "browser_use":          ("get_browser_use_enabled",  "set_browser_use_enabled",  "Enable/disable browser automation.",             True),
-    "extensions":           ("is_extensions_enabled",   "set_extensions_enabled",   "Enable/disable all extensions globally.",        True),
-    "compaction":           ("get_compaction_enabled",  "set_compaction_enabled",   "Enable/disable context compaction.",             False),
-    "retry":                ("get_retry_enabled",        "set_retry_enabled",        "Enable/disable LLM request retries.",            False),
+    "cron":             ("get_cron_enabled",         "set_cron_enabled",         "Enable/disable the cron scheduler.",             True),
+    "subagent":         ("get_subagents_enabled",    "set_subagents_enabled",    "Enable/disable background subagent delegation.", True),
+    "workflow":         ("get_workflows_enabled",    "set_workflows_enabled",    "Enable/disable workflow execution.",              True),
+    "computer_use":     ("get_computer_use_enabled", "set_computer_use_enabled", "Enable/disable desktop computer control.",       True),
+    "browser_use":      ("get_browser_use_enabled",  "set_browser_use_enabled",  "Enable/disable browser automation.",             True),
+    "extensions":       ("is_extensions_enabled",    "set_extensions_enabled",   "Enable/disable all extensions globally.",        True),
+    "compaction":       ("get_compaction_enabled",   "set_compaction_enabled",   "Enable/disable context compaction.",             False),
+    "retry":            ("get_retry_enabled",         "set_retry_enabled",        "Enable/disable LLM request retries.",            False),
     # Model / provider — no reload needed; picked up at next turn
-    "default_provider":     ("get_default_provider",    "set_default_provider",     "Default LLM provider (e.g. 'anthropic').",       False),
-    "default_model":        ("get_default_model",        "set_default_model",        "Default model ID (e.g. 'claude-opus-4-7').",     False),
-    # STT — no reload needed; hooks read settings dynamically each message
-    "stt_enabled":          ("get_stt_enabled",          "set_stt_enabled",          "Enable/disable speech-to-text transcription.",   False),
-    "stt_model":            ("get_stt_model",             "set_stt_model",            "STT model ID (e.g. 'whisper-large-v3-turbo').",  False),
-    "stt_provider":         ("get_stt_provider",          "set_stt_provider",         "STT provider (e.g. 'groq', 'openai').",          False),
-    # TTS — no reload needed; hooks read settings dynamically each message
-    "tts_enabled":          ("get_tts_enabled",          "set_tts_enabled",          "Enable/disable text-to-speech synthesis.",        False),
-    "tts_voice":            ("get_tts_voice",             "set_tts_voice",            "TTS voice name (e.g. 'autumn', 'alloy').",       False),
-    "tts_model":            ("get_tts_model",             "set_tts_model",            "TTS model ID (e.g. 'canopylabs/orpheus-v1-english').", False),
-    "tts_provider":         ("get_tts_provider",          "set_tts_provider",         "TTS provider (e.g. 'groq', 'openai').",          False),
+    "default_provider": ("get_default_provider",     "set_default_provider",     "Default LLM provider (e.g. 'anthropic').",       False),
+    "default_model":    ("get_default_model",         "set_default_model",        "Default model ID (e.g. 'claude-sonnet-4-6').",   False),
+}
+
+# Maps each _KEYS key to its JSON path in settings.json: (top_key, nested_key | None).
+# Used to persist changes to the active profile's settings.json.
+_PROFILE_JSON_PATH: dict[str, tuple[str, str | None]] = {
+    "cron":             ("cron",             "enabled"),
+    "subagent":         ("subagent",         "enabled"),
+    "workflow":         ("workflow",         "enabled"),
+    "computer_use":     ("computer_use",     None),
+    "browser_use":      ("browser_use",      None),
+    "extensions":       ("extensions",       "enabled"),
+    "compaction":       ("compaction",       "enabled"),
+    "retry":            ("retry",            "enabled"),
+    "default_provider": ("default_provider", None),
+    "default_model":    ("default_model",    None),
 }
 
 # Agent-level keys — read/written directly on the running agent, not via settings manager.
@@ -206,6 +213,37 @@ class ControlCenterTool(Tool):
             metadata={'display_name': "Settings read"},
         )
 
+    def _persist_to_profile(self, key: str, value: Any, context: ToolContext | None) -> None:
+        """Write the changed key into the active profile's settings.json."""
+        if context is None:
+            return
+        agent = context.agent
+        if agent is None:
+            return
+        profile = agent.get_active_profile() if hasattr(agent, 'get_active_profile') else None
+        if profile is None:
+            return
+        path: Path = profile.settings_path
+        try:
+            existing: dict = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+        except Exception:
+            existing = {}
+        top_key, nested_key = _PROFILE_JSON_PATH.get(key, (key, None))
+        if nested_key is None:
+            existing[top_key] = value
+        else:
+            block = existing.get(top_key)
+            if not isinstance(block, dict):
+                block = {}
+            block[nested_key] = value
+            existing[top_key] = block
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding='utf-8')
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning('control_center: could not write profile settings: %s', exc)
+
     async def _set(
         self,
         invocation: ToolInvocation,
@@ -236,6 +274,9 @@ class ControlCenterTool(Tool):
                 id=invocation.id, content=f"control_center: failed to set {key!r}: {exc}",
                 metadata={'display_name': f"Failed to change: {key}"},
             )
+
+        if key:
+            self._persist_to_profile(key, value, context)
 
         msg = f"Set {key!r} = {value!r}."
 
