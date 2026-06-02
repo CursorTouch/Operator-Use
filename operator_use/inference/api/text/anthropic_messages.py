@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from operator_use.inference.api.text.utils import parse_tool_args
+from operator_use.inference.api.text.utils import parse_tool_args, anthropic_messages_to_list, anthropic_output_config
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from anthropic import AsyncAnthropic
@@ -12,7 +12,6 @@ from operator_use.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
-    normalize_structured_response_format,
 )
 from operator_use.message.types import (
     SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -30,79 +29,6 @@ _STOP_REASON: dict[str, StopReason] = {
 }
 
 _DEFAULT_MAX_TOKENS = 8096
-
-
-def _messages_to_anthropic(
-    messages: list[LLMMessage],
-) -> tuple[str | None, list[dict[str, Any]]]:
-    system: str | None = None
-    result: list[dict[str, Any]] = []
-
-    for msg in messages:
-        match msg:
-            case SystemMessage():
-                system = "\n".join(
-                    c.content for c in msg.contents if isinstance(c, TextContent)
-                )
-            case UserMessage():
-                parts: list[dict[str, Any]] = []
-                has_text = False
-                has_image = False
-                for item in msg.contents:
-                    match item:
-                        case TextContent():
-                            has_text = True
-                            parts.append({"type": "text", "text": item.content})
-                        case ImageContent():
-                            has_image = True
-                            for b64, mime in item.to_base64():
-                                parts.append({
-                                    "type": "image",
-                                    "source": {"type": "base64", "media_type": mime or "image/png", "data": b64},
-                                })
-                if has_image and not has_text:
-                    parts.append({"type": "text", "text": "(see attached image)"})
-                result.append({"role": "user", "content": parts})
-            case AssistantMessage():
-                parts = []
-                for item in msg.contents:
-                    match item:
-                        case TextContent():
-                            parts.append({"type": "text", "text": item.content})
-                        case ThinkingContent():
-                            parts.append({"type": "thinking", "thinking": item.content, "signature": item.signature})
-                        case ToolCallContent():
-                            parts.append({"type": "tool_use", "id": item.id, "name": item.name, "input": item.args})
-                result.append({"role": "assistant", "content": parts})
-            case ToolMessage():
-                tool_results = []
-                for content in msg.contents:
-                    if isinstance(content, ToolResultContent):
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": content.id,
-                            "content": content.content,
-                            "is_error": content.is_error,
-                        })
-                if tool_results:
-                    result.append({
-                        "role": "user",
-                        "content": tool_results,
-                    })
-
-    return system, result
-
-
-def _output_config(response_format: Any | None) -> dict[str, Any] | None:
-    structured = normalize_structured_response_format(response_format)
-    if structured is None:
-        return None
-    return {
-        "format": {
-            "type": "json_schema",
-            "schema": structured.schema,
-        }
-    }
 
 
 class AnthropicMessagesAPI(BaseAPI):
@@ -150,11 +76,11 @@ class AnthropicMessagesAPI(BaseAPI):
         return params
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
-        system, anthropic_messages = _messages_to_anthropic(context.messages)
+        system, anthropic_messages = anthropic_messages_to_list(context.messages)
         if context.system_prompt:
             system = context.system_prompt
         params = self._build_params(model, system, anthropic_messages, tools=context.tools or None)
-        output_config = _output_config(context.response_format)
+        output_config = anthropic_output_config(context.response_format)
         if output_config is not None:
             params["output_config"] = output_config
 

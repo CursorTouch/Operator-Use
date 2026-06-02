@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import tempfile
 from pathlib import Path
 
 from operator_use.inference.api.audio.service import AudioLLM
@@ -43,8 +42,8 @@ async def _on_message_receive(event) -> object:
     try:
         from operator_use.settings.manager import SettingsManager
         settings_mgr = SettingsManager.get_instance()
-        stt = settings_mgr.get_stt_settings()
-        aux_stt = settings_mgr.get_auxiliary_task("stt")
+        stt = settings_mgr.get_stt_settings() if settings_mgr is not None else None
+        aux_stt = settings_mgr.get_auxiliary_task("stt") if settings_mgr is not None else None
     except Exception:
         stt = None
         aux_stt = None
@@ -79,7 +78,8 @@ async def _on_message_receive(event) -> object:
             audio_bytes = audio_path.read_bytes()
             fmt = _mime_to_format(p.mime_type)
             llm = AudioLLM(model_id, provider=provider)
-            result = await llm.transcribe(STTContext(audio=audio_bytes, format=fmt, language=language))
+            context = STTContext(audio=audio_bytes, format=fmt, language=language)
+            result = await llm.transcribe(context)
             if result.text:
                 new_parts.append(TextPart(result.text))
                 logger.debug("STT: transcribed %d chars from %s", len(result.text), audio_path.name)

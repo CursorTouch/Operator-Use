@@ -35,8 +35,8 @@ async def _on_message_send(event) -> object:
     try:
         from operator_use.settings.manager import SettingsManager
         settings_mgr = SettingsManager.get_instance()
-        tts = settings_mgr.get_tts_settings()
-        aux_tts = settings_mgr.get_auxiliary_task("tts")
+        tts = settings_mgr.get_tts_settings() if settings_mgr is not None else None
+        aux_tts = settings_mgr.get_auxiliary_task("tts") if settings_mgr is not None else None
     except Exception:
         tts = None
         aux_tts = None

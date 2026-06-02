@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from operator_use.inference.api.text.utils import parse_tool_args, openai_user_content
+from operator_use.inference.api.text.utils import parse_tool_args, openai_user_content, openai_response_format
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from mistralai import Mistral
@@ -15,7 +15,6 @@ from operator_use.inference.types import (
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ThinkingStartEvent, ThinkingDeltaEvent, ThinkingEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
-    normalize_structured_response_format,
 )
 from operator_use.message.types import (
     SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -91,20 +90,6 @@ def _messages_to_mistral(messages: list[LLMMessage]) -> list[dict[str, Any]]:
     return result
 
 
-def _response_format(response_format: Any | None) -> dict[str, Any] | None:
-    structured = normalize_structured_response_format(response_format)
-    if structured is None:
-        return None
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": structured.name,
-            "schema": structured.schema,
-            "strict": structured.strict,
-        },
-    }
-
-
 class MistralChatAPI(BaseAPI):
     def __init__(self, options: LLMOptions) -> None:
         super().__init__(options)
@@ -159,7 +144,7 @@ class MistralChatAPI(BaseAPI):
             }
             if reasoning_effort is not None:
                 kwargs["reasoning_effort"] = reasoning_effort
-            response_format = _response_format(context.response_format)
+            response_format = openai_response_format(context.response_format)
             if response_format is not None:
                 kwargs["response_format"] = response_format
 

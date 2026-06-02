@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from operator_use.inference.api.text.utils import parse_tool_args, openai_user_content, openai_assistant_content, openai_messages_to_chat
+from operator_use.inference.api.text.utils import parse_tool_args, openai_user_content, openai_assistant_content, openai_messages_to_chat, openai_response_format
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from openai import AsyncOpenAI
@@ -12,7 +12,6 @@ from operator_use.inference.types import (
     StartEvent, EndEvent, ErrorEvent,
     TextStartEvent, TextDeltaEvent, TextEndEvent,
     ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
-    normalize_structured_response_format,
 )
 from operator_use.message.types import (
     SystemMessage, UserMessage, AssistantMessage, ToolMessage,
@@ -36,20 +35,6 @@ _STOP_REASON: dict[str, StopReason] = {
     "content_filter": StopReason.ContentFilter,
 }
 
-
-
-def _response_format(response_format: Any | None) -> dict[str, Any] | None:
-    structured = normalize_structured_response_format(response_format)
-    if structured is None:
-        return None
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": structured.name,
-            "schema": structured.schema,
-            "strict": structured.strict,
-        },
-    }
 
 
 class GitHubCopilotChatAPI(BaseAPI):
@@ -94,7 +79,7 @@ class GitHubCopilotChatAPI(BaseAPI):
         if context.system_prompt:
             chat_messages = [{"role": "system", "content": context.system_prompt}] + chat_messages
         params = self._build_params(model, chat_messages, tools=context.tools or None)
-        response_format = _response_format(context.response_format)
+        response_format = openai_response_format(context.response_format)
         if response_format is not None:
             params["response_format"] = response_format
 

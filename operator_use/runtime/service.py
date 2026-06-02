@@ -339,19 +339,7 @@ class Runtime:
         await self._emit_session_shutdown('new')
         self._config = self._config.model_copy(update={'session_file': None})
         self._context = await RuntimeContext.create(self._config)
-        self.commands = CommandRegistry(
-            runtime=self,
-            discovered=self._context.resource_loader.get_commands(),
-        )
-        self.commands.register_from_extensions(
-            self._context.extension_runtime.get_commands()
-        )
-        if self._context.agent is not None:
-            self._context.agent._runtime = self
-        self.mcp_manager = self._context.mcp_manager
-        self.subagent_manager = self._create_subagent_manager(self._context)
-        self.workflow_manager = self._create_workflow_manager(self._context)
-        self._configure_context(self._context)
+        self._reinit_after_context_create()
         await self._emit_session_start('new')
 
     async def resume_session(self, session_file: Path) -> None:
@@ -384,19 +372,7 @@ class Runtime:
         await self._emit_session_shutdown('resume')
         self._config = self._config.model_copy(update={'session_file': session_file})
         self._context = await RuntimeContext.create(self._config)
-        self.commands = CommandRegistry(
-            runtime=self,
-            discovered=self._context.resource_loader.get_commands(),
-        )
-        self.commands.register_from_extensions(
-            self._context.extension_runtime.get_commands()
-        )
-        if self._context.agent is not None:
-            self._context.agent._runtime = self
-        self.mcp_manager = self._context.mcp_manager
-        self.subagent_manager = self._create_subagent_manager(self._context)
-        self.workflow_manager = self._create_workflow_manager(self._context)
-        self._configure_context(self._context)
+        self._reinit_after_context_create()
         await self._restore_agent_profile_from_session(self._context)
         await self._emit_session_start('resume')
 
@@ -416,6 +392,22 @@ class Runtime:
 
         sm.branch(from_entry_id)
         await self._emit_session_start('fork')
+
+    def _reinit_after_context_create(self) -> None:
+        """Rebuild runtime state that depends on a freshly created context."""
+        self.commands = CommandRegistry(
+            runtime=self,
+            discovered=self._context.resource_loader.get_commands(),
+        )
+        self.commands.register_from_extensions(
+            self._context.extension_runtime.get_commands()
+        )
+        if self._context.agent is not None:
+            self._context.agent._runtime = self
+        self.mcp_manager = self._context.mcp_manager
+        self.subagent_manager = self._create_subagent_manager(self._context)
+        self.workflow_manager = self._create_workflow_manager(self._context)
+        self._configure_context(self._context)
 
     def _wire_optional_tools(self, engine) -> None:
         """Attach MCP and ACP tools to an engine when their managers are available."""
