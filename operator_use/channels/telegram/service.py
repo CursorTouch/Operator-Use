@@ -12,6 +12,7 @@ from operator_use.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, mar
 logger = logging.getLogger(__name__)
 
 from telegram import Bot, BotCommand, InputFile, Update
+from telegram.error import BadRequest as TelegramBadRequest
 from telegram.constants import ChatAction
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
@@ -60,6 +61,7 @@ class TelegramChannel(BaseChannel):
         self._thinking_buffers: dict[str, str] = {}    # chat_id → accumulated thinking text
         self._thinking_tasks: dict[str, asyncio.Task] = {}  # chat_id → debounced thinking-stream task
         self._live_send_tasks: dict[str, asyncio.Task] = {}  # chat_id → in-flight first send_message task
+        self._committed_text: dict[str, str] = {}  # chat_id → text committed before a tool call (keep_typing END)
 
     @property
     def channel_id(self) -> str:
@@ -236,8 +238,10 @@ class TelegramChannel(BaseChannel):
         async def _loop() -> None:
             await asyncio.sleep(latency)
             while True:
+                committed = self._committed_text.get(chat_id, "")
                 buffered = self._buffers.get(chat_id, "")
-                if buffered.strip() and self._app is not None:
+                display = committed + buffered
+                if display.strip() and self._app is not None:
                     bot = self._app.bot
                     existing = self._live_msg_ids.get(chat_id)
                     if existing is None:
@@ -250,7 +254,7 @@ class TelegramChannel(BaseChannel):
                         async def _send_and_record() -> None:
                             sent = await bot.send_message(
                                 int(chat_id),
-                                markdown_to_telegram_html(buffered),
+                                markdown_to_telegram_html(display),
                                 parse_mode="HTML",
                             )
                             self._live_msg_ids[chat_id] = sent.message_id
@@ -271,7 +275,7 @@ class TelegramChannel(BaseChannel):
                     else:
                         try:
                             await bot.edit_message_text(
-                                markdown_to_telegram_html(buffered),
+                                markdown_to_telegram_html(display),
                                 chat_id=int(chat_id),
                                 message_id=existing,
                                 parse_mode="HTML",
@@ -339,6 +343,7 @@ class TelegramChannel(BaseChannel):
 
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
+            self._committed_text.pop(chat_id, None)
             self._thinking_buffers.pop(chat_id, None)
             self._stop_thinking_stream(chat_id)
             self._live_send_tasks.pop(chat_id, None)
@@ -465,6 +470,7 @@ class TelegramChannel(BaseChannel):
                             await asyncio.wait_for(asyncio.shield(pending_send), timeout=5.0)
                         except Exception:
                             pass
+                    self._committed_text.pop(chat_id, None)
                     live_msg_id = self._live_msg_ids.pop(chat_id, None)
                     if live_msg_id is not None:
                         try:
@@ -495,45 +501,53 @@ class TelegramChannel(BaseChannel):
                     reply_params = None
 
             if self._streaming:
-                if not keep_typing:
+                if keep_typing:
+                    # Tool-call pause: commit buffered text into _committed_text so the
+                    # live loop keeps displaying it (plus any new text after the tools
+                    # finish) in the same message.  Don't touch live_msg_id.
+                    committed = self._committed_text.get(chat_id, "")
+                    self._committed_text[chat_id] = committed + buffered
+                    self._buffers[chat_id] = ""
+                else:
                     self._stop_live_streaming(chat_id)
                     self._stop_typing(chat_id)
-                # If the live loop was cancelled mid-first-send, the inner Task is still
-                # running and _live_msg_ids is not set yet.  Wait for it so we edit
-                # the existing message instead of sending a duplicate.
-                pending_send = self._live_send_tasks.pop(chat_id, None)
-                if pending_send is not None and not pending_send.done():
-                    try:
-                        await asyncio.wait_for(asyncio.shield(pending_send), timeout=10.0)
-                    except Exception:
-                        pass
-                live_msg_id = self._live_msg_ids.pop(chat_id, None)
-                if buffered.strip():
-                    if live_msg_id is not None:
-                        # Edit the live message to its final content (single chunk, no splitting needed for edits)
+                    # If the live loop was cancelled mid-first-send, the inner Task is
+                    # still running and _live_msg_ids is not set yet.  Wait for it so we
+                    # edit the existing message instead of sending a duplicate.
+                    pending_send = self._live_send_tasks.pop(chat_id, None)
+                    if pending_send is not None and not pending_send.done():
                         try:
-                            await bot.edit_message_text(
-                                markdown_to_telegram_html(buffered),
-                                chat_id=int(chat_id),
-                                message_id=live_msg_id,
-                                parse_mode="HTML",
-                            )
+                            await asyncio.wait_for(asyncio.shield(pending_send), timeout=10.0)
                         except Exception:
-                            logger.exception("TelegramChannel: edit_message_text failed (end)")
-                    else:
-                        # Nothing was posted yet; send now with reply
-                        for chunk in split_message(buffered):
+                            pass
+                    committed = self._committed_text.pop(chat_id, "")
+                    final_text = committed + buffered
+                    live_msg_id = self._live_msg_ids.pop(chat_id, None)
+                    if final_text.strip():
+                        if live_msg_id is not None:
                             try:
-                                await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
+                                await bot.edit_message_text(
+                                    markdown_to_telegram_html(final_text),
+                                    chat_id=int(chat_id),
+                                    message_id=live_msg_id,
+                                    parse_mode="HTML",
+                                )
+                            except TelegramBadRequest as e:
+                                if "Message is not modified" not in e.message:
+                                    logger.exception("TelegramChannel: edit_message_text failed (end)")
                             except Exception:
-                                logger.exception("TelegramChannel: send_message failed (end, streaming)")
+                                logger.exception("TelegramChannel: edit_message_text failed (end)")
+                        else:
+                            # Nothing was posted yet; send now with reply
+                            for chunk in split_message(final_text):
                                 try:
-                                    await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
+                                    await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
                                 except Exception:
-                                    logger.exception("TelegramChannel: send_message fallback failed (end, streaming)")
-                if keep_typing:
-                    # Next turn re-uses a fresh live message — buffer was just popped.
-                    self._buffers[chat_id] = ""
+                                    logger.exception("TelegramChannel: send_message failed (end, streaming)")
+                                    try:
+                                        await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
+                                    except Exception:
+                                        logger.exception("TelegramChannel: send_message fallback failed (end, streaming)")
             else:
                 if not keep_typing:
                     self._stop_typing(chat_id)
@@ -554,6 +568,7 @@ class TelegramChannel(BaseChannel):
             self._stop_typing(chat_id)
             self._stop_live_streaming(chat_id)
             self._live_send_tasks.pop(chat_id, None)
+            self._committed_text.pop(chat_id, None)
             stale_live = self._live_msg_ids.pop(chat_id, None)
             if stale_live is not None:
                 try:
