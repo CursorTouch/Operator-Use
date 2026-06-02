@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 # ============================================================================
 
 class ContextFile(BaseModel):
+    """A context file (e.g. CLAUDE.md) discovered on the filesystem, with its raw content."""
+
     path: str
     content: str
 
@@ -29,6 +31,8 @@ class ContextFile(BaseModel):
 # ============================================================================
 
 class ResourceExtensionPaths(BaseModel):
+    """Extra resource paths contributed by extensions via the resources_discover event."""
+
     skill_paths: list[str] = Field(default_factory=list)
     workflow_paths: list[str] = Field(default_factory=list)
 
@@ -38,6 +42,7 @@ class ResourceExtensionPaths(BaseModel):
 # ============================================================================
 
 class BaseResourceLoader(ABC):
+    """Contract for the resource loader that supplies extensions, skills, tools, etc. to the agent."""
     @abstractmethod
     def get_extensions(self) -> 'LoadExtensionsResult': ...
 

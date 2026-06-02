@@ -37,6 +37,7 @@ _MINIMAL_LEVELS = {ThinkingLevel.Low, ThinkingLevel.Minimal}
 
 
 def _messages_to_mistral(messages: list[LLMMessage]) -> list[dict[str, Any]]:
+    """Convert a message list to Mistral Chat API format, preserving thinking content blocks."""
     result: list[dict[str, Any]] = []
     for msg in messages:
         match msg:
@@ -71,6 +72,7 @@ def _messages_to_mistral(messages: list[LLMMessage]) -> list[dict[str, Any]]:
                             })
                 entry: dict[str, Any] = {"role": "assistant"}
                 if has_thinking:
+                    # When thinking blocks are present, Mistral requires chunked content format.
                     entry["content"] = content_chunks
                 else:
                     text = "".join(text_parts) or None
@@ -91,12 +93,16 @@ def _messages_to_mistral(messages: list[LLMMessage]) -> list[dict[str, Any]]:
 
 
 class MistralChatAPI(BaseAPI):
+    """Streaming LLM API adapter for the Mistral Chat API."""
+
     def __init__(self, options: LLMOptions) -> None:
+        """Initialise the Mistral client and cache the initial api_key for change detection."""
         super().__init__(options)
         self._client_key = options.api_key
         self._client = self._build_client()
 
     def _build_client(self) -> Mistral:
+        """Construct a fresh Mistral SDK client from the current options."""
         return Mistral(
             api_key=self.options.api_key,
             server_url=self.options.base_url,
@@ -104,6 +110,7 @@ class MistralChatAPI(BaseAPI):
         )
 
     def _sync_client(self) -> None:
+        """Rebuild the Mistral client if the api_key has changed since construction."""
         # The api_key is resolved and assigned to options *after* __init__,
         # so rebuild the client whenever it changes.
         if self.options.api_key != self._client_key:
@@ -111,6 +118,7 @@ class MistralChatAPI(BaseAPI):
             self._client = self._build_client()
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
+        """Stream LLMEvents from the Mistral Chat API."""
         self._sync_client()
         mistral_messages = _messages_to_mistral(context.messages)
         if context.system_prompt:

@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class SessionStartEvent:
+    """Fired after a session has been fully loaded and is ready to accept turns."""
+
     type: Literal['session_start'] = field(default='session_start', init=False)
     reason: Literal['startup', 'reload', 'new', 'resume', 'fork'] = 'startup'
     previous_session_file: str | None = None
@@ -22,6 +24,8 @@ class SessionStartEvent:
 
 @dataclass
 class SessionBeforeSwitchEvent:
+    """Fired before the active session is replaced; handlers may cancel with SessionBeforeSwitchResult."""
+
     type: Literal['session_before_switch'] = field(default='session_before_switch', init=False)
     reason: Literal['new', 'resume'] = 'new'
     target_session_file: str | None = None
@@ -29,6 +33,8 @@ class SessionBeforeSwitchEvent:
 
 @dataclass
 class SessionBeforeForkEvent:
+    """Fired before a session tree branch is created; handlers may cancel with SessionBeforeForkResult."""
+
     type: Literal['session_before_fork'] = field(default='session_before_fork', init=False)
     entry_id: str = ''
     position: Literal['before', 'at'] = 'at'
@@ -36,6 +42,8 @@ class SessionBeforeForkEvent:
 
 @dataclass
 class SessionBeforeCompactEvent:
+    """Fired before compaction runs; handlers may cancel or replace the compaction result."""
+
     type: Literal['session_before_compact'] = field(default='session_before_compact', init=False)
     preparation: Any = None
     branch_entries: list[Any] = field(default_factory=list)
@@ -44,6 +52,8 @@ class SessionBeforeCompactEvent:
 
 @dataclass
 class SessionCompactEvent:
+    """Fired after compaction completes with the resulting compaction entry."""
+
     type: Literal['session_compact'] = field(default='session_compact', init=False)
     compaction_entry: Any = None
     from_extension: bool = False
@@ -51,6 +61,8 @@ class SessionCompactEvent:
 
 @dataclass
 class SessionShutdownEvent:
+    """Fired just before the session is torn down; last chance for cleanup."""
+
     type: Literal['session_shutdown'] = field(default='session_shutdown', init=False)
     reason: Literal['quit', 'reload', 'new', 'resume', 'fork'] = 'quit'
     target_session_file: str | None = None
@@ -58,6 +70,8 @@ class SessionShutdownEvent:
 
 @dataclass
 class TreePreparation:
+    """Computed plan for a session-tree rewrite, passed inside SessionBeforeTreeEvent."""
+
     target_id: str
     old_leaf_id: str | None
     common_ancestor_id: str | None
@@ -70,12 +84,16 @@ class TreePreparation:
 
 @dataclass
 class SessionBeforeTreeEvent:
+    """Fired before the session tree is restructured; handlers may mutate the preparation."""
+
     type: Literal['session_before_tree'] = field(default='session_before_tree', init=False)
     preparation: TreePreparation = field(default_factory=lambda: TreePreparation('', None, None, []))
 
 
 @dataclass
 class SessionTreeEvent:
+    """Fired after the session tree has been rewritten with the new leaf information."""
+
     type: Literal['session_tree'] = field(default='session_tree', init=False)
     new_leaf_id: str | None = None
     old_leaf_id: str | None = None
@@ -89,12 +107,16 @@ class SessionTreeEvent:
 
 @dataclass
 class ContextEvent:
+    """Carries the full message history just before it is sent to the LLM; handlers may rewrite it."""
+
     type: Literal['context'] = field(default='context', init=False)
     messages: list[Any] = field(default_factory=list)
 
 
 @dataclass
 class BeforeAgentStartEvent:
+    """Fired after the user prompt is known but before the engine loop begins; handlers may override the system prompt."""
+
     type: Literal['before_agent_start'] = field(default='before_agent_start', init=False)
     prompt: str = ''
     system_prompt: str = ''
@@ -102,11 +124,15 @@ class BeforeAgentStartEvent:
 
 @dataclass
 class AgentStartEvent:
+    """Fired when the engine loop starts processing a new user prompt."""
+
     type: Literal['agent_start'] = field(default='agent_start', init=False)
 
 
 @dataclass
 class AgentEndEvent:
+    """Fired when the engine loop finishes, carrying all messages produced and the exit reason."""
+
     type: Literal['agent_end'] = field(default='agent_end', init=False)
     messages: list[Any] = field(default_factory=list)
     reason: Literal['completed', 'aborted', 'error'] = 'completed'
@@ -114,6 +140,8 @@ class AgentEndEvent:
 
 @dataclass
 class AgentErrorEvent:
+    """Fired when the engine loop terminates due to an unrecoverable error."""
+
     type: Literal['agent_error'] = field(default='agent_error', init=False)
     error: str = ''
 
@@ -124,6 +152,8 @@ class AgentErrorEvent:
 
 @dataclass
 class SubagentStartEvent:
+    """Fired when a subagent task is dispatched, before it begins executing."""
+
     type: Literal['subagent_start'] = field(default='subagent_start', init=False)
     task_id: str = ''
     label: str = ''
@@ -132,6 +162,8 @@ class SubagentStartEvent:
 
 @dataclass
 class SubagentEndEvent:
+    """Fired when a subagent task completes, carrying its final status and result text."""
+
     type: Literal['subagent_end'] = field(default='subagent_end', init=False)
     task_id: str = ''
     label: str = ''
@@ -145,6 +177,8 @@ class SubagentEndEvent:
 
 @dataclass
 class TurnStartEvent:
+    """Fired at the beginning of each LLM inference turn within an agent loop."""
+
     type: Literal['turn_start'] = field(default='turn_start', init=False)
     turn_index: int = 0
     timestamp: float = 0.0
@@ -152,6 +186,8 @@ class TurnStartEvent:
 
 @dataclass
 class TurnEndEvent:
+    """Fired after a turn's assistant message and all tool results are available."""
+
     type: Literal['turn_end'] = field(default='turn_end', init=False)
     turn_index: int = 0
     message: Any = None
@@ -164,18 +200,24 @@ class TurnEndEvent:
 
 @dataclass
 class MessageStartEvent:
+    """Fired when the LLM begins streaming a new assistant message."""
+
     type: Literal['message_start'] = field(default='message_start', init=False)
     message: Any = None
 
 
 @dataclass
 class MessageUpdateEvent:
+    """Fired on each incremental content chunk while the assistant message streams."""
+
     type: Literal['message_update'] = field(default='message_update', init=False)
     message: Any = None
 
 
 @dataclass
 class MessageEndEvent:
+    """Fired when the assistant message is fully received; handlers may replace it via MessageEndEventResult."""
+
     type: Literal['message_end'] = field(default='message_end', init=False)
     message: Any = None
 
@@ -186,6 +228,8 @@ class MessageEndEvent:
 
 @dataclass
 class ToolExecutionFailureEvent:
+    """Fired when a tool raises an uncaught exception, distinct from a tool returning an error result."""
+
     type: Literal['tool_execution_failure'] = field(default='tool_execution_failure', init=False)
     tool_name: str = ''
     tool_call_id: str = ''
@@ -195,24 +239,32 @@ class ToolExecutionFailureEvent:
 
 @dataclass
 class ToolExecutionStartEvent:
+    """Fired just before a tool's execute() is called."""
+
     type: Literal['tool_execution_start'] = field(default='tool_execution_start', init=False)
     tool_call: Any = None       # ToolCallContent
 
 
 @dataclass
 class ToolExecutionUpdateEvent:
+    """Fired for each streaming progress update emitted by a long-running tool."""
+
     type: Literal['tool_execution_update'] = field(default='tool_execution_update', init=False)
     partial_tool_result: Any = None     # ToolResultContent
 
 
 @dataclass
 class ToolExecutionEndEvent:
+    """Fired after a tool's execute() returns with the final ToolResultContent."""
+
     type: Literal['tool_execution_end'] = field(default='tool_execution_end', init=False)
     tool_result: Any = None     # ToolResultContent
 
 
 @dataclass
 class ToolCallEvent:
+    """Fired before tool execution; handlers may block or rewrite params via ToolCallEventResult."""
+
     type: Literal['tool_call'] = field(default='tool_call', init=False)
     tool_call_id: str = ''
     tool_name: str = ''
@@ -221,6 +273,8 @@ class ToolCallEvent:
 
 @dataclass
 class ToolResultEvent:
+    """Fired after tool execution; handlers may override the result content via ToolResultEventResult."""
+
     type: Literal['tool_result'] = field(default='tool_result', init=False)
     tool_call_id: str = ''
     tool_name: str = ''
@@ -235,6 +289,8 @@ class ToolResultEvent:
 
 @dataclass
 class ModelSelectEvent:
+    """Fired when the active model changes, either by user command or automatic cycling."""
+
     type: Literal['model_select'] = field(default='model_select', init=False)
     model: Any = None
     previous_model: Any | None = None
@@ -243,6 +299,8 @@ class ModelSelectEvent:
 
 @dataclass
 class ThinkingLevelSelectEvent:
+    """Fired when the extended-thinking budget level changes."""
+
     type: Literal['thinking_level_select'] = field(default='thinking_level_select', init=False)
     level: Any = None
     previous_level: Any = None
@@ -254,6 +312,8 @@ class ThinkingLevelSelectEvent:
 
 @dataclass
 class InputEvent:
+    """Fired when a new user message is received; handlers may transform or handle it via InputEventResult."""
+
     type: Literal['input'] = field(default='input', init=False)
     text: str = ''
     source: Literal['interactive', 'rpc', 'extension', 'cron', 'subagent', 'goal'] = 'interactive'
@@ -261,6 +321,8 @@ class InputEvent:
 
 @dataclass
 class UserBashEvent:
+    """Fired when a shell command is run on the user's behalf (e.g. via the bash tool)."""
+
     type: Literal['user_bash'] = field(default='user_bash', init=False)
     command: str = ''
     exclude_from_context: bool = False
@@ -269,6 +331,8 @@ class UserBashEvent:
 
 @dataclass
 class ResourcesDiscoverEvent:
+    """Fired at startup and after reload to let extensions contribute extra skill/workflow paths."""
+
     type: Literal['resources_discover'] = field(default='resources_discover', init=False)
     cwd: str = ''
     reason: Literal['startup', 'reload'] = 'startup'
@@ -336,17 +400,23 @@ class QueueUpdateEvent:
 
 @dataclass
 class ResourcesDiscoverResult:
+    """Returned by resources_discover handlers to inject additional skill and workflow directories."""
+
     skill_paths: list[str] = field(default_factory=list)
     workflow_paths: list[str] = field(default_factory=list)
 
 
 @dataclass
 class ContextEventResult:
+    """Returned by context handlers to replace the message list sent to the LLM."""
+
     messages: list[Any] | None = None
 
 
 @dataclass
 class ToolCallEventResult:
+    """Returned by tool_call handlers to block execution or rewrite invocation params."""
+
     block: bool = False
     reason: str | None = None
     params: dict[str, Any] | None = None  # non-None → rewrite the invocation params
@@ -354,6 +424,8 @@ class ToolCallEventResult:
 
 @dataclass
 class ToolResultEventResult:
+    """Returned by tool_result handlers to override content, error flag, or terminate the loop."""
+
     content: str | None = None
     is_error: bool | None = None
     terminate: bool = False
@@ -361,32 +433,44 @@ class ToolResultEventResult:
 
 @dataclass
 class MessageEndEventResult:
+    """Returned by message_end handlers to swap the final AssistantMessage before it is stored."""
+
     message: Any | None = None
 
 
 @dataclass
 class BeforeAgentStartEventResult:
+    """Returned by before_agent_start handlers to override the system prompt for this turn."""
+
     system_prompt: str | None = None
 
 
 @dataclass
 class SessionBeforeSwitchResult:
+    """Returned by session_before_switch handlers; cancel=True aborts the session switch."""
+
     cancel: bool = False
 
 
 @dataclass
 class SessionBeforeForkResult:
+    """Returned by session_before_fork handlers; cancel=True aborts the fork."""
+
     cancel: bool = False
 
 
 @dataclass
 class SessionBeforeCompactResult:
+    """Returned by session_before_compact handlers; cancel=True skips compaction, compaction overrides the result."""
+
     cancel: bool = False
     compaction: Any | None = None
 
 
 @dataclass
 class SessionBeforeTreeResult:
+    """Returned by session_before_tree handlers to mutate or cancel the planned tree rewrite."""
+
     cancel: bool = False
     summary: dict[str, Any] | None = None
     custom_instructions: str | None = None
@@ -396,6 +480,8 @@ class SessionBeforeTreeResult:
 
 @dataclass
 class InputEventResult:
+    """Returned by input handlers; 'transform' replaces text, 'handled' suppresses normal processing."""
+
     action: Literal['continue', 'transform', 'handled'] = 'continue'
     text: str | None = None
 

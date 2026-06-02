@@ -27,6 +27,8 @@ from operator_use.inference.types import ThinkingLevel
 
 
 class SessionManager:
+    """Manages a single conversation session as a JSONL-backed linked list of entries."""
+
     def __init__(
         self,
         cwd: str | Path,
@@ -34,6 +36,7 @@ class SessionManager:
         session_file: Path | None = None,
         persist: bool = True,
     ):
+        """Load an existing session file or start a new session, wiring up indexes and persistence."""
         self.session_id: str | None = None
         self.cwd = Path(cwd).resolve()
         self.persist = persist
@@ -58,6 +61,7 @@ class SessionManager:
             self.new_session()
 
     def set_session(self, session_file: Path):
+        """Point the manager at an existing file, rebuilding indexes, or seed a fresh session if the file is absent/invalid."""
         self.session_file = session_file
         if session_file.exists():
             self.entries = read_session_file(session_file)
@@ -86,6 +90,7 @@ class SessionManager:
             self.flushed = True
 
     def new_session(self, options: SessionOptions | None = None):
+        """Reset state to a blank session, optionally using the supplied id or parent_session link."""
         options = options or SessionOptions()
         session_id = options.id or create_session_id()
         parent_session = Path(options.parent_session).resolve() if options.parent_session else None
@@ -108,18 +113,21 @@ class SessionManager:
         return self.session_file
 
     def _rewrite_file(self):
+        """Atomically overwrite the session file with all current in-memory entries."""
         if not self.persist or not self.session_file:
             return None
         lines = [entry.model_dump_json(exclude_none=True) + "\n" for entry in self.entries]
         self.session_file.write_text("".join(lines), encoding="utf-8")
 
     def _clear_indexes(self) -> None:
+        """Reset all in-memory indexes and set leaf_id to None."""
         self.by_id.clear()
         self.labels_by_id.clear()
         self.label_timestamps_by_id.clear()
         self.leaf_id = None
 
     def _build_index(self):
+        """Rebuild by_id, labels, and leaf_id by scanning all current entries."""
         self._clear_indexes()
 
         for entry in self.entries:
@@ -140,6 +148,7 @@ class SessionManager:
                     self.label_timestamps_by_id.pop(entry.target_id, None)
 
     def _persist(self, entry: SessionEntry):
+        """Write entry to disk, but only after the first AssistantMessage has been recorded in this session."""
         if not self.persist or not self.session_file:
             return None
 
@@ -160,6 +169,7 @@ class SessionManager:
                 f.write(entry.model_dump_json(exclude_none=True) + "\n")
 
     def _append_entry(self, entry: SessionEntry) -> str:
+        """Append entry to in-memory list, update indexes, advance leaf_id, and persist if eligible."""
         self.entries.append(entry)
         self.by_id[entry.id] = entry
         self.leaf_id = entry.id
@@ -167,6 +177,7 @@ class SessionManager:
         return entry.id
 
     def append_message(self, message: AgentMessage, meta: MessageMeta | None = None) -> str:
+        """Wrap `message` in a MessageEntry linked to the current leaf and append it."""
         entry = MessageEntry(message=message, parent_id=self.leaf_id, meta=meta)
         return self._append_entry(entry)
 
@@ -194,10 +205,12 @@ class SessionManager:
         return False
 
     def append_channel_entry(self, name: str, chat_id: str | None = None, user_id: str | None = None) -> str:
+        """Record the active gateway channel at the current leaf so future context reconstruction knows the origin."""
         entry = ChannelEntry(name=name, chat_id=chat_id, user_id=user_id, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
     def get_current_channel(self) -> str | None:
+        """Return the channel name most recently recorded on the active branch, or None."""
         # Walk the active branch (not the flat log) so a branch we navigated
         # away from can't leak its channel into the current one.
         for entry in reversed(self.get_branch()):
@@ -206,10 +219,12 @@ class SessionManager:
         return None
 
     def append_thinking_level_change(self, thinking_level: ThinkingLevel) -> str:
+        """Record a thinking-level change at the current leaf."""
         entry = ThinkingLevelChangeEntry(thinking_level=thinking_level, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
     def append_model_change(self, model_id: str, provider_id: str) -> str:
+        """Record a model/provider switch at the current leaf."""
         entry = ModelChangeEntry(model_id=model_id, provider_id=provider_id, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
@@ -221,6 +236,7 @@ class SessionManager:
         details: Any | None = None,
         from_hook: bool = False,
     ) -> str:
+        """Record a context-compaction event with its summary and the first entry that was retained."""
         entry = CompactionEntry(
             summary=summary,
             first_kept_entry_id=first_kept_entry_id,
@@ -232,6 +248,7 @@ class SessionManager:
         return self._append_entry(entry)
 
     def append_label_change(self, target_id: str, label: str | None = None) -> str:
+        """Attach or remove a human-readable label from the entry identified by `target_id`."""
         entry = LabelEntry(target_id=target_id, label=label, parent_id=self.leaf_id)
         if label:
             self.labels_by_id[target_id] = label
@@ -242,6 +259,7 @@ class SessionManager:
         return self._append_entry(entry)
 
     def append_custom_info(self, custom_type: str, data: Any | None = None) -> str:
+        """Append an extension-defined structured metadata entry that carries no LLM-visible content."""
         entry = CustomInfoEntry(custom_type=custom_type, data=data, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
@@ -252,6 +270,7 @@ class SessionManager:
         display: bool = True,
         details: Any | None = None,
     ) -> str:
+        """Append an extension-defined displayable message that will be injected into the LLM context."""
         entry = CustomMessageEntry(
             custom_type=custom_type,
             content=content,
@@ -262,10 +281,12 @@ class SessionManager:
         return self._append_entry(entry)
 
     def append_session_info(self, name: str | None = None) -> str:
+        """Record a human-readable session name at the current leaf."""
         entry = SessionInfoEntry(name=name, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
     def get_session_name(self) -> str | None:
+        """Return the most recent non-empty session name on the active branch, or None."""
         # Branch-scoped, consistent with build_session_context / get_branch.
         for entry in reversed(self.get_branch()):
             if isinstance(entry, SessionInfoEntry) and entry.name and entry.name.strip():
@@ -276,18 +297,22 @@ class SessionManager:
         return self.leaf_id
 
     def get_leaf_entry(self) -> SessionEntry | None:
+        """Return the SessionEntry at the current leaf_id, or None if the session is empty."""
         return self.by_id.get(self.leaf_id) if self.leaf_id else None
 
     def get_entry(self, id: str) -> SessionEntry | None:
+        """Look up a single entry by its ID, returning None if not found."""
         return self.by_id.get(id)
 
     def get_children(self, parent_id: str) -> list[SessionEntry]:
+        """Return all direct children of the given entry, sorted chronologically."""
         return sorted(
             [entry for entry in self.get_entries() if entry.parent_id == parent_id],
             key=lambda entry: entry.timestamp,
         )
 
     def get_label(self, id: str) -> str | None:
+        """Return the human-readable label attached to the given entry id, or None."""
         return self.labels_by_id.get(id)
 
     def get_branch(self, from_id: str | None = None) -> list[SessionEntry]:
@@ -306,6 +331,7 @@ class SessionManager:
         return path
 
     def build_session_context(self) -> SessionContext:
+        """Reconstruct the LLM-ready message list and settings from the active branch, honouring any compaction boundary."""
         thinking_level: ThinkingLevel = ThinkingLevel.Off
         model_id: str | None = None
         provider_id: str | None = None
@@ -373,15 +399,18 @@ class SessionManager:
         )
 
     def get_header(self) -> SessionHeader | None:
+        """Return the SessionHeader for this session, or None if not yet written."""
         for entry in self.entries:
             if isinstance(entry, SessionHeader):
                 return entry
         return None
 
     def get_entries(self) -> list[SessionEntry]:
+        """Return all non-header entries in file order."""
         return [entry for entry in self.entries if not isinstance(entry, SessionHeader)]
 
     def get_tree(self) -> list[SessionTreeNode]:
+        """Build a tree of SessionTreeNodes representing the full branching DAG of this session."""
         node_map: dict[str, SessionTreeNode] = {}
         roots: list[SessionTreeNode] = []
 
@@ -416,6 +445,7 @@ class SessionManager:
         return roots
 
     def branch(self, from_id: str):
+        """Move the active leaf to `from_id`, persisting a LeafEntry so the navigation survives restarts."""
         if from_id not in self.by_id:
             raise KeyError(f"Entry {from_id} not found.")
         # Persist a LeafEntry so the navigation point survives restarts.
@@ -426,6 +456,7 @@ class SessionManager:
         self.leaf_id = from_id
 
     def reset_leaf(self):
+        """Detach the current leaf pointer without writing a LeafEntry — used to seed a fresh turn."""
         self.leaf_id = None
 
     def branch_with_summary(
@@ -434,6 +465,7 @@ class SessionManager:
         from_id: str | None = None,
         details: Any | None = None,
     ) -> str:
+        """Create a BranchEntry at `from_id` carrying a prose summary of the diverged history."""
         if from_id is not None and from_id not in self.by_id:
             raise KeyError(f"Entry {from_id} not found.")
 
@@ -448,6 +480,7 @@ class SessionManager:
         return self._append_entry(entry)
 
     def create_branched_session(self, leaf_id: str) -> Path | None:
+        """Fork this session at `leaf_id` into a new file, rewriting only the entries on that branch."""
         previous_session_file = self.session_file
         path = self.get_branch(leaf_id)
 
@@ -512,6 +545,7 @@ class SessionManager:
 
     @classmethod
     def create(cls, cwd: Path | str, session_dir: Path | str | None = None) -> SessionManager:
+        """Convenience constructor: start a new session in `session_dir` (defaults to global sessions dir)."""
         cwd = Path(cwd).resolve()
         session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir()
         return SessionManager(cwd, session_dir)
@@ -522,6 +556,7 @@ class SessionManager:
         session_dir: Path | str | None = None,
         cwd_override: Path | str | None = None,
     ) -> SessionManager:
+        """Load an existing session JSONL file, optionally overriding the working directory."""
         path = Path(path).resolve()
         entries = read_session_file(path)
         header = next((e for e in entries if isinstance(e, SessionHeader)), None)
@@ -533,6 +568,7 @@ class SessionManager:
 
     @staticmethod
     def continue_recent(cwd: Path | str, session_dir: Path | str | None = None) -> SessionManager:
+        """Open the most recently modified session in `session_dir`, or create a new one if none exists."""
         cwd = Path(cwd).resolve()
         session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir()
         most_recent = find_most_recent_session(session_dir)
@@ -542,6 +578,7 @@ class SessionManager:
 
     @staticmethod
     def in_memory(cwd: Path | None = None) -> SessionManager:
+        """Create a non-persisting session manager useful for tests and dry-run scenarios."""
         cwd = cwd or Path.cwd()
         return SessionManager(cwd, None, None, False)
 
@@ -551,6 +588,7 @@ class SessionManager:
         target_cwd: Path | str,
         session_dir: Path | str | None = None,
     ) -> SessionManager:
+        """Copy all entries from `source` into a new session file under `target_cwd`, linking it as a child session."""
         source = Path(source).resolve()
         target_cwd = Path(target_cwd).resolve()
         source_entries = read_session_file(source)
@@ -604,6 +642,7 @@ class SessionManager:
         session_dir: Path | str | None = None,
         on_progress: Callable[[int, int], None] | None = None,
     ) -> list[SessionInfo]:
+        """List all sessions in `session_dir` (defaults to global sessions dir), sorted newest-first."""
         cwd = Path(cwd).resolve()
         session_dir = Path(session_dir).resolve() if session_dir else get_default_session_dir()
         sessions = list_sessions_from_dir(session_dir, on_progress=on_progress)

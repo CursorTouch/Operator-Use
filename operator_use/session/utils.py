@@ -29,16 +29,19 @@ def generate_id(by_id: Any) -> str:
     return str(uuid.uuid4())
 
 def generate_timestamp() -> float:
+    """Return the current wall-clock time as a UNIX timestamp float."""
     now = datetime.now()
     return now.timestamp()
 
 def get_default_session_dir(agent_dir: Path | None = None) -> Path:
+    """Return (and create if missing) the global sessions directory, or the given agent-specific override."""
     from operator_use.settings.paths import get_config_dir
     d = agent_dir or (get_config_dir() / 'sessions')
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 def read_session_file(session_file: Path) -> list[SessionFileEntry]:
+    """Parse a JSONL session file and return its validated entries, or [] if absent/invalid."""
     if not session_file.exists():
         return []
 
@@ -67,6 +70,7 @@ def read_session_file(session_file: Path) -> list[SessionFileEntry]:
     return entries
 
 def is_valid_session_file(session_file: Path | str) -> bool:
+    """Return True iff the file exists and its first line deserialises as a valid SessionHeader."""
     try:
         path = Path(session_file)
         if not path.exists():
@@ -84,6 +88,7 @@ def is_valid_session_file(session_file: Path | str) -> bool:
         return False
 
 def find_most_recent_session(session_dir: Path | str) -> Path | None:
+    """Return the path of the most recently modified valid session JSONL in `session_dir`, or None."""
     session_dir = Path(session_dir)
     if not session_dir.is_dir():
         return None
@@ -97,6 +102,7 @@ def find_most_recent_session(session_dir: Path | str) -> Path | None:
     return most_recent
 
 def is_message_with_contents(message: AgentMessage) -> bool:
+    """Return True iff `message` is a user or assistant LLMMessage that contains at least one text or image block."""
     if not isinstance(message, LLMMessage):
         return False
     if message.role not in (Role.USER, Role.ASSISTANT):
@@ -104,6 +110,7 @@ def is_message_with_contents(message: AgentMessage) -> bool:
     return any(isinstance(c, (TextContent, ImageContent)) for c in message.contents)
 
 def get_last_activity_time(entries: list[SessionEntry]) -> float | None:
+    """Return the UNIX timestamp of the latest user/assistant message with content, or None if there are none."""
     last_activity_time = None
     
     for entry in entries:
@@ -126,6 +133,7 @@ def get_last_activity_time(entries: list[SessionEntry]) -> float | None:
     return last_activity_time
 
 def get_session_modified_date(entries: list[SessionEntry], header: SessionHeader | None = None) -> datetime:
+    """Derive the session's last-modified datetime from message activity, falling back to the header timestamp."""
     if last_activity_time := get_last_activity_time(entries=entries):
         return datetime.fromtimestamp(last_activity_time)
 
@@ -134,6 +142,7 @@ def get_session_modified_date(entries: list[SessionEntry], header: SessionHeader
     return datetime.now()
 
 def build_session_info(file: Path) -> SessionInfo | None:
+    """Parse a single session JSONL file and return its SessionInfo summary, or None if the file is invalid."""
     content = file.read_text(encoding="utf-8")
 
     file_entries: list[SessionFileEntry] = []

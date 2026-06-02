@@ -19,20 +19,26 @@ if TYPE_CHECKING:
 
 
 class Budget:
+    """Tracks a finite integer budget of agent() calls for a single workflow run."""
+
     def __init__(self, total: int = 100) -> None:
         self.total = total
         self._spent = 0
 
     def spent(self) -> int:
+        """Return the number of units consumed so far."""
         return self._spent
 
     def remaining(self) -> int:
+        """Return how many units are left before exhaustion."""
         return self.total - self._spent
 
     def add(self, n: int = 1) -> None:
+        """Consume n units from the budget."""
         self._spent += n
 
     def exhausted(self) -> bool:
+        """Return True when no budget remains."""
         return self._spent >= self.total
 
     def __repr__(self) -> str:
@@ -206,6 +212,7 @@ class WorkflowExecuteContext:
             self._record.current_phase = prev
 
     def log(self, message: str) -> None:
+        """Append a timestamped log line to the run record."""
         ts = datetime.now().strftime('%H:%M:%S')
         line = f'{ts}  {message}'
         self._record.log_lines.append(line)
@@ -213,6 +220,7 @@ class WorkflowExecuteContext:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     async def _agent_structured(self, prompt: str, schema, system: str | None):
+        """Call the LLM with a response_format schema and parse the JSON reply into the schema."""
         from operator_use.inference.types import LLMContext, TextDeltaEvent, ErrorEvent
         from operator_use.message.types import UserMessage
 
@@ -232,6 +240,7 @@ class WorkflowExecuteContext:
         return schema.model_validate_json(text)
 
     def _filter_tools(self, names: list[str] | None) -> list[Tool]:
+        """Return the tool list restricted to the given names, or all tools if names is None."""
         if names is None:
             return self._tools
         allowed = set(names)

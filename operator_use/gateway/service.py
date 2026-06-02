@@ -13,10 +13,12 @@ _PERMISSION_FUTURES: dict[tuple[str, str], asyncio.Future] = {}
 
 
 def register_permission_future(channel: str, chat_id: str, fut: asyncio.Future) -> None:
+    """Register a Future that will be resolved when the user replies to a permission prompt."""
     _PERMISSION_FUTURES[(channel, chat_id)] = fut
 
 
 def unregister_permission_future(channel: str, chat_id: str) -> None:
+    """Remove a previously registered permission Future (e.g. on timeout or cancellation)."""
     _PERMISSION_FUTURES.pop((channel, chat_id), None)
 
 
@@ -44,6 +46,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _SessionEntry:
+    """Pairs a session's Agent with the asyncio Task currently processing a message for it."""
+
     agent: Agent
     task: asyncio.Task | None = None
 
@@ -60,6 +64,7 @@ class Gateway:
     """
 
     def __init__(self, runtime: Runtime) -> None:
+        """Attach to the runtime's bus and initialise empty channel/session registries."""
         self._runtime = runtime
         self._bus = runtime.bus
         self._channels: dict[str, BaseChannel] = {}
@@ -93,6 +98,7 @@ class Gateway:
         self._direct_handlers[channel_id] = handler
 
     def _profile_agent_for_channel(self, channel_id: str | None) -> Agent | None:
+        """Return the profile agent for a profile-namespaced channel id, or None."""
         if not channel_id:
             return None
         colon = channel_id.find(':')
@@ -108,6 +114,7 @@ class Gateway:
         chat_id: str | None = None,
         agent: Agent | None = None,
     ) -> bool | None:
+        """Return the enabled flag for a media setting (e.g. 'stt', 'tts') respecting active profile overlays."""
         try:
             from operator_use.settings.manager import SettingsManager
             settings_mgr = SettingsManager.get_instance()
@@ -139,6 +146,7 @@ class Gateway:
     # ── Channel management ────────────────────────────────────────────────────
 
     def _spawn(self, coro) -> None:
+        """Fire-and-forget a coroutine as a tracked task so it isn't GC'd before completion."""
         # Retain a strong ref: the loop only holds a weak ref, so a discarded
         # fire-and-forget task can be GC'd before it runs.
         task = asyncio.get_event_loop().create_task(coro)
@@ -146,11 +154,13 @@ class Gateway:
         task.add_done_callback(self._handler_tasks.discard)
 
     def register(self, channel: BaseChannel) -> None:
+        """Attach the bus to a channel, add it to the registry, and fire ChannelConnectEvent."""
         channel.bus = self._bus
         self._channels[channel.channel_id] = channel
         self._spawn(self.hooks.emit(ChannelConnectEvent(channel_id=channel.channel_id)))
 
     def unregister(self, channel_id: str) -> None:
+        """Remove a channel from the registry and fire ChannelDisconnectEvent."""
         self._channels.pop(channel_id, None)
         self._spawn(self.hooks.emit(ChannelDisconnectEvent(channel_id=channel_id)))
 
@@ -407,6 +417,7 @@ class Gateway:
         return f"{channel_id}:{chat_id}"
 
     def _get_or_create_session(self, session_key: str, channel_id: str | None = None, chat_id: str | None = None) -> _SessionEntry:
+        """Return the existing session entry for key, or create and cache a new one."""
         # If we've never seen this session key before, create a brand-new entry.
         # This picks the right agent for the channel (profile agent or default).
         if session_key not in self._sessions:
@@ -571,6 +582,7 @@ class Gateway:
         _tool_display_names: dict[str, str] = {}  # id → display_name from tool_start
 
         async def _on_event(event) -> None:
+            """Translate agent events into OutgoingMessage bus publications for the channel."""
             match event:
                 case MessageUpdateEvent(message=m) if m.role == Role.ASSISTANT:
                     for content in m.contents:

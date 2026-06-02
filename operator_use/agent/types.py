@@ -34,6 +34,7 @@ class AgentConfig(BaseModel):
 
 
 class PromptOptions(BaseModel):
+    """Per-turn invocation options passed to Agent.invoke()."""
     source: Literal['interactive', 'rpc', 'extension', 'cron', 'subagent', 'goal'] = 'interactive'
     compaction_custom_instructions: str | None = None
     meta: MessageMeta | None = None
@@ -43,12 +44,14 @@ class PromptOptions(BaseModel):
 
 @dataclass
 class CompactionStartEvent:
+    """Emitted before the compaction strategy runs; carries pre-compaction token count."""
     type: Literal['compaction_start'] = field(default='compaction_start', init=False)
     tokens_before: int = 0
 
 
 @dataclass
 class CompactionEndEvent:
+    """Emitted after compaction completes with the resulting summary and original token count."""
     type: Literal['compaction_end'] = field(default='compaction_end', init=False)
     tokens_before: int = 0
     summary: str = ''
@@ -56,6 +59,7 @@ class CompactionEndEvent:
 
 @dataclass
 class RetryStartEvent:
+    """Emitted before each retry attempt after a transient engine failure."""
     type: Literal['retry_start'] = field(default='retry_start', init=False)
     attempt: int = 0
     max_retries: int = 0
@@ -63,6 +67,7 @@ class RetryStartEvent:
 
 @dataclass
 class RetryEndEvent:
+    """Emitted after a retry attempt resolves (success=True) or fails (success=False, error set)."""
     type: Literal['retry_end'] = field(default='retry_end', init=False)
     attempt: int = 0
     success: bool = True

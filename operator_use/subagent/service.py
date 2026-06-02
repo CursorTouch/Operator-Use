@@ -41,6 +41,7 @@ _DEFAULT_SYSTEM_PROMPT = (
 
 
 def _build_system_prompt(custom: str | None = None) -> str:
+    """Append the current working directory to the base (or custom) system prompt."""
     base = custom or _DEFAULT_SYSTEM_PROMPT
     return base + f'\n\nCurrent working directory: {os.getcwd()}'
 
@@ -100,6 +101,7 @@ class Subagent:
         )
 
     async def run(self, record: SubagentRecord) -> None:
+        """Execute the task described by record, updating it in-place with status and result."""
         logger.info('[%s] subagent "%s" started', record.task_id, record.label)
 
         if self._hooks:
@@ -187,6 +189,7 @@ class Subagent:
         spawn_depth: int = 0,
         fork_messages: list[LLMMessage] | None = None,
     ) -> str:
+        """Drive an Engine loop to completion and return the final assistant text."""
         engine = Engine(llm=self._llm, tools=tools, options=Options())
         engine.tool_context.spawn_depth = spawn_depth
 

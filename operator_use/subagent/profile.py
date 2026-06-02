@@ -20,6 +20,8 @@ MAX_DESCRIPTION_LENGTH = 1024
 
 
 class SubagentProfile(BaseModel):
+    """Parsed representation of a SUBAGENT.md profile file."""
+
     name: str
     description: str
     tools: list[str]        # allowed tool names; empty list = all tools
@@ -30,11 +32,14 @@ class SubagentProfile(BaseModel):
 
 
 class LoadProfilesResult(BaseModel):
+    """Aggregated outcome of loading profiles from one or more directories."""
+
     profiles: list[SubagentProfile] = Field(default_factory=list)
     diagnostics: list[ResourceDiagnostic] = Field(default_factory=list)
 
 
 def _parse_frontmatter(content: str) -> tuple[dict, str]:
+    """Extract YAML-style frontmatter from a markdown string, returning (data, body)."""
     pattern = re.compile(r'^---\s*\n(.*?)\n---\s*\n', re.DOTALL)
     match = pattern.match(content)
     if not match:
@@ -62,6 +67,7 @@ def _parse_frontmatter(content: str) -> tuple[dict, str]:
 
 
 def load_profile_from_file(file_path: Path) -> tuple[SubagentProfile | None, list[ResourceDiagnostic]]:
+    """Parse a single SUBAGENT.md file into a SubagentProfile, collecting warnings on failure."""
     diagnostics: list[ResourceDiagnostic] = []
     try:
         raw = file_path.read_text(encoding='utf-8')
@@ -101,6 +107,7 @@ def load_profile_from_file(file_path: Path) -> tuple[SubagentProfile | None, lis
 
 
 def _load_from_dir(dir_path: Path) -> LoadProfilesResult:
+    """Recursively scan a directory for SUBAGENT.md files and return all valid profiles."""
     profiles: list[SubagentProfile] = []
     diagnostics: list[ResourceDiagnostic] = []
 

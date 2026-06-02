@@ -40,6 +40,7 @@ _STOP_REASON: dict[str, StopReason] = {
 
 
 def _content_to_openai(content_items: list) -> list[dict[str, Any]]:
+    """Convert typed message content items to OpenAI Responses API content parts."""
     parts: list[dict[str, Any]] = []
     for item in content_items:
         match item:
@@ -68,6 +69,7 @@ def _content_to_openai(content_items: list) -> list[dict[str, Any]]:
 def _messages_to_input(
     messages: list[LLMMessage],
 ) -> tuple[str | None, list[dict[str, Any]]]:
+    """Convert a message list to OpenAI Responses API input items, extracting system as instructions."""
     instructions: str | None = None
     input_items: list[dict[str, Any]] = []
 
@@ -94,6 +96,7 @@ def _messages_to_input(
 
 
 def _text_format(response_format: Any | None) -> dict[str, Any] | None:
+    """Convert response_format to the OpenAI Responses API text.format structure."""
     structured = normalize_structured_response_format(response_format)
     if structured is None:
         return None
@@ -108,7 +111,10 @@ def _text_format(response_format: Any | None) -> dict[str, Any] | None:
 
 
 class OpenAIResponsesAPI(BaseAPI):
+    """Streaming LLM API adapter for the OpenAI Responses API (o-series / GPT-4o)."""
+
     def __init__(self, options: LLMOptions) -> None:
+        """Initialise the AsyncOpenAI client with the supplied options."""
         super().__init__(options)
         self._client = AsyncOpenAI(
             api_key=options.api_key or "placeholder",
@@ -119,6 +125,7 @@ class OpenAIResponsesAPI(BaseAPI):
         )
 
     def _build_params(self, model: Model, instructions: str | None, input_items: list, tools: Optional[list[Tool]] = None) -> dict[str, Any]:
+        """Assemble the OpenAI Responses API request payload."""
         params: dict[str, Any] = {
             "model": model.id,
             "input": input_items,
@@ -145,6 +152,7 @@ class OpenAIResponsesAPI(BaseAPI):
         return params
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
+        """Stream LLMEvents from the OpenAI Responses API."""
         if self.options.api_key:
             self._client.api_key = self.options.api_key
         instructions, input_items = _messages_to_input(context.messages)

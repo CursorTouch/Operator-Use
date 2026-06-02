@@ -78,6 +78,7 @@ TransformContextCallback = Callable[[list[LLMMessage], Optional[AbortSignal]], l
 
 @dataclass
 class AgentState:
+    """Mutable runtime state shared between the Engine loop and external observers."""
     system_prompt: Optional[str] = None
     messages: list[LLMMessage] = field(default_factory=list)
     pending_tool_calls: set[str] = field(default_factory=set)
@@ -93,6 +94,7 @@ class AgentState:
 
 @dataclass
 class Options:
+    """Engine behaviour knobs: hooks, execution strategy, and message injection callbacks."""
     after_tool_call: Optional[AfterToolCallCallback] = None
     before_tool_call: Optional[BeforeToolCallCallback] = None
     on_event: Optional[OnEventCallback] = None
@@ -109,10 +111,12 @@ class Options:
 
 @dataclass
 class _MessageQueue:
+    """Async FIFO queue for steering/follow-up messages with configurable drain behaviour."""
     mode: FollowupMode | SteeringMode
     queue: Queue[LLMMessage] = field(default_factory=Queue)
 
     def clear(self) -> None:
+        # Replace rather than drain to avoid blocking on an empty get() mid-loop.
         self.queue = Queue()
 
     async def enqueue(self, message: LLMMessage) -> None:
@@ -122,9 +126,11 @@ class _MessageQueue:
         return self.queue.empty()
 
     def snapshot(self) -> list[LLMMessage]:
+        """Return a non-destructive copy of queued messages for inspection (e.g. QueueUpdateEvent)."""
         return list(self.queue._queue)  # type: ignore[attr-defined]
 
     async def dequeue(self) -> list[LLMMessage]:
+        """Drain one (OneAtATime) or all (All) messages from the queue."""
         messages: list[LLMMessage] = []
         if self.mode.value == "one_at_a_time":
             if not self.is_empty():

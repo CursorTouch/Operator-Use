@@ -39,6 +39,14 @@ USER_ABORT_MESSAGE = "[Operation interrupted by user]"
 
 
 class Engine:
+    """
+    Raw LLM streaming loop and tool execution layer.
+
+    Knows nothing about sessions, extensions, or compaction — those concerns
+    belong to Agent.  Callers drive it via run() / run_continue() and observe
+    results through the event callbacks wired in Options.
+    """
+
     def __init__(
         self,
         llm: LLM,
@@ -79,7 +87,8 @@ class Engine:
         return unsubscribe
 
     async def steer(self, message: LLMMessage) -> None:
-        if self.state.steering_queue:    
+        """Enqueue a steering message to be injected after the next tool-call round-trip."""
+        if self.state.steering_queue:
             await self.state.steering_queue.enqueue(message)
             if self._hooks:
                 await self._hooks.emit(QueueUpdateEvent(
@@ -89,6 +98,7 @@ class Engine:
                 ))
 
     async def follow_up(self, message: LLMMessage) -> None:
+        """Enqueue a follow-up message to be injected after the current stop-reason=Stop turn."""
         if self.state.follow_up_queue:
             await self.state.follow_up_queue.enqueue(message)
             if self._hooks:
@@ -99,25 +109,30 @@ class Engine:
             ))
 
     def clear_steering(self) -> None:
+        """Discard all pending steering messages without consuming them."""
         if self.state.steering_queue:
             self.state.steering_queue.clear()
 
     def clear_follow_up(self) -> None:
+        """Discard all pending follow-up messages without consuming them."""
         if self.state.follow_up_queue:
             self.state.follow_up_queue.clear()
 
     def clear_all_queues(self) -> None:
+        """Discard all queued steering and follow-up messages."""
         if self.state.steering_queue:
             self.state.steering_queue.clear()
         if self.state.follow_up_queue:
             self.state.follow_up_queue.clear()
 
     def has_pending_messages(self) -> bool:
+        """True if the steering or follow-up queue has messages waiting to be consumed."""
         steering_has = self.state.steering_queue is not None and not self.state.steering_queue.is_empty()
         followup_has = self.state.follow_up_queue is not None and not self.state.follow_up_queue.is_empty()
         return steering_has or followup_has
 
     def reset(self) -> None:
+        """Clear transient turn state so the engine can be re-run after an error."""
         if self.state.follow_up_queue:
             self.state.follow_up_queue.clear()
         if self.state.steering_queue:
@@ -137,17 +152,21 @@ class Engine:
         self._tools.pop(name, None)
 
     def abort(self) -> None:
+        """Signal the running loop to stop at the next safe check point."""
         self._signal.set()
 
     @property
     def is_idle(self) -> bool:
+        """True when no streaming loop is active; safe to call run() or run_continue()."""
         return not self.state.is_streaming
 
     async def wait_for_idle(self) -> None:
+        """Poll until the streaming loop exits (used by callers that can't await run())."""
         while self.state.is_streaming:
             await asyncio.sleep(0.05)
 
     async def process_events(self, event: AgentEvent) -> None:
+        """Update engine state from an event and broadcast it to hooks and subscribers."""
         match event:
             case MessageStartEvent(message=message):
                 self.state.streaming_message = message
@@ -183,6 +202,7 @@ class Engine:
         emit: EmitEvent,
         signal: Optional[AbortSignal],
     ) -> ToolResultContent:
+        """Validate, run before/after hooks, and execute a single tool call; returns a ToolResultContent."""
         if self.options.should_skip_tool_calls is not None:
             return self.options.should_skip_tool_calls(tool_call)
 
@@ -252,6 +272,7 @@ class Engine:
         emit: EmitEvent,
         signal: Optional[AbortSignal],
     ) -> list[ToolResultContent]:
+        """Execute tool calls one at a time, preserving invocation order."""
         results = []
         for tc in tool_calls:
             results.append(await self._execute(tc, emit, signal))
@@ -263,6 +284,7 @@ class Engine:
         emit: EmitEvent,
         signal: Optional[AbortSignal],
     ) -> list[ToolResultContent]:
+        """Execute all tool calls concurrently via asyncio.gather."""
         return list(await asyncio.gather(
             *[self._execute(tc, emit, signal) for tc in tool_calls]
         ))
@@ -273,6 +295,7 @@ class Engine:
         emit: EmitEvent,
         signal: Optional[AbortSignal] = None,
     ) -> list[ToolResultContent]:
+        """Dispatch a batch of tool calls according to the configured execution mode."""
         match self.options.execution_mode:
             case ToolExecutionMode.Parallel:
                 return await self._parallel_execute(tool_calls, emit, signal)
@@ -305,6 +328,7 @@ class Engine:
     # -------------------------------------------------------------------------
 
     async def _loop(self, messages: list[LLMMessage], emit: EmitEvent, signal: AbortSignal):
+        """Core agentic loop: stream LLM → execute tools → inject steering/follow-ups → repeat until done."""
         await emit(AgentStartEvent())
 
         tool_calls: list[ToolCallContent] = []
@@ -322,11 +346,14 @@ class Engine:
                 if self.options.get_ephemeral_messages is not None:
                     try:
                         ephemeral = await self.options.get_ephemeral_messages()
+                        # Ephemeral messages (e.g. injected context or reminders) are
+                        # appended to a copy of the history — they are never persisted.
                         ctx_messages = ctx_messages + ephemeral
                     except Exception:
-                        pass
+                        pass  # Ephemeral failures must not abort the turn
 
                 if self.options.transform_context is not None:
+                    # Allows callers (e.g. Agent) to inject compaction or strip unusable trailing messages.
                     ctx_messages = self.options.transform_context(ctx_messages, signal)
 
                 if signal.is_set():
@@ -457,7 +484,8 @@ class Engine:
                             await emit(TurnEndEvent(message=message, tool_results=tool_results))
                             break
 
-                        # Drain the live steering queue first, then call the options callback.
+                        # Live queue takes priority over the options callback so real-time
+                        # steers (e.g. from another coroutine) are not reordered.
                         steering_messages: list[LLMMessage] = []
                         if self.state.steering_queue and not self.state.steering_queue.is_empty():
                             steering_messages.extend(await self.state.steering_queue.dequeue())
@@ -471,7 +499,7 @@ class Engine:
                     case StopReason.Stop:
                         await emit(MessageEndEvent(message=message))
                         messages.append(message)
-                        # Drain the live follow-up queue first, then call the options callback.
+                        # Same drain-queue-first ordering as steering: real-time follow-ups win.
                         follow_up_messages: list[LLMMessage] = []
                         if self.state.follow_up_queue and not self.state.follow_up_queue.is_empty():
                             follow_up_messages.extend(await self.state.follow_up_queue.dequeue())
@@ -503,6 +531,7 @@ class Engine:
         await emit(AgentEndEvent(messages=messages, reason=end_reason))
 
     async def run(self, ctx: AgentContext) -> None:
+        """Reset the abort signal, apply context, and start a fresh loop from the given context."""
         if isinstance(ctx, list):
             from operator_use.agent.types import AgentContext as _AgentContext
             ctx = _AgentContext(
@@ -521,11 +550,12 @@ class Engine:
             self.state.is_streaming = False
 
     async def run_continue(self) -> None:
+        """Resume an idle engine from its current message history, draining queued steering/follow-up first."""
         if self.state.is_streaming:
             raise RuntimeError("Agent is already processing. Wait for completion before continuing.")
 
         if not self.state.messages:
-            # Allow continue when there are queued follow-up messages even with no history
+            # Edge case: session was reset but follow-up messages were enqueued before any LLM turn.
             if self.state.follow_up_queue and not self.state.follow_up_queue.is_empty():
                 follow_up_messages = await self.state.follow_up_queue.dequeue()
                 from operator_use.agent.types import AgentContext
@@ -561,6 +591,7 @@ class Engine:
         await self._loop_continue()
 
     async def _loop_continue(self) -> None:
+        """Re-enter the loop with existing state.messages (used when last message is a tool result)."""
         self._signal = asyncio.Event()
         self.state.is_streaming = True
         try:

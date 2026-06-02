@@ -11,6 +11,8 @@ HookRegistration = tuple[str, Callable]
 
 @dataclass
 class HookError:
+    """Captures a load-time error from a hook file without aborting the rest of the load."""
+
     path: str
     error: str
     stack: str = ""
@@ -18,11 +20,14 @@ class HookError:
 
 @dataclass
 class LoadHooksResult:
+    """Aggregated outcome of loading hook files from one or more directories."""
+
     hooks: list[HookRegistration] = field(default_factory=list)
     errors: list[HookError] = field(default_factory=list)
 
 
 def load_hooks_from_file(path: Path) -> tuple[list[HookRegistration], list[HookError]]:
+    """Import a single hook file and return its (event_type, handler) registrations."""
     errors: list[HookError] = []
     str_path = str(path)
 
@@ -69,6 +74,7 @@ def load_hooks_from_file(path: Path) -> tuple[list[HookRegistration], list[HookE
 
 
 def load_hooks_from_dir(directory: Path) -> LoadHooksResult:
+    """Load all non-private hook files from a directory, sorted for deterministic order."""
     hooks: list[HookRegistration] = []
     errors: list[HookError] = []
 
@@ -86,6 +92,7 @@ def load_hooks_from_dir(directory: Path) -> LoadHooksResult:
 
 
 def load_hooks(dirs: list[Path]) -> LoadHooksResult:
+    """Load and merge hook registrations from multiple directories in order."""
     all_hooks: list[HookRegistration] = []
     all_errors: list[HookError] = []
 

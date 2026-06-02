@@ -38,7 +38,10 @@ _STOP_REASON: dict[str, StopReason] = {
 
 
 class GitHubCopilotChatAPI(BaseAPI):
+    """Streaming LLM API adapter for the GitHub Copilot Chat endpoint (OpenAI-compatible)."""
+
     def __init__(self, options: LLMOptions) -> None:
+        """Resolve the Copilot base URL and initialise the AsyncOpenAI client with Copilot headers."""
         super().__init__(options)
         base_url = options.base_url or get_copilot_base_url(options.api_key)
         self._client = AsyncOpenAI(
@@ -50,6 +53,7 @@ class GitHubCopilotChatAPI(BaseAPI):
         )
 
     def _build_params(self, model: Model, messages: list[dict[str, Any]], tools: Optional[list[Tool]] = None) -> dict[str, Any]:
+        """Assemble the Copilot Chat Completions request payload."""
         params: dict[str, Any] = {
             "model": model.id,
             "messages": messages,
@@ -75,6 +79,7 @@ class GitHubCopilotChatAPI(BaseAPI):
         return params
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
+        """Stream LLMEvents from the GitHub Copilot Chat API."""
         chat_messages = openai_messages_to_chat(context.messages)
         if context.system_prompt:
             chat_messages = [{"role": "system", "content": context.system_prompt}] + chat_messages

@@ -40,6 +40,7 @@ class Runtime:
         config: RuntimeConfig,
         bus: Bus | None = None,
     ) -> None:
+        """Wire context into the runtime; start cron, build managers, and drop unavailable tools."""
         self._context = context
         self._config = config
         self.bus = bus or Bus()
@@ -79,6 +80,7 @@ class Runtime:
         self._configure_context(context)
 
     def _create_workflow_manager(self, context: RuntimeContext) -> WorkflowManager:
+        """Build a WorkflowManager scoped to the active profile's workflow directories."""
         profile = context.resource_loader._active_profile
         run_defaults = (
             context.settings_manager.get_workflow_run_defaults()
@@ -94,6 +96,7 @@ class Runtime:
         )
 
     def _create_subagent_manager(self, context: RuntimeContext) -> SubagentManager:
+        """Build a SubagentManager using the shared LLM and engine tools from context."""
         return SubagentManager(
             llm=context.llm,
             tools=context.engine.tools,
@@ -203,6 +206,7 @@ class Runtime:
         cls,
         config: RuntimeConfig,
     ) -> Runtime:
+        """Create a fully initialised Runtime from config and fire the session_start event."""
         context = await RuntimeContext.create(config)
         runtime = cls(context=context, config=config)
         await runtime._emit_session_start('startup')
@@ -249,6 +253,7 @@ class Runtime:
 
     @property
     def unified_session_enabled(self) -> bool:
+        """True when all gateway channels share a single session; defaults to True if not configured."""
         settings = self._context.settings_manager
         if settings is not None and settings.settings.unified_session is not None:
             return settings.settings.unified_session
@@ -388,6 +393,7 @@ class Runtime:
         await self._emit_session_start('fork')
 
     def _rebuild_commands(self) -> None:
+        """Recreate the CommandRegistry from the current resource loader and extension runtime."""
         self.commands = CommandRegistry(
             runtime=self,
             discovered=self._context.resource_loader.get_commands(),
@@ -407,6 +413,7 @@ class Runtime:
         self._configure_context(self._context)
 
     def _wire_agent_extensions(self, agent: Agent, load_result, hooks) -> None:
+        """Replace the agent's deferred extension runtime with the real one, bound to the agent and hooks."""
         from operator_use.extension.runtime import ExtensionRuntime
         real_ext = ExtensionRuntime(load_result, agent, hooks=hooks)
         agent._extensions = real_ext
@@ -765,6 +772,7 @@ class Runtime:
     # -------------------------------------------------------------------------
 
     def get_agent_profiles(self) -> dict[str, AgentProfile]:
+        """Return the registry of named agent profiles discovered at startup."""
         return self._agent_profiles
 
     # ── Peer agent registry ───────────────────────────────────────────────────
@@ -789,6 +797,7 @@ class Runtime:
         return agent
 
     def get_active_agent_profile(self) -> AgentProfile | None:
+        """Return the profile currently applied to the active agent, or None for the base runtime."""
         agent = self._context.agent
         return agent.get_active_profile() if agent else None
 
@@ -915,6 +924,7 @@ class Runtime:
     # -------------------------------------------------------------------------
 
     async def _emit_session_start(self, reason: str) -> None:
+        """Broadcast session_start to extensions and trigger the skill curator check."""
         await self._context.extension_runtime.emit(
             'session_start',
             SessionStartEvent(reason=reason),  # type: ignore[arg-type]
@@ -922,6 +932,7 @@ class Runtime:
         self._maybe_run_curator()
 
     def _maybe_run_curator(self) -> None:
+        """Launch the skill curator in the background if it is enabled and due to run."""
         try:
             from operator_use.skill.curator import maybe_run_curator
             ctx = self._context
@@ -951,6 +962,7 @@ class Runtime:
             logging.getLogger(__name__).debug('curator check failed: %s', exc)
 
     async def _emit_session_shutdown(self, reason: str) -> None:
+        """Broadcast session_shutdown to extensions and flush conversation history to the memory manager."""
         await self._context.extension_runtime.emit(
             'session_shutdown',
             SessionShutdownEvent(reason=reason),  # type: ignore[arg-type]

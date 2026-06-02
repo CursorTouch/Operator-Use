@@ -13,6 +13,7 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 
 
 class BrowserSchema(BaseModel):
+    """Input schema for the browser tool; coerces string-encoded booleans and integers from LLM output."""
     action: Literal[
         "open",
         "close",
@@ -61,6 +62,7 @@ class BrowserSchema(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _coerce_params(cls, data):
+        """Normalise stringified booleans, ints, and null-strings that LLMs emit."""
         if not isinstance(data, dict):
             return data
 
@@ -113,6 +115,8 @@ class BrowserSchema(BaseModel):
 
 
 class BrowserTool(Tool):
+    """CDP-based browser automation tool with a single action-per-call interface."""
+
     def __init__(self) -> None:
         super().__init__(
             name="browser",
@@ -153,6 +157,7 @@ class BrowserTool(Tool):
         return "Browser"
 
     def is_available(self, context: ToolContext) -> bool:
+        """Gate: requires a Browser object and browser_use not explicitly disabled."""
         if context.browser is None:
             return False
         sm = context.settings_manager
@@ -340,6 +345,7 @@ class BrowserTool(Tool):
         return browser
 
     async def _tab_action(self, invocation_id: str, browser: Browser, params: BrowserSchema) -> ToolResult:
+        """Dispatch open/close/switch tab operations."""
         match params.tab_mode:
             case "open":
                 await browser.new_tab()
@@ -363,6 +369,7 @@ class BrowserTool(Tool):
                 return ToolResult.ok(invocation_id, f"Switched to tab {params.tab_index}.")
 
     async def _download(self, invocation_id: str, browser: Browser, params: BrowserSchema) -> ToolResult:
+        """Fetch a URL with httpx and write the bytes to the downloads directory."""
         if not params.url:
             return ToolResult.error(invocation_id, "'url' is required for action='download'.")
         if not params.filename:

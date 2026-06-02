@@ -46,7 +46,7 @@ from operator_use.settings.paths import (
 
 
 class RuntimeConfig(BaseModel):
-    """Public config passed to RuntimeContext.create()."""
+    """Immutable configuration snapshot passed to RuntimeContext.create(); all fields have safe defaults."""
     model_config = {'arbitrary_types_allowed': True}
 
     cwd: Path
@@ -114,6 +114,7 @@ class RuntimeContext:
         peer_session_manager: PeerSessionManager | None = None,
         process_manager: ProcessManager | None = None,
     ) -> None:
+        """Wire together all pre-built dependency objects; does not perform I/O."""
         self.agent = agent
         self.llm = llm
         self.engine = engine
@@ -139,6 +140,7 @@ class RuntimeContext:
         config: RuntimeConfig,
         settings_manager: SettingsManager | None = None,
     ) -> RuntimeContext:
+        """Bootstrap every dependency from config and return a fully wired context; the only async factory entry-point."""
         cwd = config.cwd.resolve()
         config_dir = (config.config_dir or get_config_dir()).resolve()
 
@@ -297,6 +299,7 @@ class RuntimeContext:
         ) if (_compaction_model or _compaction_provider) else llm
 
         def _resolve_summarization_settings() -> CompactionSettings:
+            """Re-read compaction settings on every call so runtime changes to settings.json take effect without restart."""
             ss = settings_manager.get_compaction_summarization_settings()
             return CompactionSettings(
                 enabled=_global_enabled and ss["enabled"],
@@ -523,9 +526,10 @@ class RuntimeContext:
 
 
 class _DeferredExtensionRuntime(ExtensionRuntime):
-    """No-op runtime used before the real context (Agent) is available."""
+    """Placeholder runtime used before the owning Agent exists; replaced by the real ExtensionRuntime in _wire_agent_extensions()."""
 
     def __init__(self, load_result: LoadExtensionsResult) -> None:
+        """Satisfy ExtensionRuntime.__init__ with a null context so callers can hold a reference before the Agent is built."""
         class _NullCtx:
             pass
         super().__init__(load_result, _NullCtx())  # type: ignore[arg-type]

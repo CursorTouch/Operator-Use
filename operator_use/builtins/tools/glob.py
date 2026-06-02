@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class GlobSchema(BaseModel):
+    """Input schema for the glob tool."""
     pattern: str = Field(
         ...,
         description="Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
@@ -18,6 +19,8 @@ class GlobSchema(BaseModel):
     )
 
 class GlobTool(Tool):
+    """File-finder tool that expands glob patterns relative to a given directory."""
+
     def __init__(self):
         super().__init__(
             name="glob",

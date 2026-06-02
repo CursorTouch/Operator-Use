@@ -31,6 +31,7 @@ _STOP_REASON: dict[str, StopReason] = {
 
 
 def _messages_to_ollama(messages: list[LLMMessage]) -> list[dict[str, Any]]:
+    """Convert a message list to Ollama Chat API format, placing images in a separate field."""
     result: list[dict[str, Any]] = []
     for msg in messages:
         match msg:
@@ -79,12 +80,16 @@ def _messages_to_ollama(messages: list[LLMMessage]) -> list[dict[str, Any]]:
 
 
 def _format(response_format: Any | None) -> dict[str, Any] | None:
+    """Extract the raw JSON schema dict for Ollama's format field, or None if unstructured."""
     structured = normalize_structured_response_format(response_format)
     return structured.schema if structured is not None else None
 
 
 class OllamaChatAPI(BaseAPI):
+    """Streaming LLM API adapter for the Ollama Chat endpoint."""
+
     def __init__(self, options: LLMOptions) -> None:
+        """Initialise the Ollama AsyncClient targeting the configured host."""
         super().__init__(options)
         self._client = AsyncClient(
             host=options.base_url,
@@ -93,12 +98,14 @@ class OllamaChatAPI(BaseAPI):
         )
 
     def _inference_options(self) -> dict[str, Any]:
+        """Build Ollama model-level options dict (temperature, token limit)."""
         opts: dict[str, Any] = {"temperature": self.options.temperature}
         if self.options.max_tokens is not None:
             opts["num_predict"] = self.options.max_tokens
         return opts
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
+        """Stream LLMEvents from the local Ollama Chat endpoint."""
         ollama_messages = _messages_to_ollama(context.messages)
         if context.system_prompt:
             ollama_messages = [{"role": "system", "content": context.system_prompt}] + ollama_messages
@@ -167,7 +174,7 @@ class OllamaChatAPI(BaseAPI):
                     text_buf += msg.content
                     yield TextDeltaEvent(text=TextContent(content=msg.content))
 
-                # tool calls arrive in the final chunk
+                # Ollama sends all tool calls in the final chunk, not incrementally.
                 if msg.tool_calls:
                     for i, tc in enumerate(msg.tool_calls):
                         fn = tc.function

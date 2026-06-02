@@ -10,24 +10,32 @@ from operator_use.subagent.types import SubagentSettings
 
 
 class SCOPE(str, Enum):
+    """Identifies which settings file (global or project) a read/write targets."""
+
     GLOBAL = "global"
     PROJECT = "project"
 
 
 @dataclass
 class LockResult:
+    """Carries the return value and optional new JSON content out of a storage lock callback."""
+
     result: Any
     next: str | None = None
 
 
 @dataclass
 class SettingsError:
+    """Records a settings load or write failure together with its scope."""
+
     scope: SCOPE
     error: Exception
 
 
 @dataclass
 class ExtensionEntry:
+    """Per-extension config entry stored in the ``extensions.list`` settings block."""
+
     path: str
     name: Optional[str] = None
     enabled: bool = True
@@ -38,17 +46,23 @@ class ExtensionEntry:
 
 @dataclass
 class CronSettings:
+    """Top-level on/off toggle for the cron scheduler."""
+
     enabled: Optional[bool] = None
 
 
 @dataclass
 class ExtensionsSettings:
+    """Global extension toggle plus per-extension configuration list."""
+
     enabled: Optional[bool] = None                  # global on/off toggle for all extensions
     list: Optional[list[ExtensionEntry]] = None     # per-extension config
 
 
 @dataclass
 class CompactionSettings:
+    """Controls which context-compaction strategy fires and with what per-strategy tuning."""
+
     enabled: Optional[bool] = None
     strategy: Optional[str] = None          # active strategy: "summarization" | "sliding_window" | "lcm"
     strategies: Optional[dict] = None       # per-strategy settings, keyed by strategy name
@@ -56,12 +70,16 @@ class CompactionSettings:
 
 @dataclass
 class BranchSummarySettings:
+    """Tuning knobs for the branch-summarisation step that fires before a rebase."""
+
     reserve_tokens: Optional[int] = None
     skip_prompt: Optional[bool] = None
 
 
 @dataclass
 class ProviderRetrySettings:
+    """Retry knobs applied at the HTTP-provider level (timeout and back-off ceiling)."""
+
     timeout_ms: Optional[int] = None
     max_retries: Optional[int] = None
     max_retry_delay_ms: Optional[int] = None
@@ -69,6 +87,8 @@ class ProviderRetrySettings:
 
 @dataclass
 class RetrySettings:
+    """Agent-level retry policy, wrapping optional per-provider overrides."""
+
     enabled: Optional[bool] = None
     max_retries: Optional[int] = None
     base_delay_ms: Optional[int] = None
@@ -77,6 +97,8 @@ class RetrySettings:
 
 @dataclass
 class ThinkingBudgetsSettings:
+    """Maps named thinking-level labels to their token budgets."""
+
     minimal: Optional[int] = None
     low: Optional[int] = None
     medium: Optional[int] = None
@@ -93,12 +115,16 @@ class ImageSettings:
 
 @dataclass
 class STTSettings:
+    """Speech-to-text feature flags and language hint."""
+
     enabled: Optional[bool] = None       # None = auto (only when AudioPart present), True = always, False = off
     language: Optional[str] = None       # BCP-47 language hint, e.g. "en"
 
 
 @dataclass
 class TTSSettings:
+    """Text-to-speech feature flags, voice selection, and playback tuning."""
+
     enabled: Optional[bool] = None       # None = only for voice-originated messages, True = always, False = off
     voice: Optional[str] = None          # voice name, e.g. "alloy"
     speed: Optional[float] = None        # playback speed multiplier (default: 1.0)
@@ -107,12 +133,16 @@ class TTSSettings:
 
 @dataclass
 class AuxiliaryTaskSettings:
+    """Model/provider override for a single auxiliary task slot (e.g. compaction, STT, TTS)."""
+
     provider: Optional[str] = None
     model: Optional[str] = None
 
 
 @dataclass
 class ComputerUseSettings:
+    """Feature flags for the desktop-control (computer use) subsystem."""
+
     enabled: bool = True
     use_screenshot: bool = False
     use_accessibility: bool = True
@@ -121,6 +151,8 @@ class ComputerUseSettings:
 
 @dataclass
 class BrowserUseSettings:
+    """Feature flags and CDP connection options for browser automation."""
+
     enabled: bool = True
     use_accessibility: bool = True
     use_screenshot: bool = False
@@ -135,6 +167,8 @@ class BrowserUseSettings:
 
 @dataclass
 class WorkflowSettings:
+    """Execution limits and concurrency defaults for the workflow DSL runtime."""
+
     enabled: bool = True
     max_agent_calls: int = 1000   # hard runaway-loop guard per run (incl. nested)
     budget: int = 100             # advisory turn budget for loop guards
@@ -155,6 +189,8 @@ class WorkflowSettings:
 
 @dataclass
 class AuxiliarySettings:
+    """Per-task model/provider overrides for every auxiliary task slot."""
+
     compaction: Optional[AuxiliaryTaskSettings] = None
     branch_summary: Optional[AuxiliaryTaskSettings] = None
     web_extract: Optional[AuxiliaryTaskSettings] = None
@@ -165,6 +201,8 @@ class AuxiliarySettings:
 
 @dataclass
 class MemorySettings:
+    """Configuration for the persistent memory subsystem."""
+
     enabled: Optional[bool] = None
     provider: Optional[str] = None       # active memory provider id, e.g. "local_file"
     max_prompt_chars: Optional[int] = None
@@ -174,6 +212,8 @@ class MemorySettings:
 
 @dataclass
 class CuratorSettings:
+    """Schedule and thresholds for the background skill-curator that archives stale skills."""
+
     enabled: bool = True
     interval_hours: int = 168        # 7 days
     min_idle_hours: int = 2
@@ -184,6 +224,8 @@ class CuratorSettings:
 
 @dataclass
 class Settings:
+    """Root settings dataclass — every configurable knob lives here, nested or flat."""
+
     # Model / provider
     default_provider: Optional[str] = None
     default_model: Optional[str] = None

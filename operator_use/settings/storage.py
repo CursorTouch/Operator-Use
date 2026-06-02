@@ -19,21 +19,25 @@ class FileSettingsStorage(SettingsStorage):
     """File-based storage backend with locking."""
 
     def __init__(self, cwd: Path, config_dir: Path | None = None):
+        """Resolve global and project settings paths and ensure the global parent directory exists."""
         self.global_settings_path = (
             config_dir / "settings.json" if config_dir else get_settings_path()
         )
         self.project_settings_path = cwd / ".operator" / "settings.json"
         self._ensure_parent_dir(self.global_settings_path)
-      
-    def _ensure_parent_dir(self, path: Path) -> None:  
+
+    def _ensure_parent_dir(self, path: Path) -> None:
+        """Create the parent directory with restricted permissions (0o700) if absent."""
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-      
-    def _ensure_file_exists(self, path: Path) -> None:  
-        if not path.exists():  
-            path.write_text("{}", encoding="utf-8")  
-            path.chmod(0o600)  
-      
+
+    def _ensure_file_exists(self, path: Path) -> None:
+        """Create an empty JSON object file with restricted permissions (0o600) if absent."""
+        if not path.exists():
+            path.write_text("{}", encoding="utf-8")
+            path.chmod(0o600)
+
     def with_lock(self, scope: SCOPE, fn: Callable[[str | None], LockResult]) -> LockResult:
+        """Acquire a file lock for the scope, pass current content to fn, and write fn's result."""
         path = self.global_settings_path if scope == SCOPE.GLOBAL else self.project_settings_path
 
         # Never auto-create the project-level .operator/ directory.
@@ -54,19 +58,21 @@ class FileSettingsStorage(SettingsStorage):
                 path.write_text(result.next, encoding="utf-8")
             return result
   
-class InMemorySettingsStorage(SettingsStorage):  
-    """In-memory storage backend for testing."""  
-      
-    def __init__(self):  
-        self.global_data: str = "{}"  
-        self.project_data: str = "{}"  
-      
-    def with_lock(self, scope: SCOPE, fn: Callable[[str | None], LockResult]) -> LockResult:  
-        current = self.global_data if scope == SCOPE.GLOBAL else self.project_data  
-        result = fn(current)  
-        if result.next is not None:  
-            if scope == SCOPE.GLOBAL:  
-                self.global_data = result.next  
-            else:  
-                self.project_data = result.next  
+class InMemorySettingsStorage(SettingsStorage):
+    """In-memory storage backend for testing."""
+
+    def __init__(self):
+        """Initialise with empty JSON objects for both scopes."""
+        self.global_data: str = "{}"
+        self.project_data: str = "{}"
+
+    def with_lock(self, scope: SCOPE, fn: Callable[[str | None], LockResult]) -> LockResult:
+        """Pass current in-memory content to fn and update the store if fn returns new content."""
+        current = self.global_data if scope == SCOPE.GLOBAL else self.project_data
+        result = fn(current)
+        if result.next is not None:
+            if scope == SCOPE.GLOBAL:
+                self.global_data = result.next
+            else:
+                self.project_data = result.next
         return result

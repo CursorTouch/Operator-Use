@@ -33,6 +33,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class ToolError:
+    """Records a file-level tool load failure with optional stack trace."""
+
     path: str
     error: str
     stack: str = ''
@@ -40,11 +42,15 @@ class ToolError:
 
 @dataclass
 class LoadToolsResult:
+    """Aggregate result of loading tools from one or more directories."""
+
     tools: list[Tool] = field(default_factory=list)
     errors: list[ToolError] = field(default_factory=list)
 
 
 class ToolKind(str, Enum):
+    """Semantic category used by the engine to apply execution policy to a tool call."""
+
     Read = "read"
     Edit = "edit"
     Write = "write"
@@ -60,6 +66,8 @@ class ToolKind(str, Enum):
 
 
 class ToolExecutionMode(str, Enum):
+    """Controls how the engine schedules concurrent calls to the same tool."""
+
     Sequential = "sequential"
     Parallel = "parallel"
     Batch = "batch"
@@ -67,6 +75,8 @@ class ToolExecutionMode(str, Enum):
 
 @dataclass
 class ToolInvocation:
+    """Fully-resolved call site: the tool id, parsed params, working directory, and tool name."""
+
     id: str
     params: dict[str, Any] = field(default_factory=dict)
     cwd: str = ""
@@ -75,6 +85,8 @@ class ToolInvocation:
 
 @dataclass
 class ToolResult:
+    """Structured outcome of a tool call, carrying content, error flag, and optional terminate signal."""
+
     id: str
     content: str
     is_error: bool = False
@@ -89,6 +101,7 @@ class ToolResult:
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ToolResult:
+        """Construct a successful ToolResult."""
         return cls(id=id, content=content, is_error=False, metadata=metadata or {})
 
     @classmethod
@@ -98,6 +111,7 @@ class ToolResult:
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ToolResult:
+        """Construct a failed ToolResult."""
         return cls(id=id, content=content, is_error=True, metadata=metadata or {})
 
 ToolExecutionUpdateCallback = Callable[[ToolResult], Awaitable[None]]

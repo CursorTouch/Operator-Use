@@ -59,6 +59,7 @@ class SlackChannel(BaseChannel):
         streaming: bool = True,
         streaming_latency: float = 1.0,
     ) -> None:
+        """Configure the bot/app tokens, display options, and per-chat streaming state."""
         super().__init__()
         if not _SLACK_AVAILABLE:
             raise ImportError('slack-bolt>=1.0 is required for SlackChannel.')
@@ -181,6 +182,7 @@ class SlackChannel(BaseChannel):
             await self.disconnect()
 
     def _valid_commands(self) -> list[str]:
+        """Return only command names that satisfy Slack's naming constraints."""
         return [
             name
             for name, _desc in self._commands
@@ -188,6 +190,7 @@ class SlackChannel(BaseChannel):
         ]
 
     def _register_slash_commands(self, app) -> None:
+        """Register a Slack slash-command handler for every valid Operator command."""
         if self._command_handler is None:
             return
 
@@ -233,6 +236,7 @@ class SlackChannel(BaseChannel):
             self._handler = None
 
     def _start_live_streaming(self, chat_id: str, slack_channel_id: str, thread_ts: str | None, client) -> None:
+        """Start a debounced loop that posts then edits a single Slack message with accumulated text."""
         self._stop_live_streaming(chat_id)
         self._live_ts_map[chat_id] = None
         latency = self._streaming_latency
@@ -267,11 +271,13 @@ class SlackChannel(BaseChannel):
         self._live_tasks[chat_id] = asyncio.create_task(_loop())
 
     def _stop_live_streaming(self, chat_id: str) -> None:
+        """Cancel the live-streaming loop for a chat if one is running."""
         task = self._live_tasks.pop(chat_id, None)
         if task:
             task.cancel()
 
     def _start_thinking_stream(self, chat_id: str, slack_channel_id: str, thread_ts: str | None, client) -> None:
+        """Start a debounced loop that edits the shared tool-status slot with streaming thinking text."""
         self._stop_thinking_stream(chat_id)
         latency = self._streaming_latency
 
@@ -299,6 +305,7 @@ class SlackChannel(BaseChannel):
         self._thinking_tasks[chat_id] = asyncio.create_task(_loop())
 
     def _stop_thinking_stream(self, chat_id: str) -> None:
+        """Cancel the thinking-stream loop for a chat if one is running."""
         task = self._thinking_tasks.pop(chat_id, None)
         if task:
             task.cancel()
@@ -319,6 +326,7 @@ class SlackChannel(BaseChannel):
         client = self._clients.get(chat_id)
 
         async def _post(text: str) -> None:
+            """Post a plain text message to the resolved Slack channel/thread."""
             if client is None:
                 logger.warning("SlackChannel: no client for chat_id %r", chat_id)
                 return

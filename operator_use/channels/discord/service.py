@@ -49,6 +49,7 @@ class DiscordChannel(BaseChannel):
         streaming: bool = True,
         streaming_latency: float = 1.0,
     ) -> None:
+        """Configure the bot token, display options, and per-chat streaming state."""
         super().__init__()
         if not _DISCORD_AVAILABLE:
             raise ImportError('discord.py>=2.0 is required for DiscordChannel.')
@@ -166,6 +167,7 @@ class DiscordChannel(BaseChannel):
             await self.disconnect()
 
     def _valid_commands(self) -> list[tuple[str, str]]:
+        """Return only commands whose names satisfy Discord's naming constraints."""
         return [
             (name, (desc or name)[:100])
             for name, desc in self._commands
@@ -173,6 +175,7 @@ class DiscordChannel(BaseChannel):
         ]
 
     def _register_application_commands(self, tree) -> None:
+        """Add a Discord slash command to the command tree for every valid Operator command."""
         if self._command_handler is None:
             return
 
@@ -249,11 +252,13 @@ class DiscordChannel(BaseChannel):
         self._typing_tasks[chat_id] = asyncio.create_task(_loop())
 
     def _stop_typing(self, chat_id: str) -> None:
+        """Cancel the periodic typing-indicator loop for a chat."""
         task = self._typing_tasks.pop(chat_id, None)
         if task:
             task.cancel()
 
     def _start_live_streaming(self, chat_id: str) -> None:
+        """Start a debounced loop that edits a single Discord message with accumulated text."""
         self._stop_live_streaming(chat_id)
         self._live_messages[chat_id] = None
         latency = self._streaming_latency
@@ -287,11 +292,13 @@ class DiscordChannel(BaseChannel):
         self._live_tasks[chat_id] = asyncio.create_task(_loop())
 
     def _stop_live_streaming(self, chat_id: str) -> None:
+        """Cancel the live-streaming loop for a chat if one is running."""
         task = self._live_tasks.pop(chat_id, None)
         if task:
             task.cancel()
 
     def _start_thinking_stream(self, chat_id: str) -> None:
+        """Start a debounced loop that edits the shared status slot with streaming thinking text."""
         self._stop_thinking_stream(chat_id)
         latency = self._streaming_latency
 
@@ -320,6 +327,7 @@ class DiscordChannel(BaseChannel):
         self._thinking_tasks[chat_id] = asyncio.create_task(_loop())
 
     def _stop_thinking_stream(self, chat_id: str) -> None:
+        """Cancel the thinking-stream loop for a chat if one is running."""
         task = self._thinking_tasks.pop(chat_id, None)
         if task:
             task.cancel()

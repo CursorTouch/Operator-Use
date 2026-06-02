@@ -56,12 +56,16 @@ if TYPE_CHECKING:
 # ============================================================================
 
 class ContextUsage(BaseModel):
+    """Snapshot of how much of the context window the current session occupies."""
+
     tokens: int | None
     context_window: int
     percent: float | None
 
 
 class CompactOptions(BaseModel):
+    """Options forwarded to the compaction subsystem when the caller triggers compaction."""
+
     custom_instructions: str | None = None
     on_complete: Any | None = None
     on_error: Any | None = None
@@ -97,27 +101,41 @@ class ExtensionContext(ABC):
     # ── Query ─────────────────────────────────────────────────────────────────
 
     @abstractmethod
-    def is_idle(self) -> bool: ...
+    def is_idle(self) -> bool:
+        """Return True when no turn is in progress and no messages are queued."""
+        ...
 
     @abstractmethod
-    def has_pending_messages(self) -> bool: ...
+    def has_pending_messages(self) -> bool:
+        """Return True when there is at least one message waiting to be processed."""
+        ...
 
     @abstractmethod
-    def get_context_usage(self) -> ContextUsage | None: ...
+    def get_context_usage(self) -> ContextUsage | None:
+        """Return the latest context-window usage snapshot, or None before the first turn."""
+        ...
 
     @abstractmethod
-    def get_system_prompt(self) -> str: ...
+    def get_system_prompt(self) -> str:
+        """Return the fully assembled system prompt sent to the LLM."""
+        ...
 
     # ── Control ───────────────────────────────────────────────────────────────
 
     @abstractmethod
-    def abort(self) -> None: ...
+    def abort(self) -> None:
+        """Signal the engine to abort the current turn."""
+        ...
 
     @abstractmethod
-    def shutdown(self) -> None: ...
+    def shutdown(self) -> None:
+        """Request a full harness shutdown after the current turn drains."""
+        ...
 
     @abstractmethod
-    def compact(self, options: CompactOptions | None = None) -> None: ...
+    def compact(self, options: CompactOptions | None = None) -> None:
+        """Schedule a compaction at the next save point."""
+        ...
 
     @abstractmethod
     async def reload(self) -> None:
@@ -158,6 +176,8 @@ class ExtensionContext(ABC):
 
 @dataclass
 class ToolDefinition:
+    """Declarative description of a tool provided by an extension."""
+
     name: str
     description: str
     parameters: type[BaseModel]
@@ -171,6 +191,8 @@ class ToolDefinition:
 
 @dataclass
 class RegisteredTool:
+    """A ToolDefinition paired with its origin SourceInfo for diagnostics."""
+
     definition: ToolDefinition
     source_info: SourceInfo
 
@@ -179,6 +201,7 @@ class ExtensionTool(Tool):
     """Adapts a ToolDefinition from an extension into a Tool the engine can execute."""
 
     def __init__(self, definition: ToolDefinition, ctx: ExtensionContext) -> None:
+        """Wrap a ToolDefinition, injecting the shared ExtensionContext for every call."""
         super().__init__(
             name=definition.name,
             description=definition.description,
@@ -196,6 +219,7 @@ class ExtensionTool(Tool):
         signal: AbortSignal | None = None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Validate invocation params then delegate to the definition's execute function."""
         params = self._definition.parameters.model_validate(invocation.params)
         return await self._definition.execute(params, invocation, self._ctx, context)
 
@@ -206,6 +230,8 @@ class ExtensionTool(Tool):
 
 @dataclass
 class RegisteredCommand:
+    """A slash command contributed by an extension, with its handler and origin."""
+
     name: str
     source_info: SourceInfo
     description: str | None = None
@@ -218,30 +244,40 @@ class RegisteredCommand:
 
 @dataclass
 class RegisteredInferenceProvider:
+    """An extension-contributed text inference provider descriptor with its origin."""
+
     provider: APIProvider | OAuthProvider
     source_info: SourceInfo
 
 
 @dataclass
 class RegisteredImageProvider:
+    """An extension-contributed image generation provider descriptor with its origin."""
+
     provider: ImageProvider
     source_info: SourceInfo
 
 
 @dataclass
 class RegisteredAudioProvider:
+    """An extension-contributed audio (TTS/STT) provider descriptor with its origin."""
+
     provider: AudioProvider
     source_info: SourceInfo
 
 
 @dataclass
 class RegisteredVideoProvider:
+    """An extension-contributed video generation provider descriptor with its origin."""
+
     provider: VideoProvider
     source_info: SourceInfo
 
 
 @dataclass
 class RegisteredTextAPI:
+    """A named text LLM API class contributed by an extension."""
+
     name: str
     api: Type[BaseLLMAPI]
     source_info: SourceInfo
@@ -249,6 +285,8 @@ class RegisteredTextAPI:
 
 @dataclass
 class RegisteredImageAPI:
+    """A named image generation API class contributed by an extension."""
+
     name: str
     api: Type[BaseImageAPI]
     source_info: SourceInfo
@@ -256,6 +294,8 @@ class RegisteredImageAPI:
 
 @dataclass
 class RegisteredAudioAPI:
+    """A named audio (TTS/STT) API class contributed by an extension."""
+
     name: str
     api: Type[BaseAudioAPI]
     source_info: SourceInfo
@@ -263,6 +303,8 @@ class RegisteredAudioAPI:
 
 @dataclass
 class RegisteredVideoAPI:
+    """A named video generation API class contributed by an extension."""
+
     name: str
     api: Type[BaseVideoAPI]
     source_info: SourceInfo
@@ -274,12 +316,16 @@ class RegisteredVideoAPI:
 
 @dataclass
 class RegisteredMemoryProvider:
+    """An extension-contributed memory provider descriptor with its origin."""
+
     provider: MemoryProvider
     source_info: SourceInfo
 
 
 @dataclass
 class RegisteredMemoryAPI:
+    """A named memory API class contributed by an extension."""
+
     name: str
     api: Type[BaseMemoryAPI]
     source_info: SourceInfo
@@ -291,6 +337,8 @@ class RegisteredMemoryAPI:
 
 @dataclass
 class RegisteredSubagentProfile:
+    """A subagent profile contributed by an extension with its origin."""
+
     profile: SubagentProfile
     source_info: SourceInfo
 
@@ -309,6 +357,8 @@ ExtensionFactory = Callable[['ExtensionAPI'], Awaitable[None] | None]
 
 @dataclass
 class ExtensionError:
+    """Records a non-fatal error that occurred while loading or dispatching an extension."""
+
     extension_path: str
     event: str
     error: str
@@ -317,6 +367,8 @@ class ExtensionError:
 
 @dataclass
 class Extension:
+    """All state accumulated for a single loaded extension module."""
+
     path: str
     source_info: SourceInfo
     handlers: dict[str, list[EventHandler]] = field(default_factory=dict)
@@ -338,6 +390,8 @@ class Extension:
 
 @dataclass
 class LoadExtensionsResult:
+    """Aggregated outcome of loading a batch of extension files."""
+
     extensions: list[Extension] = field(default_factory=list)
     errors: list[ExtensionError] = field(default_factory=list)
 
@@ -353,6 +407,7 @@ class ExtensionAPI:
     """
 
     def __init__(self, extension: Extension, bus: EventBus) -> None:
+        """Bind this API surface to a specific Extension instance and the shared EventBus."""
         self._extension = extension
         self.events = bus
 
@@ -362,9 +417,11 @@ class ExtensionAPI:
         return self._extension.config
 
     def on(self, event: str, handler: EventHandler) -> None:
+        """Subscribe handler to the named lifecycle event; multiple handlers are allowed."""
         self._extension.handlers.setdefault(event, []).append(handler)
 
     def register_tool(self, tool: ToolDefinition) -> None:
+        """Expose a tool to the engine; overwrites a previous registration with the same name."""
         source_info = SourceInfo(path=self._extension.path, source='extension')
         self._extension.tools[tool.name] = RegisteredTool(definition=tool, source_info=source_info)
 
@@ -374,6 +431,7 @@ class ExtensionAPI:
         handler: Callable[..., Awaitable[None]],
         description: str | None = None,
     ) -> None:
+        """Register a slash command with an optional description shown in /help."""
         source_info = SourceInfo(path=self._extension.path, source='extension')
         self._extension.commands[name] = RegisteredCommand(
             name=name,

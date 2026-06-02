@@ -50,6 +50,8 @@ _PYDANTIC_FIELD_TYPES: dict[str, type] = {
 
 
 class SettingsManager:
+    """Process-wide singleton that owns global and project settings with async-safe persistence."""
+
     _instance: Optional["SettingsManager"] = None
 
     @classmethod
@@ -755,11 +757,13 @@ class SettingsManager:
         return next((a for a in acp.agents if a.name == name), None)
 
     def _get_or_init_acp(self):
+        """Return the global ACP settings block, initialising it to defaults if absent."""
         if self.global_settings.acp is None:
             self.global_settings.acp = ACPSettings()
         return self.global_settings.acp
 
     def set_acp_enabled(self, enabled: bool) -> None:
+        """Enable or disable ACP and persist to global settings."""
         self._get_or_init_acp().enabled = enabled
         self._mark_modified('acp')
         self._save()
@@ -912,6 +916,7 @@ class SettingsManager:
         return i.auto_resize if i and i.auto_resize is not None else True
 
     def set_image_auto_resize(self, enabled: bool):
+        """Enable or disable automatic image resizing before LLM submission, and persist."""
         if not self.global_settings.image:
             self.global_settings.image = ImageSettings()
         self.global_settings.image.auto_resize = enabled
@@ -924,6 +929,7 @@ class SettingsManager:
         return i.block_images if i and i.block_images is not None else False
 
     def set_image_block_images(self, enabled: bool):
+        """Enable or disable blocking all images from the LLM, and persist."""
         if not self.global_settings.image:
             self.global_settings.image = ImageSettings()
         self.global_settings.image.block_images = enabled
@@ -937,6 +943,7 @@ class SettingsManager:
         return self.settings.execute_path
 
     def set_execute_path(self, path: str | None):
+        """Set the custom execute path and persist to global settings."""
         self.global_settings.execute_path = path
         self._mark_modified("execute_path")
         self._save()
@@ -954,6 +961,7 @@ class SettingsManager:
         return self.settings.execute_command_prefix
 
     def set_execute_command_prefix(self, prefix: str | None):
+        """Set the execute command prefix and persist to global settings."""
         self.global_settings.execute_command_prefix = prefix
         self._mark_modified("execute_command_prefix")
         self._save()
@@ -975,50 +983,61 @@ class SettingsManager:
         return self.settings.channels
 
     def get_websocket_channel_config(self) -> WebSocketChannelConfig:
+        """Return the resolved WebSocket channel configuration."""
         return self.get_channels_settings().websocket
 
     def get_telegram_channel_config(self) -> TelegramChannelConfig:
+        """Return the resolved Telegram channel configuration."""
         return self.get_channels_settings().telegram
 
     def get_discord_channel_config(self) -> DiscordChannelConfig:
+        """Return the resolved Discord channel configuration."""
         return self.get_channels_settings().discord
 
     def get_slack_channel_config(self) -> SlackChannelConfig:
+        """Return the resolved Slack channel configuration."""
         return self.get_channels_settings().slack
 
     def get_twitch_channel_config(self) -> TwitchChannelConfig:
+        """Return the resolved Twitch channel configuration."""
         return self.get_channels_settings().twitch
 
     def _get_or_init_channels(self) -> ChannelsSettings:
+        """Return the global channels block, creating it with defaults if absent."""
         if self.global_settings.channels is None:
             self.global_settings.channels = ChannelsSettings()
         return self.global_settings.channels
 
     def set_websocket_channel_config(self, **kwargs) -> None:
+        """Merge kwargs into the WebSocket channel config and persist."""
         ch = self._get_or_init_channels()
         ch.websocket = WebSocketChannelConfig(**{**ch.websocket.model_dump(), **kwargs})
         self._mark_modified('channels')
         self._save()
 
     def set_telegram_channel_config(self, **kwargs) -> None:
+        """Merge kwargs into the Telegram channel config and persist."""
         ch = self._get_or_init_channels()
         ch.telegram = TelegramChannelConfig(**{**ch.telegram.model_dump(), **kwargs})
         self._mark_modified('channels')
         self._save()
 
     def set_discord_channel_config(self, **kwargs) -> None:
+        """Merge kwargs into the Discord channel config and persist."""
         ch = self._get_or_init_channels()
         ch.discord = DiscordChannelConfig(**{**ch.discord.model_dump(), **kwargs})
         self._mark_modified('channels')
         self._save()
 
     def set_slack_channel_config(self, **kwargs) -> None:
+        """Merge kwargs into the Slack channel config and persist."""
         ch = self._get_or_init_channels()
         ch.slack = SlackChannelConfig(**{**ch.slack.model_dump(), **kwargs})
         self._mark_modified('channels')
         self._save()
 
     def set_twitch_channel_config(self, **kwargs) -> None:
+        """Merge kwargs into the Twitch channel config and persist."""
         ch = self._get_or_init_channels()
         ch.twitch = TwitchChannelConfig(**{**ch.twitch.model_dump(), **kwargs})
         self._mark_modified('channels')
@@ -1035,18 +1054,21 @@ class SettingsManager:
         return self.settings.tts or TTSSettings()
 
     def _ensure_stt(self) -> STTSettings:
+        """Return the global STT block, creating it if absent and syncing the merged view."""
         if self.global_settings.stt is None:
             self.global_settings.stt = STTSettings()
         self.settings.stt = self.global_settings.stt
         return self.global_settings.stt
 
     def _ensure_tts(self) -> TTSSettings:
+        """Return the global TTS block, creating it if absent and syncing the merged view."""
         if self.global_settings.tts is None:
             self.global_settings.tts = TTSSettings()
         self.settings.tts = self.global_settings.tts
         return self.global_settings.tts
 
     def _ensure_aux_stt(self) -> "AuxiliaryTaskSettings":
+        """Return the auxiliary STT task slot, creating parent blocks if absent."""
         if self.global_settings.auxiliary is None:
             self.global_settings.auxiliary = AuxiliarySettings()
             self.settings.auxiliary = self.global_settings.auxiliary
@@ -1055,6 +1077,7 @@ class SettingsManager:
         return self.global_settings.auxiliary.stt
 
     def _ensure_aux_tts(self) -> "AuxiliaryTaskSettings":
+        """Return the auxiliary TTS task slot, creating parent blocks if absent."""
         if self.global_settings.auxiliary is None:
             self.global_settings.auxiliary = AuxiliarySettings()
             self.settings.auxiliary = self.global_settings.auxiliary
@@ -1064,56 +1087,70 @@ class SettingsManager:
 
     # STT
     def get_stt_enabled(self) -> bool | None:
+        """Return the STT enabled flag (None = auto-detect from AudioPart presence)."""
         return (self.settings.stt or STTSettings()).enabled
 
     def set_stt_enabled(self, enabled: bool | None) -> None:
+        """Set the STT enabled flag without persisting (caller must call _save)."""
         self._ensure_stt().enabled = enabled
         self._mark_modified("stt", "enabled")
 
     def get_stt_model(self) -> str | None:
+        """Return the STT auxiliary model override, or None if using the default."""
         aux = self.settings.auxiliary
         return (aux.stt.model if aux and aux.stt else None)
 
     def set_stt_model(self, model: str) -> None:
+        """Set the STT auxiliary model override without persisting."""
         self._ensure_aux_stt().model = model
         self._mark_modified("auxiliary", "stt.model")
 
     def get_stt_provider(self) -> str | None:
+        """Return the STT auxiliary provider override, or None if using the default."""
         aux = self.settings.auxiliary
         return (aux.stt.provider if aux and aux.stt else None)
 
     def set_stt_provider(self, provider: str) -> None:
+        """Set the STT auxiliary provider override without persisting."""
         self._ensure_aux_stt().provider = provider
         self._mark_modified("auxiliary", "stt.provider")
 
     # TTS
     def get_tts_enabled(self) -> bool | None:
+        """Return the TTS enabled flag (None = only for voice-originated messages)."""
         return (self.settings.tts or TTSSettings()).enabled
 
     def set_tts_enabled(self, enabled: bool | None) -> None:
+        """Set the TTS enabled flag without persisting (caller must call _save)."""
         self._ensure_tts().enabled = enabled
         self._mark_modified("tts", "enabled")
 
     def get_tts_voice(self) -> str | None:
+        """Return the configured TTS voice name, or None if unset."""
         return (self.settings.tts or TTSSettings()).voice
 
     def set_tts_voice(self, voice: str) -> None:
+        """Set the TTS voice name without persisting."""
         self._ensure_tts().voice = voice
         self._mark_modified("tts", "voice")
 
     def get_tts_model(self) -> str | None:
+        """Return the TTS auxiliary model override, or None if using the default."""
         aux = self.settings.auxiliary
         return (aux.tts.model if aux and aux.tts else None)
 
     def set_tts_model(self, model: str) -> None:
+        """Set the TTS auxiliary model override without persisting."""
         self._ensure_aux_tts().model = model
         self._mark_modified("auxiliary", "tts.model")
 
     def get_tts_provider(self) -> str | None:
+        """Return the TTS auxiliary provider override, or None if using the default."""
         aux = self.settings.auxiliary
         return (aux.tts.provider if aux and aux.tts else None)
 
     def set_tts_provider(self, provider: str) -> None:
+        """Set the TTS auxiliary provider override without persisting."""
         self._ensure_aux_tts().provider = provider
         self._mark_modified("auxiliary", "tts.provider")
 
@@ -1133,6 +1170,7 @@ class SettingsManager:
         return self.settings.memory or MemorySettings()
 
     def set_memory_settings(self, **kwargs) -> None:
+        """Merge kwargs into the memory settings block and persist to global settings."""
         current = self.global_settings.memory or MemorySettings()
         values = asdict(current)
         values.update(kwargs)

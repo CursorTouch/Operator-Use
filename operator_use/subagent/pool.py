@@ -42,6 +42,7 @@ class TaskPool:
         return asyncio.create_task(self._try_launch(task_id))
 
     async def _try_launch(self, task_id: str) -> None:
+        """Wait for all declared dependencies, then acquire the semaphore and run."""
         task_info = self._pending.get(task_id)
         if not task_info:
             return
@@ -55,6 +56,7 @@ class TaskPool:
             await self._run_task(task_id)
 
     async def _run_task(self, task_id: str) -> None:
+        """Pop the task from pending, execute its coroutine, and signal the completion event."""
         if task_id not in self._pending:
             return
         task_info = self._pending.pop(task_id)
@@ -80,6 +82,7 @@ class TaskPool:
                 self._completion_events[task_id].set()
 
     def stats(self) -> dict:
+        """Return a snapshot of pending, running, and completed task counts."""
         return {
             'max_concurrent': self.max_concurrent,
             'pending': len(self._pending),

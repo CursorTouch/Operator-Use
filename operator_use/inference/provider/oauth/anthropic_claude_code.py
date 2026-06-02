@@ -40,6 +40,7 @@ SCOPES = "org:create_api_key user:profile user:inference user:sessions:claude_co
 
 
 def _build_authorization_url(challenge: str, state: str) -> str:
+    """Construct the Anthropic authorize URL with PKCE and state parameters."""
     params = {
         "code": "true",
         "client_id": CLIENT_ID,
@@ -54,6 +55,7 @@ def _build_authorization_url(challenge: str, state: str) -> str:
 
 
 def _post_json(url: str, body: dict) -> dict:
+    """POST a JSON body and return the parsed response; raise RuntimeError on HTTP errors."""
     data = json.dumps(body).encode()
     req = urllib.request.Request(
         url,
@@ -61,6 +63,7 @@ def _post_json(url: str, body: dict) -> dict:
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
+            # Browser UA is required; Anthropic rejects requests without it
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         },
         method="POST",
@@ -74,6 +77,7 @@ def _post_json(url: str, body: dict) -> dict:
 
 
 def _exchange_code(code: str, state: str, verifier: str) -> dict:
+    """Exchange an authorization code for tokens using PKCE verification."""
     return _post_json(TOKEN_URL, {
         "grant_type": "authorization_code",
         "client_id": CLIENT_ID,
@@ -85,6 +89,7 @@ def _exchange_code(code: str, state: str, verifier: str) -> dict:
 
 
 def _refresh_token_sync(refresh_token: str) -> dict:
+    """Synchronously refresh an Anthropic OAuth token; called via asyncio.to_thread."""
     return _post_json(TOKEN_URL, {
         "grant_type": "refresh_token",
         "client_id": CLIENT_ID,
@@ -93,6 +98,7 @@ def _refresh_token_sync(refresh_token: str) -> dict:
 
 
 def _validate_token_sync(access_token: str) -> bool:
+    """Probe the models endpoint to confirm the access token is still accepted."""
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/models",
         headers={
@@ -105,6 +111,7 @@ def _validate_token_sync(access_token: str) -> bool:
         with urllib.request.urlopen(req, context=_SSL_CONTEXT, timeout=10) as resp:
             return resp.status == 200
     except urllib.error.HTTPError as e:
+        # 401/403 mean the token is genuinely invalid; other codes may be transient
         return e.code not in (401, 403)
     except Exception:
         return False
@@ -124,6 +131,7 @@ def _parse_token_response(data: dict) -> tuple[str, str, int]:
 
 
 async def login_anthropic(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
+    """Run the full Anthropic PKCE login flow and return a fresh OAuthCredential."""
     verifier, challenge = generate_pkce()
     # The state is the verifier itself (matches the TS implementation)
     state = verifier
@@ -171,6 +179,7 @@ async def login_anthropic(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
 
 
 async def refresh_anthropic_token(credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+    """Exchange a refresh token for a new OAuthCredential; transparent to the streaming loop."""
     data = await asyncio.to_thread(_refresh_token_sync, credential.refresh)
     access, refresh, expires_ms = _parse_token_response(data)
     return OAuthCredential(access=access, refresh=refresh, expires=expires_ms)
@@ -178,29 +187,36 @@ async def refresh_anthropic_token(credential: OAuthCredential, signal: Optional[
 
 @dataclass
 class AnthropicClaudeCodeOAuthProvider(OAuthProvider):
+    """OAuthProvider implementation for Anthropic Claude Pro/Max accounts."""
+
     id: str = "anthropic-claude-code"
     name: str = "Anthropic (Claude Pro/Max)"
     uses_callback_server: bool = True
 
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential:
+        """Initiate the PKCE login flow through the Anthropic authorization server."""
         return await login_anthropic(callbacks)
 
     async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        """Obtain a new access token using the stored refresh token."""
         return await refresh_anthropic_token(credential, signal=signal)
 
     async def logout(self, credential: OAuthCredential) -> None:
-        # Anthropic OAuth does not expose a token revocation endpoint
+        """No-op: Anthropic OAuth does not expose a token revocation endpoint."""
         pass
 
     def get_api_key(self, credential: OAuthCredential) -> str:
+        """Return the access token used as a Bearer key for API calls."""
         return credential.access
 
     @property
     def api(self):
+        """Return the API class that handles requests with this provider's tokens."""
         from operator_use.inference.api.text.anthropic_claude_code import AnthropicClaudeCodeAPI
         return AnthropicClaudeCodeAPI
 
     async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:
+        """Return True if the credential is unexpired and accepted by the API."""
         if self.is_expired(credential):
             return False
         if signal and signal.is_set():

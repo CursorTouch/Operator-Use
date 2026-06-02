@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 
 class CronSchema(BaseModel):
+    """Input schema for the cron tool; validates required fields differ per action."""
     action: Literal['list', 'add', 'update', 'remove', 'enable', 'disable'] = Field(
         description=(
             'Action to perform:\n'
@@ -88,6 +89,7 @@ class CronSchema(BaseModel):
 
     @model_validator(mode='after')
     def _check_fields(self) -> 'CronSchema':
+        """Enforce that schedule parameters and job_id are present when required by the action."""
         if self.action == 'add':
             missing = [f for f, v in [('name', self.name), ('schedule_mode', self.schedule_mode), ('message', self.message)] if not v]
             if missing:
@@ -102,6 +104,7 @@ class CronSchema(BaseModel):
 
 
 def _format_job(job: CronJob) -> dict:
+    """Serialise a CronJob to a plain dict suitable for JSON output to the LLM."""
     sched = job.schedule
     if sched.mode == 'every' and sched.interval_ms:
         schedule_str = f'every {sched.interval_ms}ms'
@@ -126,6 +129,8 @@ def _format_job(job: CronJob) -> dict:
 
 
 class CronTool(Tool):
+    """Manage scheduled jobs that inject a prompt into the agent on a timer or cron expression."""
+
     def __init__(self, cron: Cron | None = None) -> None:
         super().__init__(
             name='cron',
@@ -152,6 +157,7 @@ class CronTool(Tool):
         return "Cron"
 
     def is_available(self, context) -> bool:
+        """Gate: cron must be enabled in settings and a Cron service must be present."""
         sm = context.settings_manager
         if sm is not None and sm.get_cron_enabled() is False:
             return False

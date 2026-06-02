@@ -7,11 +7,13 @@ from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMo
 
 
 def _file_hash(content: str) -> str:
+    """Compute a 4-hex CRC32 tag over content with trailing whitespace stripped so formatter runs don't invalidate it."""
     normalized = re.sub(r'[ \t\r]+(?=\n|$)', '', content)
     return format(zlib.crc32(normalized.encode('utf-8')) & 0xFFFF, '04X')
 
 
 class Edit(BaseModel):
+    """A single line-range mutation to apply atomically within a batch."""
     operation: Literal["replace", "delete", "insert_before", "insert_after", "insert_head", "insert_tail"] = Field(
         ...,
         description=(
@@ -47,6 +49,7 @@ class Edit(BaseModel):
 
 
 class EditSchema(BaseModel):
+    """Input schema for edit_file; requires a file hash to guard against concurrent edits."""
     path: str = Field(..., description="Absolute path or path relative to the current working directory.")
     file_hash: str = Field(
         ...,
@@ -67,6 +70,8 @@ class EditSchema(BaseModel):
 
 
 class EditTool(Tool):
+    """Apply one or more line-numbered edits to a file, using a hash guard to reject stale writes."""
+
     def __init__(self):
         super().__init__(
             name="edit_file",

@@ -54,6 +54,7 @@ _READABLE_KEYS = sorted({**_KEYS, **_AGENT_KEYS})
 
 
 class ControlCenterSchema(BaseModel):
+    """Input schema for control_center; validates that key and value are present for set actions."""
     action: Literal["get", "set", "reboot"] = Field(
         description=(
             "get    — read one or all settings. Omit `key` to list all.\n"
@@ -88,6 +89,7 @@ class ControlCenterSchema(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> ControlCenterSchema:
+        """Reject read-only keys and missing values on set before the tool even executes."""
         if self.action == "set":
             if not self.key:
                 raise ValueError("'key' is required when action='set'")
@@ -101,6 +103,8 @@ class ControlCenterSchema(BaseModel):
 
 
 class ControlCenterTool(Tool):
+    """Runtime settings inspector and mutator; supports get, set, and in-place process reboot."""
+
     def __init__(self) -> None:
         super().__init__(
             name="control_center",
@@ -135,6 +139,7 @@ class ControlCenterTool(Tool):
         return "Settings"
 
     def is_available(self, context: ToolContext) -> bool:
+        """Only expose the tool when a settings manager is present."""
         return context.settings_manager is not None
 
     async def execute(
@@ -166,6 +171,7 @@ class ControlCenterTool(Tool):
     # ------------------------------------------------------------------
 
     def _get_agent_value(self, key: str, context: ToolContext | None) -> Any:
+        """Read a live agent-level key (model or provider) directly from the running LLM."""
         agent = context.agent if context else None
         llm = getattr(getattr(agent, '_engine', None), 'llm', None)
         if llm is None:
@@ -177,6 +183,7 @@ class ControlCenterTool(Tool):
         return None
 
     def _get(self, invocation: ToolInvocation, sm: Any, key: str | None, context: ToolContext | None = None) -> ToolResult:
+        """Return a single setting (when key provided) or the full settings table as JSON."""
         if key is not None:
             if key not in _KEYS and key not in _AGENT_KEYS:
                 return ToolResult.error(
@@ -252,6 +259,7 @@ class ControlCenterTool(Tool):
         value: Any,
         context: ToolContext | None,
     ) -> ToolResult:
+        """Apply a settings change via the manager, persist it to the profile JSON, and reload if required."""
         # Agent-level keys: swap the running LLM in-place
         if key in _AGENT_KEYS:
             return await self._set_agent_key(invocation, key, value, context)
@@ -304,6 +312,7 @@ class ControlCenterTool(Tool):
         value: Any,
         context: ToolContext | None,
     ) -> ToolResult:
+        """Swap the live LLM in-place so the next turn uses a different model or provider without a full reload."""
         agent = context.agent if context else None
         engine = getattr(agent, '_engine', None)
         if engine is None:
@@ -398,6 +407,7 @@ class ControlCenterTool(Tool):
         origin_channel: str | None = None,
         origin_chat: str | None = None,
     ) -> None:
+        """Flush state, drain the bus, shut down the gateway, then exec() the fresh process in-place."""
         import os
         import sys
         from pathlib import Path

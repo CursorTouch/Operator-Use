@@ -74,12 +74,15 @@ class SubagentManager:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def update_profiles(self, profiles: list[SubagentProfile]) -> None:
+        """Replace the active profile map (called on settings reload)."""
         self._profiles = {p.name: p for p in profiles}
 
     def list_profiles(self) -> list[SubagentProfile]:
+        """Return all registered subagent profiles."""
         return list(self._profiles.values())
 
     def get_profile(self, name: str) -> SubagentProfile | None:
+        """Look up a profile by name, returning None if not found."""
         return self._profiles.get(name)
 
     def on_complete(
@@ -168,6 +171,7 @@ class SubagentManager:
         return task_id
 
     def cancel(self, task_id: str) -> bool:
+        """Cancel an in-flight task. Returns True if the cancellation was sent."""
         t = self._tasks.get(task_id)
         if t and not t.done():
             t.cancel()
@@ -175,17 +179,21 @@ class SubagentManager:
         return False
 
     def get_record(self, task_id: str) -> SubagentRecord | None:
+        """Return the record for a known task_id, or None if it was never spawned."""
         return self._records.get(task_id)
 
     def list_all(self) -> list[SubagentRecord]:
+        """Return all records, newest first."""
         return sorted(self._records.values(), key=lambda r: r.started_at, reverse=True)
 
     def pool_stats(self) -> dict:
+        """Return pending/running/completed counts from the underlying TaskPool."""
         return self._pool.stats()
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
     async def _run_and_announce(self, record: SubagentRecord) -> None:
+        """Execute the subagent, announce its result, then fire completion listeners."""
         await self._runner.run(record)
         try:
             await asyncio.shield(self._announce(record))
@@ -254,6 +262,7 @@ class SubagentManager:
         ))
 
     def _check_for_cycles(self, new_id: str, depends_on: list[str]) -> None:
+        """Raise ValueError if adding new_id would create a dependency cycle."""
         visited: set[str] = set()
         stack = list(depends_on)
         while stack:

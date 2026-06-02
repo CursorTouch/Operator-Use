@@ -79,13 +79,16 @@ class WorkflowManager:
         self._class_workflows[workflow.name] = workflow
 
     def list_workflows(self):
+        """Return (path_or_None, meta) pairs for all available workflows; class-based listed first."""
         file_based = self._loader.list_with_meta() if self._loader else []
         shadowed = set(self._class_workflows)
+        # File entries with the same name as a class workflow are hidden (shadowed).
         file_based = [(p, m) for p, m in file_based if m.name not in shadowed]
         class_based = [(None, w.meta()) for w in self._class_workflows.values()]
         return class_based + file_based
 
     def find_workflow(self, name: str) -> Path | None:
+        """Return the file path for a named file-based workflow, or None."""
         return self._loader.find(name) if self._loader else None
 
     async def invoke(

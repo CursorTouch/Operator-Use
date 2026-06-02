@@ -32,7 +32,10 @@ _DEFAULT_MAX_TOKENS = 8096
 
 
 class AnthropicMessagesAPI(BaseAPI):
+    """Streaming LLM API adapter for Anthropic Messages API (API-key auth)."""
+
     def __init__(self, options: LLMOptions) -> None:
+        """Initialise the AsyncAnthropic client with the supplied options."""
         super().__init__(options)
         self._client = AsyncAnthropic(
             api_key=options.api_key,
@@ -49,6 +52,7 @@ class AnthropicMessagesAPI(BaseAPI):
         messages: list[dict[str, Any]],
         tools: Optional[list[Tool]] = None,
     ) -> dict[str, Any]:
+        """Assemble the Anthropic API request payload, including thinking and tool configs."""
         params: dict[str, Any] = {
             "model": model.id,
             "messages": messages,
@@ -70,12 +74,14 @@ class AnthropicMessagesAPI(BaseAPI):
                 }
                 for tool in tools
             ]
+            # Cache the last tool definition to reduce repeated prompt-token charges.
             tool_defs[-1]["cache_control"] = {"type": "ephemeral"}
             params["tools"] = tool_defs
-            
+
         return params
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
+        """Stream LLMEvents from the Anthropic Messages API."""
         system, anthropic_messages = anthropic_messages_to_list(context.messages)
         if context.system_prompt:
             system = context.system_prompt
@@ -89,6 +95,7 @@ class AnthropicMessagesAPI(BaseAPI):
             if modified is not None:
                 params = modified
 
+        # Per-block accumulation buffers keyed by content block index.
         block_types: dict[int, str] = {}
         tool_ids: dict[int, str] = {}
         tool_names: dict[int, str] = {}

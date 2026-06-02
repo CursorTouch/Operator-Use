@@ -9,6 +9,8 @@ from pydantic import BaseModel
 
 
 class SubagentStatus(StrEnum):
+    """Lifecycle states for a subagent task."""
+
     running   = 'running'
     completed = 'completed'
     failed    = 'failed'
@@ -23,6 +25,7 @@ DeliveryMode = Literal['agent', 'channel']
 
 @dataclass
 class SubagentRecord:
+    """Mutable runtime record for one subagent invocation — created before launch, updated on completion."""
     task_id: str
     label: str
     task: str
@@ -48,6 +51,8 @@ class SubagentRecord:
 
 
 class SubagentSettings(BaseModel):
+    """User-configurable limits and retry policy for subagent execution."""
+
     enabled: bool = True
     max_concurrent: int = 10
     max_iterations: int = 20

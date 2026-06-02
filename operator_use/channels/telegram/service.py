@@ -40,6 +40,7 @@ class TelegramChannel(BaseChannel):
         streaming: bool = True,
         streaming_latency: float = 1.0,
     ) -> None:
+        """Configure the bot token, display options, and per-chat streaming state."""
         super().__init__()
         self._name = name
         self._token = token
@@ -227,11 +228,13 @@ class TelegramChannel(BaseChannel):
         self._typing_tasks[chat_id] = asyncio.create_task(_loop())
 
     def _stop_typing(self, chat_id: str) -> None:
+        """Cancel the periodic typing-action loop for a chat."""
         task = self._typing_tasks.pop(chat_id, None)
         if task:
             task.cancel()
 
     def _start_live_streaming(self, chat_id: str) -> None:
+        """Start a debounced loop that edits a single Telegram message with accumulated text."""
         self._stop_live_streaming(chat_id)
         self._live_msg_ids[chat_id] = None
         latency = self._streaming_latency
@@ -288,6 +291,7 @@ class TelegramChannel(BaseChannel):
         self._live_tasks[chat_id] = asyncio.create_task(_loop())
 
     def _stop_live_streaming(self, chat_id: str) -> None:
+        """Cancel the live-streaming loop for a chat if one is running."""
         task = self._live_tasks.pop(chat_id, None)
         if task:
             task.cancel()
@@ -322,6 +326,7 @@ class TelegramChannel(BaseChannel):
         self._thinking_tasks[chat_id] = asyncio.create_task(_loop())
 
     def _stop_thinking_stream(self, chat_id: str) -> None:
+        """Cancel the thinking-stream loop for a chat if one is running."""
         task = self._thinking_tasks.pop(chat_id, None)
         if task:
             task.cancel()

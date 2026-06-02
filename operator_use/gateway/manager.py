@@ -35,6 +35,7 @@ class GatewayManager:
     """
 
     def __init__(self, runtime: Runtime) -> None:
+        """Wire the gateway to the runtime and attach resource-loader hooks (STT/TTS)."""
         self._runtime = runtime
         self._settings = runtime.settings_manager
         self.gateway = Gateway(runtime)
@@ -65,6 +66,7 @@ class GatewayManager:
 
 
     def _on_profile_startup_done(self, task: asyncio.Task) -> None:
+        """Log any exception raised during profile startup without surfacing it to the caller."""
         if not task.cancelled() and task.exception() is not None:
             logger.error('Profile gateway startup failed: %s', task.exception(), exc_info=task.exception())
 
@@ -113,7 +115,7 @@ class GatewayManager:
         cfg,
         auth,
     ) -> None:
-        """Start individual channel tasks for a single profile."""
+        """Inspect each channel section in cfg and start an asyncio task for every enabled one."""
         from operator_use.channels.types import ChannelsSettings
 
         if cfg.websocket.enabled:
@@ -261,12 +263,14 @@ class GatewayManager:
     # ── Internal task helpers ─────────────────────────────────────────────────
 
     def _start_task(self, name: str, coro) -> None:
+        """Create and track an asyncio task for a channel coroutine, logging crashes on exit."""
         task = asyncio.create_task(coro, name=f'gateway:{name}')
         self._tasks.append(task)
         task.add_done_callback(lambda t: self._on_task_done(name, t))
         logger.info('Gateway channel started: %s', name)
 
     def _on_task_done(self, name: str, task: asyncio.Task) -> None:
+        """Log unhandled exceptions when a channel task exits unexpectedly."""
         if task.cancelled():
             return
         exc = task.exception()
@@ -274,10 +278,12 @@ class GatewayManager:
             logger.error('Gateway channel %r crashed: %s', name, exc, exc_info=exc)
 
     async def _run_websocket(self, cfg) -> None:
+        """Start a WebSocket server channel and run it until cancelled."""
         from operator_use.channels.websocket import WebSocketServer
         await WebSocketServer(self.gateway, host=cfg.host, port=cfg.port).start()
 
     async def _run_telegram(self, bot_token: str, tcfg, name: str = 'telegram') -> None:
+        """Build, register, and run a TelegramChannel until cancelled."""
         from operator_use.channels.telegram import TelegramChannel
         cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
         ch = TelegramChannel(
@@ -295,6 +301,7 @@ class GatewayManager:
         await ch.connect()
 
     async def _run_discord(self, bot_token: str, dcfg, name: str = 'discord') -> None:
+        """Build, register, and run a DiscordChannel until cancelled."""
         from operator_use.channels.discord import DiscordChannel
         cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
         ch = DiscordChannel(
@@ -313,6 +320,7 @@ class GatewayManager:
         await ch.connect()
 
     async def _run_slack(self, bot_token: str, app_token: str, scfg, name: str = 'slack') -> None:
+        """Build, register, and run a SlackChannel until cancelled."""
         from operator_use.channels.slack import SlackChannel
         cmds = [(c.name, c.description) for c in self._runtime.commands.list()]
         ch = SlackChannel(
@@ -331,6 +339,7 @@ class GatewayManager:
         await ch.connect()
 
     async def _run_twitch(self, cfg, token: str, name: str | None = None) -> None:
+        """Build, register, and run a TwitchChannel until cancelled."""
         from operator_use.channels.twitch import TwitchChannel
         ch = TwitchChannel(
             token=token,
@@ -344,6 +353,7 @@ class GatewayManager:
         await ch.connect()
 
     async def _run_email(self, cfg, username: str, password: str, name: str = 'email') -> None:
+        """Build, register, and run an EmailChannel until cancelled."""
         from operator_use.channels.email import EmailChannel
         ch = EmailChannel(
             username=username,
@@ -364,6 +374,7 @@ class _ProfileChannelAuth:
     """Simple holder for channel tokens loaded from a profile's auth/channels.json."""
 
     def __init__(self) -> None:
+        """Initialise all token fields to empty strings."""
         self.telegram_token: str = ''
         self.discord_token: str = ''
         self.slack_bot_token: str = ''

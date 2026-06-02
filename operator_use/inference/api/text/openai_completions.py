@@ -61,7 +61,10 @@ def _clean_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 class OpenAICompletionsAPI(BaseAPI):
+    """Streaming LLM API adapter for the OpenAI Chat Completions endpoint."""
+
     def __init__(self, options: LLMOptions) -> None:
+        """Initialise the AsyncOpenAI client with the supplied options."""
         super().__init__(options)
         self._client = AsyncOpenAI(
             api_key=options.api_key or "placeholder",
@@ -72,6 +75,7 @@ class OpenAICompletionsAPI(BaseAPI):
         )
 
     def _build_params(self, model: Model, messages: list[dict[str, Any]], tools: Optional[list[Tool]] = None) -> dict[str, Any]:
+        """Assemble the OpenAI Chat Completions request payload."""
         params: dict[str, Any] = {
             "model": model.id,
             "messages": messages,
@@ -99,6 +103,7 @@ class OpenAICompletionsAPI(BaseAPI):
         return params
 
     async def stream(self, context: LLMContext, model: Model) -> AsyncGenerator[LLMEvent, None]:  # type: ignore[override]
+        """Stream LLMEvents from the OpenAI Chat Completions API."""
         if self.options.api_key:
             self._client.api_key = self.options.api_key
         chat_messages = openai_messages_to_chat(context.messages)
@@ -118,7 +123,7 @@ class OpenAICompletionsAPI(BaseAPI):
         text_buf = ""
         thinking_started = False
         thinking_buf = ""
-        # tool call state keyed by delta index
+        # Tool-call accumulation state keyed by delta index (OpenAI streams partial tool calls per-index).
         tool_started: dict[int, bool] = {}
         tool_bufs: dict[int, str] = {}
         tool_meta: dict[int, dict[str, str]] = {}

@@ -7,6 +7,7 @@ from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMo
 MAX_TOOL_OUTPUT_LENGTH = 100000
 
 class GrepSchema(BaseModel):
+    """Input schema for the grep tool."""
     pattern: str = Field(
         ...,
         description="Search pattern (regex or literal string)",
@@ -37,6 +38,8 @@ class GrepSchema(BaseModel):
     )
 
 class GrepTool(Tool):
+    """Text search tool; scans files with regex or literal matching and optional surrounding context lines."""
+
     def __init__(self):
         super().__init__(
             name="grep",

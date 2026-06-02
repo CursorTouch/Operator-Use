@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class WorkflowAgentCapError(RuntimeError):
-    """Raised when a run exceeds its hard agent()-call cap (runaway-loop guard)."""
+    """Raised when a workflow run exceeds its hard agent()-call cap (runaway-loop guard)."""
 
 
 @dataclass
@@ -47,6 +47,8 @@ class WorkflowInvocation:
 
 
 class WorkflowStatus(StrEnum):
+    """Lifecycle states for a workflow run."""
+
     running   = 'running'
     completed = 'completed'
     failed    = 'failed'
@@ -55,6 +57,8 @@ class WorkflowStatus(StrEnum):
 
 @dataclass
 class WorkflowMeta:
+    """Static metadata for a workflow, extracted from its `meta` dict or class attributes."""
+
     name: str
     description: str
     when_to_use: str | None = None
@@ -64,6 +68,8 @@ class WorkflowMeta:
 
 @dataclass
 class WorkflowRunRecord:
+    """Mutable runtime record for one workflow run — updated in-place as the run progresses."""
+
     run_id: str
     workflow_name: str
     status: WorkflowStatus
@@ -92,9 +98,11 @@ class WorkflowJournal:
                 self._cache = {}
 
     def get(self, prompt: str, opts: dict) -> Any | None:
+        """Return a cached result for (prompt, opts), or None on a miss."""
         return self._cache.get(self._key(prompt, opts))
 
     def set(self, prompt: str, opts: dict, result: Any) -> None:
+        """Store a result for (prompt, opts) and flush to disk if a path is configured."""
         self._cache[self._key(prompt, opts)] = result
         if self._path:
             try:
@@ -103,6 +111,7 @@ class WorkflowJournal:
                 pass
 
     def _key(self, prompt: str, opts: dict) -> str:
+        """Produce a stable 16-hex-char key from prompt + options."""
         payload = json.dumps({'prompt': prompt, **opts}, sort_keys=True)
         return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
@@ -129,6 +138,7 @@ class Workflow(ABC):
 
     @classmethod
     def meta(cls) -> WorkflowMeta:
+        """Build a WorkflowMeta from the class-level attributes."""
         return WorkflowMeta(
             name=cls.name,
             description=cls.description,

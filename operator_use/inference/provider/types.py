@@ -16,6 +16,8 @@ __all__ = ["AuthType", "APIProvider", "OAuthProvider", "ImageProvider", "AudioPr
 
 @dataclass
 class OAuthProvider(ABC):
+    """Base for providers that authenticate via OAuth rather than a static API key."""
+
     id: str
     name: str
     auth_type: AuthType = AuthType.OAuth
@@ -41,9 +43,12 @@ class OAuthProvider(ABC):
     async def validate(self, credential: "OAuthCredential", signal: Optional["AbortSignal"] = None) -> bool: ...
 
     def is_expired(self, credential: "OAuthCredential") -> bool:
+        """Return True if the token expires within the next 30 seconds."""
+        # 30-second buffer prevents using a token that expires mid-request
         return int(time.time() * 1000) + 30_000 >= credential.expires
 
     async def ensure_fresh(self, credential: "OAuthCredential", signal: Optional["AbortSignal"] = None) -> "OAuthCredential":
+        """Return a valid credential, transparently refreshing if expired."""
         if self.is_expired(credential):
             return await self.refresh_token(credential=credential, signal=signal)
         return credential
@@ -51,6 +56,8 @@ class OAuthProvider(ABC):
 
 @dataclass
 class APIProvider:
+    """Provider that authenticates with a static API key stored in LLMOptions."""
+
     id: str
     name: str
     api: Union[str, Type["BaseLLMAPI"]]
@@ -59,14 +66,18 @@ class APIProvider:
     supported_transports: list[Transport] = field(default_factory=lambda: [Transport.HTTP])
 
     def get_api_key(self) -> Optional[str]:
+        """Return the configured API key, or None if not set."""
         return self.options.api_key
 
     def get_base_url(self) -> Optional[str]:
+        """Return the configured base URL override, or None to use the default."""
         return self.options.base_url
 
 
 @dataclass
 class ImageProvider:
+    """Provider descriptor for image generation APIs."""
+
     name: str
     api: str
     base_url: str
@@ -75,6 +86,8 @@ class ImageProvider:
 
 @dataclass
 class AudioProvider:
+    """Provider descriptor for speech-to-text and text-to-speech APIs."""
+
     name: str
     api: str
     base_url: Optional[str] = None
@@ -83,6 +96,8 @@ class AudioProvider:
 
 @dataclass
 class VideoProvider:
+    """Provider descriptor for video generation APIs."""
+
     name: str
     api: str
     base_url: Optional[str] = None

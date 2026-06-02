@@ -10,6 +10,7 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 
 
 class ComputerAction(str, Enum):
+    """Enumeration of all supported desktop automation actions."""
     open = "open"
     close = "close"
     click = "click"
@@ -54,6 +55,7 @@ class CaretPosition(str, Enum):
 
 
 class ComputerSchema(BaseModel):
+    """Input schema for the computer tool; validates that required coordinates and names are present for each action."""
     action: ComputerAction = Field(
         description=(
             "Computer action to perform: open (enable desktop access), "
@@ -80,6 +82,7 @@ class ComputerSchema(BaseModel):
     shortcut: str | None = Field(default=None, description="Keyboard shortcut such as command+c or ctrl+c.")
     @model_validator(mode="after")
     def _check_action_fields(self) -> ComputerSchema:
+        """Raise ValueError when a required field is absent for the chosen action."""
         loc = self.loc or ((self.x, self.y) if self.x is not None and self.y is not None else None)
         if self.action in {ComputerAction.click, ComputerAction.type, ComputerAction.move, ComputerAction.drag} and loc is None:
             raise ValueError("'loc' or both 'x' and 'y' are required for this action")
@@ -98,6 +101,8 @@ class ComputerSchema(BaseModel):
 
 
 class ComputerTool(Tool):
+    """Desktop automation tool that drives mouse, keyboard, and application management."""
+
     def __init__(self) -> None:
         super().__init__(
             name="computer",
@@ -136,6 +141,7 @@ class ComputerTool(Tool):
         return "Computer"
 
     def is_available(self, context: ToolContext) -> bool:
+        """Gate: requires a Desktop object and computer_use not explicitly disabled."""
         if context.desktop is None:
             return False
         sm = context.settings_manager
@@ -213,6 +219,7 @@ class ComputerTool(Tool):
             return ToolResult.error(id=invocation.id, content=f"computer: {exc}")
 
     def _run_action(self, desktop: Any, params: ComputerSchema) -> str:
+        """Dispatch the validated action to the Desktop driver and return a human-readable result."""
         loc = self._loc(params)
         match params.action:
             case ComputerAction.click:
@@ -262,6 +269,7 @@ class ComputerTool(Tool):
         return f"Unknown action: {params.action.value}"
 
     def _loc(self, params: ComputerSchema) -> tuple[int, int] | None:
+        """Resolve the target coordinate from either loc or the x/y fallback fields."""
         if params.loc is not None:
             return params.loc
         if params.x is not None and params.y is not None:
@@ -269,6 +277,7 @@ class ComputerTool(Tool):
         return None
 
     def _to_jsonable(self, value: Any) -> Any:
+        """Recursively convert an arbitrary Desktop driver return value to a JSON-safe structure."""
         if dataclasses.is_dataclass(value):
             return {
                 field.name: self._to_jsonable(getattr(value, field.name))

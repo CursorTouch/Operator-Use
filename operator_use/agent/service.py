@@ -62,6 +62,7 @@ class Agent(ExtensionContext):
         config: AgentConfig,
         memory_manager: MemoryManager | None = None,
     ) -> None:
+        """Wire together all subsystems and register engine-level callbacks."""
         self._engine = engine
         self._session_manager = session_manager
         self._resources = resource_loader
@@ -79,6 +80,7 @@ class Agent(ExtensionContext):
         self._skill_review = SkillReviewTracker()
         self._memory_review = MemoryReviewTracker()
         def _make_judge_llm():
+            """Build an LLM instance for goal judging, falling back to the main engine LLM if no auxiliary task is configured."""
             try:
                 from operator_use.settings.manager import SettingsManager
                 _sm = SettingsManager.get_instance()
@@ -114,6 +116,7 @@ class Agent(ExtensionContext):
 
     @property
     def hooks(self):
+        """Expose the extension runtime's hook registry for direct hook registration."""
         return self._extensions._hooks
 
     # -------------------------------------------------------------------------
@@ -122,26 +125,32 @@ class Agent(ExtensionContext):
 
     @property
     def cwd(self) -> Path:
+        """Working directory for tool execution, sourced from AgentConfig."""
         return self._config.cwd
 
     @property
     def session_manager(self) -> Any:
+        """Underlying session manager; exposed so extensions can query history."""
         return self._session_manager
 
     @property
     def model(self) -> Any | None:
+        """Configured model identifier, or None when using the provider default."""
         return self._config.model
 
     @property
     def model_registry(self) -> Any:
+        """Live model registry from the inference layer."""
         return self._engine.llm._models
 
     @property
     def signal(self) -> Any:
+        """Abort signal that extensions can observe or trigger."""
         return self._engine._signal
 
     @property
     def _last_assistant_text(self) -> str:
+        """Return concatenated text content of the most-recent assistant message, empty string if none."""
         for message in reversed(self._engine.state.messages):
             if message.role == Role.ASSISTANT:
                 parts = [
@@ -152,22 +161,28 @@ class Agent(ExtensionContext):
         return ""
 
     def is_idle(self) -> bool:
+        """True when no engine streaming is in progress."""
         return self._engine.is_idle
 
     def has_pending_messages(self) -> bool:
+        """True when at least one message is queued in the engine for the next turn."""
         return self._engine.has_pending_messages()
 
     def abort(self) -> None:
+        """Signal the engine to cancel the current streaming turn."""
         self._engine.abort()
 
     def shutdown(self) -> None:
+        """Alias for abort; used by callers that manage agent lifecycle."""
         self._engine.abort()
 
     async def steer(self, text: str) -> None:
+        """Inject a mid-turn steering message into the engine's steering queue."""
         msg = UserMessage.text(text)
         await self._engine.steer(msg)
 
     def get_context_usage(self) -> ContextUsage | None:
+        """Return current token usage relative to the configured context window, or None if not yet known."""
         if not self._context_tokens:
             return None
         percent = (self._context_tokens / self._context_window * 100) if self._context_window else None
@@ -178,10 +193,12 @@ class Agent(ExtensionContext):
         )
 
     def get_system_prompt(self) -> str:
+        """Return the cached system prompt from the most recent turn."""
         return self._system_prompt
 
     @property
     def goal_manager(self) -> GoalManager:
+        """Goal lifecycle manager; extensions use this to set or inspect the active goal."""
         return self._goal_manager
 
     def compact(self, options: CompactOptions | None = None) -> None:
@@ -190,7 +207,7 @@ class Agent(ExtensionContext):
         self._compact_options = options
 
     async def run_compaction(self, custom_instructions: str | None = None) -> bool:
-        """Run compaction immediately while the agent is idle."""
+        """Run compaction immediately and emit save_point/settled events; raises if the agent is busy."""
         if self._phase != "idle":
             raise RuntimeError(f"Agent is busy (phase={self._phase!r}). Wait for the current operation to finish.")
 
@@ -204,21 +221,26 @@ class Agent(ExtensionContext):
         return True
 
     async def reload(self) -> None:
+        """Reload all resources (tools, skills, prompts) and invalidate the system-prompt cache."""
         await self._resources.reload()
         self._system_prompt_cache.clear()
 
     async def wait_for_idle(self) -> None:
+        """Block until the engine finishes any in-progress streaming turn."""
         await self._engine.wait_for_idle()
 
     async def new_session(self) -> None:
+        """Delegate session creation to the runtime (no-op when no runtime is attached)."""
         if self._runtime is not None:
             await self._runtime.new_session()
 
     async def fork(self, entry_id: str) -> None:
+        """Delegate session forking from a specific history entry to the runtime."""
         if self._runtime is not None:
             await self._runtime.fork_session(entry_id)
 
     async def switch_session(self, session_file: Path) -> None:
+        """Delegate session switching to the runtime."""
         if self._runtime is not None:
             await self._runtime.resume_session(session_file)
 
@@ -299,6 +321,7 @@ class Agent(ExtensionContext):
         invocation: ToolInvocation,
         signal: object,
     ) -> ToolInvocation | ToolResultContent | None:
+        """Fan out the tool_call event; returning ToolResultContent short-circuits execution."""
         if invocation.name != 'skill':
             self._skill_review.on_tool_call()
         if invocation.name != 'memory':
@@ -336,6 +359,7 @@ class Agent(ExtensionContext):
         result: ToolResult,
         signal: object,
     ) -> ToolResult | None:
+        """Fan out the tool_result event; extensions may override content, error flag, or terminate."""
         results = await self._extensions.emit(
             'tool_result',
             ToolResultEvent(
@@ -390,6 +414,7 @@ class Agent(ExtensionContext):
         self._engine.llm = self._baseline_llm
 
     def get_active_profile(self) -> AgentProfile | None:
+        """Return the currently-active named agent profile, or None if running under the global config."""
         return self._active_profile
 
     def _sync_tools_from_resources(self, allowlist: list[str]) -> None:
@@ -410,6 +435,7 @@ class Agent(ExtensionContext):
         self._engine.state.tools = list(filtered)
 
     def _rebuild_system_prompt(self, channel: str | None = None) -> str:
+        """Assemble the full system prompt from SOUL.md, AGENT.md, SYSTEM.md, and appended parts."""
         skills, _ = self._resources.get_skills()
         # SYSTEM.md fully overrides identity; the AGENT.md body is the operation
         # manual, which sits alongside SOUL.md rather than replacing it.
@@ -442,6 +468,7 @@ class Agent(ExtensionContext):
     def _register_message_handler(self, persisted_ids: list[str], error_holder: list[AssistantMessage]) -> Callable:
         """Register a message_end hook that persists messages and tracks token usage."""
         async def _on_message_end(event: MessageEndEvent) -> None:
+            """Persist completed messages to session and update token usage; hold back error messages until final failure."""
             message = event.message
             if message is None:
                 return
@@ -526,6 +553,7 @@ class Agent(ExtensionContext):
         )
 
     def _active_todo_injection(self) -> str | None:
+        """Return a formatted todo list for prompt injection if the todo tool is loaded and has items."""
         for tool in self._engine.state.tools:
             formatter = getattr(tool, 'format_for_injection', None)
             if tool.name == 'todo' and callable(formatter):
@@ -535,6 +563,7 @@ class Agent(ExtensionContext):
         return None
 
     def _hydrate_todo_store(self, messages: list[Any]) -> None:
+        """Replay message history into the todo tool's in-memory store so it reflects persisted state."""
         for tool in self._engine.state.tools:
             hydrator = getattr(tool, 'hydrate_from_messages', None)
             if tool.name == 'todo' and callable(hydrator):
@@ -559,6 +588,7 @@ class Agent(ExtensionContext):
         # Start memory prefetch as a background task so the sync prompt rebuild
         # runs while the SQLite / vector search is in flight.
         async def _prefetch() -> str:
+            """Retrieve recalled memory context relevant to the incoming user input."""
             if self._memory_manager:
                 return await self._memory_manager.prefetch(
                     user_input, session_id=self._session_manager.session_id or ""
@@ -742,6 +772,7 @@ class Agent(ExtensionContext):
             await self._extensions.emit('settled', SettledEvent())
 
     async def _continue_goal_if_needed(self) -> bool:
+        """Evaluate the active goal after a turn and re-invoke the agent if continuation is needed."""
         if not self._goal_manager.is_active():
             return False
 
@@ -753,6 +784,7 @@ class Agent(ExtensionContext):
         return False
 
     async def _run_with_retry(self, ctx: AgentContext, user_entry_id: str) -> None:
+        """Run the engine loop with exponential-backoff retry; rewinds session on transient failures."""
         max_retries = self._config.retry_max_retries if self._config.retry_enabled else 0
         base_delay_s = self._config.retry_base_delay_ms / 1000
 
@@ -833,6 +865,7 @@ class Agent(ExtensionContext):
     # -------------------------------------------------------------------------
 
     async def _run_compaction(self, custom_instructions: str | None = None) -> bool:
+        """Execute compaction: prepare, run strategy, append compaction entry, and emit events."""
         self._compact_requested = False
         compact_opts = self._compact_options
         self._compact_options = None

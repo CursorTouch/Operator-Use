@@ -16,6 +16,7 @@ class WorkflowLoader:
         self._dirs = [d for d in dirs if d is not None]
 
     def find(self, name: str) -> Path | None:
+        """Return the path of the first matching workflow file, or None if not found."""
         for d in self._dirs:
             path = d / f'{name}.py'
             if path.exists():
@@ -23,6 +24,7 @@ class WorkflowLoader:
         return None
 
     def discover(self) -> list[Path]:
+        """Return all workflow .py files across configured dirs; first-found name wins."""
         seen: set[str] = set()
         result: list[Path] = []
         for d in self._dirs:
@@ -36,6 +38,7 @@ class WorkflowLoader:
         return result
 
     def list_with_meta(self) -> list[tuple[Path, WorkflowMeta]]:
+        """Return (path, meta) pairs for all discovered workflows; falls back to stem name on parse error."""
         result = []
         for path in self.discover():
             try:
