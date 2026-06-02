@@ -619,6 +619,7 @@ class Gateway:
         reply_to = (msg_metadata or {}).get('reply_to')
         msg_meta = MessageMeta(
             reply_to=str(reply_to) if reply_to else None,
+            channel_message_id=message_id or None,
             attachments=attachments or None,
         )
 

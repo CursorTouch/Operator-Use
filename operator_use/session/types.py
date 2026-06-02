@@ -77,6 +77,7 @@ class MessageAttachment(BaseModel):
 
 class MessageMeta(BaseModel):
     reply_to: str | None = None                      # message_id this is replying to
+    channel_message_id: str | None = None            # channel-side message ID (for reaction lookup)
     attachments: list[MessageAttachment] | None = None
     reactions: list[str] | None = None
 

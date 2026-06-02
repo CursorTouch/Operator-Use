@@ -55,13 +55,11 @@ class SendSchema(BaseModel):
     emoji: str | None = Field(
         default=None,
         description=(
-            'Emoji to react with. Required when action=react. '
-            'For Slack: emoji name without colons (e.g. "thumbsup", "white_check_mark"). '
-            'For Telegram: must be one of the 74 allowed reaction emojis '
-            '(e.g. "👍", "👎", "❤", "🔥", "🥰", "👏", "😁", "🤔", "😢", "🎉", "🤩", "💩", '
-            '"🙏", "👌", "🤡", "🥱", "😍", "💯", "🤣", "⚡", "🏆", "😭", "👻", "👀", "😇", '
-            '"🤗", "✍", "🫡", "🤪", "🗿", "🆒", "🦄", "😎", "👾", "😡"). '
-            'For Discord: any standard emoji character or custom emoji.'
+            'Unicode emoji character to react with. Required when action=react. '
+            'Use the actual emoji character, not a shortcode (e.g. "👍" not "+1"). '
+            'Supported: "👍" "👎" "❤" "🔥" "🥰" "👏" "😁" "🤔" "😢" "🎉" "🤩" "💩" '
+            '"🙏" "👌" "🤡" "🥱" "😍" "💯" "🤣" "⚡" "🏆" "😭" "👻" "👀" "😇" '
+            '"🤗" "✍" "🫡" "🤪" "🗿" "🆒" "🦄" "😎" "👾" "😡".'
         ),
     )
     message_id: str | None = Field(
@@ -154,7 +152,7 @@ class SendTool(Tool):
             case SendAction.intermediate:
                 return await self._send_intermediate(invocation, channel, chat_id, params, bus)
             case SendAction.react:
-                return await self._send_react(invocation, channel, chat_id, params, bus)
+                return await self._send_react(invocation, channel, chat_id, params, bus, context)
             case _:
                 return ToolResult.error(id=invocation.id, content=f"send: unknown action '{action}'.")
 
@@ -224,6 +222,7 @@ class SendTool(Tool):
         chat_id: str,
         params: dict,
         bus,
+        context: ToolContext | None = None,
     ) -> ToolResult:
         from operator_use.bus.types import OutgoingMessage
 
@@ -241,6 +240,11 @@ class SendTool(Tool):
             chat_id=chat_id,
             metadata={'kind': 'react', 'message_id': target_id, 'emoji': emoji},
         ))
+
+        sm = context.session_manager if context else None
+        if sm and emoji:
+            sm.add_reaction(target_id, emoji)
+
         return ToolResult.ok(id=invocation.id, content=f'Reaction {emoji!r} sent.')
 
 

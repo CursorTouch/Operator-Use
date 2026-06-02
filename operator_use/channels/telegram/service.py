@@ -614,7 +614,16 @@ class TelegramChannel(BaseChannel):
         elif phase is None:
             kind = metadata.get('kind')
             if kind == 'react':
-                emoji = metadata.get('emoji', '👍')
+                _SHORTCODE_MAP = {
+                    '+1': '👍', 'thumbsup': '👍', 'thumbs_up': '👍',
+                    '-1': '👎', 'thumbsdown': '👎', 'thumbs_down': '👎',
+                    'heart': '❤', 'fire': '🔥', 'clap': '👏',
+                    'tada': '🎉', 'pray': '🙏', 'ok': '👌',
+                    'eyes': '👀', 'cry': '😢', 'joy': '🤣',
+                    'thinking': '🤔', 'ok_hand': '👌', 'handshake': '🤝',
+                }
+                raw_emoji = str(metadata.get('emoji') or '👍')
+                emoji = _SHORTCODE_MAP.get(raw_emoji.strip(':'), raw_emoji)
                 message_id = metadata.get('message_id')
                 if message_id is not None:
                     try:
@@ -625,7 +634,7 @@ class TelegramChannel(BaseChannel):
                             [ReactionTypeEmoji(emoji)],
                         )
                     except Exception:
-                        logger.debug("TelegramChannel: set_message_reaction failed for %r", message_id)
+                        logger.exception("TelegramChannel: set_message_reaction failed for %r", message_id)
                 return
 
             # Direct send (out-of-band) — handles TTS audio, files, and plain text

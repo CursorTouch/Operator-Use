@@ -520,7 +520,7 @@ class SlackChannel(BaseChannel):
         elif phase is None:
             kind = metadata.get('kind')
             if kind == 'react':
-                emoji = emoji_to_slack_name(metadata.get('emoji', 'thumbsup'))
+                emoji = emoji_to_slack_name(str(metadata.get('emoji') or '👍'))
                 message_id = metadata.get('message_id', '')
                 if client is not None and message_id:
                     try:

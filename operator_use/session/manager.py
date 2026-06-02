@@ -182,6 +182,20 @@ class SessionManager:
         self._rewrite_file()
         return True
 
+    def add_reaction(self, channel_message_id: str, emoji: str) -> bool:
+        """Append an emoji reaction to the MessageEntry matching the given channel-side message ID."""
+        for entry in self.entries:
+            if not isinstance(entry, MessageEntry):
+                continue
+            if entry.meta and entry.meta.channel_message_id == channel_message_id:
+                if entry.meta.reactions is None:
+                    entry.meta.reactions = []
+                if emoji not in entry.meta.reactions:
+                    entry.meta.reactions.append(emoji)
+                self._rewrite_file()
+                return True
+        return False
+
     def append_channel_entry(self, name: str, chat_id: str | None = None, user_id: str | None = None) -> str:
         entry = ChannelEntry(name=name, chat_id=chat_id, user_id=user_id, parent_id=self.leaf_id)
         return self._append_entry(entry)
