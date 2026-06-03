@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 async def _handle_skills(registry: CommandRegistry, _args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     runtime = registry.runtime
     if runtime is None:
         print("No runtime attached.")

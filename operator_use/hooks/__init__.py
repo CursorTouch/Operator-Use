@@ -1,3 +1,5 @@
+"""Hooks system: event types and service for agent lifecycle events."""
+
 from operator_use.hooks.service import Hooks
 from operator_use.hooks.types import (
     # Session lifecycle

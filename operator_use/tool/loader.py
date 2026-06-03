@@ -38,12 +38,14 @@ def load_tool_from_file(path: Path) -> tuple[list[Tool], list[ToolError]]:
 
         if hasattr(module, 'tools'):
             value = module.tools
+            # Support factories that return tool lists
             if callable(value):
                 value = value()
             if isinstance(value, list):
                 loaded.extend(t for t in value if isinstance(t, Tool))
         elif hasattr(module, 'tool'):
             value = module.tool
+            # Support factories that return a single tool
             if callable(value) and not isinstance(value, Tool):
                 value = value()
             if isinstance(value, Tool):
@@ -94,6 +96,7 @@ def load_tools(dirs: list[Path]) -> LoadToolsResult:
         result = load_tools_from_dir(directory)
         all_errors.extend(result.errors)
         for tool in result.tools:
+            # First occurrence of a tool name wins (builtin precedence via load order)
             if tool.name not in seen:
                 seen.add(tool.name)
                 all_tools.append(tool)

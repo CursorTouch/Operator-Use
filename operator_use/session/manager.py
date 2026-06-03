@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Callable
+from typing import Any, Callable, List
 from datetime import datetime
 from pathlib import Path
 
@@ -650,7 +650,7 @@ class SessionManager:
         return sessions
 
     @staticmethod
-    def list_all(on_progress: Callable[[int, int], None] | None = None) -> list[SessionInfo]:
+    def list_all(on_progress: Callable[[int, int], None] | None = None) -> List[SessionInfo]:
         """List sessions across all profiles."""
         profiles_dir = get_profiles_dir()
         if not profiles_dir.exists():

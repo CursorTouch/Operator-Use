@@ -28,22 +28,21 @@ class FileSettingsStorage(SettingsStorage):
 
     def _ensure_parent_dir(self, path: Path) -> None:
         """Create the parent directory with restricted permissions (0o700) if absent."""
+        # Restrict to user-only access for security
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     def _ensure_file_exists(self, path: Path) -> None:
         """Create an empty JSON object file with restricted permissions (0o600) if absent."""
         if not path.exists():
             path.write_text("{}", encoding="utf-8")
+            # Restrict to user-only read/write for security
             path.chmod(0o600)
 
     def with_lock(self, scope: SCOPE, fn: Callable[[str | None], LockResult]) -> LockResult:
         """Acquire a file lock for the scope, pass current content to fn, and write fn's result."""
         path = self.global_settings_path if scope == SCOPE.GLOBAL else self.project_settings_path
 
-        # Never auto-create the project-level .operator/ directory.
-        # FileLock creates parent dirs automatically; guard against that by
-        # checking upfront.  If the directory doesn't already exist, treat
-        # project settings as empty and silently drop any writes.
+        # Never auto-create .operator/ for project scope; FileLock would auto-create parent dirs
         if scope == SCOPE.PROJECT and not path.parent.exists():
             result = fn(None)
             return LockResult(result=result.result, next=None)
@@ -54,6 +53,7 @@ class FileSettingsStorage(SettingsStorage):
             self._ensure_file_exists(path)
             current = path.read_text(encoding="utf-8") if path.exists() else "{}"
             result = fn(current)
+            # Persist new content only if fn returned a non-None next value
             if result.next is not None:
                 path.write_text(result.next, encoding="utf-8")
             return result

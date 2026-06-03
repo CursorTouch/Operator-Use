@@ -1,3 +1,4 @@
+"""todo — Create and manage task lists with status tracking (pending, in_progress, completed, etc.)."""
 from __future__ import annotations
 
 import json
@@ -150,6 +151,7 @@ class TodoTool(Tool):
         self.store = store or TodoStore()
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the action."""
         if args.get('todos') is None:
             return "Reading tasks"
         return "Updating tasks" if args.get('merge') else "Writing tasks"
@@ -198,6 +200,7 @@ class TodoTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch the requested action."""
         params = invocation.params
         todos = params.get('todos')
         merge = bool(params.get('merge', False))

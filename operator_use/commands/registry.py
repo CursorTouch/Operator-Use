@@ -28,11 +28,13 @@ class CommandRegistry:
         return load_commands_from_dir(get_builtins_commands_dir()).commands
 
     def register(self, command: SlashCommandInfo) -> None:
+        """Register a command and its aliases in the registry."""
         self._commands[command.name] = command
         for alias in command.aliases:
             self._commands[alias] = command
 
     def register_from_extensions(self, ext_commands: dict[str, Any]) -> None:
+        """Register commands provided by extensions."""
         for name, registered in ext_commands.items():
             cmd = SlashCommandInfo(
                 name=name,
@@ -42,9 +44,11 @@ class CommandRegistry:
             self.register(cmd)
 
     def get(self, name: str) -> SlashCommandInfo | None:
+        """Look up a command by name or alias, returning None if not found."""
         return self._commands.get(name)
 
     def list(self) -> list[SlashCommandInfo]:
+        """Return all unique registered commands (deduplicating aliases)."""
         seen: set[str] = set()
         result: list[SlashCommandInfo] = []
         for cmd in self._commands.values():
@@ -54,6 +58,7 @@ class CommandRegistry:
         return result
 
     async def dispatch(self, parsed: CommandParseResult) -> bool:
+        """Find and invoke a command handler; return True if dispatched, False if not found."""
         cmd = self._commands.get(parsed.name)
         if cmd is None:
             print(f"Unknown command: /{parsed.name}. Type /help for a list of commands.")

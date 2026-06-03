@@ -51,6 +51,7 @@ _DEFAULT_DB_NAME = "lcm.db"
 
 
 class LCMCompaction(Compaction):
+    """Lossless Context Management: hierarchical DAG compaction with full-text search retrieval."""
     def __init__(
         self,
         llm: LLM,
@@ -59,6 +60,7 @@ class LCMCompaction(Compaction):
         session_id_provider: Callable[[], str] | None = None,
         db_path: Path | None = None,
     ) -> None:
+        """Initialize LCM with message store and summary DAG."""
         self.llm = llm
         self.settings = settings or LCMSettings()
         self._settings_provider = settings_provider
@@ -70,6 +72,7 @@ class LCMCompaction(Compaction):
 
     @staticmethod
     def _default_db_path() -> Path:
+        """Resolve default database path to ~/.operator/lcm.db."""
         from pathlib import Path as _Path
         home = _Path.home()
         db_dir = home / ".operator"
@@ -78,11 +81,13 @@ class LCMCompaction(Compaction):
 
     @property
     def _settings(self) -> LCMSettings:
+        """Resolve settings dynamically if a provider is configured."""
         if self._settings_provider is not None:
             return self._settings_provider()
         return self.settings
 
     def _get_session_id(self) -> str:
+        """Get session ID from provider or return default."""
         if self._session_id_provider is not None:
             sid = self._session_id_provider()
             if sid:
@@ -94,12 +99,14 @@ class LCMCompaction(Compaction):
     # -------------------------------------------------------------------------
 
     def should_compact(self, context_tokens: int, context_window: int) -> bool:
+        """Trigger compaction when context exceeds reserve_tokens threshold."""
         settings = self._settings
         if not settings.enabled:
             return False
         return context_tokens > context_window - settings.reserve_tokens
 
     def prepare(self, path_entries: list[SessionEntry]) -> CompactionPreparation | None:
+        """Prepare LCM compaction, finding messages to archive and summarize."""
         settings = self._settings
 
         if path_entries and isinstance(path_entries[-1], CompactionEntry):
@@ -158,6 +165,7 @@ class LCMCompaction(Compaction):
         custom_instructions: str | None = None,
         thinking_level: ThinkingLevel | None = None,
     ) -> CompactionResult:
+        """Archive, summarize, build DAG, and inject active context summary."""
         session_id = self._get_session_id()
         settings = self._settings
         all_messages = preparation.messages_to_summarize + preparation.turn_prefix_messages

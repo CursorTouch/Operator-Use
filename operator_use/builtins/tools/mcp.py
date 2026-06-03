@@ -62,6 +62,7 @@ class MCPTool(Tool):
         self._agent_id = agent_id
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the MCP action and server."""
         action = args.get('action', '')
         server_name = args.get('server_name', '') or ''
         if action == 'list': return "Listing MCP servers"
@@ -70,6 +71,7 @@ class MCPTool(Tool):
         return "MCP"
 
     def is_available(self, context) -> bool:
+        """Check that an MCP manager is configured and available."""
         return (self._manager or context.mcp_manager) is not None
 
     async def execute(
@@ -79,6 +81,7 @@ class MCPTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch list/connect/disconnect operations for MCP servers."""
         manager = self._manager or (context.mcp_manager if context else None)
         engine = self._engine or (context.engine if context else None)
         if manager is None:

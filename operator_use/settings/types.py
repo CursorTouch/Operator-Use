@@ -109,8 +109,9 @@ class ThinkingBudgetsSettings:
 
 @dataclass
 class ImageSettings:
-    auto_resize: Optional[bool] = None    # resize images to 2000×2000 max before sending to LLM (default: True)
-    block_images: Optional[bool] = None   # prevent all images from being sent to the LLM (default: False)
+    """Image preprocessing and filtering knobs."""
+    auto_resize: Optional[bool] = None    # Resize to 2000×2000 max before LLM (default: True)
+    block_images: Optional[bool] = None   # Prevent all images from LLM (default: False)
 
 
 @dataclass

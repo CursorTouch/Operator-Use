@@ -25,22 +25,34 @@ class OAuthProvider(ABC):
 
     @property
     @abstractmethod
-    def api(self) -> Type["BaseLLMAPI"]: ...
+    def api(self) -> Type["BaseLLMAPI"]:
+        """Return the LLM API class for this provider."""
+        ...
 
     @abstractmethod
-    async def login(self, callbacks: "OAuthLoginCallbacks") -> "OAuthCredential": ...
+    async def login(self, callbacks: "OAuthLoginCallbacks") -> "OAuthCredential":
+        """Authenticate with the provider and return a credential."""
+        ...
 
     @abstractmethod
-    async def refresh_token(self, credential: "OAuthCredential", signal: Optional["AbortSignal"] = None) -> "OAuthCredential": ...
+    async def refresh_token(self, credential: "OAuthCredential", signal: Optional["AbortSignal"] = None) -> "OAuthCredential":
+        """Refresh an expired credential."""
+        ...
 
     @abstractmethod
-    async def logout(self, credential: "OAuthCredential") -> None: ...
+    async def logout(self, credential: "OAuthCredential") -> None:
+        """Revoke the credential and clean up."""
+        ...
 
     @abstractmethod
-    def get_api_key(self, credential: "OAuthCredential") -> str: ...
+    def get_api_key(self, credential: "OAuthCredential") -> str:
+        """Extract the access token from the credential."""
+        ...
 
     @abstractmethod
-    async def validate(self, credential: "OAuthCredential", signal: Optional["AbortSignal"] = None) -> bool: ...
+    async def validate(self, credential: "OAuthCredential", signal: Optional["AbortSignal"] = None) -> bool:
+        """Check if the credential is valid (not necessarily fresh)."""
+        ...
 
     def is_expired(self, credential: "OAuthCredential") -> bool:
         """Return True if the token expires within the next 30 seconds."""

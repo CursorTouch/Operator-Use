@@ -1,3 +1,4 @@
+"""workflow — Create, edit, and run Python workflows with orchestration (parallel, pipeline, phase tracking)."""
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -168,6 +169,7 @@ class WorkflowTool(Tool):
         self._manager = manager
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the action."""
         action = args.get('action', '')
         name = args.get('name', '') or ''
         run_id = args.get('run_id', '') or ''
@@ -181,6 +183,7 @@ class WorkflowTool(Tool):
         return "Workflow"
 
     def is_available(self, context) -> bool:
+        """Check that required service is available in context."""
         sm = context.settings_manager
         if sm is not None and not sm.get_workflows_enabled():
             return False
@@ -193,6 +196,7 @@ class WorkflowTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch the requested action."""
         manager = self._manager or (context.workflow_manager if context else None)
         if manager is None:
             return ToolResult.error(id=invocation.id, content='WorkflowManager is not available.')

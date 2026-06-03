@@ -103,6 +103,7 @@ class TeamTool(Tool):
         )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the action."""
         action = args.get('action', '')
         team_name = args.get('team_name', '') or ''
         member_name = args.get('member_name', '') or ''
@@ -125,6 +126,7 @@ class TeamTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch the requested action."""
         if context is None or context.team_manager is None:
             return ToolResult.error(id=invocation.id, content='TeamManager is not available.')
 

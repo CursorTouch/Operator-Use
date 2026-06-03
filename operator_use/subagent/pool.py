@@ -16,12 +16,13 @@ class TaskPool:
     """
 
     def __init__(self, max_concurrent: int = 10) -> None:
+        """Initialize a task pool with concurrency limit and dependency tracking."""
         self.max_concurrent = max_concurrent
         self._semaphore = asyncio.Semaphore(max_concurrent) if max_concurrent > 0 else None
-        self._pending: dict[str, dict] = {}
-        self._running: set[str] = set()
-        self._completed: dict[str, bool] = {}
-        self._completion_events: dict[str, asyncio.Event] = {}
+        self._pending: dict[str, dict] = {}  # Queued tasks awaiting dependencies
+        self._running: set[str] = set()  # Currently executing tasks
+        self._completed: dict[str, bool] = {}  # Finished tasks and their success status
+        self._completion_events: dict[str, asyncio.Event] = {}  # Signals for each task's completion
 
     def submit(
         self,
@@ -29,6 +30,7 @@ class TaskPool:
         task_id: str,
         depends_on: list[str] | None = None,
     ) -> asyncio.Task:
+        """Queue a task; launch after dependencies complete and semaphore permits."""
         depends_on = depends_on or []
         # setdefault (not assignment): this task may already have an event that
         # a previously-submitted dependent is awaiting — reuse it, don't replace
@@ -82,7 +84,7 @@ class TaskPool:
                 self._completion_events[task_id].set()
 
     def stats(self) -> dict:
-        """Return a snapshot of pending, running, and completed task counts."""
+        """Return snapshot of pool state: max_concurrent, pending, running, completed counts."""
         return {
             'max_concurrent': self.max_concurrent,
             'pending': len(self._pending),

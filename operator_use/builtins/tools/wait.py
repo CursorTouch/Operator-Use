@@ -1,8 +1,10 @@
+"""wait — Pause execution for a specified duration in seconds."""
 import asyncio
 from pydantic import BaseModel, Field
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class WaitSchema(BaseModel):
+    """Input schema for wait; validates sleep duration is positive."""
     seconds: float = Field(
         ...,
         description="Number of seconds to wait (e.g. 5, 2.5).",
@@ -10,6 +12,7 @@ class WaitSchema(BaseModel):
     )
 
 class WaitTool(Tool):
+    """Pause execution for a specified number of seconds."""
     def __init__(self):
         super().__init__(
             name="wait",
@@ -20,6 +23,7 @@ class WaitTool(Tool):
         )
 
     def get_display_name(self, args: dict) -> str:
+        """Format a readable description of the wait duration."""
         seconds = args.get('seconds', '')
         return f"Waiting {seconds}s" if seconds else "Waiting"
 
@@ -30,6 +34,7 @@ class WaitTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Sleep for the specified duration and report completion."""
         params = invocation.params
         seconds = params.get("seconds")
         

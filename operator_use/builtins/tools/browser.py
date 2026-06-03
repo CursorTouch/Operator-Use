@@ -1,3 +1,4 @@
+"""browser — CDP-based browser automation with click, type, scroll, scrape, and file operations."""
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +14,7 @@ from operator_use.tool.types import Tool, ToolContext, ToolExecutionMode, ToolIn
 
 
 class BrowserSchema(BaseModel):
-    """Input schema for the browser tool; coerces string-encoded booleans and integers from LLM output."""
+    """Input schema for browser; coerces stringified params from LLM and validates action-specific fields."""
     action: Literal[
         "open",
         "close",
@@ -62,7 +63,7 @@ class BrowserSchema(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _coerce_params(cls, data):
-        """Normalise stringified booleans, ints, and null-strings that LLMs emit."""
+        """Coerce string-encoded booleans, integers, and nulls from LLM outputs to proper types."""
         if not isinstance(data, dict):
             return data
 
@@ -157,7 +158,7 @@ class BrowserTool(Tool):
         return "Browser"
 
     def is_available(self, context: ToolContext) -> bool:
-        """Gate: requires a Browser object and browser_use not explicitly disabled."""
+        """Check that browser is available and browser_use is not disabled in settings."""
         if context.browser is None:
             return False
         sm = context.settings_manager
@@ -335,7 +336,7 @@ class BrowserTool(Tool):
             return ToolResult.error(invocation.id, f"browser: {exc}")
 
     async def _get_browser(self, browser: Browser, params: BrowserSchema) -> Browser:
-        """Ensure the browser is connected, reconnecting if needed."""
+        """Reconnect crashed browser; open if not yet connected."""
         if browser.crashed:
             try:
                 await browser.close()
@@ -345,7 +346,7 @@ class BrowserTool(Tool):
         return browser
 
     async def _tab_action(self, invocation_id: str, browser: Browser, params: BrowserSchema) -> ToolResult:
-        """Dispatch open/close/switch tab operations."""
+        """Dispatch tab open/close/switch operations based on tab_mode."""
         match params.tab_mode:
             case "open":
                 await browser.new_tab()
@@ -369,7 +370,7 @@ class BrowserTool(Tool):
                 return ToolResult.ok(invocation_id, f"Switched to tab {params.tab_index}.")
 
     async def _download(self, invocation_id: str, browser: Browser, params: BrowserSchema) -> ToolResult:
-        """Fetch a URL with httpx and write the bytes to the downloads directory."""
+        """Fetch URL content and save to the browser's downloads directory."""
         if not params.url:
             return ToolResult.error(invocation_id, "'url' is required for action='download'.")
         if not params.filename:

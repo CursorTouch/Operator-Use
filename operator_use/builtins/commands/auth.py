@@ -1,3 +1,4 @@
+"""auth slash command — Manage credentials and OAuth flows for integrations."""
 from __future__ import annotations
 
 import asyncio
@@ -41,6 +42,7 @@ async def _read_line_cancelable(message: str = "") -> str:
 
 
 async def _handle_login(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     from operator_use.inference.api.text.service import LLM
     from operator_use.inference.provider.oauth.types import OAuthLoginCallbacks, OAuthAuthInfo, OAuthPrompt
 
@@ -112,6 +114,7 @@ async def _handle_login(registry: CommandRegistry, args: list[str]) -> None:
 
 
 async def _handle_logout(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     from operator_use.inference.api.text.service import LLM
 
     auth = LLM._auth_store
@@ -152,6 +155,7 @@ async def _handle_logout(registry: CommandRegistry, args: list[str]) -> None:
 
 
 async def _handle_auth(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     from operator_use.inference.api.text.service import LLM
 
     auth = LLM._auth_store

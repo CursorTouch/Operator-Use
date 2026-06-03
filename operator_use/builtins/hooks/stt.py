@@ -23,12 +23,14 @@ _MIME_TO_FORMAT: dict[str, AudioFormat] = {
 
 
 def _mime_to_format(mime_type: str | None) -> AudioFormat:
+    """Convert MIME type string to AudioFormat enum, defaulting to MP3."""
     if not mime_type:
         return AudioFormat.MP3
     return _MIME_TO_FORMAT.get(mime_type.lower().split(';')[0].strip(), AudioFormat.MP3)
 
 
 async def _on_message_receive(event) -> object:
+    """Transform incoming audio messages to text via STT before agent processing."""
     from operator_use.hooks.types import MessageReceiveEvent, MessageReceiveResult
     from operator_use.bus.types import AudioPart, TextPart
 

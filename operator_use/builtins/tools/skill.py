@@ -76,12 +76,14 @@ class SkillSchema(BaseModel):
 
 
 def _validate_name(name: str) -> str | None:
+    """Validate skill name format against alphanumeric pattern; return error message or None."""
     if not name or not _VALID_NAME_RE.match(name):
         return 'name must be lowercase letters, digits, hyphens, or underscores (2-64 chars)'
     return None
 
 
 def _atomic_write(path: Path, text: str) -> None:
+    """Write text to file atomically to prevent partial writes on crash."""
     tmp = path.with_suffix(path.suffix + '.tmp')
     tmp.write_text(text, encoding='utf-8')
     tmp.replace(path)
@@ -97,6 +99,7 @@ def _active_profile(context=None):
 
 
 def _skill_dir(name: str, context=None) -> Path | None:
+    """Resolve the target skill directory from the context or active profile."""
     profile = _active_profile(context)
     if profile is None:
         return None
@@ -125,6 +128,7 @@ class SkillTool(Tool):
         )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the action and skill name."""
         action = args.get('action', '')
         name = args.get('name', '') or ''
         if action == 'view': return f"Viewing skill: {name}" if name else "Viewing skill"

@@ -31,12 +31,14 @@ class MessageStore:
     """Append-only SQLite store for archived messages with FTS5 search."""
 
     def __init__(self, db_path: str | Path) -> None:
+        """Initialize or open the SQLite message store at db_path."""
         self._path = Path(db_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
         self._init()
 
     def _init(self) -> None:
+        """Create tables and full-text search indexes if not present."""
         self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS messages (
                 store_id    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +95,7 @@ class MessageStore:
     # -------------------------------------------------------------------------
 
     def get_by_ids(self, store_ids: list[int]) -> list[StoredMessage]:
+        """Retrieve messages by their store_ids, ordered by timestamp."""
         if not store_ids:
             return []
         placeholders = ",".join("?" * len(store_ids))
@@ -104,7 +107,7 @@ class MessageStore:
         return [StoredMessage(*r) for r in rows]
 
     def search(self, query: str, session_id: str, limit: int = 10) -> list[StoredMessage]:
-        """FTS5 search across archived messages for a session."""
+        """Full-text search across archived messages, with substring fallback."""
         try:
             rows = self._conn.execute(
                 """SELECT m.store_id, m.session_id, m.role, m.content_text, m.content_json, m.timestamp
@@ -124,9 +127,11 @@ class MessageStore:
         return [StoredMessage(*r) for r in rows]
 
     def close(self) -> None:
+        """Close the database connection."""
         self._conn.close()
 
     def __del__(self) -> None:
+        """Ensure database is closed on garbage collection."""
         try:
             self.close()
         except Exception:

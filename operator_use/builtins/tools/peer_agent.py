@@ -44,6 +44,7 @@ _chain: ContextVar[tuple[str, ...]] = ContextVar('peer_agent_chain', default=())
 
 
 def _current_chain() -> tuple[str, ...]:
+    """Retrieve the current delegation chain from context var."""
     return _chain.get()
 
 
@@ -55,6 +56,7 @@ _peer_task_registries: WeakKeyDictionary = WeakKeyDictionary()
 
 
 def _task_registry(context: ToolContext) -> dict:
+    """Get or initialize the weak-keyed task registry for tracking detached runs."""
     agent = context.agent
     if agent is None:
         return {}
@@ -79,6 +81,7 @@ def _last_response(session_manager: SessionManager) -> str:
 
 
 def _format_duration(started: datetime, finished: datetime | None) -> str:
+    """Format duration from start to end time as human-readable string."""
     end = finished or datetime.now()
     secs = int((end - started).total_seconds())
     return f'{secs}s' if secs < 60 else f'{secs // 60}m {secs % 60}s'

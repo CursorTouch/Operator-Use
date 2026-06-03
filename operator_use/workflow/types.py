@@ -86,10 +86,11 @@ class WorkflowRunRecord:
 
 
 class WorkflowJournal:
-    """Write-through cache keyed by (prompt, opts) SHA-256. Persists to disk."""
+    """Write-through cache for workflow agent() results, keyed by (prompt, opts) SHA-256."""
 
     def __init__(self, run_dir: Path | None = None) -> None:
         self._cache: dict[str, Any] = {}
+        # Persist to journal.json in the run directory if provided.
         self._path = run_dir / 'journal.json' if run_dir else None
         if self._path and self._path.exists():
             try:
@@ -98,11 +99,11 @@ class WorkflowJournal:
                 self._cache = {}
 
     def get(self, prompt: str, opts: dict) -> Any | None:
-        """Return a cached result for (prompt, opts), or None on a miss."""
+        """Retrieve a cached result for (prompt, opts), or None on cache miss."""
         return self._cache.get(self._key(prompt, opts))
 
     def set(self, prompt: str, opts: dict, result: Any) -> None:
-        """Store a result for (prompt, opts) and flush to disk if a path is configured."""
+        """Store a result and flush to disk (if a run directory was provided)."""
         self._cache[self._key(prompt, opts)] = result
         if self._path:
             try:
@@ -111,7 +112,7 @@ class WorkflowJournal:
                 pass
 
     def _key(self, prompt: str, opts: dict) -> str:
-        """Produce a stable 16-hex-char key from prompt + options."""
+        """Hash (prompt, opts) to a stable 16-character hex key."""
         payload = json.dumps({'prompt': prompt, **opts}, sort_keys=True)
         return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
@@ -138,7 +139,7 @@ class Workflow(ABC):
 
     @classmethod
     def meta(cls) -> WorkflowMeta:
-        """Build a WorkflowMeta from the class-level attributes."""
+        """Extract WorkflowMeta from the class attributes."""
         return WorkflowMeta(
             name=cls.name,
             description=cls.description,
@@ -152,22 +153,25 @@ class Workflow(ABC):
         invocation: WorkflowInvocation,
         workflow_context: WorkflowContext,
     ) -> WorkflowExecuteContext:
-        """Build a WorkflowExecuteContext from the provided WorkflowContext.
+        """Build a WorkflowExecuteContext from the provided WorkflowContext for use inside execute().
 
-        Call this inside execute() to get ctx with agent(), phase(), log(), etc.
+        The returned context provides agent(), phase(), log(), and other workflow APIs.
         """
         from operator_use.subagent.service import Subagent
         from operator_use.subagent.types import SubagentSettings
         from operator_use.workflow.context import WorkflowExecuteContext
 
+        # Exclude subagent and workflow tools to prevent infinite recursion.
         tools = [t for t in workflow_context.tools if t.name not in ('subagent', 'workflow')]
 
+        # Build a Subagent instance for the agent() API.
         subagent = Subagent(
             llm=workflow_context.llm,
             tools=tools,
             settings=SubagentSettings(),
         )
 
+        # Use existing run record or create a new one (for nested workflows).
         record = workflow_context.record or WorkflowRunRecord(
             run_id=invocation.run_id,
             workflow_name=invocation.workflow_name,
@@ -175,6 +179,7 @@ class Workflow(ABC):
             started_at=datetime.now(),
         )
 
+        # Set up a persistent journal and temp directory for this run.
         run_dir = Path(tempfile.gettempdir()) / '.operator-workflow-runs' / invocation.run_id
         run_dir.mkdir(parents=True, exist_ok=True)
 

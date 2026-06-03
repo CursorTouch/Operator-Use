@@ -33,8 +33,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class ToolError:
-    """Records a file-level tool load failure with optional stack trace."""
-
+    """File-level tool load failure with optional stack trace."""
     path: str
     error: str
     stack: str = ''
@@ -75,8 +74,7 @@ class ToolExecutionMode(str, Enum):
 
 @dataclass
 class ToolInvocation:
-    """Fully-resolved call site: the tool id, parsed params, working directory, and tool name."""
-
+    """Complete tool call specification with resolved args and execution context."""
     id: str
     params: dict[str, Any] = field(default_factory=dict)
     cwd: str = ""
@@ -85,8 +83,7 @@ class ToolInvocation:
 
 @dataclass
 class ToolResult:
-    """Structured outcome of a tool call, carrying content, error flag, and optional terminate signal."""
-
+    """Tool execution outcome with optional error flag and early termination signal."""
     id: str
     content: str
     is_error: bool = False
@@ -101,7 +98,7 @@ class ToolResult:
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ToolResult:
-        """Construct a successful ToolResult."""
+        """Construct a successful outcome."""
         return cls(id=id, content=content, is_error=False, metadata=metadata or {})
 
     @classmethod
@@ -111,7 +108,7 @@ class ToolResult:
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ToolResult:
-        """Construct a failed ToolResult."""
+        """Construct a failed outcome."""
         return cls(id=id, content=content, is_error=True, metadata=metadata or {})
 
 ToolExecutionUpdateCallback = Callable[[ToolResult], Awaitable[None]]
@@ -121,7 +118,7 @@ AbortSignal = asyncio.Event
 
 @dataclass
 class ToolContext:
-    """Runtime services available to tools during execution."""
+    """Runtime services available to tools during execution (LLM, agents, managers, etc)."""
     llm: LLM | None = None
     engine: Engine | None = None
     agent: Agent | None = None
@@ -149,6 +146,7 @@ class ToolContext:
 
 
 class Tool(ABC):
+    """Abstract base for tools: executable, schema-validated components with metadata and policy."""
     def __init__(
         self,
         name: str,
@@ -158,6 +156,7 @@ class Tool(ABC):
         execution_mode: ToolExecutionMode = ToolExecutionMode.Sequential,
         display_name: str = "",
     ) -> None:
+        """Initialize tool with name, description, schema, kind, and execution concurrency policy."""
         self.name = name
         self.description = description
         self.schema = schema
@@ -166,24 +165,24 @@ class Tool(ABC):
         self.display_name = display_name
 
     def get_display_name(self, args: dict[str, Any]) -> str:
-        """Return a human-readable label for channel display based on call args.
+        """Return a human-readable channel label based on call args; override for intent-specific messages.
 
-        Override in subclasses to produce intent-specific messages (e.g. "Changing
-        setting: memory" instead of "control_center"). Falls back to display_name
-        then name when not overridden.
+        Falls back to display_name then name when not overridden.
         """
         return self.display_name or self.name
 
     def is_available(self, context: ToolContext) -> bool:
-        """Return False to exclude this tool when its backing service is unavailable."""
+        """Check if tool should be available given current service availability."""
         return True
 
     def validate(self, params: dict[str, Any]) -> tuple[bool, list[str]]:
+        """Validate params against schema; return (success, error_list)."""
         try:
             self.schema.model_validate(params)
             return True, []
         except Exception as e:
             from pydantic import ValidationError
+            # Format Pydantic errors with field path for clarity
             if isinstance(e, ValidationError):
                 errors = [
                     f"{' -> '.join(str(loc) for loc in err['loc'])}: {err['msg']}"
@@ -194,6 +193,7 @@ class Tool(ABC):
             return False, errors
 
     def to_json(self) -> dict[str, Any]:
+        """Serialize to JSON schema with name, description, and input_schema."""
         return {
             "name": self.name,
             "description": self.description,
@@ -201,6 +201,7 @@ class Tool(ABC):
         }
 
     def _is_cancelled(self, signal: Optional[AbortSignal]) -> bool:
+        """Check if abort signal has been set."""
         return signal is not None and signal.is_set()
 
     @abstractmethod
@@ -211,4 +212,5 @@ class Tool(ABC):
         signal: Optional[AbortSignal] = None,
         context: Optional[ToolContext] = None,
     ) -> ToolResult:
+        """Execute the tool with params; subclasses must override."""
         ...

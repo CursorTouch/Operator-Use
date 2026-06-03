@@ -37,6 +37,7 @@ def _fmt_status(status: WorkflowStatus) -> str:
 
 
 async def _handle_workflows(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     runtime = registry.runtime
     if runtime is None:
         print('No active runtime.')

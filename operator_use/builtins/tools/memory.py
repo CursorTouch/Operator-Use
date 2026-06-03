@@ -1,3 +1,4 @@
+"""memory — Persist facts and key information across sessions (search, remember, forget, reflect)."""
 from __future__ import annotations
 
 import json
@@ -61,6 +62,7 @@ class MemoryTool(Tool):
         )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the memory action."""
         action = args.get('action', '')
         query = args.get('query', '') or ''
         if action == 'search': return f"Searching memories: {query[:40]}" if query else "Searching memories"
@@ -70,6 +72,7 @@ class MemoryTool(Tool):
         return "Memory"
 
     def is_available(self, context) -> bool:
+        """Check that memory is enabled and a memory manager is available."""
         sm = context.settings_manager
         if sm is not None and sm.settings.memory is not None and sm.settings.memory.enabled is False:
             return False
@@ -82,6 +85,7 @@ class MemoryTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch memory search/remember/forget/reflect operations."""
         manager = context.memory_manager if context else None
         if manager is None:
             return ToolResult.error(id=invocation.id, content="memory: memory manager is not available.")
@@ -113,6 +117,7 @@ class MemoryTool(Tool):
             return ToolResult.error(id=invocation.id, content=f"memory: {exc}")
 
     def _format_results(self, results: list[MemorySearchResult]) -> str:
+        """Format search results as JSON with source, score, content, and metadata."""
         if not results:
             return "No matching memories found."
         rows = [

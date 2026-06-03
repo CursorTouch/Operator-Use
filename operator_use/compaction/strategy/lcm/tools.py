@@ -25,7 +25,9 @@ class LCMGrepSchema(BaseModel):
 
 
 class LCMGrepTool(Tool):
+    """Search the LCM archive for compacted context by keyword."""
     def __init__(self, dag: SummaryDAG, store: MessageStore, session_id_provider) -> None:
+        """Initialize with DAG and message store backends."""
         super().__init__(
             name="lcm_grep",
             description=(
@@ -48,6 +50,7 @@ class LCMGrepTool(Tool):
         signal: Optional[AbortSignal] = None,
         context: Optional[ToolContext] = None,
     ) -> ToolResult:
+        """Search both DAG nodes and message store, returning formatted results."""
         params = LCMGrepSchema.model_validate(invocation.params)
         session_id = self._session_id_provider()
 
@@ -88,7 +91,9 @@ class LCMExpandSchema(BaseModel):
 
 
 class LCMExpandTool(Tool):
+    """Drill into a specific LCM summary node to view its sources or child summaries."""
     def __init__(self, dag: SummaryDAG, store: MessageStore) -> None:
+        """Initialize with DAG and message store backends."""
         super().__init__(
             name="lcm_expand",
             description=(
@@ -109,6 +114,7 @@ class LCMExpandTool(Tool):
         signal: Optional[AbortSignal] = None,
         context: Optional[ToolContext] = None,
     ) -> ToolResult:
+        """Retrieve the specified node and its sources (children or raw messages)."""
         params = LCMExpandSchema.model_validate(invocation.params)
         node = self._dag.get_node(params.node_id)
         if not node:

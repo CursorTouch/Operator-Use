@@ -17,17 +17,19 @@ if TYPE_CHECKING:
 
 @dataclass
 class TextContent:
+    """Plain text content (system/user/assistant messages)."""
     type: Literal["text"] = "text"
     content: str = ""
 
 
 @dataclass
 class ImageContent:
+    """Image content (PIL images, bytes, URLs, or base64 strings)."""
     type: Literal["image"] = "image"
     images: list[str | Image.Image | bytes] = field(default_factory=list)
 
     def to_base64(self) -> list[tuple[str, str]]:
-        """Returns (base64_data, mime_type) pairs. URL strings are passed through as-is."""
+        """Convert all images to (base64_data, mime_type) pairs."""
         return [image_to_base64(img) for img in self.images]
 
     @classmethod
@@ -41,12 +43,13 @@ class ImageContent:
 
 @dataclass
 class AudioContent:
+    """Audio content (bytes, base64 strings, or 'file:' paths)."""
     type: Literal["audio"] = "audio"
-    # Each item is raw bytes, a base64 string, or a file path string prefixed with "file:".
+    # Each item is raw bytes, a base64 string, or a file path string prefixed with "file:"
     audio: list[bytes | str] = field(default_factory=list)
 
     def to_base64(self) -> list[tuple[str, str]]:
-        """Returns (base64_data, mime_type) pairs for each audio item."""
+        """Convert all audio to (base64_data, mime_type) pairs."""
         return [audio_to_base64(item) for item in self.audio]
 
     @classmethod
@@ -60,6 +63,7 @@ class AudioContent:
 
 @dataclass
 class ThinkingContent:
+    """Extended thinking content from Claude models with thinking enabled."""
     type: Literal["thinking"] = "thinking"
     content: str = ""
     signature: str = ""
@@ -67,6 +71,7 @@ class ThinkingContent:
 
 @dataclass
 class ToolCallContent:
+    """Tool invocation from assistant with args, semantic kind, and call id."""
     type: Literal["tool_call"] = "tool_call"
     id: str = ""
     name: str = ""
@@ -77,6 +82,7 @@ class ToolCallContent:
 
 @dataclass
 class ToolResultContent:
+    """Tool execution result paired with ToolCallContent by id."""
     type: Literal["tool_result"] = "tool_result"
     id: str = ""
     content: str = ""
@@ -97,6 +103,7 @@ ToolContent = ToolResultContent
 
 @dataclass
 class UsageCost:
+    """Monetized costs in USD for input, output, cache operations, and total."""
     input: float = 0.0
     output: float = 0.0
     cache_read: float = 0.0
@@ -106,6 +113,7 @@ class UsageCost:
 
 @dataclass
 class Usage:
+    """Token counts and costs for a single LLM completion."""
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
@@ -114,6 +122,7 @@ class Usage:
 
 
 class Role(str, Enum):
+    """Message roles in the conversation history."""
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
@@ -125,6 +134,7 @@ class Role(str, Enum):
 
 @dataclass
 class BaseMessage:
+    """Common fields for all message types (contents, id, timestamp)."""
     contents: list[Content] = field(default_factory=list)
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float = field(default_factory=time.time)
@@ -132,57 +142,70 @@ class BaseMessage:
 
 @dataclass
 class SystemMessage(BaseMessage):
+    """System context and instructions for the LLM."""
     role: Literal[Role.SYSTEM] = field(default=Role.SYSTEM, init=False)
 
     @classmethod
     def text(cls, content: str) -> SystemMessage:
+        """Construct SystemMessage from plain text."""
         return cls(contents=[TextContent(content=content)])
 
 
 @dataclass
 class UserMessage(BaseMessage):
+    """User input containing text, images, audio, and/or tool results."""
     role: Literal[Role.USER] = field(default=Role.USER, init=False)
 
     @classmethod
     def text(cls, content: str) -> UserMessage:
+        """Construct UserMessage from plain text."""
         return cls(contents=[TextContent(content=content)])
 
     @classmethod
     def with_images(cls, content: str, images: list[str | Image.Image | bytes]) -> UserMessage:
+        """Construct UserMessage with text and images."""
         return cls(contents=[TextContent(content=content), ImageContent(images=images)])
 
     @classmethod
     def with_audio(cls, content: str, audio: list[bytes | str]) -> UserMessage:
+        """Construct UserMessage with text and audio."""
         return cls(contents=[TextContent(content=content), AudioContent(audio=audio)])
 
 
 @dataclass
 class AssistantMessage(BaseMessage):
+    """LLM response with text, thinking, tool calls, usage, and stop reason."""
     role: Literal[Role.ASSISTANT] = field(default=Role.ASSISTANT, init=False)
     usage: Usage = field(default_factory=Usage)
     stop_reason: StopReason = StopReason.Stop
     error: str = ""
 
     def text_content(self) -> str:
+        """Concatenate all TextContent items."""
         return "".join(c.content for c in self.contents if isinstance(c, TextContent))
 
     def tool_calls(self) -> list[ToolCallContent]:
+        """Extract all ToolCallContent items."""
         return [c for c in self.contents if isinstance(c, ToolCallContent)]
 
     def thinking(self) -> list[ThinkingContent]:
+        """Extract all ThinkingContent items."""
         return [c for c in self.contents if isinstance(c, ThinkingContent)]
 
 
 @dataclass
 class ToolMessage(BaseMessage):
+    """Tool execution results responding to ToolCallContent."""
     role: Literal[Role.TOOL] = field(default=Role.TOOL, init=False)
 
     @classmethod
     def from_results(cls, results: list[ToolResultContent]) -> ToolMessage:
+        """Construct ToolMessage from multiple tool results."""
         return cls(contents=list(results))  # type: ignore[arg-type]
 
     @classmethod
     def from_result(cls, result: ToolResultContent) -> ToolMessage:
+        """Construct ToolMessage from a single tool result."""
         return cls(contents=[result])  # type: ignore[arg-type]
 
 
@@ -191,6 +214,7 @@ LLMMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 
 @dataclass
 class CustomMessage:
+    """Application-defined message with custom type, contents, and details."""
     role: Literal[Role.CUSTOM] = field(default=Role.CUSTOM, init=False)
     custom_type: str
     timestamp: float
@@ -199,7 +223,9 @@ class CustomMessage:
 
     @classmethod
     def from_session(cls, entry: CustomMessageEntry) -> CustomMessage:
+        """Reconstruct CustomMessage from session storage entry."""
         raw = entry.content
+        # Normalize content to list of TextContent or ImageContent
         if isinstance(raw, list):
             contents: list[TextContent | ImageContent] = cast(list[TextContent | ImageContent], raw)
         elif isinstance(raw, str):
@@ -216,13 +242,15 @@ class CustomMessage:
 
 @dataclass
 class BranchSummaryMessage:
+    """Session branch summary recorded before rebase."""
     role: Literal[Role.BRANCH_SUMMARY] = field(default=Role.BRANCH_SUMMARY, init=False)
     summary: str
-    from_id:str
-    timestamp:float
+    from_id: str
+    timestamp: float
 
     @classmethod
-    def from_session(cls,entry:BranchEntry)->BranchSummaryMessage:
+    def from_session(cls, entry: BranchEntry) -> BranchSummaryMessage:
+        """Reconstruct BranchSummaryMessage from session storage entry."""
         return cls(
             summary=entry.summary,
             from_id=entry.from_id,
@@ -231,13 +259,15 @@ class BranchSummaryMessage:
 
 @dataclass
 class CompactionSummaryMessage:
+    """Context compaction summary recorded when history is summarized."""
     role: Literal[Role.COMPACTION_SUMMARY] = field(default=Role.COMPACTION_SUMMARY, init=False)
     summary: str
-    tokens_before:int
-    timestamp:float
+    tokens_before: int
+    timestamp: float
 
     @classmethod
-    def from_session(cls,entry:CompactionEntry)->CompactionSummaryMessage:
+    def from_session(cls, entry: CompactionEntry) -> CompactionSummaryMessage:
+        """Reconstruct CompactionSummaryMessage from session storage entry."""
         return cls(
             summary=entry.summary,
             tokens_before=entry.tokens_before,

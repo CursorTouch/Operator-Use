@@ -1,8 +1,10 @@
+"""write — Create or overwrite files with automatic parent directory creation."""
 from pathlib import Path
 from pydantic import BaseModel, Field
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class WriteSchema(BaseModel):
+    """Input schema for write; validates path and content are provided."""
     path: str = Field(
         ...,
         description="Absolute path or path relative to the current working directory.",
@@ -17,6 +19,7 @@ class WriteSchema(BaseModel):
     )
 
 class WriteTool(Tool):
+    """Create or overwrite files with automatic parent directory creation."""
     def __init__(self):
         super().__init__(
             name="write",
@@ -26,6 +29,7 @@ class WriteTool(Tool):
             execution_mode=ToolExecutionMode.Parallel,        )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the target filename."""
         path = args.get('path', '') or ''
         name = path.rsplit('/', 1)[-1] if path else ''
         return f"Writing: {name}" if name else "Writing file"
@@ -37,6 +41,7 @@ class WriteTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Write content to file, creating parent directories if needed."""
         params = invocation.params
         path_str = params.get("path")
         content = params.get("content")

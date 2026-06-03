@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 
 class SlidingWindowCompactionSettings(BaseModel):
+    """Configuration for window-based compaction without explicit summarization."""
     enabled: bool = True
     trigger_percent: float = 0.5   # fire when context exceeds this fraction (0.5 = 50%)
     batch_tokens: int = 10_000     # max tokens to compact per round

@@ -10,13 +10,16 @@ from operator_use.compaction.strategy.lcm.types import LCMNode
 
 
 class SummaryDAG:
+    """SQLite-backed DAG storing hierarchical summaries for LCM retrieval."""
     def __init__(self, db_path: str | Path) -> None:
+        """Initialize or open the SQLite database at db_path."""
         self._path = Path(db_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
         self._init()
 
     def _init(self) -> None:
+        """Create tables and full-text search indexes if not present."""
         self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS nodes (
                 node_id     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,6 +51,7 @@ class SummaryDAG:
     # -------------------------------------------------------------------------
 
     def add_node(self, node: LCMNode) -> int:
+        """Persist an LCM node and return its new node_id."""
         cur = self._conn.execute(
             "INSERT INTO nodes(session_id, depth, summary, source_ids, source_type, expand_hint, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -70,6 +74,7 @@ class SummaryDAG:
     # -------------------------------------------------------------------------
 
     def get_node(self, node_id: int) -> LCMNode | None:
+        """Retrieve a node by its id, or None if not found."""
         row = self._conn.execute(
             "SELECT node_id, session_id, depth, summary, source_ids, source_type, expand_hint, created_at "
             "FROM nodes WHERE node_id = ?",
@@ -78,7 +83,7 @@ class SummaryDAG:
         return self._row_to_node(row) if row else None
 
     def get_uncondensed(self, session_id: str, depth: int) -> list[LCMNode]:
-        """Nodes at `depth` not yet referenced as sources by any higher-depth node."""
+        """Return nodes at depth that haven't been condensed into any higher-depth node yet."""
         rows = self._conn.execute(
             """SELECT n.node_id, n.session_id, n.depth, n.summary,
                       n.source_ids, n.source_type, n.expand_hint, n.created_at
@@ -95,7 +100,7 @@ class SummaryDAG:
         return [self._row_to_node(r) for r in rows]
 
     def get_top_level(self, session_id: str) -> LCMNode | None:
-        """The single deepest / most recent node — the active summary anchor."""
+        """Return the deepest/most recent node, the active summary anchor."""
         row = self._conn.execute(
             """SELECT node_id, session_id, depth, summary, source_ids,
                       source_type, expand_hint, created_at
@@ -108,7 +113,7 @@ class SummaryDAG:
         return self._row_to_node(row) if row else None
 
     def get_children(self, node: LCMNode) -> list[LCMNode]:
-        """Child nodes (source_type='nodes') of a higher-depth node."""
+        """Return child nodes referenced in a higher-depth node."""
         if node.source_type != "nodes" or not node.source_ids:
             return []
         placeholders = ",".join("?" * len(node.source_ids))
@@ -120,6 +125,7 @@ class SummaryDAG:
         return [self._row_to_node(r) for r in rows]
 
     def search(self, query: str, session_id: str, limit: int = 10) -> list[LCMNode]:
+        """Search nodes by full-text or substring match, ranked by relevance."""
         try:
             rows = self._conn.execute(
                 """SELECT n.node_id, n.session_id, n.depth, n.summary,
@@ -143,6 +149,7 @@ class SummaryDAG:
     # -------------------------------------------------------------------------
 
     def _row_to_node(self, row: tuple) -> LCMNode:
+        """Reconstruct an LCMNode from a database row."""
         node_id, session_id, depth, summary, source_ids, source_type, expand_hint, created_at = row
         n = LCMNode(
             session_id=session_id,
@@ -157,9 +164,11 @@ class SummaryDAG:
         return n
 
     def close(self) -> None:
+        """Close the database connection."""
         self._conn.close()
 
     def __del__(self) -> None:
+        """Ensure database is closed on garbage collection."""
         try:
             self.close()
         except Exception:

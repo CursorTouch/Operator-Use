@@ -11,15 +11,19 @@ class Bus:
         self._outgoing: asyncio.Queue[OutgoingMessage] = asyncio.Queue()
 
     async def publish_incoming(self, msg: IncomingMessage) -> None:
+        """Queue a message from a gateway channel."""
         await self._incoming.put(msg)
 
     async def consume_incoming(self) -> IncomingMessage:
+        """Dequeue the next message from a gateway channel."""
         return await self._incoming.get()
 
     async def publish_outgoing(self, msg: OutgoingMessage) -> None:
+        """Queue a message to a gateway channel."""
         await self._outgoing.put(msg)
 
     async def consume_outgoing(self) -> OutgoingMessage:
+        """Dequeue the next message to a gateway channel."""
         return await self._outgoing.get()
 
 

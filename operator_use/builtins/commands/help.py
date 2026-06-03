@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 async def _handle_help(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     lines = ['Available commands:']
     for cmd in registry.list():
         aliases = f"  (aliases: /{', /'.join(cmd.aliases)})" if cmd.aliases else ""

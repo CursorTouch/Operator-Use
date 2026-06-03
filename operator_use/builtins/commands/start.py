@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 
 async def _handle_start(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     print(
         "Hi! I'm Operator, a personal assistant.\n"
         "I can help you with tasks, answer questions, and run tools.\n"

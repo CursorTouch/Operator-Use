@@ -26,6 +26,7 @@ _AUDIO_MIME: dict[bytes, str] = {
 
 
 def detect_image_mime(data: bytes) -> str:
+    """Detect image MIME type from magic bytes; default to PNG if unknown."""
     if data[:3] == b"\xff\xd8\xff":
         return "image/jpeg"
     if data[:8] == b"\x89PNG\r\n\x1a\n":
@@ -38,8 +39,10 @@ def detect_image_mime(data: bytes) -> str:
 
 
 def detect_audio_mime(data: bytes) -> str:
+    """Detect audio MIME type from magic bytes; default to MP3 if unknown."""
     for magic, mime in _AUDIO_MIME.items():
         if data[:len(magic)] == magic:
+            # WAV files use RIFF container with WAVE format code
             if magic == b"RIFF" and len(data) >= 12 and data[8:12] == b"WAVE":
                 return "audio/wav"
             elif magic != b"RIFF":
@@ -48,34 +51,41 @@ def detect_audio_mime(data: bytes) -> str:
 
 
 def image_to_base64(img: str | Image.Image | bytes) -> tuple[str, str]:
-    """Return (base64_data, mime_type). URL strings are passed through with empty mime."""
+    """Convert image to (base64_data, mime_type); URL strings passed through with empty mime."""
     if isinstance(img, str):
+        # URLs are passed through as-is
         if img.startswith("http"):
             return img, ""
+        # Detect MIME type from base64 string magic bytes
         try:
             mime = detect_image_mime(base64.b64decode(img[:16] + "=="))
         except Exception:
             mime = "image/png"
         return img, mime
     if isinstance(img, Image.Image):
+        # Serialize PIL Image with format detection
         fmt = (img.format or "PNG").upper()
         buf = io.BytesIO()
         img.save(buf, format=fmt)
         mime = _PIL_MIME.get(fmt, "image/png")
         return base64.b64encode(buf.getvalue()).decode(), mime
+    # Raw bytes: detect MIME from magic bytes
     mime = detect_image_mime(img)
     return base64.b64encode(img).decode(), mime
 
 
 def audio_to_base64(item: bytes | str) -> tuple[str, str]:
-    """Return (base64_data, mime_type). Accepts bytes, base64 string, or 'file:' path."""
+    """Convert audio to (base64_data, mime_type); accepts bytes, base64, or 'file:' paths."""
     if isinstance(item, bytes):
+        # Raw bytes: detect MIME from magic bytes
         mime = detect_audio_mime(item)
         return base64.b64encode(item).decode(), mime
     if item.startswith("file:"):
+        # Load file from disk and encode
         data = Path(item[5:]).read_bytes()
         mime = detect_audio_mime(data)
         return base64.b64encode(data).decode(), mime
+    # Assume base64 string; detect MIME from magic bytes
     try:
         mime = detect_audio_mime(base64.b64decode(item[:16] + "=="))
     except Exception:
@@ -84,17 +94,16 @@ def audio_to_base64(item: bytes | str) -> tuple[str, str]:
 
 
 def filter_empty_assistant_messages(messages: list) -> list:
-    """Remove assistant messages with no usable content from anywhere in history.
+    """Remove assistant messages with no usable content (prevents provider 400 errors).
 
-    An assistant message with empty contents (e.g. a persisted API error turn)
-    produces {"role": "assistant"} with neither content nor tool_calls, which
-    all providers reject with a 400. Filter them out before building LLM context.
-    """
+    Empty assistant messages (e.g. from persisted API errors) produce invalid {"role": "assistant"}
+    with no content or tool_calls, causing all providers to reject the request."""
     from operator_use.message.types import Role, TextContent, ToolCallContent, ThinkingContent
     result = []
     for msg in messages:
         if getattr(msg, 'role', None) == Role.ASSISTANT:
             contents = getattr(msg, 'contents', [])
+            # Check for at least one usable content type
             has_usable = any(
                 isinstance(c, (TextContent, ToolCallContent, ThinkingContent))
                 for c in contents
@@ -106,19 +115,14 @@ def filter_empty_assistant_messages(messages: list) -> list:
 
 
 def strip_unusable_trailing_assistant(messages: list) -> list:
-    """Return messages with unusable trailing assistant turns removed.
+    """Return messages with trailing assistant turns removed if unusable.
 
-    Non-destructive: operates on the given list only (the caller's session
-    record should stay append-only). Drops, from the end:
+    Non-destructive (copy of input list). Drops from end:
+    - error/abort assistant turns (stop_reason != Stop)
+    - empty assistant turns (no text content)
+    - unanswered tool calls (no tool result follows)
 
-    - an assistant message whose stop_reason is not Stop (error/abort turns), and
-    - an assistant message with no usable content (empty turn), and
-    - an assistant message containing tool_calls (a trailing assistant is by
-      definition unanswered — no tool result follows it),
-
-    because providers reject dangling tool_calls, empty assistant turns, and
-    partial error turns. A trailing assistant message with real text and a
-    successful stop reason is a legitimately completed turn and is kept.
+    Keeps trailing assistant with real text and successful stop (legitimately completed turn).
     """
     from operator_use.message.types import Role, TextContent, ToolCallContent
     from operator_use.inference.types import StopReason
@@ -128,15 +132,18 @@ def strip_unusable_trailing_assistant(messages: list) -> list:
         last = msgs[-1]
         if getattr(last, "role", None) != Role.ASSISTANT:
             break
+        # Drop error/abort turns
         stop_reason = getattr(last, "stop_reason", StopReason.Stop)
         if stop_reason != StopReason.Stop:
             msgs.pop()
             continue
         contents = getattr(last, "contents", [])
+        # Check for real text content and unanswered tool calls
         has_text = any(
             isinstance(c, TextContent) and c.content.strip() for c in contents
         )
         has_tool_calls = any(isinstance(c, ToolCallContent) for c in contents)
+        # Drop empty turns or dangling tool calls
         if has_tool_calls or not has_text:
             msgs.pop()
             continue

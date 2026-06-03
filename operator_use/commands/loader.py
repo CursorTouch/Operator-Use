@@ -22,6 +22,7 @@ class LoadCommandsResult:
 
 
 def load_command_from_file(path: Path) -> tuple[list[SlashCommandInfo], list[CommandError]]:
+    """Load command(s) from a Python file, returning (commands, errors)."""
     errors: list[CommandError] = []
     str_path = str(path)
 
@@ -67,6 +68,7 @@ def load_command_from_file(path: Path) -> tuple[list[SlashCommandInfo], list[Com
 
 
 def load_commands_from_dir(directory: Path) -> LoadCommandsResult:
+    """Load all commands from .py files in a directory."""
     commands: list[SlashCommandInfo] = []
     errors: list[CommandError] = []
 

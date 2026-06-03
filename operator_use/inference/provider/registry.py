@@ -8,6 +8,7 @@ class TextProviderRegistry:
     """Registry mapping provider IDs to text-LLM provider instances."""
 
     def __init__(self) -> None:
+        """Initialize an empty provider registry."""
         self._providers: dict[str, TextProvider] = {}
 
     def register(self, provider: TextProvider) -> None:
@@ -67,6 +68,7 @@ class ImageProviderRegistry:
     """Registry mapping provider names to image-generation provider instances."""
 
     def __init__(self) -> None:
+        """Initialize an empty image provider registry."""
         self._providers: dict[str, ImageProvider] = {}
 
     def register(self, provider: ImageProvider) -> None:
@@ -103,6 +105,7 @@ class AudioProviderRegistry:
     """Registry mapping provider names to audio (STT/TTS) provider instances."""
 
     def __init__(self) -> None:
+        """Initialize an empty audio provider registry."""
         self._providers: dict[str, AudioProvider] = {}
 
     def register(self, provider: AudioProvider) -> None:
@@ -139,6 +142,7 @@ class VideoProviderRegistry:
     """Registry mapping provider names to video-generation provider instances."""
 
     def __init__(self) -> None:
+        """Initialize an empty video provider registry."""
         self._providers: dict[str, VideoProvider] = {}
 
     def register(self, provider: VideoProvider) -> None:

@@ -90,7 +90,10 @@ class Subagent:
         tools: list[Tool] | None = None,
         spawn_depth: int = 1,
     ) -> str:
-        """Run an isolated single-task engine loop without record tracking or hooks."""
+        """Run an isolated engine loop without record tracking or SubagentStartEvent/EndEvent emissions.
+
+        Useful for internal use (e.g., in skills) where hooks and record overhead are unwanted.
+        """
         allowed_tools = tools if tools is not None else [t for t in self._tools if t.name != 'subagent']
         return await self._run_loop(
             task=task,
@@ -101,7 +104,7 @@ class Subagent:
         )
 
     async def run(self, record: SubagentRecord) -> None:
-        """Execute the task described by record, updating it in-place with status and result."""
+        """Execute the task in record, updating its status and result in-place, emitting hook events."""
         logger.info('[%s] subagent "%s" started', record.task_id, record.label)
 
         if self._hooks:
@@ -111,6 +114,7 @@ class Subagent:
                 task=record.task,
             ))
 
+        # Filter tools: exclude 'subagent' (prevent spawning subagents), then restrict to allow-list if set.
         allowed_tools = [t for t in self._tools if t.name != 'subagent']
         if record.tool_names is not None:
             allowed_set = set(record.tool_names)
@@ -122,10 +126,12 @@ class Subagent:
 
         result = '(no result)'
 
+        # For forked subagents, convert parent messages to LLM format.
         fork_messages = None
         if record.fork and record.parent_messages is not None:
             fork_messages = _build_fork_messages(record.parent_messages, record.task)
 
+        # Retry loop with exponential backoff on failure.
         for attempt in range(self._settings.max_retries + 1):
             try:
                 result = await asyncio.wait_for(
@@ -152,6 +158,7 @@ class Subagent:
                 break
 
             except Exception as exc:
+                # Retry with exponential backoff, capped at retry_max_delay.
                 record.retry_count = attempt
                 if attempt < self._settings.max_retries:
                     delay = min(
@@ -172,6 +179,7 @@ class Subagent:
         record.finished_at = datetime.now()
         logger.info('[%s] subagent "%s" done — status=%s', record.task_id, record.label, record.status)
 
+        # Emit end event for observability (e.g., logging, metrics).
         if self._hooks:
             await self._hooks.emit(SubagentEndEvent(
                 task_id=record.task_id,
@@ -189,7 +197,11 @@ class Subagent:
         spawn_depth: int = 0,
         fork_messages: list[LLMMessage] | None = None,
     ) -> str:
-        """Drive an Engine loop to completion and return the final assistant text."""
+        """Run an isolated engine loop and return the final assistant text output.
+
+        Uses on_event callbacks to track the last AssistantMessage, abort on
+        max_iterations, and detect engine errors.
+        """
         engine = Engine(llm=self._llm, tools=tools, options=Options())
         engine.tool_context.spawn_depth = spawn_depth
 
@@ -197,14 +209,17 @@ class Subagent:
         turns = 0
         error: str | None = None
 
+        # Capture final assistant text, track iteration count, and detect errors.
         async def on_event(event) -> None:
             nonlocal final_text, turns, error
             if isinstance(event, AgentEndEvent):
+                # Extract the latest assistant message from the turn.
                 for msg in reversed(event.messages):
                     if isinstance(msg, AssistantMessage):
                         final_text = msg.text_content()
                         break
             elif isinstance(event, TurnEndEvent):
+                # Abort the engine if we've hit the iteration limit.
                 turns += 1
                 if turns >= max_iterations:
                     engine.abort()
@@ -213,6 +228,7 @@ class Subagent:
 
         engine.options.on_event = on_event
 
+        # Use fork_messages if provided (for forked subagents), else start fresh.
         messages: list[LLMMessage]
         if fork_messages is not None:
             messages = fork_messages

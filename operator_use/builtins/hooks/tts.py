@@ -23,6 +23,7 @@ _FORMAT_EXT: dict[AudioFormat, str] = {
 
 
 async def _on_message_send(event) -> object:
+    """Synthesize agent response text to audio via TTS before sending to user."""
     from operator_use.hooks.types import MessageSendEvent, MessageSendResult
     from operator_use.bus.types import AudioPart
 

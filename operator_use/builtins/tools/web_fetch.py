@@ -1,3 +1,4 @@
+"""web_fetch — Fetch and extract content from URLs (with LLM-guided extraction)."""
 import asyncio
 from pydantic import BaseModel, Field
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
@@ -42,6 +43,7 @@ class WebFetchTool(Tool):
         self._llm = llm
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the action."""
         url = args.get('url', '') or ''
         short = url[:50] if len(url) > 50 else url
         return f"Fetching: {short}" if short else "Fetching URL"
@@ -69,6 +71,7 @@ class WebFetchTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch the requested action."""
         params = invocation.params
         url = params.get("url")
         prompt = params.get("prompt")

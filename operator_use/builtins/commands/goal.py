@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 async def _handle_goal(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     runtime = registry.runtime
     if runtime is None or runtime.current_session is None:
         return

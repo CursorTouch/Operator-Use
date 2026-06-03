@@ -54,6 +54,7 @@ _POLICY_MODEL_IDS = [
 
 
 def normalize_domain(input_str: str) -> Optional[str]:
+    """Parse and normalize a GitHub domain/URL, returning the hostname or None."""
     trimmed = input_str.strip()
     if not trimmed:
         return None
@@ -66,6 +67,7 @@ def normalize_domain(input_str: str) -> Optional[str]:
 
 
 def _get_urls(domain: str) -> dict[str, str]:
+    """Build OAuth and Copilot API URLs for a GitHub domain."""
     return {
         "device_code": f"https://{domain}/login/device/code",
         "access_token": f"https://{domain}/login/oauth/access_token",
@@ -75,6 +77,7 @@ def _get_urls(domain: str) -> dict[str, str]:
 
 
 def get_copilot_base_url(token: Optional[str] = None, enterprise_domain: Optional[str] = None) -> str:
+    """Derive the Copilot API base URL from a token's proxy-ep claim or enterprise domain."""
     if token:
         match = re.search(r"proxy-ep=([^;]+)", token)
         if match:
@@ -87,6 +90,7 @@ def get_copilot_base_url(token: Optional[str] = None, enterprise_domain: Optiona
 
 
 def _fetch_json(url: str, *, method: str = "GET", headers: dict, body: Optional[bytes] = None) -> dict:
+    """Send an HTTP request and return the parsed JSON response; raise RuntimeError on HTTP errors."""
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, context=_SSL_CONTEXT, timeout=30) as resp:
@@ -97,6 +101,7 @@ def _fetch_json(url: str, *, method: str = "GET", headers: dict, body: Optional[
 
 
 def _start_device_flow(domain: str) -> dict:
+    """Initiate the GitHub device code flow and return device/user codes."""
     urls = _get_urls(domain)
     body = urllib.parse.urlencode({"client_id": CLIENT_ID, "scope": "read:user"}).encode()
     return _fetch_json(
@@ -112,6 +117,7 @@ def _start_device_flow(domain: str) -> dict:
 
 
 def _poll_access_token_once(domain: str, device_code: str) -> dict:
+    """Poll GitHub for a device flow access token (may return authorization_pending or error)."""
     urls = _get_urls(domain)
     body = urllib.parse.urlencode({
         "client_id": CLIENT_ID,
@@ -131,6 +137,7 @@ def _poll_access_token_once(domain: str, device_code: str) -> dict:
 
 
 def _fetch_copilot_token(github_token: str, domain: str) -> dict:
+    """Exchange a GitHub token for a short-lived Copilot API token."""
     urls = _get_urls(domain)
     return _fetch_json(
         urls["copilot_token"],
@@ -140,6 +147,7 @@ def _fetch_copilot_token(github_token: str, domain: str) -> dict:
 
 
 def _enable_model(copilot_token: str, model_id: str, enterprise_domain: Optional[str]) -> bool:
+    """Enable a model for Copilot use by accepting its policy (best-effort, no-op on failure)."""
     base_url = get_copilot_base_url(copilot_token, enterprise_domain)
     url = f"{base_url}/models/{model_id}/policy"
     body = json.dumps({"state": "enabled"}).encode()
@@ -168,6 +176,7 @@ async def _poll_for_github_token(
     interval_seconds: int,
     expires_in: int,
 ) -> str:
+    """Poll GitHub's device flow token endpoint until authorization is granted or timeout."""
     deadline = time.time() + expires_in
     interval_ms = max(1000, interval_seconds * 1000)
     multiplier = _INITIAL_POLL_INTERVAL_MULTIPLIER
@@ -271,6 +280,7 @@ async def login_github_copilot(callbacks: OAuthLoginCallbacks) -> OAuthCredentia
 
 
 async def refresh_github_copilot_token(credential: OAuthCredential, enterprise_domain: Optional[str] = None, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+    """Refresh a Copilot token using the stored GitHub refresh token."""
     domain = enterprise_domain or "github.com"
     copilot_data = await asyncio.to_thread(_fetch_copilot_token, credential.refresh, domain)
     token = copilot_data.get("token")
@@ -286,24 +296,30 @@ async def refresh_github_copilot_token(credential: OAuthCredential, enterprise_d
 
 @dataclass
 class GitHubCopilotOAuthProvider(OAuthProvider):
+    """OAuthProvider implementation for GitHub Copilot accounts."""
     id: str = "github-copilot"
     name: str = "GitHub Copilot"
     uses_callback_server: bool = False
 
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential:
+        """Initiate the device code login flow through GitHub's authorization server."""
         return await login_github_copilot(callbacks)
 
     async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        """Obtain a new access token using the stored refresh token."""
         return await refresh_github_copilot_token(credential, signal=signal)
 
     async def logout(self, credential: OAuthCredential) -> None:
+        """No-op: GitHub device flow tokens cannot be revoked."""
         # GitHub does not expose a token revocation endpoint for device flow tokens
         pass
 
     def get_api_key(self, OAuthCredential: OAuthCredential) -> str:
+        """Return the Copilot access token used as a Bearer key for API calls."""
         return OAuthCredential.access
 
     async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:
+        """Return True if the credential is valid, refreshing if expired."""
         if self.is_expired(credential):
             try:
                 await self.refresh_token(credential, signal=signal)
@@ -316,5 +332,6 @@ class GitHubCopilotOAuthProvider(OAuthProvider):
 
     @property
     def api(self):
+        """Return the API class that handles requests with this provider's tokens."""
         from operator_use.inference.api.text.github_copilot_chat import GitHubCopilotChatAPI
         return GitHubCopilotChatAPI

@@ -1,3 +1,4 @@
+"""terminal — Execute shell commands with streaming output and timeout support."""
 import asyncio
 import os
 import signal
@@ -61,6 +62,7 @@ class TerminalTool(Tool):
         self._execute_command_prefix: str | None = None
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the action."""
         cmd = args.get('cmd', '') or ''
         short = cmd[:50] if len(cmd) > 50 else cmd
         return f"Running: {short}" if short else "Running command"
@@ -102,6 +104,7 @@ class TerminalTool(Tool):
         signal: Optional[AbortSignal] = None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch the requested action."""
         params = invocation.params
         cmd = params.get("cmd")
         timeout = params.get("timeout", 10)

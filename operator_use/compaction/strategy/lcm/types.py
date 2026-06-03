@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 
 class LCMSettings(BaseModel):
+    """Configuration for layer-based hierarchical compaction (LCM)."""
     enabled: bool = True
     reserve_tokens: int = 16384
     keep_recent_tokens: int = 20000
@@ -17,6 +18,7 @@ class LCMSettings(BaseModel):
 
 @dataclass
 class StoredMessage:
+    """A message persisted to the LCM database with both text and JSON representations."""
     store_id: int
     session_id: str
     role: str
@@ -27,6 +29,7 @@ class StoredMessage:
 
 @dataclass
 class LCMNode:
+    """A node in the LCM DAG representing a compressed abstraction of messages or child nodes."""
     session_id: str
     depth: int
     summary: str

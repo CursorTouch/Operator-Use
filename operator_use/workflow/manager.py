@@ -78,7 +78,7 @@ class WorkflowManager:
         """Register a class-based workflow. Takes precedence over same-named file-based ones."""
         self._class_workflows[workflow.name] = workflow
 
-    def list_workflows(self):
+    def list_workflows(self) -> list:
         """Return (path_or_None, meta) pairs for all available workflows; class-based listed first."""
         file_based = self._loader.list_with_meta() if self._loader else []
         shadowed = set(self._class_workflows)
@@ -156,6 +156,7 @@ class WorkflowManager:
         return invocation.run_id
 
     def cancel(self, run_id: str) -> bool:
+        """Cancel a running workflow by run_id, returning True if the cancellation was sent."""
         t = self._tasks.get(run_id)
         if t and not t.done():
             t.cancel()
@@ -163,15 +164,17 @@ class WorkflowManager:
         return False
 
     def get_record(self, run_id: str) -> WorkflowRunRecord | None:
+        """Retrieve a workflow run record by run_id, or None if not found."""
         return self._records.get(run_id)
 
     def list_all(self) -> list[WorkflowRunRecord]:
+        """Return all workflow records sorted by start time, newest first."""
         return sorted(self._records.values(), key=lambda r: r.started_at, reverse=True)
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _make_workflow_context(self, spawn_depth: int = 1, record: Any = None) -> WorkflowContext:
-        """Build a WorkflowContext from the manager's own llm and tools."""
+        """Build a WorkflowContext with nested_workflow callback wired to _run_inline."""
         return WorkflowContext(
             llm=self._llm,
             tools=self._tools,
@@ -227,6 +230,7 @@ class WorkflowManager:
         invocation: WorkflowInvocation,
         record: WorkflowRunRecord,
     ) -> None:
+        """Execute a class-based workflow, catch exceptions, write logs, and announce result."""
         try:
             await asyncio.wait_for(
                 self._run_class(workflow, invocation, record),
@@ -260,6 +264,7 @@ class WorkflowManager:
         invocation: WorkflowInvocation,
         record: WorkflowRunRecord,
     ) -> None:
+        """Execute a class-based workflow and update its record on completion."""
         logger.info('[%s] workflow "%s" started (class-based)', record.run_id, record.workflow_name)
         result = await workflow.execute(invocation, self._make_workflow_context())
         record.result = result
@@ -273,6 +278,7 @@ class WorkflowManager:
         record: WorkflowRunRecord,
         args: dict[str, Any],
     ) -> None:
+        """Execute a file-based workflow, catch exceptions, write logs, and announce result."""
         try:
             await asyncio.wait_for(self._run(path, record, args), timeout=1800.0)
         except asyncio.CancelledError:
@@ -303,6 +309,7 @@ class WorkflowManager:
         record: WorkflowRunRecord,
         args: dict[str, Any],
     ) -> None:
+        """Execute a file-based workflow and update its record on completion."""
         from operator_use.workflow.context import WorkflowExecuteContext
         from operator_use.workflow.execute import execute
         from operator_use.workflow.types import WorkflowJournal
@@ -329,6 +336,7 @@ class WorkflowManager:
         logger.info('[%s] workflow "%s" completed', record.run_id, record.workflow_name)
 
     def _write_log(self, record: WorkflowRunRecord) -> None:
+        """Write the workflow run's log lines to a file (if runs_dir is set)."""
         if self._runs_dir is None or not record.log_lines:
             return
         try:
@@ -339,6 +347,7 @@ class WorkflowManager:
             logger.warning('[%s] failed to write log file', record.run_id)
 
     async def _announce(self, record: WorkflowRunRecord) -> None:
+        """Publish the workflow result back to the originating session via the bus."""
         if not record.channel or not record.chat_id or self._bus is None:
             logger.warning(
                 '[%s] no channel/chat_id or bus — result dropped. Result:\n%s',

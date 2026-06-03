@@ -1,3 +1,4 @@
+"""agent slash command — View and switch between agent profiles."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -9,6 +10,7 @@ if TYPE_CHECKING:
 
 
 async def _handle_agent(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     runtime = registry.runtime
     if runtime is None:
         return

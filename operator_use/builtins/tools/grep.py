@@ -1,3 +1,4 @@
+"""grep — Search files for patterns (regex or literal, with glob filtering)."""
 import re
 from pathlib import Path
 from typing import Optional
@@ -7,7 +8,7 @@ from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMo
 MAX_TOOL_OUTPUT_LENGTH = 100000
 
 class GrepSchema(BaseModel):
-    """Input schema for the grep tool."""
+    """Input schema for grep; validates pattern, path, and search options."""
     pattern: str = Field(
         ...,
         description="Search pattern (regex or literal string)",
@@ -38,7 +39,7 @@ class GrepSchema(BaseModel):
     )
 
 class GrepTool(Tool):
-    """Text search tool; scans files with regex or literal matching and optional surrounding context lines."""
+    """Search files for regex or literal patterns with optional context and filtering."""
 
     def __init__(self):
         super().__init__(
@@ -50,6 +51,7 @@ class GrepTool(Tool):
             )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the search pattern."""
         pattern = args.get('pattern', '') or ''
         short = pattern[:40] if len(pattern) > 40 else pattern
         return f"Searching: {short}" if short else "Searching"
@@ -61,6 +63,7 @@ class GrepTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Search files and return matches with optional surrounding context lines."""
         params = invocation.params
         pattern = params.get("pattern")
         path_str = params.get("path", ".")

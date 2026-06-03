@@ -8,6 +8,7 @@ _CONTEXT_FILENAMES = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"]
 
 
 def _load_context_file_from_dir(directory: Path) -> ContextFile | None:
+    """Load CLAUDE.md or AGENTS.md from directory, or None if not found."""
     for filename in _CONTEXT_FILENAMES:
         candidate = directory / filename
         if candidate.is_file():

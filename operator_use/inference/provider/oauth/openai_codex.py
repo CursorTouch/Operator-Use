@@ -41,15 +41,18 @@ CALLBACK_HOST = None  # binds to all interfaces (IPv4 + IPv6)
 CALLBACK_PORT = 1455
 
 def _create_state() -> str:
+    """Generate a random OAuth state token."""
     return secrets.token_hex(16)
 
 
 def _decode_jwt(token: str) -> dict | None:
+    """Parse and decode a JWT token, returning the payload dict or None if invalid."""
     try:
         parts = token.split(".")
         if len(parts) != 3:
             return None
         payload = parts[1]
+        # Add standard base64 padding
         padding = (4 - len(payload) % 4) % 4
         decoded = base64.urlsafe_b64decode(payload + "=" * padding)
         return json.loads(decoded)
@@ -58,6 +61,7 @@ def _decode_jwt(token: str) -> dict | None:
 
 
 def _get_account_id(access_token: str) -> str | None:
+    """Extract the ChatGPT account ID from the JWT token's auth claim."""
     payload = _decode_jwt(access_token)
     if not isinstance(payload, dict):
         return None
@@ -70,6 +74,7 @@ def _get_account_id(access_token: str) -> str | None:
 
 
 def _build_authorization_url(challenge: str, state: str, originator: str) -> str:
+    """Build the OpenAI authorization URL with PKCE and state parameters."""
     params = {
         "response_type": "code",
         "client_id": CLIENT_ID,
@@ -86,6 +91,7 @@ def _build_authorization_url(challenge: str, state: str, originator: str) -> str
 
 
 def _post_token(body: dict[str, str]) -> dict:
+    """POST a token request to OpenAI and return the parsed response; raise RuntimeError on HTTP errors."""
     data = urllib.parse.urlencode(body).encode()
     req = urllib.request.Request(
         TOKEN_URL,
@@ -102,6 +108,7 @@ def _post_token(body: dict[str, str]) -> dict:
 
 
 def _exchange_code(code: str, verifier: str) -> dict:
+    """Exchange an authorization code for tokens using PKCE verification."""
     return _post_token({
         "grant_type": "authorization_code",
         "client_id": CLIENT_ID,
@@ -112,6 +119,7 @@ def _exchange_code(code: str, verifier: str) -> dict:
 
 
 def _refresh_token_sync(refresh_token: str) -> dict:
+    """Exchange a refresh token for a new access token."""
     return _post_token({
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
@@ -120,6 +128,7 @@ def _refresh_token_sync(refresh_token: str) -> dict:
 
 
 def _revoke_token_sync(token: str) -> None:
+    """Revoke a token at the OpenAI authorization server (best-effort, silently ignores errors)."""
     data = urllib.parse.urlencode({
         "token": token,
         "client_id": CLIENT_ID,
@@ -134,10 +143,12 @@ def _revoke_token_sync(token: str) -> None:
         with urllib.request.urlopen(req, context=_SSL_CONTEXT):
             pass
     except urllib.error.HTTPError:
-        pass  # best-effort; treat any error as revocation attempt done
+        # best-effort; treat any error as revocation attempt done
+        pass
 
 
 def _validate_token_sync(access_token: str) -> bool:
+    """Check if the access token is valid by probing the userinfo endpoint."""
     req = urllib.request.Request(
         USERINFO_URL,
         headers={"Authorization": f"Bearer {access_token}"},
@@ -168,6 +179,7 @@ async def login_openai_codex(
     callbacks: OAuthLoginCallbacks,
     originator: str = "program",
 ) -> OAuthCredential:
+    """Run the full OpenAI PKCE login flow and return a fresh OAuthCredential."""
     verifier, challenge = generate_pkce()
     state = _create_state()
     url = _build_authorization_url(challenge, state, originator)
@@ -211,6 +223,7 @@ async def login_openai_codex(
 
 
 async def refresh_openai_codex_token(credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+    """Exchange a refresh token for a new OAuthCredential; transparent to the streaming loop."""
     data = await asyncio.to_thread(_refresh_token_sync, credential.refresh)
     access, refresh, expires_ms = _parse_token_response(data)
 
@@ -223,28 +236,36 @@ async def refresh_openai_codex_token(credential: OAuthCredential, signal: Option
 
 @dataclass
 class OpenAICodexOAuthProvider(OAuthProvider):
+    """OAuthProvider implementation for ChatGPT Plus/Pro (Codex) accounts."""
+
     id: str = "openai-codex"
     name: str = "ChatGPT Plus/Pro (Codex Subscription)"
     uses_callback_server: bool = True
 
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential:
+        """Initiate the PKCE login flow through the OpenAI authorization server."""
         return await login_openai_codex(callbacks)
 
     async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        """Obtain a new access token using the stored refresh token."""
         return await refresh_openai_codex_token(credential, signal=signal)
 
     async def logout(self, credential: OAuthCredential) -> None:
+        """Revoke the refresh token at the OpenAI authorization server."""
         await asyncio.to_thread(_revoke_token_sync, credential.refresh)
 
     def get_api_key(self, credential: OAuthCredential) -> str:
+        """Return the access token used as a Bearer key for API calls."""
         return credential.access
 
     @property
     def api(self):
+        """Return the API class that handles requests with this provider's tokens."""
         from operator_use.inference.api.text.openai_codex_responses import OpenAICodexResponsesAPI
         return OpenAICodexResponsesAPI
 
     async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:
+        """Return True if the credential is unexpired and accepted by the API."""
         if self.is_expired(credential):
             return False
         if signal and signal.is_set():

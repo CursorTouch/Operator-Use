@@ -1,3 +1,4 @@
+"""knowledge — Build and query document knowledge bases with vector search and RAG."""
 from __future__ import annotations
 
 from enum import StrEnum
@@ -57,6 +58,7 @@ KnowledgeSchema.model_rebuild()
 
 
 def _get_knowledge_dir(context: ToolContext | None) -> Path | None:
+    """Extract the active profile's knowledge directory from resource loader if present."""
     if context is None:
         return None
     loader = context.resource_loader
@@ -67,6 +69,7 @@ def _get_knowledge_dir(context: ToolContext | None) -> Path | None:
 
 
 def _source_type(source: str) -> Literal['youtube', 'url', 'file', 'text']:
+    """Infer the source type from URL format, file path, or fallback to raw text."""
     if 'youtube.com/' in source or 'youtu.be/' in source:
         return 'youtube'
     if source.startswith(('http://', 'https://')):
@@ -79,6 +82,7 @@ def _source_type(source: str) -> Literal['youtube', 'url', 'file', 'text']:
 
 
 def _make_workflow_context(context: ToolContext) -> WorkflowContext:
+    """Create a workflow context from the current tool context for knowledge workflows."""
     tools = context.engine.tools if context.engine is not None else []
     return WorkflowContext(llm=context.llm, tools=tools)
 
@@ -93,6 +97,7 @@ class KnowledgeTool(Tool):
         )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the knowledge action."""
         action = args.get('action', '')
         query = args.get('query', '') or ''
         page = args.get('page', '') or ''
@@ -107,6 +112,7 @@ class KnowledgeTool(Tool):
         return "Knowledge"
 
     def is_available(self, context) -> bool:
+        """Check that a knowledge directory is available in the active profile."""
         return _get_knowledge_dir(context) is not None
 
     async def execute(
@@ -116,6 +122,7 @@ class KnowledgeTool(Tool):
         signal: AbortSignal | None = None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch knowledge base operations (list, query, add, ingest, lint, consolidate, log)."""
         params = KnowledgeSchema.model_validate(invocation.params)
         knowledge_dir = _get_knowledge_dir(context)
 

@@ -124,6 +124,7 @@ class ControlCenterTool(Tool):
         self._tasks: set[asyncio.Task] = set()
 
     def get_display_name(self, args: dict) -> str:
+        """Format a readable description of the action and target setting."""
         action = args.get('action', '')
         key = args.get('key')
         resume_prompt = args.get('resume_prompt')
@@ -139,7 +140,7 @@ class ControlCenterTool(Tool):
         return "Settings"
 
     def is_available(self, context: ToolContext) -> bool:
-        """Only expose the tool when a settings manager is present."""
+        """Check that a settings manager is present in the context."""
         return context.settings_manager is not None
 
     async def execute(
@@ -149,6 +150,7 @@ class ControlCenterTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch get/set/reboot actions for runtime settings control."""
         sm = context.settings_manager if context else None
         if sm is None:
             return ToolResult.error(id=invocation.id, content="control_center: settings manager is not available.")

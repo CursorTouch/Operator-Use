@@ -28,25 +28,27 @@ if TYPE_CHECKING:
 
 
 class SummarizationCompaction(Compaction):
+    """Summarization-based compaction triggered when context approaches the window limit."""
     def __init__(
         self,
         llm: LLM,
         settings: CompactionSettings | None = None,
         settings_provider: Callable[[], CompactionSettings] | None = None,
     ):
+        """Initialize with an LLM and optional settings/provider."""
         self.llm = llm
         self.settings = settings or CompactionSettings()
         self._settings_provider = settings_provider
 
     @property
     def _settings(self) -> CompactionSettings:
-        """Resolve compaction settings live so changes (e.g. settings.json) take
-        effect on the next check rather than being frozen at construction."""
+        """Resolve compaction settings live so changes (e.g. settings.json) take effect on the next check."""
         if self._settings_provider is not None:
             return self._settings_provider()
         return self.settings
 
     def should_compact(self, context_tokens: int, context_window: int) -> bool:
+        """Trigger compaction when context exceeds reserve_tokens threshold or trigger_percent."""
         settings = self._settings
         if not settings.enabled:
             return False
@@ -55,11 +57,7 @@ class SummarizationCompaction(Compaction):
         return context_tokens > context_window - settings.reserve_tokens
 
     def prepare(self, path_entries: list[SessionEntry]) -> CompactionPreparation | None:
-        """
-        Analyse path_entries (root → leaf, no header) and return everything
-        needed to call compact(). Returns None if the last entry is already a
-        compaction or no valid cut point exists.
-        """
+        """Analyse entries and return compaction inputs, or None if already compacted or no cut point."""
         settings = self._settings
 
         if path_entries and isinstance(path_entries[-1], CompactionEntry):
@@ -114,6 +112,7 @@ class SummarizationCompaction(Compaction):
         custom_instructions: str | None = None,
         thinking_level: ThinkingLevel | None = None,
     ) -> CompactionResult:
+        """Generate a summary via LLM, optionally handling split turns separately."""
         if preparation.is_split_turn and preparation.turn_prefix_messages:
             summary = await self._compact_split_turn(preparation, custom_instructions, thinking_level)
         else:
@@ -147,6 +146,7 @@ class SummarizationCompaction(Compaction):
         custom_instructions: str | None,
         thinking_level: ThinkingLevel | None,
     ) -> str:
+        """Handle split turns by summarizing history and turn context separately in parallel."""
         async def summarize_history() -> str:
             prompt = build_summary_prompt(
                 preparation.messages_to_summarize,

@@ -55,6 +55,7 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
 # ============================================================================
 
 def validate_name(name: str, parent_dir_name: str) -> list[str]:
+    """Validate a skill name; return list of error messages if invalid."""
     errors: list[str] = []
     if name != parent_dir_name:
         errors.append(f'name "{name}" does not match parent directory "{parent_dir_name}"')
@@ -70,6 +71,7 @@ def validate_name(name: str, parent_dir_name: str) -> list[str]:
 
 
 def validate_description(description: str | None) -> list[str]:
+    """Validate a skill description; return list of error messages if invalid."""
     if not description or not description.strip():
         return ['description is required']
     if len(description) > MAX_DESCRIPTION_LENGTH:
@@ -82,6 +84,7 @@ def validate_description(description: str | None) -> list[str]:
 # ============================================================================
 
 def _make_source_info(file_path: Path, base_dir: Path, source: str) -> SourceInfo:
+    """Construct SourceInfo from file path and source type."""
     scope = source if source in ('user', 'project') else None
     return SourceInfo(
         path=str(file_path),
@@ -99,6 +102,7 @@ def load_skill_from_file(
     file_path: Path,
     source: str,
 ) -> tuple[Skill | None, list[ResourceDiagnostic]]:
+    """Parse a single SKILL.md file; return (Skill, diagnostics) or (None, diagnostics) on validation failure."""
     diagnostics: list[ResourceDiagnostic] = []
 
     try:
@@ -153,6 +157,7 @@ def _load_from_dir_internal(
     source: str,
     include_root_files: bool,
 ) -> LoadSkillsResult:
+    """Recursively scan a directory for SKILL.md files and return all valid skills."""
     skills: list[Skill] = []
     diagnostics: list[ResourceDiagnostic] = []
 
@@ -191,6 +196,7 @@ def _load_from_dir_internal(
 
 
 def load_skills_from_dir(dir_path: Path, source: str) -> LoadSkillsResult:
+    """Load all skills from a directory tree, including root-level .md files."""
     return _load_from_dir_internal(dir_path, source, include_root_files=True)
 
 
@@ -199,6 +205,7 @@ def load_skills_from_dir(dir_path: Path, source: str) -> LoadSkillsResult:
 # ============================================================================
 
 def load_skills(options: LoadSkillsOptions) -> LoadSkillsResult:
+    """Load skills from all configured paths; first-found wins on name collision."""
     cwd = options.cwd
     all_diagnostics: list[ResourceDiagnostic] = []
     collision_diagnostics: list[ResourceDiagnostic] = []

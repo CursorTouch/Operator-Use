@@ -73,6 +73,7 @@ class SubAgentSchema(BaseModel):
 
 
 def _format_duration(started: datetime, finished: datetime | None) -> str:
+    """Format duration from start to end time as human-readable string."""
     end = finished or datetime.now()
     secs = int((end - started).total_seconds())
     return f'{secs // 60}m {secs % 60}s' if secs >= 60 else f'{secs}s'

@@ -30,7 +30,7 @@ class Budget:
         return self._spent
 
     def remaining(self) -> int:
-        """Return how many units are left before exhaustion."""
+        """Return the number of units remaining before exhaustion."""
         return self.total - self._spent
 
     def add(self, n: int = 1) -> None:
@@ -38,7 +38,7 @@ class Budget:
         self._spent += n
 
     def exhausted(self) -> bool:
-        """Return True when no budget remains."""
+        """Return True if the budget is fully consumed."""
         return self._spent >= self.total
 
     def __repr__(self) -> str:
@@ -92,27 +92,30 @@ class WorkflowExecuteContext:
         stall_ms: int | None = None,
         max_retries: int | None = None,
     ) -> str | BaseModel:
-        """Run a single agent task. Returns str or a parsed Pydantic model if schema given.
+        """Invoke an agent task and return the result (str or Pydantic model if schema given).
 
-        A stalled call (no completion within `stall_ms`) is cancelled and retried up
-        to `max_retries` times before raising. Hard-capped by `max_agent_calls`.
-        `stall_ms`/`max_retries` default to the run's configured values when omitted."""
+        Stalled calls (no completion within stall_ms) are retried up to max_retries times.
+        Hard-capped by max_agent_calls; raise WorkflowAgentCapError on overflow.
+        With resume=True, cache the result in the journal (keyed by prompt + options).
+        """
         from operator_use.workflow.types import WorkflowAgentCapError
 
         stall_ms = self._stall_ms if stall_ms is None else stall_ms
         max_retries = self._max_retries if max_retries is None else max_retries
 
+        # Check hard cap to prevent runaway workflows.
         if self._record.agent_calls >= self._max_agent_calls:
             raise WorkflowAgentCapError(
                 f'Workflow exceeded max agent() calls ({self._max_agent_calls}). '
                 f'Raise it via args["max_agent_calls"] if this is intentional.'
             )
 
-        # Claim the slot before yielding to prevent concurrent parallel() calls
+        # Increment the counter before awaiting to prevent concurrent parallel() calls
         # from all passing the cap check before any of them increments the counter.
         self._record.agent_calls += 1
         self.budget.add()
 
+        # Check the journal (persistent cache) if resume=True.
         opts = {'schema': schema.__name__ if schema else None, 'system': system}
         if resume:
             cached = self._journal.get(prompt, opts)
@@ -121,17 +124,23 @@ class WorkflowExecuteContext:
 
         result = await self._run_with_retry(prompt, schema, system, tools, stall_ms, max_retries)
 
+        # Store the result in the journal for future resume checks.
         if resume:
             serialized = result.model_dump() if isinstance(result, BaseModel) else result
             self._journal.set(prompt, opts, serialized)
         return result
 
     async def _run_with_retry(self, prompt, schema, system, tools, stall_ms: int, max_retries: int):
-        """Produce one agent result, retrying on stall (timeout) up to max_retries times."""
+        """Run an agent task with timeout and retry on stall, returning result or raising.
+
+        Converts stall_ms to a timeout, calls either structured or unstructured agent,
+        and retries up to max_retries times on asyncio.TimeoutError.
+        """
         timeout = max(stall_ms, 1) / 1000
         last_exc: BaseException | None = None
         for attempt in range(max_retries + 1):
             try:
+                # Structured (with schema) vs unstructured (text result) path.
                 if schema is not None:
                     return await asyncio.wait_for(self._agent_structured(prompt, schema, system), timeout=timeout)
                 allowed = self._filter_tools(tools)

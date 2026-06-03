@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 
 class ContextPruningSettings(BaseModel):
+    """Configuration for truncating tool output to reduce context usage."""
     enabled: bool = False                  # off by default; opt-in per profile
     min_prune_chars: int = 200             # ignore results shorter than this
     soft_trim_chars: int = 2000            # results longer than this are soft-trimmed (head…tail)

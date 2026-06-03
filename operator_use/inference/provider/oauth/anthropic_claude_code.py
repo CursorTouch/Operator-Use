@@ -98,7 +98,7 @@ def _refresh_token_sync(refresh_token: str) -> dict:
 
 
 def _validate_token_sync(access_token: str) -> bool:
-    """Probe the models endpoint to confirm the access token is still accepted."""
+    """Probe the models endpoint to confirm the access token is still accepted (401/403 = invalid)."""
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/models",
         headers={
@@ -118,7 +118,7 @@ def _validate_token_sync(access_token: str) -> bool:
 
 
 def _parse_token_response(data: dict) -> tuple[str, str, int]:
-    """Returns (access_token, refresh_token, expires_ms)."""
+    """Extract (access_token, refresh_token, expires_ms) from an Anthropic token response with 5-minute buffer."""
     access = data.get("access_token")
     refresh = data.get("refresh_token")
     expires_in = data.get("expires_in")

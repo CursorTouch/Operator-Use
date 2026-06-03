@@ -1,3 +1,4 @@
+"""ls — List directory contents with file metadata (size, mtime, permissions)."""
 import os
 from datetime import datetime
 from pathlib import Path
@@ -6,12 +7,14 @@ from pydantic import BaseModel, Field
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class LsSchema(BaseModel):
+    """Input schema for ls; validates path exists and is a directory."""
     path: str = Field(
         default=".",
         description="Absolute path or path relative to the current working directory. Omit to list the current directory.",
     )
 
 class LsTool(Tool):
+    """List directory contents with file metadata (size, mtime, permissions)."""
     def __init__(self):
         super().__init__(
             name="ls",
@@ -21,6 +24,7 @@ class LsTool(Tool):
             execution_mode=ToolExecutionMode.Parallel,        )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the target directory."""
         path = args.get('path', '.') or '.'
         return f"Listing: {path}"
 
@@ -31,6 +35,7 @@ class LsTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """List directory contents with size, mtime, and permissions."""
         params = invocation.params
         path_str = params.get("path", ".")
         resolved_path = Path(path_str).resolve()
@@ -50,6 +55,7 @@ class LsTool(Tool):
             return ToolResult.ok(id=invocation.id, content=f"Directory is empty: {resolved_path}")
 
         def _human_size(n: float) -> str:
+            """Format bytes as human-readable size with units."""
             for unit in ("B", "K", "M", "G", "T"):
                 if n < 1024:
                     return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"

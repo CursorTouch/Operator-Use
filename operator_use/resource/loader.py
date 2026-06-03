@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 
 def _read_optional_file(path: Path) -> str | None:
+    """Read a file, returning None if not found or on read error."""
     try:
         return path.read_text(encoding='utf-8') if path.is_file() else None
     except OSError:
@@ -195,6 +196,7 @@ class ResourceLoader(BaseResourceLoader):
     # -------------------------------------------------------------------------
 
     async def _reload_extensions(self) -> None:
+        """Discover and load all extension files from builtin, profile, and package directories."""
         if self._no_extensions:
             self._extensions_result = LoadExtensionsResult()
             return
@@ -229,6 +231,7 @@ class ResourceLoader(BaseResourceLoader):
         )
 
     def _reload_skills(self) -> None:
+        """Load all skill files from builtin, profile, extension, and package directories."""
         if self._no_skills:
             self._skills = []
             self._skill_diagnostics = []
@@ -258,6 +261,7 @@ class ResourceLoader(BaseResourceLoader):
         self._skill_diagnostics = result.diagnostics
 
     def _reload_tools(self) -> None:
+        """Load all tool files from builtin, profile, and project directories."""
         dirs = [get_builtins_tools_dir()]
 
         if self._active_profile is not None:
@@ -271,6 +275,7 @@ class ResourceLoader(BaseResourceLoader):
         self._tools = load_tools(dirs).tools
 
     def _reload_commands(self) -> None:
+        """Load all command files from builtin, profile, package, and project directories."""
         dirs = [get_builtins_commands_dir()]
 
         if self._active_profile is not None:
@@ -285,6 +290,7 @@ class ResourceLoader(BaseResourceLoader):
         self._commands = load_commands(dirs).commands
 
     def _reload_hooks(self) -> None:
+        """Load all hook registrations from builtin, profile, and project directories."""
         dirs = [get_builtins_hooks_dir()]
 
         if self._active_profile is not None:
@@ -298,6 +304,7 @@ class ResourceLoader(BaseResourceLoader):
         self._hooks = load_hooks(dirs).hooks
 
     def _reload_context_files(self) -> None:
+        """Load context files (CLAUDE.md/AGENTS.md) from the active profile and ancestors."""
         if self._no_context_files:
             self._context_files = []
             return
@@ -306,6 +313,7 @@ class ResourceLoader(BaseResourceLoader):
             self._context_files = load_project_context_files(self._cwd, self._active_profile.profile_dir)
 
     def _reload_subagent_profiles(self) -> None:
+        """Load all subagent profile files from builtin, profile, package, and project directories."""
         dirs = [get_builtins_subagents_dir()]
 
         if self._active_profile is not None:
@@ -320,11 +328,13 @@ class ResourceLoader(BaseResourceLoader):
         self._subagent_profiles = load_profiles(dirs).profiles
 
     def _reload_agent_profiles(self) -> None:
+        """Load all agent profiles from the global profiles directory."""
         profiles_root = get_profiles_dir()
         dirs = [profiles_root] if profiles_root.is_dir() else []
         self._agent_profiles = load_agent_profiles(dirs).profiles
 
     def _reload_system_prompt(self) -> None:
+        """Assemble system prompt from override, knowledge, and workflow sections."""
         if self._system_prompt_override is not None:
             self._system_prompt = self._system_prompt_override
         else:
@@ -362,6 +372,7 @@ class ResourceLoader(BaseResourceLoader):
             self._active_profile.temp_dir.mkdir(parents=True, exist_ok=True)
 
     def _reload_identity_files(self) -> None:
+        """Load identity files (soul, user profile, memory, tools reference) from the active profile."""
         if self._active_profile is not None:
             self._soul_prompt = _read_optional_file(self._active_profile.soul_path)
             self._user_profile = _read_optional_file(self._active_profile.user_path)

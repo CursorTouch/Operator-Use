@@ -75,6 +75,7 @@ async def _dream(registry: CommandRegistry) -> None:
 
 
 async def _handle_memory(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     subcommand = args[0].lower() if args else ''
     if subcommand == 'dream':
         await _dream(registry)

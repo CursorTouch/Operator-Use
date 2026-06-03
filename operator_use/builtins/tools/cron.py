@@ -1,3 +1,4 @@
+"""cron — Create and manage background scheduled tasks (jobs, recurring intervals)."""
 import json
 from typing import TYPE_CHECKING, Literal
 
@@ -104,7 +105,7 @@ class CronSchema(BaseModel):
 
 
 def _format_job(job: CronJob) -> dict:
-    """Serialise a CronJob to a plain dict suitable for JSON output to the LLM."""
+    """Convert a CronJob to a plain dict with readable schedule and status for LLM output."""
     sched = job.schedule
     if sched.mode == 'every' and sched.interval_ms:
         schedule_str = f'every {sched.interval_ms}ms'
@@ -145,6 +146,7 @@ class CronTool(Tool):
         self._cron = cron
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the cron action and target job."""
         action = args.get('action', '')
         name = args.get('name', '') or ''
         job_id = args.get('job_id', '') or ''
@@ -157,7 +159,7 @@ class CronTool(Tool):
         return "Cron"
 
     def is_available(self, context) -> bool:
-        """Gate: cron must be enabled in settings and a Cron service must be present."""
+        """Check that cron is enabled and a Cron service is available."""
         sm = context.settings_manager
         if sm is not None and sm.get_cron_enabled() is False:
             return False
@@ -170,6 +172,7 @@ class CronTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch list/add/update/remove/enable/disable cron job operations."""
         cron = self._cron or (context.cron if context else None)
         if cron is None:
             return ToolResult.error(id=invocation.id, content='Cron service is not available.')

@@ -33,6 +33,7 @@ class ContextPruner:
     """Wires into engine.options.transform_context to prune old tool results."""
 
     def __init__(self, settings: ContextPruningSettings) -> None:
+        """Initialize with pruning configuration."""
         self._settings = settings
 
     def transform(
@@ -40,7 +41,7 @@ class ContextPruner:
         messages: list[LLMMessage],
         signal: Optional[AbortSignal] = None,
     ) -> list[LLMMessage]:
-        """TransformContextCallback — prune old tool results in-memory."""
+        """Trim or replace old tool results in-memory, protecting the recent tail."""
         s = self._settings
         if not s.enabled:
             return messages

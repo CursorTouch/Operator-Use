@@ -1,3 +1,4 @@
+"""edit — Apply line-range mutations to files (replace, insert, delete lines atomically)."""
 import re
 import zlib
 from pathlib import Path
@@ -7,7 +8,7 @@ from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMo
 
 
 def _file_hash(content: str) -> str:
-    """Compute a 4-hex CRC32 tag over content with trailing whitespace stripped so formatter runs don't invalidate it."""
+    """Compute 4-hex CRC32 hash with trailing whitespace normalized to guard against formatter changes."""
     normalized = re.sub(r'[ \t\r]+(?=\n|$)', '', content)
     return format(zlib.crc32(normalized.encode('utf-8')) & 0xFFFF, '04X')
 
@@ -87,6 +88,7 @@ class EditTool(Tool):
         )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the target filename."""
         path = args.get('path', '') or ''
         name = path.rsplit('/', 1)[-1] if path else ''
         return f"Editing: {name}" if name else "Editing file"

@@ -1,3 +1,4 @@
+"""process — Start and manage background processes (shell commands and spawned agents)."""
 from __future__ import annotations
 
 import time
@@ -114,6 +115,7 @@ class ProcessTool(Tool):
         self._manager = manager
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the process action."""
         action = args.get('action', '')
         command = args.get('command', '') or ''
         description = args.get('description', '') or ''
@@ -128,6 +130,7 @@ class ProcessTool(Tool):
         return "Process"
 
     def is_available(self, context) -> bool:
+        """Check that a process manager is available."""
         return (self._manager or context.process_manager) is not None
 
     async def execute(

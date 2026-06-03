@@ -70,10 +70,12 @@ _CURATOR_REVIEW_PROMPT = (
 # ── State file ────────────────────────────────────────────────────────────────
 
 def _state_path(skills_dir: Path) -> Path:
+    """Return the path to the curator state file."""
     return skills_dir / _STATE_FILE
 
 
 def _load_state(skills_dir: Path) -> dict[str, Any]:
+    """Load curator state from disk, returning empty dict on missing or error."""
     p = _state_path(skills_dir)
     if not p.exists():
         return {}
@@ -84,6 +86,7 @@ def _load_state(skills_dir: Path) -> dict[str, Any]:
 
 
 def _save_state(skills_dir: Path, state: dict[str, Any]) -> None:
+    """Atomically write curator state to disk."""
     p = _state_path(skills_dir)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -118,7 +121,7 @@ def archive_skill(skills_dir: Path, name: str) -> bool:
 
 
 def restore_skill(skills_dir: Path, name: str) -> tuple[bool, str]:
-    """Restore an archived skill back to the skills dir."""
+    """Restore an archived skill back to active; return (success, message)."""
     archive_dir = skills_dir / _ARCHIVE_DIR
     src = archive_dir / name
     if not src.exists():
@@ -136,6 +139,7 @@ def restore_skill(skills_dir: Path, name: str) -> tuple[bool, str]:
 
 
 def list_archived(skills_dir: Path) -> list[str]:
+    """Return names of all archived skills."""
     archive_dir = skills_dir / _ARCHIVE_DIR
     if not archive_dir.is_dir():
         return []
@@ -149,6 +153,7 @@ def should_run_now(
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
     paused: bool = False,
 ) -> bool:
+    """Check if enough time has elapsed since last run and curator is not paused."""
     if paused:
         return False
     state = _load_state(skills_dir)
@@ -170,6 +175,7 @@ def apply_automatic_transitions(
     stale_after_days: int = DEFAULT_STALE_AFTER_DAYS,
     archive_after_days: int = DEFAULT_ARCHIVE_AFTER_DAYS,
 ) -> dict[str, int]:
+    """Mark idle agent-created skills stale or archived by activity age; return transition counts."""
     now = datetime.now(timezone.utc)
     stale_cutoff   = now - timedelta(days=stale_after_days)
     archive_cutoff = now - timedelta(days=archive_after_days)
@@ -205,6 +211,7 @@ def apply_automatic_transitions(
 # ── LLM consolidation pass ────────────────────────────────────────────────────
 
 async def _run_llm_consolidation(skills_dir: Path, llm: Any, skill_manage_tool: Any, skill_view_tool: Any | None) -> str:
+    """Run the LLM consolidation engine to merge narrow skills into class-level umbrellas."""
     from operator_use.agent.types import AgentContext
     from operator_use.engine.service import Engine
     from operator_use.engine.types import Options
@@ -271,6 +278,7 @@ async def run_curator(
     stale_after_days: int = DEFAULT_STALE_AFTER_DAYS,
     archive_after_days: int = DEFAULT_ARCHIVE_AFTER_DAYS,
 ) -> str:
+    """Run both auto-transitions and LLM consolidation; update state and return summary."""
     counts = apply_automatic_transitions(skills_dir, stale_after_days, archive_after_days)
     auto_summary = (
         f"auto: {counts['marked_stale']} marked stale, "
@@ -336,6 +344,7 @@ def maybe_run_curator(
 # ── Status helper ─────────────────────────────────────────────────────────────
 
 def curator_status(skills_dir: Path) -> dict[str, Any]:
+    """Return curator state and skill lifecycle statistics."""
     state = _load_state(skills_dir)
     rows = skill_usage.agent_created_report(skills_dir)
     by_state: dict[str, int] = {STATE_ACTIVE: 0, STATE_STALE: 0, STATE_ARCHIVED: 0}

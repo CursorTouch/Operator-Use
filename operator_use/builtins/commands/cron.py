@@ -119,6 +119,7 @@ def _print_job_detail(job: CronJob) -> None:
 
 
 async def _handle_cron(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     runtime = registry.runtime
     if runtime is None:
         print("No active runtime.")

@@ -28,7 +28,7 @@ from operator_use.hooks.service import Hooks
 from operator_use.subagent.manager import _session_channel, _session_chat_id, _session_message_id
 from operator_use.agent.types import RetryStartEvent, RetryEndEvent
 from operator_use.hooks.types import (
-    AgentErrorEvent, MessageEndEvent, MessageUpdateEvent,
+    AgentErrorEvent, MessageStartEvent, MessageEndEvent, MessageUpdateEvent,
     ToolExecutionEndEvent, ToolExecutionStartEvent, ToolExecutionUpdateEvent,
     ChannelConnectEvent, ChannelDisconnectEvent,
     MessageReceiveEvent, MessageReceiveResult,
@@ -584,6 +584,8 @@ class Gateway:
         async def _on_event(event) -> None:
             """Translate agent events into OutgoingMessage bus publications for the channel."""
             match event:
+                case MessageStartEvent(message=m) if m.role == Role.ASSISTANT:
+                    pass
                 case MessageUpdateEvent(message=m) if m.role == Role.ASSISTANT:
                     for content in m.contents:
                         chunk_text = getattr(content, 'content', '')
@@ -662,7 +664,7 @@ class Gateway:
                         channel=channel_id,
                         chat_id=chat_id,
                         stream_phase=StreamPhase.CHUNK,
-                        metadata={'kind': 'tool_update', 'name': name, 'text': str(partial.content), 'id': partial.id},
+                        metadata={'kind': 'tool_update', 'name': name, 'text': partial.content, 'id': partial.id},
                     )
                     await self._bus.publish_outgoing(out)
 
@@ -683,7 +685,7 @@ class Gateway:
                             'name': name,
                             'display_name': display_name,
                             'is_error': res.is_error,
-                            'result': str(res.content)[:300] if res.is_error else '',
+                            'result': res.content[:300] if res.is_error else '',
                             'id': res.id,
                         },
                     )

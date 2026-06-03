@@ -1,3 +1,4 @@
+"""web_search — Search the web (text, news, images, videos, books) via DuckDuckGo."""
 import asyncio
 from enum import StrEnum
 from pydantic import BaseModel, Field
@@ -77,6 +78,7 @@ class WebSearchTool(Tool):
             execution_mode=ToolExecutionMode.Parallel,        )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the action."""
         query = args.get('query', '') or ''
         mode = args.get('mode', 'text') or 'text'
         short = query[:40] if len(query) > 40 else query
@@ -91,6 +93,7 @@ class WebSearchTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch the requested action."""
         query = invocation.params.get("query")
         mode = SearchMode(invocation.params.get("mode", SearchMode.text))
         max_results = invocation.params.get("max_results", 10)

@@ -108,12 +108,10 @@ class SubagentManager:
         channel: str | None = None,
         chat_id: str | None = None,
     ) -> str:
-        """Spawn a background subagent. Returns task_id immediately.
+        """Spawn a background subagent task and return its task_id immediately.
 
-        The channel + chat_id default to the asyncio context variable set
-        by Gateway._run_session(); callers outside a session turn (e.g. cron)
-        pass them explicitly. In CLI mode both are None and the result falls
-        back to a direct agent.invoke() call.
+        Channel + chat_id default to asyncio context variables set by
+        Gateway._run_session(); pass them explicitly for out-of-band spawns (cron, etc).
         """
         channel = channel or _session_channel.get()
         chat_id = chat_id or _session_chat_id.get()
@@ -171,7 +169,7 @@ class SubagentManager:
         return task_id
 
     def cancel(self, task_id: str) -> bool:
-        """Cancel an in-flight task. Returns True if the cancellation was sent."""
+        """Cancel an in-flight task, returning True if the cancellation was sent."""
         t = self._tasks.get(task_id)
         if t and not t.done():
             t.cancel()
@@ -179,26 +177,28 @@ class SubagentManager:
         return False
 
     def get_record(self, task_id: str) -> SubagentRecord | None:
-        """Return the record for a known task_id, or None if it was never spawned."""
+        """Retrieve a subagent record by task_id, or None if not found."""
         return self._records.get(task_id)
 
     def list_all(self) -> list[SubagentRecord]:
-        """Return all records, newest first."""
+        """Return all records sorted by start time, newest first."""
         return sorted(self._records.values(), key=lambda r: r.started_at, reverse=True)
 
     def pool_stats(self) -> dict:
-        """Return pending/running/completed counts from the underlying TaskPool."""
+        """Return task pool statistics (pending, running, completed counts)."""
         return self._pool.stats()
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
     async def _run_and_announce(self, record: SubagentRecord) -> None:
-        """Execute the subagent, announce its result, then fire completion listeners."""
+        """Execute the subagent, publish its result, then invoke registered completion callbacks."""
         await self._runner.run(record)
+        # Shield the announce from cancellation to ensure results are always published.
         try:
             await asyncio.shield(self._announce(record))
         except Exception:
             logger.exception('[%s] failed to announce result to bus', record.task_id)
+        # Fire all registered one-shot completion callbacks, catching exceptions from each.
         for cb in self._listeners.pop(record.task_id, []):
             try:
                 await cb(record)
@@ -206,18 +206,21 @@ class SubagentManager:
                 logger.warning('[%s] completion listener raised', record.task_id, exc_info=True)
 
     async def _announce(self, record: SubagentRecord) -> None:
-        """Deliver the subagent result back to the originating session via the bus.
+        """Publish the subagent result back to the originating session via the bus.
 
-        Both CLI (stdio) and gateway channels use the same gateway bus.
-        Gateway._handle_incoming routes 'stdio' messages directly to
-        runtime.current_session so the REPL's own renderer handles output.
+        Behavior depends on delivery mode: 'channel' sends the raw result as an
+        OutgoingMessage; 'agent' wraps it in an IncomingMessage for the LLM to
+        summarize. Both CLI (stdio) and gateway channels use the bus; Gateway
+        routes 'stdio' messages directly to runtime.current_session.
         """
+        # Sanity check: need both channel and chat_id to route the result.
         if not record.channel or not record.chat_id:
             logger.warning(
                 '[%s] no channel/chat_id — result dropped. Result:\n%s',
                 record.task_id, record.result,
             )
             return
+        # Bus required for any delivery mode.
         if self._bus is None:
             logger.warning(
                 '[%s] no bus available — result dropped. Result:\n%s',
@@ -229,6 +232,7 @@ class SubagentManager:
 
         from operator_use.bus.types import IncomingMessage, OutgoingMessage, TextPart
 
+        # 'channel' mode: send raw result directly to the chat.
         if record.deliver == 'channel':
             await self._bus.publish_outgoing(OutgoingMessage(
                 channel=record.channel,
@@ -238,6 +242,7 @@ class SubagentManager:
             ))
             return
 
+        # 'agent' mode: wrap result in an IncomingMessage for the main agent to summarize.
         status_label = record.status.value
         if record.status == SubagentStatus.completed:
             content = (
@@ -262,7 +267,11 @@ class SubagentManager:
         ))
 
     def _check_for_cycles(self, new_id: str, depends_on: list[str]) -> None:
-        """Raise ValueError if adding new_id would create a dependency cycle."""
+        """Detect and raise ValueError if adding new_id would create a dependency cycle.
+
+        Uses depth-first search to traverse the dependency graph and raise early
+        if new_id would depend (directly or transitively) on itself.
+        """
         visited: set[str] = set()
         stack = list(depends_on)
         while stack:

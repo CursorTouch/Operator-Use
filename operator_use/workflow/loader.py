@@ -16,7 +16,7 @@ class WorkflowLoader:
         self._dirs = [d for d in dirs if d is not None]
 
     def find(self, name: str) -> Path | None:
-        """Return the path of the first matching workflow file, or None if not found."""
+        """Search for a workflow file by name; return the first match or None."""
         for d in self._dirs:
             path = d / f'{name}.py'
             if path.exists():
@@ -24,13 +24,14 @@ class WorkflowLoader:
         return None
 
     def discover(self) -> list[Path]:
-        """Return all workflow .py files across configured dirs; first-found name wins."""
+        """Find all workflow .py files across configured dirs; deduplicate by filename."""
         seen: set[str] = set()
         result: list[Path] = []
         for d in self._dirs:
             if not d.exists():
                 continue
             for path in sorted(d.glob('*.py')):
+                # Skip __init__.py and already-seen names (first-found wins).
                 if path.name == '__init__.py' or path.name in seen:
                     continue
                 seen.add(path.name)
@@ -38,12 +39,13 @@ class WorkflowLoader:
         return result
 
     def list_with_meta(self) -> list[tuple[Path, WorkflowMeta]]:
-        """Return (path, meta) pairs for all discovered workflows; falls back to stem name on parse error."""
+        """Discover all workflows and extract their metadata; fallback to stem on parse error."""
         result = []
         for path in self.discover():
             try:
                 meta = load_meta(path)
             except Exception:
+                # If metadata parse fails, use filename as name and empty description.
                 meta = WorkflowMeta(name=path.stem, description='')
             result.append((path, meta))
         return result

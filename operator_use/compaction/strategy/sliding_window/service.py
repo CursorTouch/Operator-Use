@@ -51,6 +51,7 @@ class SlidingWindowCompaction(Compaction):
 
     @property
     def _settings(self) -> SlidingWindowCompactionSettings:
+        """Resolve settings dynamically if a provider is configured."""
         if self._settings_provider is not None:
             return self._settings_provider()
         return self.settings
@@ -60,12 +61,14 @@ class SlidingWindowCompaction(Compaction):
     # -------------------------------------------------------------------------
 
     def should_compact(self, context_tokens: int, context_window: int) -> bool:
+        """Trigger compaction when context exceeds trigger_percent of window."""
         settings = self._settings
         if not settings.enabled:
             return False
         return context_tokens > context_window * settings.trigger_percent
 
     def prepare(self, path_entries: list[SessionEntry]) -> CompactionPreparation | None:
+        """Prepare a sliding window batch (oldest batch_tokens of content to summarize)."""
         settings = self._settings
 
         if path_entries and isinstance(path_entries[-1], CompactionEntry):
@@ -135,6 +138,7 @@ class SlidingWindowCompaction(Compaction):
         custom_instructions: str | None = None,
         thinking_level: ThinkingLevel | None = None,
     ) -> CompactionResult:
+        """Summarize the batch, optionally handling split turns separately."""
         if preparation.is_split_turn and preparation.turn_prefix_messages:
             summary = await self._compact_split_turn(preparation, custom_instructions, thinking_level)
         else:
@@ -168,6 +172,7 @@ class SlidingWindowCompaction(Compaction):
         custom_instructions: str | None,
         thinking_level: ThinkingLevel | None,
     ) -> str:
+        """Handle split turns by summarizing history and turn context separately in parallel."""
         async def summarize_history() -> str:
             prompt = build_summary_prompt(
                 preparation.messages_to_summarize,

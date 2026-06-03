@@ -1,3 +1,4 @@
+"""send — Deliver files and intermediate updates to the user mid-turn."""
 from __future__ import annotations
 
 import mimetypes
@@ -110,6 +111,7 @@ class SendTool(Tool):
         self._bus = bus
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the action."""
         action = args.get('action', '')
         path = args.get('path', '') or ''
         emoji = args.get('emoji', '') or ''
@@ -121,6 +123,7 @@ class SendTool(Tool):
         return "Sending"
 
     def is_available(self, context) -> bool:
+        """Check that required service is available in context."""
         return (self._bus or context.bus) is not None
 
     async def execute(
@@ -130,6 +133,7 @@ class SendTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Dispatch the requested action."""
         bus = self._bus or (context.bus if context else None)
         if bus is None:
             return ToolResult.error(id=invocation.id, content='send: bus is not available.')

@@ -242,7 +242,7 @@ class ToolExecutionStartEvent:
     """Fired just before a tool's execute() is called."""
 
     type: Literal['tool_execution_start'] = field(default='tool_execution_start', init=False)
-    tool_call: Any = None       # ToolCallContent
+    tool_call: ToolCallContent       # ToolCallContent
 
 
 @dataclass
@@ -250,7 +250,7 @@ class ToolExecutionUpdateEvent:
     """Fired for each streaming progress update emitted by a long-running tool."""
 
     type: Literal['tool_execution_update'] = field(default='tool_execution_update', init=False)
-    partial_tool_result: Any = None     # ToolResultContent
+    partial_tool_result: ToolResultContent     # ToolResultContent
 
 
 @dataclass
@@ -258,7 +258,7 @@ class ToolExecutionEndEvent:
     """Fired after a tool's execute() returns with the final ToolResultContent."""
 
     type: Literal['tool_execution_end'] = field(default='tool_execution_end', init=False)
-    tool_result: Any = None     # ToolResultContent
+    tool_result: ToolResultContent     # ToolResultContent
 
 
 @dataclass

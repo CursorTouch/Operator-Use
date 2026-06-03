@@ -24,10 +24,12 @@ from operator_use.compaction.strategy.types import (
 # ============================================================================
 
 def calculate_context_tokens(usage: Usage) -> int:
+    """Sum all token types from a usage record."""
     return usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens
 
 
 def estimate_tokens(message: AgentMessage) -> int:
+    """Estimate token count for a message by converting characters at ~4 chars/token ratio."""
     chars = 0
     match message:
         case UserMessage(contents=contents):
@@ -36,6 +38,7 @@ def estimate_tokens(message: AgentMessage) -> int:
                     case TextContent(content=text):
                         chars += len(text)
                     case ImageContent():
+                        # Fixed token estimate for images
                         chars += 4800
         case AssistantMessage(contents=contents):
             for content in contents:
@@ -62,6 +65,7 @@ def estimate_tokens(message: AgentMessage) -> int:
 
 
 def get_assistant_usage(message:AgentMessage) -> Usage|None:
+    """Extract usage from an assistant message if it completed successfully."""
     if isinstance(message, AssistantMessage):
         if message.stop_reason not in (StopReason.Error, StopReason.Abort) and message.usage:
             return message.usage
@@ -69,6 +73,7 @@ def get_assistant_usage(message:AgentMessage) -> Usage|None:
 
 
 def get_last_assistant_usage(entries: list[SessionEntry]) -> Usage | None:
+    """Find the most recent successful assistant message's usage in entries."""
     for entry in reversed(entries):
         if message := get_message_from_entry(entry=entry):
             if usage := get_assistant_usage(message=message):
@@ -76,6 +81,7 @@ def get_last_assistant_usage(entries: list[SessionEntry]) -> Usage | None:
     return None
 
 def get_last_assistant_usage_info(messages: list[AgentMessage])->tuple[Usage, int] | None:
+    """Return (usage, message_index) for the most recent successful assistant message."""
     for i, message in enumerate(reversed(messages)):
         if usage := get_assistant_usage(message=message):
             original_index = len(messages) - 1 - i
@@ -84,8 +90,10 @@ def get_last_assistant_usage_info(messages: list[AgentMessage])->tuple[Usage, in
 
 
 def estimate_context_tokens(messages: list[AgentMessage]) -> ContextUsageEstimate:
+    """Calculate context token usage: reported usage + trailing tokens after last assistant message."""
     usage_info = get_last_assistant_usage_info(messages=messages)
     if usage_info is None:
+        # No assistant usage data; estimate all tokens
         total = sum(estimate_tokens(m) for m in messages)
         return ContextUsageEstimate(
             tokens=total,
@@ -96,6 +104,7 @@ def estimate_context_tokens(messages: list[AgentMessage]) -> ContextUsageEstimat
 
     usage, last_usage_index = usage_info
     usage_tokens = calculate_context_tokens(usage=usage)
+    # Add messages after the last assistant response to trailing
     trailing = sum(estimate_tokens(messages[i]) for i in range(last_usage_index + 1, len(messages)))
     return ContextUsageEstimate(
         tokens=usage_tokens + trailing,
@@ -128,6 +137,7 @@ def extract_file_ops_from_message(msg: AgentMessage, file_ops: FileOperations) -
 
 
 def compute_file_lists(file_ops: FileOperations) -> tuple[list[str], list[str]]:
+    """Partition file operations into (read-only, modified), sorted and deduplicated."""
     modified = file_ops.edited | file_ops.written
     read_files = sorted(file_ops.read - modified)
     modified_files = sorted(modified)
@@ -135,6 +145,7 @@ def compute_file_lists(file_ops: FileOperations) -> tuple[list[str], list[str]]:
 
 
 def format_file_operations(read_files: list[str], modified_files: list[str]) -> str:
+    """Render file operations as XML tags, empty string if no files."""
     sections: list[str] = []
     if read_files:
         sections.append(f"<read-files>\n{chr(10).join(read_files)}\n</read-files>")
@@ -150,6 +161,7 @@ def format_file_operations(read_files: list[str], modified_files: list[str]) -> 
 # ============================================================================
 
 def get_message_from_entry(entry: SessionEntry) -> AgentMessage | None:
+    """Convert a session entry to an agent message, or None if not a message."""
     match entry:
         case MessageEntry(message=message):
             return message
@@ -164,6 +176,7 @@ def get_message_from_entry(entry: SessionEntry) -> AgentMessage | None:
 
 
 def get_message_from_entry_for_compaction(entry: SessionEntry) -> AgentMessage | None:
+    """Convert a session entry to a message for compaction, excluding prior compactions."""
     if isinstance(entry, CompactionEntry):
         return None
     return get_message_from_entry(entry)
@@ -176,12 +189,14 @@ def get_message_from_entry_for_compaction(entry: SessionEntry) -> AgentMessage |
 def find_valid_cut_points(
     entries: list[SessionEntry], start_index: int, end_index: int
 ) -> list[int]:
+    """Find indices where compaction can cut (complete messages/summaries, no tool results)."""
     cut_points: list[int] = []
     for i in range(start_index, end_index):
         entry = entries[i]
         match entry:
             case MessageEntry():
                 match entry.message.role:
+                    # Can cut after user, assistant, or summary messages, not after tool results
                     case Role.USER | Role.ASSISTANT | Role.CUSTOM | Role.BRANCH_SUMMARY | Role.COMPACTION_SUMMARY:
                         cut_points.append(i)
             case BranchEntry() | CustomMessageEntry():
@@ -192,6 +207,7 @@ def find_valid_cut_points(
 def find_turn_start_index(
     entries: list[SessionEntry], entry_index: int, start_index: int
 ) -> int:
+    """Walk backward from entry_index to find where the current turn started."""
     for i in range(entry_index, start_index - 1, -1):
         entry = entries[i]
         match entry:
@@ -214,6 +230,7 @@ def find_cut_point(
     end_index: int,
     keep_recent_tokens: int,
 ) -> CutPointResult:
+    """Find the earliest compaction cut point that retains at least keep_recent_tokens of recent messages."""
     cut_points = find_valid_cut_points(entries, start_index, end_index)
 
     if not cut_points:
@@ -272,6 +289,7 @@ def build_summary_prompt(
     summarization_prompt: str,
     update_summarization_prompt: str,
 ) -> str:
+    """Construct a summarization prompt, optionally updating a previous summary."""
     base = update_summarization_prompt if previous_summary else summarization_prompt
     if custom_instructions:
         base = f"{base}\n\nAdditional focus: {custom_instructions}"
@@ -283,6 +301,7 @@ def build_summary_prompt(
 
 
 def build_turn_prefix_prompt(messages: list, turn_prefix_prompt: str) -> str:
+    """Construct a prompt to generate a turn-prefix message preserving context state."""
     conversation_text = serialize_conversation(messages)
     return f"<conversation>\n{conversation_text}\n</conversation>\n\n{turn_prefix_prompt}"
 
@@ -292,7 +311,7 @@ def build_turn_prefix_prompt(messages: list, turn_prefix_prompt: str) -> str:
 # ============================================================================
 
 def extract_text_from_events(events: list, error_label: str) -> str:
-    """Collect text from LLM events, raising RuntimeError on error stop reason."""
+    """Collect text from LLM events, raising RuntimeError if the stream ended with an error."""
     from operator_use.inference.types import TextEndEvent, EndEvent, ErrorEvent, StopReason
     text_parts: list[str] = []
     stop_reason = StopReason.Stop
@@ -316,7 +335,7 @@ def extract_text_from_events(events: list, error_label: str) -> str:
 # ============================================================================
 
 def find_prev_compaction_index(entries: list[SessionEntry]) -> int:
-    """Return the index of the most recent CompactionEntry, or -1."""
+    """Return the index of the most recent CompactionEntry, or -1 if none found."""
     for i in reversed(range(len(entries))):
         if isinstance(entries[i], CompactionEntry):
             return i
@@ -324,7 +343,7 @@ def find_prev_compaction_index(entries: list[SessionEntry]) -> int:
 
 
 def resolve_boundary_start(entries: list[SessionEntry], prev_compaction_index: int) -> int:
-    """Return the first entry index to include when summarising after a prior compaction."""
+    """Find the first entry to include when summarizing after a prior compaction."""
     if prev_compaction_index < 0:
         return 0
     prev = entries[prev_compaction_index]
@@ -341,7 +360,7 @@ def collect_messages_in_range(
     end: int,
     for_compaction: bool = False,
 ) -> list[AgentMessage]:
-    """Extract AgentMessages from entries[start:end]."""
+    """Extract AgentMessages from entries[start:end], optionally excluding prior compactions."""
     fn = get_message_from_entry_for_compaction if for_compaction else get_message_from_entry
     return [msg for i in range(start, end) if (msg := fn(entries[i])) is not None]
 
@@ -350,7 +369,7 @@ def build_file_ops_from_prev_compaction(
     entries: list[SessionEntry],
     prev_compaction_index: int,
 ) -> FileOperations:
-    """Seed a FileOperations from the saved details of the previous compaction."""
+    """Initialize FileOperations with files from the previous compaction's details."""
     from operator_use.compaction.strategy.types import CompactionDetails  # local to avoid circular at module level
     file_ops = FileOperations()
     if prev_compaction_index < 0:
@@ -373,7 +392,7 @@ def build_file_ops_from_prev_compaction(
 
 
 def accumulate_file_ops(file_ops: FileOperations, messages: list[AgentMessage]) -> None:
-    """Add file ops extracted from each message into file_ops in-place."""
+    """Extract file operations from messages and merge into file_ops in-place."""
     for msg in messages:
         extract_file_ops_from_message(msg, file_ops)
 
@@ -386,6 +405,7 @@ _TOOL_RESULT_MAX_CHARS = 2000
 
 
 def _truncate_for_summary(text: str, max_chars: int = _TOOL_RESULT_MAX_CHARS) -> str:
+    """Truncate text for summaries, appending a note if cut."""
     if len(text) <= max_chars:
         return text
     truncated_chars = len(text) - max_chars
@@ -393,6 +413,7 @@ def _truncate_for_summary(text: str, max_chars: int = _TOOL_RESULT_MAX_CHARS) ->
 
 
 def serialize_conversation(messages: list[AgentMessage]) -> str:
+    """Render messages as labeled text for inclusion in a summarization prompt."""
     parts: list[str] = []
     for msg in messages:
         match msg:

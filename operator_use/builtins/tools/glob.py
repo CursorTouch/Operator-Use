@@ -1,10 +1,11 @@
+"""glob — Find files matching a glob pattern (recursive wildcards supported)."""
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 class GlobSchema(BaseModel):
-    """Input schema for the glob tool."""
+    """Input schema for glob; validates pattern and optional path/limit."""
     pattern: str = Field(
         ...,
         description="Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
@@ -19,7 +20,7 @@ class GlobSchema(BaseModel):
     )
 
 class GlobTool(Tool):
-    """File-finder tool that expands glob patterns relative to a given directory."""
+    """Find files matching a glob pattern with optional result limit."""
 
     def __init__(self):
         super().__init__(
@@ -30,6 +31,7 @@ class GlobTool(Tool):
             execution_mode=ToolExecutionMode.Parallel,        )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the search pattern."""
         pattern = args.get('pattern', '') or ''
         return f"Searching: {pattern}" if pattern else "Searching files"
 
@@ -40,6 +42,7 @@ class GlobTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Match and return files against the glob pattern, respecting the limit."""
         params = invocation.params
         pattern = params.get("pattern")
         path_str = params.get("path", ".")

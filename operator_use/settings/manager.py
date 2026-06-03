@@ -156,10 +156,11 @@ class SettingsManager:
 
     @staticmethod
     def _parse_ext_entries(raw: Any) -> Optional[list[ExtensionEntry]]:
-        """Build ExtensionEntry list from raw dicts, or None when absent."""
+        """Build ExtensionEntry list from raw dicts, filtering unknown keys."""
         if not isinstance(raw, list):
             return None
         valid = {f.name for f in dc.fields(ExtensionEntry)}
+        # Filter to only valid ExtensionEntry fields, skip non-dict items
         return [
             ExtensionEntry(**{k: v for k, v in item.items() if k in valid})
             for item in raw if isinstance(item, dict)
@@ -167,7 +168,7 @@ class SettingsManager:
 
     @staticmethod
     def _parse_extensions(data: dict) -> Optional[ExtensionsSettings]:
-        """Parse the extensions block: ``{"enabled": bool, "list": [...]}``."""
+        """Parse extensions block into ExtensionsSettings, handling missing keys."""
         val = data.get('extensions')
         if isinstance(val, dict):
             return ExtensionsSettings(
@@ -213,17 +214,14 @@ class SettingsManager:
 
     @staticmethod
     def _deep_merge_dicts(base: dict, override: dict) -> dict:
-        """Recursively merge *override* onto *base* at the raw-dict level.
+        """Recursively merge override onto base; partial nested blocks preserve base values.
 
-        Only keys present in *override* win; nested dicts merge key-by-key, so a
-        partial block (e.g. {"browser_use": {"attach_to_existing": true}}) overrides
-        just that key and leaves the rest of the base block intact. This is what
-        lets a profile specify a subset of fields without resetting the others to
-        their dataclass defaults (which dataclass-level merging cannot distinguish
-        from explicit values)."""
+        Enables profiles to override specific nested fields (e.g. {"browser_use": {"attach_to_existing": true}})
+        without resetting unspecified fields to dataclass defaults."""
         out = dict(base)
         for key, value in override.items():
             existing = out.get(key)
+            # Recurse for nested dicts, preserving base structure for unspecified keys
             if isinstance(value, dict) and isinstance(existing, dict):
                 out[key] = SettingsManager._deep_merge_dicts(existing, value)
             else:
@@ -252,8 +250,9 @@ class SettingsManager:
         return SettingsManager._settings_from_dict(merged)
 
     def _mark_modified(self, field: str, nested_field: Optional[str] = None):
-        """Record a global settings field (and optional nested key) as modified."""
+        """Mark a global field as modified for deferred persistence."""
         self.modified_fields.add(field)
+        # Track nested fields to enable granular writes (preserve other nested keys)
         if nested_field:
             self.modified_nested_fields.setdefault(field, set()).add(nested_field)
 
@@ -264,7 +263,7 @@ class SettingsManager:
             self.modified_project_nested_fields.setdefault(field, set()).add(nested_field)
 
     def _clone_modified_nested_fields(self, source: Dict[str, Set[str]]) -> Dict[str, Set[str]]:
-        """Snapshot the nested-field modification tracker so async writes see state at enqueue time."""
+        """Deep-copy nested-field tracker to ensure async writes capture state at enqueue time."""
         return {key: set(value) for key, value in source.items()}
 
     def _record_error(self, scope: SCOPE, error: Exception):
@@ -282,11 +281,12 @@ class SettingsManager:
                 self.modified_project_nested_fields.clear()
 
     def _enqueue_write(self, scope: SCOPE, task: Callable[..., None]):
-        """Chain an async write task so concurrent saves are serialised and never interleave."""
+        """Chain an async write task to serialize concurrent saves and prevent interleaving."""
         import asyncio
         prev = self._write_queue
 
         async def chained() -> None:
+            # Wait for prior write to complete before starting this one
             if prev is not None:
                 try:
                     await prev
@@ -294,6 +294,7 @@ class SettingsManager:
                     pass
             try:
                 task()
+                # Clear modification tracker only after successful write
                 self._clear_modified_scope(scope)
             except Exception as e:
                 self._record_error(scope, e)
@@ -302,19 +303,17 @@ class SettingsManager:
 
     @staticmethod
     def _to_json_dict(settings: Settings) -> dict:
-        """Convert a Settings dataclass to a JSON-serializable dict.
-
-        Handles nested dataclasses via dataclasses.asdict and Pydantic BaseModel
-        fields via model_dump(), so mixed-type settings serialize correctly.
-        """
+        """Convert Settings dataclass to JSON dict, handling nested dataclasses and Pydantic models."""
         result = {}
         for f in dc.fields(settings):
             val = getattr(settings, f.name)
             if val is None:
                 result[f.name] = None
             elif dc.is_dataclass(val):
+                # Convert nested dataclass to dict recursively
                 result[f.name] = dc.asdict(cast(Any, val))
             elif hasattr(val, 'model_dump'):
+                # Handle Pydantic BaseModel fields
                 result[f.name] = val.model_dump()
             else:
                 result[f.name] = val
@@ -327,17 +326,19 @@ class SettingsManager:
         modified_fields: Set[str],
         modified_nested_fields: Dict[str, Set[str]],
     ):
-        """Write only the modified fields back to storage, merging at the key level to preserve concurrent changes."""
+        """Write modified fields to storage, merging at key level to preserve concurrent changes."""
         def persist_fn(current):
             current_dict = json.loads(current) if current else {}
             snapshot_dict = SettingsManager._to_json_dict(snapshot_settings)
             merged = dict(current_dict)
             for field_name in modified_fields:
                 value = snapshot_dict.get(field_name)
+                # For nested fields, only update the specific keys that changed
                 if field_name in modified_nested_fields and isinstance(value, dict):
                     base = current_dict.get(field_name) or {}
                     if isinstance(base, dict):
                         merged_nested = {**base}
+                        # Preserve unmodified nested keys
                         for nested_key in modified_nested_fields[field_name]:
                             merged_nested[nested_key] = value.get(nested_key)
                         merged[field_name] = merged_nested
@@ -350,12 +351,14 @@ class SettingsManager:
         self.storage.with_lock(scope, persist_fn)
 
     def _save(self):
-        """Update the merged view and enqueue an async write of modified global settings."""
+        """Recompute merged view and enqueue async write of modified global settings."""
         self.settings = self._deep_merge_settings(self.global_settings, self.project_settings)
+        # Skip write if we couldn't load global settings originally
         if self.global_settings_load_error:
             return
         snapshot_global = copy.deepcopy(self.global_settings)
         modified_fields = set(self.modified_fields)
+        # Snapshot now to avoid race conditions between mark and write
         modified_nested_fields = self._clone_modified_nested_fields(self.modified_nested_fields)
 
         def write_task():
@@ -364,9 +367,10 @@ class SettingsManager:
         self._enqueue_write(SCOPE.GLOBAL, write_task)
 
     def _save_project_settings(self, settings: Settings):
-        """Update the merged view and enqueue an async write of modified project settings."""
+        """Recompute merged view and enqueue async write of modified project settings."""
         self.project_settings = copy.deepcopy(settings)
         self.settings = self._deep_merge_settings(self.global_settings, self.project_settings)
+        # Skip write if we couldn't load project settings originally
         if self.project_settings_load_error:
             return
         snapshot_project = copy.deepcopy(self.project_settings)
@@ -550,7 +554,7 @@ class SettingsManager:
         return c.strategy if c and c.strategy else "summarization"
 
     def _get_strategy_raw(self, name: str) -> dict:
-        """Return the raw settings dict for a named strategy (empty dict if unset)."""
+        """Return raw compaction strategy settings dict (empty dict if unset)."""
         c = self.settings.compaction
         strategies: dict = (c.strategies or {}) if c else {}
         return strategies.get(name) or {}
@@ -757,7 +761,7 @@ class SettingsManager:
         return next((a for a in acp.agents if a.name == name), None)
 
     def _get_or_init_acp(self):
-        """Return the global ACP settings block, initialising it to defaults if absent."""
+        """Return or initialize global ACP settings block."""
         if self.global_settings.acp is None:
             self.global_settings.acp = ACPSettings()
         return self.global_settings.acp
@@ -783,11 +787,12 @@ class SettingsManager:
         self._save()
 
     def remove_acp_agent_config(self, name: str) -> bool:
-        """Remove an agent entry by name. Returns True if it existed."""
+        """Remove an agent entry by name; return True if it existed."""
         acp = self.settings.acp
         if acp is None:
             return False
         before = len(acp.agents)
+        # Filter out the matching agent
         acp.agents = [a for a in acp.agents if a.name != name]
         if len(acp.agents) == before:
             return False
@@ -1003,7 +1008,7 @@ class SettingsManager:
         return self.get_channels_settings().twitch
 
     def _get_or_init_channels(self) -> ChannelsSettings:
-        """Return the global channels block, creating it with defaults if absent."""
+        """Return or initialize global channels settings block."""
         if self.global_settings.channels is None:
             self.global_settings.channels = ChannelsSettings()
         return self.global_settings.channels
@@ -1054,32 +1059,36 @@ class SettingsManager:
         return self.settings.tts or TTSSettings()
 
     def _ensure_stt(self) -> STTSettings:
-        """Return the global STT block, creating it if absent and syncing the merged view."""
+        """Initialize global STT block if absent and sync merged view."""
         if self.global_settings.stt is None:
             self.global_settings.stt = STTSettings()
+        # Keep merged view in sync with global block
         self.settings.stt = self.global_settings.stt
         return self.global_settings.stt
 
     def _ensure_tts(self) -> TTSSettings:
-        """Return the global TTS block, creating it if absent and syncing the merged view."""
+        """Initialize global TTS block if absent and sync merged view."""
         if self.global_settings.tts is None:
             self.global_settings.tts = TTSSettings()
+        # Keep merged view in sync with global block
         self.settings.tts = self.global_settings.tts
         return self.global_settings.tts
 
     def _ensure_aux_stt(self) -> "AuxiliaryTaskSettings":
-        """Return the auxiliary STT task slot, creating parent blocks if absent."""
+        """Initialize auxiliary STT task slot and parent blocks if absent."""
         if self.global_settings.auxiliary is None:
             self.global_settings.auxiliary = AuxiliarySettings()
+            # Sync merged view to prevent stale reads
             self.settings.auxiliary = self.global_settings.auxiliary
         if self.global_settings.auxiliary.stt is None:
             self.global_settings.auxiliary.stt = AuxiliaryTaskSettings()
         return self.global_settings.auxiliary.stt
 
     def _ensure_aux_tts(self) -> "AuxiliaryTaskSettings":
-        """Return the auxiliary TTS task slot, creating parent blocks if absent."""
+        """Initialize auxiliary TTS task slot and parent blocks if absent."""
         if self.global_settings.auxiliary is None:
             self.global_settings.auxiliary = AuxiliarySettings()
+            # Sync merged view to prevent stale reads
             self.settings.auxiliary = self.global_settings.auxiliary
         if self.global_settings.auxiliary.tts is None:
             self.global_settings.auxiliary.tts = AuxiliaryTaskSettings()

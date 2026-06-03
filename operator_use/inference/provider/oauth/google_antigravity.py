@@ -46,6 +46,7 @@ SCOPES = " ".join([
 
 
 def _build_authorization_url(state: str) -> str:
+    """Build the Google authorization URL with state parameter."""
     params = {
         "client_id": CLIENT_ID,
         "response_type": "code",
@@ -59,6 +60,7 @@ def _build_authorization_url(state: str) -> str:
 
 
 def _post_form(url: str, body: dict) -> dict:
+    """POST a form-encoded request and return the parsed JSON response; raise RuntimeError on HTTP errors."""
     data = urllib.parse.urlencode(body).encode()
     req = urllib.request.Request(
         url,
@@ -75,6 +77,7 @@ def _post_form(url: str, body: dict) -> dict:
 
 
 def _exchange_code(code: str, state: str) -> dict:
+    """Exchange an authorization code for tokens."""
     return _post_form(TOKEN_URL, {
         "grant_type": "authorization_code",
         "client_id": CLIENT_ID,
@@ -85,6 +88,7 @@ def _exchange_code(code: str, state: str) -> dict:
 
 
 def _refresh_token_sync(refresh_token: str) -> dict:
+    """Exchange a refresh token for a new access token via Google's token endpoint."""
     return _post_form(TOKEN_URL, {
         "grant_type": "refresh_token",
         "client_id": CLIENT_ID,
@@ -94,6 +98,7 @@ def _refresh_token_sync(refresh_token: str) -> dict:
 
 
 def _validate_token_sync(access_token: str) -> bool:
+    """Check if the access token is valid by probing the userinfo endpoint."""
     req = urllib.request.Request(
         USERINFO_URL,
         headers={"Authorization": f"Bearer {access_token}"},
@@ -109,7 +114,7 @@ def _validate_token_sync(access_token: str) -> bool:
 
 
 def _parse_token_response(data: dict) -> tuple[str, str, int]:
-    """Returns (access_token, refresh_token, expires_ms)."""
+    """Extract (access_token, refresh_token, expires_ms) from a Google token response."""
     access = data.get("access_token")
     refresh = data.get("refresh_token")
     expires_in = data.get("expires_in")
@@ -124,6 +129,7 @@ def _parse_token_response(data: dict) -> tuple[str, str, int]:
 
 
 async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
+    """Run the full Google Antigravity OAuth login flow and return a fresh OAuthCredential."""
     state = secrets.token_urlsafe(32)
     url = _build_authorization_url(state)
 
@@ -169,6 +175,7 @@ async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
 
 
 async def refresh_antigravity_token(credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+    """Exchange a refresh token for a new OAuthCredential; transparent to the streaming loop."""
     data = await asyncio.to_thread(_refresh_token_sync, credential.refresh)
     access, new_refresh, expires_ms = _parse_token_response(data)
     refresh = new_refresh or credential.refresh
@@ -177,17 +184,22 @@ async def refresh_antigravity_token(credential: OAuthCredential, signal: Optiona
 
 @dataclass
 class GoogleAntigravityOAuthProvider(OAuthProvider):
+    """OAuthProvider implementation for Google Antigravity accounts."""
+
     id: str = "google-antigravity"
     name: str = "Google Antigravity"
     uses_callback_server: bool = True
 
     async def login(self, callbacks: OAuthLoginCallbacks) -> OAuthCredential:
+        """Initiate the OAuth login flow through the Google authorization server."""
         return await login_antigravity(callbacks)
 
     async def refresh_token(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> OAuthCredential:
+        """Obtain a new access token using the stored refresh token."""
         return await refresh_antigravity_token(credential, signal=signal)
 
     async def logout(self, credential: OAuthCredential) -> None:
+        """Revoke the access token at the Google revocation endpoint (best-effort, silently ignores errors)."""
         # Revoke token via Google's revocation endpoint
         try:
             req = urllib.request.Request(
@@ -201,14 +213,17 @@ class GoogleAntigravityOAuthProvider(OAuthProvider):
             pass
 
     def get_api_key(self, credential: OAuthCredential) -> str:
+        """Return the access token used as a Bearer key for API calls."""
         return credential.access
 
     @property
     def api(self):
+        """Return the API class that handles requests with this provider's tokens."""
         from operator_use.inference.api.text.google_antigravity import GoogleAntigravityAPI
         return GoogleAntigravityAPI
 
     async def validate(self, credential: OAuthCredential, signal: Optional[AbortSignal] = None) -> bool:
+        """Return True if the credential is unexpired and accepted by the API."""
         if self.is_expired(credential):
             return False
         if signal and signal.is_set():

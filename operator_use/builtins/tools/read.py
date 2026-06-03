@@ -1,3 +1,4 @@
+"""read — Read file contents with line-range and offset support."""
 import re
 import zlib
 from pathlib import Path
@@ -8,13 +9,13 @@ MAX_TOOL_OUTPUT_LENGTH = 100000
 
 
 def _file_hash(content: str) -> str:
-    """4-hex whole-file hash. Trailing whitespace is stripped before hashing so
-    formatter runs don't invalidate the tag."""
+    """Compute 4-hex CRC32 hash with trailing whitespace normalized to guard against formatter changes."""
     normalized = re.sub(r'[ \t\r]+(?=\n|$)', '', content)
     return format(zlib.crc32(normalized.encode('utf-8')) & 0xFFFF, '04X')
 
 
 class ReadSchema(BaseModel):
+    """Input schema for read; validates path is provided and limits are non-negative."""
     path: str = Field(
         ...,
         description="Absolute path or path relative to the current working directory.",
@@ -30,6 +31,7 @@ class ReadSchema(BaseModel):
 
 
 class ReadTool(Tool):
+    """Read text files with line-range support and whole-file hash for safe editing."""
     def __init__(self):
         super().__init__(
             name="read",
@@ -45,6 +47,7 @@ class ReadTool(Tool):
         )
 
     def get_display_name(self, args: dict) -> str:
+        """Return a human-readable description of the target filename."""
         path = args.get('path', '') or ''
         name = path.rsplit('/', 1)[-1] if path else ''
         return f"Reading: {name}" if name else "Reading file"
@@ -56,6 +59,7 @@ class ReadTool(Tool):
         signal=None,
         context: ToolContext | None = None,
     ) -> ToolResult:
+        """Read file lines with offset/limit and return with 4-hex hash guard."""
         params = invocation.params
         path_str = params.get("path")
         offset = params.get("offset", 0)

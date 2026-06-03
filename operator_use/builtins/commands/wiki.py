@@ -35,6 +35,7 @@ def _get_knowledge_dir(registry: CommandRegistry) -> Path | None:
 
 
 async def _handle_wiki(registry: CommandRegistry, args: list[str]) -> None:
+    """Execute the command with parsed arguments."""
     runtime = registry.runtime
     if runtime is None:
         print("No active runtime.")
