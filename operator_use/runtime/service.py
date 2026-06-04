@@ -218,25 +218,39 @@ class Runtime:
 
     @property
     def current_session(self) -> Agent | None:
+        """Return the active Agent session, or None if no session is loaded."""
         return self._context.agent
 
     @property
     def session_manager(self):
+        """Return the SessionManager for the active session."""
         return self._context.session_manager
 
     @property
     def settings_manager(self):
+        """Return the SettingsManager for the application."""
         return self._context.settings_manager
 
     @property
     def auth_channel_manager(self):
+        """Return the ChannelAuthManager for gateway channel authentication."""
         return self._context.auth_channel_manager
 
     def get_session_dir(self, agent: Agent | None = None) -> Path:
         """Return the sessions directory for the given agent (or current session).
 
         Profile agents have their own isolated sessions_dir under
-        ~/.operator/profiles/<name>/sessions/.
+        ~/.operator/profiles/<name>/sessions/. Falls back to global session directory
+        if no profile is active.
+
+        Args:
+            agent: Optional Agent instance; defaults to the current session.
+
+        Returns:
+            Path to the sessions directory.
+
+        Raises:
+            RuntimeError: If no active profile and no session directory is configured.
         """
         target = agent or self._context.agent
         if target is not None:
@@ -253,7 +267,11 @@ class Runtime:
 
     @property
     def unified_session_enabled(self) -> bool:
-        """True when all gateway channels share a single session; defaults to True if not configured."""
+        """True when all gateway channels share a single session; defaults to True if not configured.
+
+        Returns:
+            True if unified session mode is enabled.
+        """
         settings = self._context.settings_manager
         if settings is not None and settings.settings.unified_session is not None:
             return settings.settings.unified_session
@@ -264,9 +282,11 @@ class Runtime:
     # -------------------------------------------------------------------------
 
     async def user_input(self, text: str, options: PromptOptions | None = None) -> None:
-        """
-        Route user input. Slash commands go to CommandRegistry;
-        everything else is forwarded to the active Agent.
+        """Route user input. Slash commands go to CommandRegistry; everything else to Agent.
+
+        Args:
+            text: User input text (either a command like '/reload' or a plain prompt).
+            options: Optional PromptOptions for metadata or channel overrides.
         """
         parsed = parse_command(text)
         if parsed is not None:
@@ -275,7 +295,15 @@ class Runtime:
             await self.invoke(text, options)
 
     async def invoke(self, user_input: str, options: PromptOptions | None = None) -> None:
-        """Forward a plain prompt to the current session."""
+        """Forward a plain prompt to the current session.
+
+        Args:
+            user_input: The user message text.
+            options: Optional PromptOptions for metadata or channel overrides.
+
+        Raises:
+            RuntimeError: If no session is active.
+        """
         if self._context.agent is None:
             raise RuntimeError("No active session available.")
         await self._context.agent.invoke(user_input, options)
@@ -285,10 +313,9 @@ class Runtime:
     # -------------------------------------------------------------------------
 
     async def reload(self) -> None:
-        """
-        Reload all resources (tools, skills, commands, extensions, hooks)
-        without touching the active session. The conversation history is
-        preserved; only the runtime environment is refreshed.
+        """Reload all resources (tools, skills, commands, extensions, hooks) without touching the session.
+
+        The conversation history is preserved; only the runtime environment is refreshed.
         """
         resource_loader = self._context.resource_loader
         await resource_loader.reload()
@@ -334,7 +361,10 @@ class Runtime:
         self._configure_context(self._context)
 
     async def new_session(self) -> None:
-        """Shut down the current session and start a fresh one."""
+        """Shut down the current session and start a fresh one.
+
+        Emits session_shutdown and session_start events.
+        """
         await self._emit_session_shutdown('new')
         self._config = self._config.model_copy(update={'session_file': None})
         self._context = await RuntimeContext.create(self._config)
@@ -376,7 +406,14 @@ class Runtime:
         await self._emit_session_start('resume')
 
     async def fork_session(self, from_entry_id: str) -> None:
-        """Branch the session tree at the given entry and start a new leaf."""
+        """Branch the session tree at the given entry and start a new leaf.
+
+        Args:
+            from_entry_id: The entry ID to branch from.
+
+        Raises:
+            KeyError: If the entry ID does not exist in the session.
+        """
         sm = self._context.session_manager
         if from_entry_id not in sm.by_id:
             raise KeyError(f"Entry '{from_entry_id}' not found in session.")
@@ -393,7 +430,10 @@ class Runtime:
         await self._emit_session_start('fork')
 
     def _rebuild_commands(self) -> None:
-        """Recreate the CommandRegistry from the current resource loader and extension runtime."""
+        """Recreate the CommandRegistry from the current resource loader and extension runtime.
+
+        Used when reloading resources or after a context change.
+        """
         self.commands = CommandRegistry(
             runtime=self,
             discovered=self._context.resource_loader.get_commands(),
@@ -778,14 +818,25 @@ class Runtime:
     # ── Peer agent registry ───────────────────────────────────────────────────
 
     def register_peer_agent(self, name: str, agent: Agent) -> None:
-        """Register a pre-built profile agent so peers can call it directly."""
+        """Register a pre-built profile agent so peers can call it directly.
+
+        Args:
+            name: The profile name.
+            agent: The Agent instance to register.
+        """
         self._peer_agents[name] = agent
 
     async def get_or_build_peer_agent(self, name: str) -> Agent:
         """Return the live peer agent for *name*, building it lazily if needed.
 
-        Called by the peer_agent tool.  GatewayManager pre-populates the
+        Called by the peer_agent tool. GatewayManager pre-populates the
         registry at startup; in REPL mode agents are built on first access.
+
+        Args:
+            name: The profile name of the peer agent.
+
+        Returns:
+            The live Agent instance.
         """
         if name in self._peer_agents:
             return self._peer_agents[name]
