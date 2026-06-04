@@ -21,7 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 class MCPManager:
+    """Manages MCP server connections with reference counting and tool caching.
+
+    Supports multiple agents sharing a single physical MCP connection. A server
+    is started on first connect and remains active while any agent is connected.
+    """
+
     def __init__(self, configs: list[MCPServerConfig]) -> None:
+        """Initialize the manager with MCP server configurations.
+
+        Args:
+            configs: List of MCPServerConfig instances for available servers.
+        """
         self._configs: dict[str, MCPServerConfig] = {c.name: c for c in configs}
         self._clients: dict[str, Client] = {}
         self._tools: dict[str, list[MCPTool]] = {}
@@ -42,12 +53,37 @@ class MCPManager:
     # ── Queries ───────────────────────────────────────────────────────────────
 
     def is_connected(self, agent_id: str, server_name: str) -> bool:
+        """Check if an agent is connected to a server.
+
+        Args:
+            agent_id: Agent identifier.
+            server_name: MCP server name.
+
+        Returns:
+            True if the agent has an active connection to the server.
+        """
         return server_name in self._agent_connections.get(agent_id, set())
 
     def is_server_active(self, server_name: str) -> bool:
+        """Check if an MCP server is currently running.
+
+        Args:
+            server_name: MCP server name.
+
+        Returns:
+            True if the server has at least one active connection.
+        """
         return self._connection_count.get(server_name, 0) > 0
 
     def list_servers(self, agent_id: str | None = None) -> list[dict]:
+        """List all configured servers and their connection status.
+
+        Args:
+            agent_id: Optional agent ID to filter servers connected by that agent.
+
+        Returns:
+            List of server dicts with name, transport, active status, and tool counts.
+        """
         result = []
         for name, cfg in self._configs.items():
             if agent_id is not None and name not in self._agent_connections.get(agent_id, set()):
@@ -63,12 +99,32 @@ class MCPManager:
         return result
 
     def all_server_names(self) -> list[str]:
+        """Get all configured MCP server names.
+
+        Returns:
+            List of all available server names.
+        """
         return list(self._configs.keys())
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def connect(self, agent_id: str, server_name: str) -> list[MCPTool]:
-        """Connect agent to a server. Returns its tools. No-op if already connected."""
+        """Connect agent to an MCP server and retrieve its tools.
+
+        Opens the server connection on first agent connect, then increments the
+        reference count. Subsequent agents reuse the same connection. No-op if
+        the agent is already connected to the server.
+
+        Args:
+            agent_id: Agent identifier.
+            server_name: MCP server name.
+
+        Returns:
+            List of MCPTool instances available from the server.
+
+        Raises:
+            ValueError: If the server name is not configured.
+        """
         from operator_use.mcp.tool import MCPTool as _MCPTool
 
         async with self._lock_for(server_name):
