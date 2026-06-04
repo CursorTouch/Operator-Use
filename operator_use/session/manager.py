@@ -177,12 +177,28 @@ class SessionManager:
         return entry.id
 
     def append_message(self, message: AgentMessage, meta: MessageMeta | None = None) -> str:
-        """Wrap `message` in a MessageEntry linked to the current leaf and append it."""
+        """Wrap `message` in a MessageEntry linked to the current leaf and append it.
+
+        Args:
+            message: The message to append (UserMessage, AssistantMessage, ToolMessage, etc).
+            meta: Optional metadata (channel info, author, etc).
+
+        Returns:
+            The ID of the created MessageEntry.
+        """
         entry = MessageEntry(message=message, parent_id=self.leaf_id, meta=meta)
         return self._append_entry(entry)
 
     def patch_entry_meta(self, entry_id: str, meta: "MessageMeta") -> bool:
-        """Update the meta of an existing MessageEntry in-place and rewrite the session file."""
+        """Update the meta of an existing MessageEntry in-place and rewrite the session file.
+
+        Args:
+            entry_id: The ID of the MessageEntry to update.
+            meta: The new metadata to assign.
+
+        Returns:
+            True if the entry existed and was updated, False otherwise.
+        """
         entry = self.by_id.get(entry_id)
         if not isinstance(entry, MessageEntry):
             return False
@@ -191,7 +207,15 @@ class SessionManager:
         return True
 
     def add_reaction(self, channel_message_id: str, emoji: str) -> bool:
-        """Append an emoji reaction to the MessageEntry matching the given channel-side message ID."""
+        """Append an emoji reaction to the MessageEntry matching the given channel-side message ID.
+
+        Args:
+            channel_message_id: The external message ID from the gateway channel.
+            emoji: The emoji string to append to the reactions list.
+
+        Returns:
+            True if a matching MessageEntry was found and updated, False otherwise.
+        """
         for entry in self.entries:
             if not isinstance(entry, MessageEntry):
                 continue
@@ -205,12 +229,25 @@ class SessionManager:
         return False
 
     def append_channel_entry(self, name: str, chat_id: str | None = None, user_id: str | None = None) -> str:
-        """Record the active gateway channel at the current leaf so future context reconstruction knows the origin."""
+        """Record the active gateway channel at the current leaf so future context reconstruction knows the origin.
+
+        Args:
+            name: The channel name (e.g., 'slack', 'discord', 'telegram').
+            chat_id: Optional chat/conversation ID from the channel.
+            user_id: Optional user ID from the channel.
+
+        Returns:
+            The ID of the created ChannelEntry.
+        """
         entry = ChannelEntry(name=name, chat_id=chat_id, user_id=user_id, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
     def get_current_channel(self) -> str | None:
-        """Return the channel name most recently recorded on the active branch, or None."""
+        """Return the channel name most recently recorded on the active branch, or None.
+
+        Returns:
+            The channel name (e.g., 'slack', 'discord') or None if not set.
+        """
         # Walk the active branch (not the flat log) so a branch we navigated
         # away from can't leak its channel into the current one.
         for entry in reversed(self.get_branch()):
@@ -219,12 +256,27 @@ class SessionManager:
         return None
 
     def append_thinking_level_change(self, thinking_level: ThinkingLevel) -> str:
-        """Record a thinking-level change at the current leaf."""
+        """Record a thinking-level change at the current leaf.
+
+        Args:
+            thinking_level: The new thinking level setting.
+
+        Returns:
+            The ID of the created ThinkingLevelChangeEntry.
+        """
         entry = ThinkingLevelChangeEntry(thinking_level=thinking_level, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
     def append_model_change(self, model_id: str, provider_id: str) -> str:
-        """Record a model/provider switch at the current leaf."""
+        """Record a model/provider switch at the current leaf.
+
+        Args:
+            model_id: The new model identifier (e.g., 'claude-3-5-sonnet').
+            provider_id: The new provider identifier (e.g., 'anthropic').
+
+        Returns:
+            The ID of the created ModelChangeEntry.
+        """
         entry = ModelChangeEntry(model_id=model_id, provider_id=provider_id, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
@@ -236,7 +288,18 @@ class SessionManager:
         details: Any | None = None,
         from_hook: bool = False,
     ) -> str:
-        """Record a context-compaction event with its summary and the first entry that was retained."""
+        """Record a context-compaction event with its summary and the first entry that was retained.
+
+        Args:
+            summary: The compacted context summary or description.
+            first_kept_entry_id: ID of the first message entry retained after compaction.
+            tokens_before: Token count before compaction.
+            details: Optional dict with compaction strategy details.
+            from_hook: Whether compaction was triggered by a hook (vs. automatic).
+
+        Returns:
+            The ID of the created CompactionEntry.
+        """
         entry = CompactionEntry(
             summary=summary,
             first_kept_entry_id=first_kept_entry_id,
@@ -248,7 +311,15 @@ class SessionManager:
         return self._append_entry(entry)
 
     def append_label_change(self, target_id: str, label: str | None = None) -> str:
-        """Attach or remove a human-readable label from the entry identified by `target_id`."""
+        """Attach or remove a human-readable label from the entry identified by `target_id`.
+
+        Args:
+            target_id: The entry ID to label or unlabel.
+            label: The label string, or None to remove the label.
+
+        Returns:
+            The ID of the created LabelEntry.
+        """
         entry = LabelEntry(target_id=target_id, label=label, parent_id=self.leaf_id)
         if label:
             self.labels_by_id[target_id] = label
@@ -259,7 +330,15 @@ class SessionManager:
         return self._append_entry(entry)
 
     def append_custom_info(self, custom_type: str, data: Any | None = None) -> str:
-        """Append an extension-defined structured metadata entry that carries no LLM-visible content."""
+        """Append an extension-defined structured metadata entry that carries no LLM-visible content.
+
+        Args:
+            custom_type: The custom type identifier (domain/extension-specific).
+            data: Optional arbitrary structured data.
+
+        Returns:
+            The ID of the created CustomInfoEntry.
+        """
         entry = CustomInfoEntry(custom_type=custom_type, data=data, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
@@ -270,7 +349,17 @@ class SessionManager:
         display: bool = True,
         details: Any | None = None,
     ) -> str:
-        """Append an extension-defined displayable message that will be injected into the LLM context."""
+        """Append an extension-defined displayable message that will be injected into the LLM context.
+
+        Args:
+            custom_type: The custom message type identifier.
+            content: Message content (text, images, or arbitrary data).
+            display: Whether to display this message in the UI (default True).
+            details: Optional metadata or context dict.
+
+        Returns:
+            The ID of the created CustomMessageEntry.
+        """
         entry = CustomMessageEntry(
             custom_type=custom_type,
             content=content,
@@ -281,12 +370,23 @@ class SessionManager:
         return self._append_entry(entry)
 
     def append_session_info(self, name: str | None = None) -> str:
-        """Record a human-readable session name at the current leaf."""
+        """Record a human-readable session name at the current leaf.
+
+        Args:
+            name: The session name or description.
+
+        Returns:
+            The ID of the created SessionInfoEntry.
+        """
         entry = SessionInfoEntry(name=name, parent_id=self.leaf_id)
         return self._append_entry(entry)
 
     def get_session_name(self) -> str | None:
-        """Return the most recent non-empty session name on the active branch, or None."""
+        """Return the most recent non-empty session name on the active branch, or None.
+
+        Returns:
+            The session name if set, or None.
+        """
         # Branch-scoped, consistent with build_session_context / get_branch.
         for entry in reversed(self.get_branch()):
             if isinstance(entry, SessionInfoEntry) and entry.name and entry.name.strip():
@@ -294,29 +394,66 @@ class SessionManager:
         return None
 
     def get_leaf_id(self) -> str | None:
+        """Return the ID of the current leaf entry on the active branch.
+
+        Returns:
+            The current leaf ID, or None if the session has no entries.
+        """
         return self.leaf_id
 
     def get_leaf_entry(self) -> SessionEntry | None:
-        """Return the SessionEntry at the current leaf_id, or None if the session is empty."""
+        """Return the SessionEntry at the current leaf_id, or None if the session is empty.
+
+        Returns:
+            The current leaf SessionEntry, or None.
+        """
         return self.by_id.get(self.leaf_id) if self.leaf_id else None
 
     def get_entry(self, id: str) -> SessionEntry | None:
-        """Look up a single entry by its ID, returning None if not found."""
+        """Look up a single entry by its ID, returning None if not found.
+
+        Args:
+            id: The entry ID to look up.
+
+        Returns:
+            The SessionEntry, or None if not found.
+        """
         return self.by_id.get(id)
 
     def get_children(self, parent_id: str) -> list[SessionEntry]:
-        """Return all direct children of the given entry, sorted chronologically."""
+        """Return all direct children of the given entry, sorted chronologically.
+
+        Args:
+            parent_id: The parent entry ID.
+
+        Returns:
+            List of child SessionEntries sorted by timestamp.
+        """
         return sorted(
             [entry for entry in self.get_entries() if entry.parent_id == parent_id],
             key=lambda entry: entry.timestamp,
         )
 
     def get_label(self, id: str) -> str | None:
-        """Return the human-readable label attached to the given entry id, or None."""
+        """Return the human-readable label attached to the given entry id, or None.
+
+        Args:
+            id: The entry ID to get the label for.
+
+        Returns:
+            The label string, or None if not set.
+        """
         return self.labels_by_id.get(id)
 
     def get_branch(self, from_id: str | None = None) -> list[SessionEntry]:
-        """Return entries from root to the given id (or leaf_id), in root→leaf order."""
+        """Return entries from root to the given id (or leaf_id), in root→leaf order.
+
+        Args:
+            from_id: Optional entry ID to trace back to root from; defaults to current leaf_id.
+
+        Returns:
+            List of SessionEntries from root to the target, in order.
+        """
         path: list[SessionEntry] = []
         seen: set[str] = set()
         cursor = from_id or self.leaf_id
@@ -331,7 +468,11 @@ class SessionManager:
         return path
 
     def build_session_context(self) -> SessionContext:
-        """Reconstruct the LLM-ready message list and settings from the active branch, honouring any compaction boundary."""
+        """Reconstruct the LLM-ready message list and settings from the active branch, honouring any compaction boundary.
+
+        Returns:
+            A SessionContext with messages, thinking_level, model_id, and provider_id.
+        """
         thinking_level: ThinkingLevel = ThinkingLevel.Off
         model_id: str | None = None
         provider_id: str | None = None
