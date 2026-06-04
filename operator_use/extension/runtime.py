@@ -34,12 +34,21 @@ class ExtensionRuntime:
 
     @property
     def errors(self) -> list[ExtensionError]:
+        """Return all accumulated extension loading and execution errors."""
         return self._errors
 
     async def emit(self, event_type: str, event: Any) -> list[Any]:
-        """
-        Emit an event to all extensions and the system Hooks registry.
-        Returns a list of non-None results from handlers.
+        """Emit an event to all extensions and the system Hooks registry.
+
+        Returns a list of non-None results from handlers. Extension handler exceptions
+        are caught, logged, and do not abort processing.
+
+        Args:
+            event_type: The event type identifier (e.g., 'session_start').
+            event: The event object to dispatch (should have a .type attribute).
+
+        Returns:
+            List of non-None results from all matching handlers.
         """
         results: list[Any] = []
 
@@ -67,9 +76,17 @@ class ExtensionRuntime:
         return results
 
     async def emit_parallel(self, event_type: str, event: Any) -> list[Any]:
-        """
-        Emit an event to all extensions and Hooks concurrently.
-        Use for fire-and-forget events where order doesn't matter.
+        """Emit an event to all extensions and Hooks concurrently.
+
+        Use for fire-and-forget events where order doesn't matter. All handlers
+        run in parallel via asyncio.gather. Exceptions are caught per-handler.
+
+        Args:
+            event_type: The event type identifier.
+            event: The event object to dispatch.
+
+        Returns:
+            List of non-None results from all matching handlers.
         """
         tasks = []
 
