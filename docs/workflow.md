@@ -53,13 +53,14 @@ These names are injected at runtime — **do not import them**:
 
 | Global | Signature | Description |
 |---|---|---|
-| `agent` | `await agent(prompt, schema=None, system=None, tools=None, resume=False, stall_ms=180000, max_retries=5)` | Run an LLM agent call. Returns `str` (no schema) or a Pydantic model instance. A call that doesn't finish within `stall_ms` is cancelled and retried up to `max_retries` times, then raises `TimeoutError`. |
+| `agent` | `await agent(prompt, schema=None, system=None, tools=None, resume=False, stall_ms=180000, max_retries=5, model=None, provider=None)` | Run an LLM agent call. Returns `str` (no schema) or a Pydantic model instance. A call that doesn't finish within `stall_ms` is cancelled and retried up to `max_retries` times, then raises `TimeoutError`. `model`/`provider` override the session default for this single call. |
+| `classify` | `await classify(prompt, *, options=None, schema=None, system=None, model=None, provider=None)` | Single direct LLM call — no subagent loop, no tool execution. Use `options=[...]` for string enum classification (returns `str`); use `schema=MyModel` for structured output (returns model instance). Cheaper than `agent()` for routing/labelling tasks. |
 | `parallel` | `await parallel(*thunks, concurrency=5, return_exceptions=False)` | Run zero-argument async callables concurrently; returns list of results. Default fail-fast (cancels siblings, re-raises); with `return_exceptions=True` it never rejects and each failed slot holds its exception. |
 | `pipeline` | `await pipeline(items, *stages, concurrency=5)` | Process items through a list of sync or async transform functions. |
 | `workflow` | `await workflow(name, args=None)` | Run another workflow inline and return its result. One level deep only; shares the caller's run record (unified log + shared agent-call cap). |
 | `phase` | `async with phase("name"):` | Label the current phase in the run status. |
 | `log` | `log("message")` | Append a timestamped line to the run log. |
-| `budget` | `budget.remaining()` / `budget.spent()` / `budget.exhausted()` | Soft, advisory turn budget for loop guards (not enforced — see Limits). |
+| `budget` | `budget.remaining()` / `budget.spent()` / `budget.exhausted()` / `budget.tokens_spent()` | Soft, advisory call-count budget for loop guards (not enforced — see Limits). `tokens_spent()` returns `{input, output, cache_read, cache_write, total}` accumulated from all structured `agent()` and `classify()` calls. |
 | `args` | `dict` | Key-value arguments passed at invocation. |
 
 ## `agent()` schema mode
