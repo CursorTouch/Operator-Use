@@ -547,6 +547,15 @@ class Runtime:
             team_manager=self.team_manager,
         )
 
+        # Pre-populate the system prompt cache from the main agent so the first
+        # invoke() on this session agent hits the provider's prefix cache instead
+        # of paying full token cost to establish a new cache entry.
+        parent = self._context.agent
+        if parent._system_prompt_cache:
+            agent._system_prompt_cache.update(parent._system_prompt_cache)
+        elif parent._system_prompt:
+            agent._system_prompt_cache[None] = parent._system_prompt
+
         return agent
 
     def create_acp_session_agent(self, sessions_dir: Path, session_id: str) -> Agent:

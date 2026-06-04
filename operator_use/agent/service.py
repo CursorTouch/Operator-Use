@@ -79,25 +79,31 @@ class Agent(ExtensionContext):
         self._runtime: Runtime | None = None
         self._skill_review = SkillReviewTracker()
         self._memory_review = MemoryReviewTracker()
-        def _make_judge_llm():
-            """Build an LLM instance for goal judging, falling back to the main engine LLM if no auxiliary task is configured."""
+        # Lazily resolve the judge LLM on first call so we don't construct a
+        # cold client at init time when the aux model may never be needed.
+        _judge_llm_cache: list = []
+
+        def _get_judge_llm():
+            if _judge_llm_cache:
+                return _judge_llm_cache[0]
             try:
                 from operator_use.settings.manager import SettingsManager
                 _sm = SettingsManager.get_instance()
-                if _sm is None:
-                    return engine.llm
-                _aux = _sm.get_auxiliary_task("goal_judge")
-                if _aux.model or _aux.provider:
-                    from operator_use.inference.api.text.service import LLM
-                    return LLM(model_id=_aux.model or engine.llm.model.id, provider=_aux.provider)
+                if _sm is not None:
+                    _aux = _sm.get_auxiliary_task("goal_judge")
+                    if _aux.model or _aux.provider:
+                        from operator_use.inference.api.text.service import LLM
+                        llm = LLM(model_id=_aux.model or engine.llm.model.id, provider=_aux.provider)
+                        _judge_llm_cache.append(llm)
+                        return llm
             except Exception:
                 pass
+            _judge_llm_cache.append(engine.llm)
             return engine.llm
 
-        _judge_llm = _make_judge_llm()
         self._goal_manager = GoalManager(
             session_manager,
-            judge=lambda goal, response, subgoals=None: judge_goal_with_llm(_judge_llm, goal, response, subgoals),
+            judge=lambda goal, response, subgoals=None: judge_goal_with_llm(_get_judge_llm(), goal, response, subgoals),
         )
 
         self._phase: AgentPhase = AgentPhase.IDLE
@@ -148,9 +154,21 @@ class Agent(ExtensionContext):
             compaction=NullCompaction(),
             config=self._config,
         )
-        # Inherit the live system prompt so the provider's prefix cache is hit
+
+        # Inherit the live system prompt so the provider's prefix cache is hit.
+        # Copy the full cache so any channel-specific variants are also warm.
         child._system_prompt = self._system_prompt
+        child._system_prompt_cache.update(self._system_prompt_cache)
         child._active_profile = self._active_profile
+
+        # Forward safe tool_context fields — services the child's tools may need.
+        # Desktop and browser are intentionally excluded: ephemeral children
+        # should not control automation sessions owned by the parent.
+        parent_ctx = self._engine.tool_context
+        child_engine.tool_context.memory_manager = parent_ctx.memory_manager
+        child_engine.tool_context.mcp_manager = parent_ctx.mcp_manager
+        child_engine.tool_context.settings_manager = parent_ctx.settings_manager
+
         return child
 
     # -------------------------------------------------------------------------
