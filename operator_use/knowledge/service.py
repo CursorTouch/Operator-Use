@@ -30,7 +30,16 @@ class Knowledge:
     # ── Index loading ─────────────────────────────────────────────────────────
 
     def _load_index(self, knowledge_dir: Path) -> list[dict[str, Any]] | None:
-        """Load index.yaml from a knowledge directory. Returns None if absent/invalid."""
+        """Load index.yaml from a knowledge directory.
+
+        Returns None if absent/invalid. Falls back to filesystem scan if missing.
+
+        Args:
+            knowledge_dir: The knowledge directory to scan.
+
+        Returns:
+            List of knowledge entries from index.yaml, or None if not found.
+        """
         index_path = knowledge_dir / INDEX_FILENAME
         if not index_path.exists():
             return None
@@ -53,7 +62,14 @@ class Knowledge:
     # ── Filesystem scan (fallback) ────────────────────────────────────────────
 
     def list_files(self) -> list[dict]:
-        """Return all knowledge entries discovered from filesystem, deduplicated by name."""
+        """Return all knowledge entries discovered from filesystem, deduplicated by name.
+
+        Scans for index.yaml in each knowledge directory, then falls back to
+        finding all *.md files (index.md directories and flat files).
+
+        Returns:
+            List of knowledge entry dicts with name, path, and preview.
+        """
         seen: set[str] = set()
         files: list[dict] = []
         for knowledge_dir in self._dirs:
@@ -94,15 +110,17 @@ class Knowledge:
     # ── System prompt injection ───────────────────────────────────────────────
 
     def build_knowledge_for_prompt(self) -> str | None:
-        """
-        Build knowledge section for system prompt injection.
+        """Build knowledge section for system prompt injection.
 
         With index.yaml:
-          - always_load entries → <knowledge> blocks with full content
-          - remaining entries   → <available_knowledge> list
+          - always_load: true entries → <knowledge> blocks with full content
+          - always_load: false entries → <available_knowledge> list for on-demand
 
         Without index.yaml (filesystem scan):
-          - all discovered files → <available_knowledge> list
+          - all discovered files → <available_knowledge> list for on-demand
+
+        Returns:
+            Formatted knowledge section for prompt injection, or None if no knowledge.
         """
         always_blocks: list[str] = []
         available: list[dict[str, str]] = []
