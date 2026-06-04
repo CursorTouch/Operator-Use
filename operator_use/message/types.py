@@ -29,15 +29,35 @@ class ImageContent:
     images: list[str | Image.Image | bytes] = field(default_factory=list)
 
     def to_base64(self) -> list[tuple[str, str]]:
-        """Convert all images to (base64_data, mime_type) pairs."""
+        """Convert all images to (base64_data, mime_type) pairs.
+
+        Returns:
+            List of (base64_string, mime_type) tuples.
+        """
         return [image_to_base64(img) for img in self.images]
 
     @classmethod
     def from_file(cls, path: str | Path) -> ImageContent:
+        """Load image from a file path.
+
+        Args:
+            path: Path to the image file.
+
+        Returns:
+            An ImageContent instance with the loaded image bytes.
+        """
         return cls(images=[Path(path).read_bytes()])
 
     @classmethod
     def from_url(cls, url: str) -> ImageContent:
+        """Create ImageContent from a URL.
+
+        Args:
+            url: The image URL.
+
+        Returns:
+            An ImageContent instance with the URL.
+        """
         return cls(images=[url])
 
 
@@ -49,15 +69,36 @@ class AudioContent:
     audio: list[bytes | str] = field(default_factory=list)
 
     def to_base64(self) -> list[tuple[str, str]]:
-        """Convert all audio to (base64_data, mime_type) pairs."""
+        """Convert all audio to (base64_data, mime_type) pairs.
+
+        Returns:
+            List of (base64_string, mime_type) tuples.
+        """
         return [audio_to_base64(item) for item in self.audio]
 
     @classmethod
     def from_file(cls, path: str | Path) -> AudioContent:
+        """Load audio from a file path.
+
+        Args:
+            path: Path to the audio file.
+
+        Returns:
+            An AudioContent instance with the loaded audio bytes.
+        """
         return cls(audio=[Path(path).read_bytes()])
 
     @classmethod
     def from_base64(cls, data: str, mime_type: str | None = None) -> AudioContent:
+        """Create AudioContent from a base64-encoded string.
+
+        Args:
+            data: Base64-encoded audio data.
+            mime_type: Optional MIME type hint (not currently used).
+
+        Returns:
+            An AudioContent instance with the base64 data.
+        """
         return cls(audio=[data])
 
 
@@ -147,7 +188,14 @@ class SystemMessage(BaseMessage):
 
     @classmethod
     def text(cls, content: str) -> SystemMessage:
-        """Construct SystemMessage from plain text."""
+        """Construct SystemMessage from plain text.
+
+        Args:
+            content: The system message text.
+
+        Returns:
+            A SystemMessage with the text content.
+        """
         return cls(contents=[TextContent(content=content)])
 
 
@@ -158,17 +206,40 @@ class UserMessage(BaseMessage):
 
     @classmethod
     def text(cls, content: str) -> UserMessage:
-        """Construct UserMessage from plain text."""
+        """Construct UserMessage from plain text.
+
+        Args:
+            content: The user message text.
+
+        Returns:
+            A UserMessage with the text content.
+        """
         return cls(contents=[TextContent(content=content)])
 
     @classmethod
     def with_images(cls, content: str, images: list[str | Image.Image | bytes]) -> UserMessage:
-        """Construct UserMessage with text and images."""
+        """Construct UserMessage with text and images.
+
+        Args:
+            content: The user message text.
+            images: List of PIL Images, image bytes, or image URLs.
+
+        Returns:
+            A UserMessage with text and image content.
+        """
         return cls(contents=[TextContent(content=content), ImageContent(images=images)])
 
     @classmethod
     def with_audio(cls, content: str, audio: list[bytes | str]) -> UserMessage:
-        """Construct UserMessage with text and audio."""
+        """Construct UserMessage with text and audio.
+
+        Args:
+            content: The user message text.
+            audio: List of audio bytes, base64 strings, or 'file:' paths.
+
+        Returns:
+            A UserMessage with text and audio content.
+        """
         return cls(contents=[TextContent(content=content), AudioContent(audio=audio)])
 
 
@@ -181,15 +252,27 @@ class AssistantMessage(BaseMessage):
     error: str = ""
 
     def text_content(self) -> str:
-        """Concatenate all TextContent items."""
+        """Concatenate all TextContent items.
+
+        Returns:
+            The concatenated text from all text content blocks.
+        """
         return "".join(c.content for c in self.contents if isinstance(c, TextContent))
 
     def tool_calls(self) -> list[ToolCallContent]:
-        """Extract all ToolCallContent items."""
+        """Extract all ToolCallContent items.
+
+        Returns:
+            List of all tool calls in this message.
+        """
         return [c for c in self.contents if isinstance(c, ToolCallContent)]
 
     def thinking(self) -> list[ThinkingContent]:
-        """Extract all ThinkingContent items."""
+        """Extract all ThinkingContent items.
+
+        Returns:
+            List of all extended thinking blocks in this message.
+        """
         return [c for c in self.contents if isinstance(c, ThinkingContent)]
 
 
@@ -200,12 +283,26 @@ class ToolMessage(BaseMessage):
 
     @classmethod
     def from_results(cls, results: list[ToolResultContent]) -> ToolMessage:
-        """Construct ToolMessage from multiple tool results."""
+        """Construct ToolMessage from multiple tool results.
+
+        Args:
+            results: List of tool execution results.
+
+        Returns:
+            A ToolMessage containing all the tool results.
+        """
         return cls(contents=list(results))  # type: ignore[arg-type]
 
     @classmethod
     def from_result(cls, result: ToolResultContent) -> ToolMessage:
-        """Construct ToolMessage from a single tool result."""
+        """Construct ToolMessage from a single tool result.
+
+        Args:
+            result: A single tool execution result.
+
+        Returns:
+            A ToolMessage containing the tool result.
+        """
         return cls(contents=[result])  # type: ignore[arg-type]
 
 
@@ -223,7 +320,14 @@ class CustomMessage:
 
     @classmethod
     def from_session(cls, entry: CustomMessageEntry) -> CustomMessage:
-        """Reconstruct CustomMessage from session storage entry."""
+        """Reconstruct CustomMessage from session storage entry.
+
+        Args:
+            entry: A CustomMessageEntry from the session JSONL.
+
+        Returns:
+            A CustomMessage reconstructed from the session entry.
+        """
         raw = entry.content
         # Normalize content to list of TextContent or ImageContent
         if isinstance(raw, list):
