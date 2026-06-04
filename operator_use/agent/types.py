@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -10,6 +11,13 @@ from operator_use.session.types import MessageMeta
 
 if TYPE_CHECKING:
     from operator_use.tool.types import Tool
+
+
+class AgentPhase(str, Enum):
+    """Agent execution phase."""
+    IDLE = "idle"
+    TURN = "turn"
+    COMPACTION = "compaction"
 
 
 @dataclass

@@ -57,7 +57,7 @@ class GatewayManager:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        """Start gateway processing loops and all enabled channels as background asyncio tasks.
+        """Start gateway processing loops and all enabled channels as background  asyncio tasks.
 
         Creates the main gateway event loop and launches profile-specific channels
         asynchronously. Emits GatewayStartupEvent once all profiles are ready.

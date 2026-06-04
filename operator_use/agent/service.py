@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from operator_use.agent.types import AgentConfig, AgentContext, PromptOptions, RetryStartEvent, RetryEndEvent
+from operator_use.agent.types import AgentConfig, AgentContext, AgentPhase, PromptOptions, RetryStartEvent, RetryEndEvent
 from operator_use.extension.types import (
     ExtensionContext, ExtensionError, ExtensionTool, ContextUsage, CompactOptions,
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
@@ -100,7 +100,7 @@ class Agent(ExtensionContext):
             judge=lambda goal, response, subgoals=None: judge_goal_with_llm(_judge_llm, goal, response, subgoals),
         )
 
-        self._phase: str = "idle"
+        self._phase: AgentPhase = AgentPhase.IDLE
         self._rebooting: bool = False
         self._last_assistant_entry_id: str | None = None
         self._active_profile: AgentProfile | None = None
@@ -222,7 +222,7 @@ class Agent(ExtensionContext):
         Raises:
             RuntimeError: If the agent is currently busy (not idle).
         """
-        if self._phase != "idle":
+        if self._phase != AgentPhase.IDLE:
             raise RuntimeError(f"Agent is busy (phase={self._phase!r}). Wait for the current operation to finish.")
 
         performed = await self._run_compaction(custom_instructions)
@@ -613,7 +613,7 @@ class Agent(ExtensionContext):
         Raises:
             RuntimeError: If the agent is already busy or is rebooting.
         """
-        if self._phase != "idle":
+        if self._phase != AgentPhase.IDLE:
             if self._rebooting:
                 raise RuntimeError("Rebooting — please send your message again in a moment.")
             raise RuntimeError(f"Agent is busy (phase={self._phase!r}). Wait for the current operation to finish.")
@@ -740,11 +740,11 @@ class Agent(ExtensionContext):
             tools=list(self._engine.tools) + ext_tools,
         )
 
-        self._phase = "turn"
+        self._phase = AgentPhase.TURN
         try:
             await self._run_with_retry(ctx, user_entry_id)
         finally:
-            self._phase = "idle"
+            self._phase = AgentPhase.IDLE
 
         # Persist the completed exchange to the memory provider
         if self._memory_manager:
@@ -776,7 +776,7 @@ class Agent(ExtensionContext):
             # Now run the deferred action (this may call sys.exit)
             self._engine._deferred_fn = None
             self._rebooting = True
-            self._phase = "turn"
+            self._phase = AgentPhase.TURN
             await deferred()
             return  # deferred action takes over (e.g. sys.exit); don't continue
 
@@ -907,7 +907,7 @@ class Agent(ExtensionContext):
         self._compact_requested = False
         compact_opts = self._compact_options
         self._compact_options = None
-        self._phase = "compaction"
+        self._phase = AgentPhase.COMPACTION
         try:
             path_entries = self._session_manager.get_branch()
             preparation = self._compaction.prepare(path_entries)
@@ -964,4 +964,4 @@ class Agent(ExtensionContext):
                 compact_opts.on_complete(compaction_result)
             return True
         finally:
-            self._phase = "idle"
+            self._phase = AgentPhase.IDLE
