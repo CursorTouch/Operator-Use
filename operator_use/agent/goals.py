@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Awaitable, Callable, Literal
 
 from operator_use.inference.types import LLMContext
@@ -24,6 +24,15 @@ CONTINUATION_PROMPT_TEMPLATE = (
     "If you are blocked and need input from the user, say so clearly and stop."
 )
 
+CONTINUATION_PROMPT_WITH_SUBGOALS_TEMPLATE = (
+    "[Continuing toward your standing goal]\n"
+    "Goal: {goal}\n"
+    "Required criteria:\n{subgoals}\n\n"
+    "Continue working toward this goal. ALL criteria above must be satisfied before stopping. "
+    "If you believe both the goal and all criteria are met, state so explicitly and stop. "
+    "If you are blocked and need input from the user, say so clearly and stop."
+)
+
 JUDGE_SYSTEM_PROMPT = (
     "You are a strict judge evaluating whether an autonomous agent has "
     "achieved a user's stated goal. You receive the goal text and the "
@@ -38,13 +47,33 @@ JUDGE_SYSTEM_PROMPT = (
     '{"done": <bool>, "reason": "<one-sentence rationale>"}'
 )
 
+JUDGE_SYSTEM_PROMPT_WITH_SUBGOALS = (
+    "You are a strict judge evaluating whether an autonomous agent has "
+    "achieved a user's stated goal AND all required criteria. You receive the goal, "
+    "the criteria list, and the agent's most recent response.\n\n"
+    "The goal is DONE only when ALL of the following are satisfied:\n"
+    "- The primary goal is achieved (response confirms completion or shows the deliverable), AND\n"
+    "- Every criterion in the list is explicitly satisfied.\n\n"
+    "If the primary goal is done but any criterion is unmet — NOT done, CONTINUE.\n"
+    "If blocked or needs user input — treat as DONE with a block reason.\n\n"
+    "Reply ONLY with a single JSON object on one line:\n"
+    '{"done": <bool>, "reason": "<one-sentence rationale>"}'
+)
+
 JUDGE_USER_PROMPT_TEMPLATE = (
     "Goal:\n{goal}\n\n"
     "Agent's most recent response:\n{response}\n\n"
     "Is the goal satisfied?"
 )
 
-JudgeFn = Callable[[str, str], Awaitable[tuple[str, str, bool]]]
+JUDGE_USER_PROMPT_WITH_SUBGOALS_TEMPLATE = (
+    "Goal:\n{goal}\n\n"
+    "Required criteria:\n{subgoals}\n\n"
+    "Agent's most recent response:\n{response}\n\n"
+    "Are the goal AND all criteria satisfied?"
+)
+
+JudgeFn = Callable[[str, str, "list[str] | None"], Awaitable[tuple[str, str, bool]]]
 
 
 @dataclass
@@ -59,6 +88,7 @@ class GoalState:
     last_reason: str | None = None
     paused_reason: str | None = None
     consecutive_parse_failures: int = 0
+    subgoals: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -76,6 +106,7 @@ class GoalState:
             last_reason=data.get("last_reason"),
             paused_reason=data.get("paused_reason"),
             consecutive_parse_failures=int(data.get("consecutive_parse_failures", 0) or 0),
+            subgoals=list(data.get("subgoals") or []),
         )
 
 
@@ -126,21 +157,32 @@ def parse_judge_response(raw: str) -> tuple[bool, str, bool]:
     return done, reason, False
 
 
-async def judge_goal_with_llm(llm: Any, goal: str, last_response: str) -> tuple[str, str, bool]:
+async def judge_goal_with_llm(llm: Any, goal: str, last_response: str, subgoals: list[str] | None = None) -> tuple[str, str, bool]:
     if not goal.strip():
         return "skipped", "empty goal", False
     if not last_response.strip():
         return "continue", "empty response (nothing to evaluate)", False
 
-    prompt = JUDGE_USER_PROMPT_TEMPLATE.format(
-        goal=_truncate(goal, 2000),
-        response=_truncate(last_response, JUDGE_RESPONSE_SNIPPET_CHARS),
-    )
+    if subgoals:
+        subgoals_text = "\n".join(f"- {s}" for s in subgoals)
+        prompt = JUDGE_USER_PROMPT_WITH_SUBGOALS_TEMPLATE.format(
+            goal=_truncate(goal, 2000),
+            subgoals=subgoals_text,
+            response=_truncate(last_response, JUDGE_RESPONSE_SNIPPET_CHARS),
+        )
+        system = JUDGE_SYSTEM_PROMPT_WITH_SUBGOALS
+    else:
+        prompt = JUDGE_USER_PROMPT_TEMPLATE.format(
+            goal=_truncate(goal, 2000),
+            response=_truncate(last_response, JUDGE_RESPONSE_SNIPPET_CHARS),
+        )
+        system = JUDGE_SYSTEM_PROMPT
+
     try:
         events = await llm.invoke(
             LLMContext(
                 messages=[UserMessage(contents=[TextContent(content=prompt)])],
-                system_prompt=JUDGE_SYSTEM_PROMPT,
+                system_prompt=system,
             )
         )
     except Exception as exc:
@@ -183,14 +225,23 @@ class GoalManager:
         if state is None or state.status == "cleared":
             return "No active goal. Set one with /goal <text>."
         turns = f"{state.turns_used}/{state.max_turns} turns"
+        sub = f" [{len(state.subgoals)} criteria]" if state.subgoals else ""
         if state.status == "active":
-            return f"Goal active ({turns}): {state.goal}"
+            return f"Goal active ({turns}{sub}): {state.goal}"
         if state.status == "paused":
             reason = f" - {state.paused_reason}" if state.paused_reason else ""
-            return f"Goal paused ({turns}{reason}): {state.goal}"
+            return f"Goal paused ({turns}{sub}{reason}): {state.goal}"
         if state.status == "done":
-            return f"Goal done ({turns}): {state.goal}"
-        return f"Goal {state.status} ({turns}): {state.goal}"
+            return f"Goal done ({turns}{sub}): {state.goal}"
+        return f"Goal {state.status} ({turns}{sub}): {state.goal}"
+
+    def add_subgoal(self, criterion: str) -> GoalState | None:
+        """Append an additional criterion to the active goal. Returns None if no goal is active."""
+        if self._state is None or self._state.status not in {"active", "paused"}:
+            return None
+        self._state.subgoals.append(criterion.strip())
+        self._save()
+        return self._state
 
     def set(self, goal: str, *, max_turns: int | None = None) -> GoalState:
         goal = goal.strip()
@@ -309,13 +360,20 @@ class GoalManager:
     def next_continuation_prompt(self) -> str | None:
         if self._state is None or self._state.status != "active":
             return None
+        if self._state.subgoals:
+            subgoals_text = "\n".join(f"- {s}" for s in self._state.subgoals)
+            return CONTINUATION_PROMPT_WITH_SUBGOALS_TEMPLATE.format(
+                goal=self._state.goal,
+                subgoals=subgoals_text,
+            )
         return CONTINUATION_PROMPT_TEMPLATE.format(goal=self._state.goal)
 
     async def _judge_result(self, goal: str, last_response: str) -> tuple[str, str, bool]:
         if self._judge is None:
             return "continue", "judge unavailable", False
+        subgoals = self._state.subgoals if self._state else []
         try:
-            return await self._judge(goal, last_response)
+            return await self._judge(goal, last_response, subgoals or None)
         except Exception as exc:
             return "continue", f"judge error: {type(exc).__name__}", False
 

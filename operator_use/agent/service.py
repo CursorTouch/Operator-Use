@@ -97,7 +97,7 @@ class Agent(ExtensionContext):
         _judge_llm = _make_judge_llm()
         self._goal_manager = GoalManager(
             session_manager,
-            judge=lambda goal, response: judge_goal_with_llm(_judge_llm, goal, response),
+            judge=lambda goal, response, subgoals=None: judge_goal_with_llm(_judge_llm, goal, response, subgoals),
         )
 
         self._phase: str = "idle"

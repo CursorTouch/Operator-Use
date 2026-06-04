@@ -35,7 +35,7 @@ class AgentConfig(BaseModel):
 
 class PromptOptions(BaseModel):
     """Per-turn invocation options passed to Agent.invoke()."""
-    source: Literal['interactive', 'rpc', 'extension', 'cron', 'subagent', 'goal'] = 'interactive'
+    source: Literal['interactive', 'rpc', 'extension', 'cron', 'subagent', 'goal', 'queue', 'background'] = 'interactive'
     compaction_custom_instructions: str | None = None
     meta: MessageMeta | None = None
     channel: str | None = None

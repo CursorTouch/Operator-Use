@@ -316,7 +316,7 @@ class InputEvent:
 
     type: Literal['input'] = field(default='input', init=False)
     text: str = ''
-    source: Literal['interactive', 'rpc', 'extension', 'cron', 'subagent', 'goal'] = 'interactive'
+    source: Literal['interactive', 'rpc', 'extension', 'cron', 'subagent', 'goal', 'queue', 'background'] = 'interactive'
 
 
 @dataclass

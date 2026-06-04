@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 _INTERVAL_RE = re.compile(r'^(\d+(?:\.\d+)?)(ms|s|m|h|d)$', re.IGNORECASE)
 _UNITS_MS = {'ms': 1, 's': 1_000, 'm': 60_000, 'h': 3_600_000, 'd': 86_400_000}
+# A cron field is either *, a number, or contains / , - (range/step/list).
+_CRON_FIELD_RE = re.compile(r'^(\*|[0-9]+([,/\-][0-9*]+)*)$')
 
 
 def _parse_interval(token: str) -> int | None:
@@ -20,6 +22,16 @@ def _parse_interval(token: str) -> int | None:
         return None
     value, unit = float(m.group(1)), m.group(2).lower()
     return max(1, int(value * _UNITS_MS[unit]))
+
+
+def _parse_cron_expr(tokens: list[str]) -> str | None:
+    """Return a 5-field cron expression if tokens[0:5] look like one, else None."""
+    if len(tokens) < 5:
+        return None
+    fields = tokens[:5]
+    if all(_CRON_FIELD_RE.match(f) for f in fields):
+        return ' '.join(fields)
+    return None
 
 
 def _fmt_interval(ms: int) -> str:
@@ -31,11 +43,13 @@ def _fmt_interval(ms: int) -> str:
 
 _USAGE = (
     "Usage:\n"
-    "  /loop <interval> <message>   — repeat <message> every <interval>\n"
-    "  /loop stop <name|id>         — stop a running loop\n"
-    "  /loop                        — list active loops\n"
+    "  /loop <interval> <message>              — repeat <message> every <interval>\n"
+    "  /loop <MIN HR DOM MON DOW> <message>    — repeat on a cron schedule\n"
+    "  /loop stop <name|id>                    — stop a running loop\n"
+    "  /loop                                   — list active loops\n"
     "\n"
-    "Intervals: 30s  5m  2h  1d"
+    "Intervals: 30s  5m  2h  1d\n"
+    "Cron:      /loop 0 9 * * * daily-standup"
 )
 
 
@@ -93,16 +107,28 @@ async def _handle_loop(registry: CommandRegistry, args: list[str]) -> None:
         print(f"Stopped loop '{job.name}'.")
         return
 
-    # /loop <interval> <message>
-    interval_ms = _parse_interval(args[0])
-    if interval_ms is None:
-        print(f"Invalid interval '{args[0]}'.\n{_USAGE}")
-        return
-    if len(args) < 2:
-        print(f"No message provided.\n{_USAGE}")
-        return
+    # /loop <MIN HR DOM MON DOW> <message>  — cron expression (5 fields)
+    cron_expr = _parse_cron_expr(args)
+    if cron_expr is not None:
+        if len(args) < 6:
+            print(f"No message provided after cron expression.\n{_USAGE}")
+            return
+        message = ' '.join(args[5:])
+        schedule = CronSchedule(mode='cron', expr=cron_expr)
+        schedule_label = cron_expr
+    else:
+        # /loop <interval> <message>
+        interval_ms = _parse_interval(args[0])
+        if interval_ms is None:
+            print(f"Invalid interval or cron expression '{args[0]}'.\n{_USAGE}")
+            return
+        if len(args) < 2:
+            print(f"No message provided.\n{_USAGE}")
+            return
+        message = ' '.join(args[1:])
+        schedule = CronSchedule(mode='every', interval_ms=interval_ms)
+        schedule_label = f"every {_fmt_interval(interval_ms)}"
 
-    message = ' '.join(args[1:])
     slug = re.sub(r'[^a-z0-9]+', '-', message[:32].lower()).strip('-')
     name = f'loop:{slug}'
 
@@ -114,16 +140,16 @@ async def _handle_loop(registry: CommandRegistry, args: list[str]) -> None:
 
     job = cron.add_job(
         name=name,
-        schedule=CronSchedule(mode='every', interval_ms=interval_ms),
+        schedule=schedule,
         payload=CronPayload(message=message),
     )
-    print(f"Loop '{name}' started — runs every {_fmt_interval(interval_ms)}.")
+    print(f"Loop '{name}' started — {schedule_label}.")
     print(f"Message: {message}")
     print(f"ID: {job.id}  ·  /loop stop {job.id[:8]} to cancel")
 
 
 command = SlashCommandInfo(
     name='loop',
-    description='Repeat a prompt on a fixed interval. Usage: /loop <interval> <message>',
+    description='Repeat a prompt on an interval or cron schedule. Usage: /loop <interval|cron> <message>',
     handler=_handle_loop,
 )
