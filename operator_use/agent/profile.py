@@ -82,82 +82,102 @@ class AgentProfile(BaseModel):
 
     @property
     def settings_path(self) -> Path:
+        """Path to per-profile settings.json overlay file."""
         return self.profile_dir / 'settings.json'
 
     @property
     def soul_path(self) -> Path:
+        """Path to per-profile SOUL.md persona override file."""
         return self.profile_dir / 'SOUL.md'
 
     @property
     def user_path(self) -> Path:
+        """Path to per-profile USER.md user information override file."""
         return self.profile_dir / 'USER.md'
 
     @property
     def memory_path(self) -> Path:
+        """Path to per-profile MEMORY.md memory context override file."""
         return self.profile_dir / 'MEMORY.md'
 
     @property
     def tools_path(self) -> Path:
+        """Path to per-profile TOOLS.md tool documentation file."""
         return self.profile_dir / 'TOOLS.md'
 
     @property
     def sessions_dir(self) -> Path:
+        """Directory for per-profile session history files."""
         return self.profile_dir / 'sessions'
 
     @property
     def tools_dir(self) -> Path:
+        """Directory for per-profile custom tools."""
         return self.profile_dir / 'tools'
 
     @property
     def skills_dir(self) -> Path:
+        """Directory for per-profile custom skills."""
         return self.profile_dir / 'skills'
 
     @property
     def knowledge_dir(self) -> Path:
+        """Directory for per-profile knowledge documents for injection."""
         return self.profile_dir / 'knowledge'
 
     @property
     def extensions_dir(self) -> Path:
+        """Directory for per-profile extensions."""
         return self.profile_dir / 'extensions'
 
     @property
     def commands_dir(self) -> Path:
+        """Directory for per-profile custom slash commands."""
         return self.profile_dir / 'commands'
 
     @property
     def hooks_dir(self) -> Path:
+        """Directory for per-profile hook definitions."""
         return self.profile_dir / 'hooks'
 
     @property
     def subagents_dir(self) -> Path:
+        """Directory for per-profile subagent templates."""
         return self.profile_dir / 'subagents'
 
     @property
     def temp_dir(self) -> Path:
+        """Temporary scratch space for the profile."""
         return self.profile_dir / 'temp'
 
     @property
     def memory_dir(self) -> Path:
+        """Directory for per-profile memory files."""
         return self.profile_dir / 'memory'
 
     @property
     def tasks_dir(self) -> Path:
+        """Directory for per-profile task state."""
         return self.profile_dir / 'tasks'
 
     @property
     def crons_path(self) -> Path:
+        """Path to per-profile crons.json scheduled job configuration."""
         return self.profile_dir / 'crons.json'
 
     @property
     def teams_dir(self) -> Path:
+        """Directory for per-profile multi-agent team state."""
         return self.profile_dir / 'teams'
 
     @property
     def acp_dir(self) -> Path:
+        """Root directory for Agent Control Protocol (ACP) state."""
         return self.profile_dir / 'acp'
 
     @property
     def acp_tokens_path(self) -> Path:
+        """Path to per-profile ACP authentication tokens."""
         return self.profile_dir / 'acp' / 'tokens.json'
 
     @property
@@ -167,18 +187,22 @@ class AgentProfile(BaseModel):
 
     @property
     def workflows_dir(self) -> Path:
+        """Directory for per-profile Python workflows."""
         return self.profile_dir / 'workflows'
 
     @property
     def workflow_runs_dir(self) -> Path:
+        """Directory for per-profile workflow run history and outputs."""
         return self.profile_dir / 'workflows' / '.runs'
 
     @property
     def auth_dir(self) -> Path:
+        """Directory for per-profile authentication state."""
         return self.profile_dir / 'auth'
 
     @property
     def auth_channels_path(self) -> Path:
+        """Path to per-profile channel authentication configuration."""
         return self.profile_dir / 'auth' / 'channels.json'
 
     # ── Peer-to-peer paths ────────────────────────────────────────────────────
@@ -189,7 +213,14 @@ class AgentProfile(BaseModel):
         return self.profile_dir / 'peer'
 
     def peer_bookmark_path(self, profile_name: str) -> Path:
-        """Bookmark file for a specific peer profile."""
+        """Bookmark file for a specific peer profile.
+
+        Args:
+            profile_name: The name of the peer profile.
+
+        Returns:
+            Path to the peer bookmark JSON file.
+        """
         return self.peer_dir / f'{profile_name}.json'
 
     def peer_sessions_dir(self, other_profile: str) -> Path:
@@ -198,6 +229,12 @@ class AgentProfile(BaseModel):
         Named from this profile's perspective:
           profiles/alice/peer/sessions/bob/  — alice's sessions talking to bob
           profiles/bob/peer/sessions/alice/  — bob's sessions talking to alice
+
+        Args:
+            other_profile: The name of the peer profile to communicate with.
+
+        Returns:
+            Path to the peer session directory.
         """
         return self.peer_dir / 'sessions' / other_profile
 
@@ -238,6 +275,18 @@ def _cleanup_tmpdir(path: str) -> None:
 def load_agent_profile_from_file(
     file_path: Path,
 ) -> tuple[AgentProfile | None, list[ResourceDiagnostic]]:
+    """Parse AGENT.md file and construct an AgentProfile.
+
+    Extracts frontmatter fields (name, description, model, provider, tools) and
+    uses the file body as the custom system prompt. Bootstraps the profile
+    directory structure with default subdirectories.
+
+    Args:
+        file_path: Path to the AGENT.md file.
+
+    Returns:
+        A tuple of (AgentProfile or None, list of ResourceDiagnostic warnings/errors).
+    """
     diagnostics: list[ResourceDiagnostic] = []
     try:
         raw = file_path.read_text(encoding='utf-8')
