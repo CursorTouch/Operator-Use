@@ -179,6 +179,9 @@ the Agent.
        │          engine.run(AgentContext)        │
        │    ◄──────────────────────────────────  │
        │    if error:                            │
+       │      classify_error(exc) → ErrorKind    │
+       │      if not retryable → abort           │
+       │      if CONTEXT_OVERFLOW → compact first│
        │      rewind session (remove unpersisted)│
        │      engine.reset()                     │
        │      sleep(base * 2^attempt) ── backoff │
@@ -305,21 +308,27 @@ queue a follow-up prompt that fires immediately after the current response finis
        │                                                             │
        │  1. resolve tool by name (builtin wins over extension)      │
        │                                                             │
-       │  2. GUARDRAILS — before_call                                │
-       │     ┌───────────────────────────────────────────────┐      │
-       │     │  LoopDetectionGuardrail.before_call()         │      │
-       │     │   • repeated exact failure → block (≥5)       │      │
-       │     │   • idempotent no-progress → block (≥5 same)  │      │
-       │     └───────────────────────────────────────────────┘      │
+       │  2. TOOL WHITELIST (child agents only, dispatch-time)       │
+       │     if _tool_whitelist set and name not in it:              │
+       │       → return error result (full tool list in body stays   │
+       │         byte-identical → provider cache hit preserved)      │
+       │                                                             │
+       │  3. BEFORE HOOKS                                            │
        │     ┌───────────────────────────────────────────────┐      │
        │     │  Agent._before_tool_call()                    │      │
        │     │   emit 'tool_call' → extensions               │      │
        │     │   if any handler blocks → return error result │      │
        │     └───────────────────────────────────────────────┘      │
+       │     ┌───────────────────────────────────────────────┐      │
+       │     │  Guardrails.before_call() (all, in order)     │      │
+       │     │   allow / warn → continue to execution        │      │
+       │     │   block → return synthetic error result       │      │
+       │     │   halt  → engine.abort(), return error        │      │
+       │     └───────────────────────────────────────────────┘      │
        │                                                             │
-       │  3. emit tool_execution_start                               │
+       │  4. emit tool_execution_start                               │
        │                                                             │
-       │  4. tool.execute(id, params, signal, on_update)             │
+       │  5. tool.execute(id, params, signal, on_update)             │
        │     ┌──────────────────────────────────────────────────┐   │
        │     │  BUILTIN TOOLS (selection):                       │   │
        │     │  read, edit, write, terminal, browser, computer  │   │
@@ -328,24 +337,23 @@ queue a follow-up prompt that fires immediately after the current response finis
        │     │  todo, knowledge, workflow, sandbox, …           │   │
        │     └──────────────────────────────────────────────────┘   │
        │                                                             │
-       │  5. emit tool_execution_update (streaming progress)         │
-       │  6. emit tool_execution_end                                 │
+       │  6. emit tool_execution_update (streaming progress)         │
+       │  7. emit tool_execution_end                                 │
        │                                                             │
-       │  7. GUARDRAILS — after_call                                 │
-       │     ┌───────────────────────────────────────────────┐      │
-       │     │  LoopDetectionGuardrail.after_call()          │      │
-       │     │   • exact failure: warn (≥2) / block (≥5)     │      │
-       │     │   • same-tool failure: warn (≥3) / halt (≥8)  │      │
-       │     │   • idempotent same result: warn (≥2)         │      │
-       │     └───────────────────────────────────────────────┘      │
+       │  8. AFTER HOOKS                                             │
        │     ┌───────────────────────────────────────────────┐      │
        │     │  Agent._after_tool_call()                     │      │
        │     │   emit 'tool_result' → extensions             │      │
        │     │   handlers may patch content / is_error       │      │
        │     │   handlers may set terminate=True             │      │
        │     └───────────────────────────────────────────────┘      │
+       │     ┌───────────────────────────────────────────────┐      │
+       │     │  Guardrails.after_call() (all, in order)      │      │
+       │     │   warn  → append reason to result content     │      │
+       │     │   halt  → engine.abort()                      │      │
+       │     └───────────────────────────────────────────────┘      │
        │                                                             │
-       │  8. increment SkillReviewTracker + MemoryReviewTracker      │
+       │  9. increment SkillReviewTracker + MemoryReviewTracker      │
        └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -479,3 +487,4 @@ before and after Agent is involved.
 | Tool interface, execution modes | [tool.md](./tool.md) |
 | Long-term memory, providers | [memory.md](./memory.md) |
 | Context compaction | [compaction.md](./compaction.md) |
+| Guardrail interface, loading, built-ins | [guardrails.md](./guardrails.md) |

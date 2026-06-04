@@ -93,6 +93,9 @@ The `handler` receives the `CommandRegistry` (which carries a `registry.runtime`
 | `/auth` | — | Show authentication status for all providers (OAuth and API-key). |
 | `/compact [instructions]` | — | Run compaction immediately. Optional custom instructions override the default summarization prompt. |
 | `/cron [id]` | — | List scheduled cron jobs. Pass an ID prefix or name for details. |
+| `/background <prompt>` | `/bg`, `/btw` | Run a prompt in a background session via the subagent manager without blocking the current workspace. |
+| `/queue <prompt>` | — | Queue a prompt to run after the current agent turn completes. |
+| `/subgoal <criterion>` | — | Add a required criterion to the active goal. The LLM judge must satisfy all criteria before marking the goal done. |
 | `/loop [interval] [message]` | — | Repeat a prompt on a fixed interval. No args lists active loops; `stop <name\|id>` cancels one. |
 | `/new` | `/clear` | Start a new session (discards the current session history). |
 | `/reload` | — | Reload all resources (tools, skills, commands, extensions) while keeping the active session history intact. |
@@ -171,6 +174,46 @@ Repeats a user prompt on a fixed interval using the cron scheduler. Requires `cr
 Supported interval units: `ms`, `s`, `m`, `h`, `d` (e.g. `30s`, `5m`, `2h`).
 
 Each loop is a cron job named `loop:<slug>`. Starting a loop with the same message slug replaces the existing one (no duplicates accumulate). Use `/loop stop` or the `/cron` command to cancel.
+
+### /background (/bg, /btw)
+
+Forks the current session and runs the given prompt in a background subagent session,
+without blocking the foreground workspace:
+
+```
+/background <prompt>
+/bg summarize the logs from today
+```
+
+Uses `SubagentManager.invoke(task=..., fork=True, deliver='agent')` under the hood.
+The result surfaces back into the foreground session as a follow-up message when the
+background task completes. Requires `subagents_enabled: true` in settings.
+
+### /queue
+
+Queues a prompt to run after the current agent turn completes. If the agent is idle
+the prompt is dispatched immediately. If a turn is in progress it is scheduled with
+`source='queue'` so it runs in sequence after the active turn settles:
+
+```
+/queue <prompt>
+/queue run the test suite
+```
+
+### /subgoal
+
+Adds a required criterion to the active `/goal`. The LLM judge evaluates after each
+continuation turn and will only mark the goal done when every criterion is satisfied:
+
+```
+/subgoal <criterion>
+/subgoal all tests pass
+/subgoal no TypeScript errors
+```
+
+Requires an active goal (set via `/goal <text>`). Prints the updated criterion count
+and the current goal status line. Criteria are stored in `GoalState.subgoals` and
+persisted to the session via `CustomInfoEntry`.
 
 ### /wiki
 

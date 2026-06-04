@@ -38,6 +38,7 @@ Find detailed documentation before reading source:
 |---|---|
 | Full system — channels → gateway → agent → engine → session | `docs/architecture.md` |
 | Turn flow, retry, compaction scheduling | `docs/agent.md` |
+| Guardrail interface, loading, loop detection | `docs/guardrails.md` |
 | LLM loop, tool execution modes, queues | `docs/engine.md` |
 | Session JSONL, branching, reconstruction | `docs/session.md` |
 | Extension loading, `api.config`, dispatch | `docs/extensions.md` |

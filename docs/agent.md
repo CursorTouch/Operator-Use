@@ -19,13 +19,16 @@ invoke(user_input)
 
 ## Phase model
 
-Agent tracks an explicit phase string:
+Agent tracks phase as an `AgentPhase` enum:
 
 ```python
-self._phase: str   # "idle" | "turn" | "compaction"
+class AgentPhase(str, Enum):
+    IDLE       = "idle"
+    TURN       = "turn"
+    COMPACTION = "compaction"
 ```
 
-Structural operations require `phase == "idle"`:
+Structural operations require `phase == AgentPhase.IDLE`:
 
 - `invoke()`
 - `run_compaction()`
@@ -39,13 +42,15 @@ Calling either while the agent is busy raises `RuntimeError` immediately.
 `invoke()` follows this sequence:
 
 ```
-1. Assert phase == "idle"
+1. Assert phase == AgentPhase.IDLE
    │
-2. Emit 'input' event
+2. Call guardrail.on_turn_start() on all guardrails (reset per-turn state)
+   │
+3. Emit 'input' event
    ├─ Extensions see raw user text
    │
-3. Rebuild system prompt
-   ├─ Load skills, knowledge, context files
+3. Rebuild system prompt (or hit per-channel cache)
+   ├─ Load skills, knowledge
    ├─ Apply AGENT.md + SYSTEM.md
    │
 4. Emit 'before_agent_start'
@@ -88,6 +93,7 @@ Calling either while the agent is busy raises `RuntimeError` immediately.
 - Failed retries fully rewind before next attempt
 - User message is persisted once before retry loop (can be removed if all retries fail)
 - Compaction only runs after `save_point` (turn complete, session durable)
+- Guardrails run on every tool call within a turn; errors from guardrails never abort a turn (the decision itself is the signal)
 
 ## Retry
 
@@ -109,6 +115,29 @@ for attempt in range(max_retries + 1):
     self._engine.reset()
     await asyncio.sleep(base_delay_s * 2 ** (attempt - 1))
 ```
+
+### Error classification
+
+Every engine error is classified by `classify_error(exc) -> ClassifiedError` before
+deciding whether to retry:
+
+| `ErrorKind` | HTTP | Retryable | Notes |
+|---|---|---|---|
+| `RATE_LIMIT` | 429 | yes | Backoff + retry |
+| `OVERLOADED` | 503 / 529 | yes | Backoff + retry |
+| `SERVER_ERROR` | 500 / 502 | yes | Retry |
+| `TIMEOUT` | — | yes | Retry |
+| `CONTEXT_OVERFLOW` | 400 / 413 | yes | **Run compaction first**, then retry |
+| `UNKNOWN` | — | yes | Retry with backoff |
+| `AUTH` | 401 / 403 | no | Abort immediately |
+| `AUTH_PERMANENT` | 401 / 403 | no | Abort immediately |
+| `BILLING` | 402 / 429 | no | Abort immediately |
+| `MODEL_NOT_FOUND` | 404 | no | Abort immediately |
+| `CONTENT_BLOCKED` | — | no | Abort immediately |
+| `FORMAT_ERROR` | 400 | no | Abort immediately |
+
+`CONTEXT_OVERFLOW` triggers an automatic compaction pass before the next retry
+attempt, so the context is within budget when the LLM is called again.
 
 **Example walkthrough:**
 
@@ -240,7 +269,7 @@ if self._compact_requested or self._compaction.should_compact(
 
 Extensions may call `ctx.compact()` during a turn to set `_compact_requested`. The actual compaction always runs after the turn, never mid-turn.
 
-`run_compaction()` is also a public API for manual compaction. It checks `phase == "idle"` and fails fast if called while a turn is running. After a successful manual compaction it emits `save_point` and optionally `settled`.
+`run_compaction()` is also a public API for manual compaction. It checks `phase == AgentPhase.IDLE` and fails fast if called while a turn is running. After a successful manual compaction it emits `save_point` and optionally `settled`.
 
 See [compaction.md](./compaction.md) for the Compaction implementation.
 
@@ -283,6 +312,69 @@ Agent exposes `new_session()`, `fork()`, and `switch_session()` — all forwarde
 
 Engine events (`agent_start`, `turn_start`, `message_end`, `tool_execution_*`, …) are re-dispatched through `_on_engine_event`. See [engine.md](./engine.md) for the full Engine event list.
 
+## spawn_child
+
+`agent.spawn_child(tools=None) -> Agent` creates an ephemeral child agent that
+shares the parent's LLM instance and system prompt. Used by background reviewers.
+
+```python
+child = agent.spawn_child(tools=['skill'])
+```
+
+**What the child inherits:**
+- Same `Engine.llm` instance (same provider credentials and base URL)
+- Same `_system_prompt` and full `_system_prompt_cache` (byte-identical → prefix cache hit)
+- All parent tools in the request body (same provider cache key)
+- `session_id` pinned to the parent's (so any prompt rebuild still produces identical bytes)
+- `mcp_manager` and `settings_manager` from the parent's tool context
+
+**What the child does not get:**
+- No session persistence (`persist=False`)
+- No extensions
+- No compaction (`NullCompaction`)
+- No desktop/browser tool context (intentional — children must not control parent's automation sessions)
+- Memory manager is only forwarded if `'memory'` is in the whitelist
+
+**Tool whitelist:** When `tools` is a list, only those tools may dispatch at runtime.
+All parent tools are still sent in the request body so the provider cache key is
+unchanged. Non-whitelisted calls return `ToolResultContent(is_error=True)` immediately.
+
+## Guardrails
+
+Agent maintains a list of `Guardrail` instances in `self._guardrails`. They are
+loaded from files and merged with extension-registered guardrails on every `reload()`.
+
+```
+reload()
+  └─ _refresh_guardrails()
+       ├─ file_guardrails = resources.get_guardrails()   # builtin + profile + project
+       └─ ext_guardrails  = extensions.get_guardrails()  # extension-registered
+          (file names win on collision)
+```
+
+**Turn lifecycle:**
+- `on_turn_start()` called on all guardrails at the start of `invoke()` to reset per-turn counters.
+- `before_call()` runs inside `_before_tool_call` after extension `tool_call` handlers. A `block` decision returns a synthetic error result; `halt` sends the Engine abort signal.
+- `after_call()` runs inside `_after_tool_call` after extension `tool_result` handlers. A `warn` decision appends the reason to the result content; `halt` aborts the Engine.
+
+See [guardrails.md](./guardrails.md) for the full interface, loading rules, and examples.
+
+## System prompt cache
+
+The system prompt is rebuilt once per `invoke()` call and cached per channel:
+
+```python
+self._system_prompt_cache: dict[str | None, str]
+```
+
+Key is `opts.channel` (the incoming channel ID, or `None` for the REPL). On cache
+hit the rebuild is skipped entirely. The cache is cleared:
+- On `reload()` (resources changed)
+- When the memory review background thread completes (MEMORY.md may have been updated)
+
+Child agents inherit the full parent cache via `child._system_prompt_cache.update(...)`,
+so any channel-specific variants are also warm for the child.
+
 ## Related documents
 
 - [engine.md](./engine.md) — Engine loop and tool execution
@@ -290,3 +382,4 @@ Engine events (`agent_start`, `turn_start`, `message_end`, `tool_execution_*`, �
 - [hooks.md](./hooks.md) — Hooks system event types and result semantics
 - [extensions.md](./extensions.md) — Extension loading and dispatch
 - [compaction.md](./compaction.md) — Compaction logic
+- [guardrails.md](./guardrails.md) — Guardrail interface, loading, built-ins

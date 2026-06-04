@@ -26,6 +26,7 @@ class Extension:
     handlers: dict[str, list[Callable]]          # event_type → list of handlers
     tools: dict[str, RegisteredTool]             # tool_name → registered tool
     commands: dict[str, RegisteredCommand]       # command_name → slash command
+    guardrails: dict[str, Guardrail]             # guardrail_name → Guardrail instance
     config: dict                                 # per-extension settings (from extension_list)
     # Provider registrations collected during factory execution
     inference_providers: list[Any]               # APIProvider | OAuthProvider instances
@@ -187,6 +188,7 @@ Configure in `~/.operator/settings.json`:
 | `api.on(event, handler)` | Register an event handler |
 | `api.register_tool(ToolDefinition)` | Register a tool the LLM can call |
 | `api.register_command(name, handler, description?)` | Register a slash command |
+| `api.register_guardrail(guardrail)` | Register a `Guardrail` instance; file-loaded names take precedence on collision |
 | `api.register_provider(provider)` | Register a custom inference provider (`APIProvider` or `OAuthProvider`) |
 | `api.register_llm_api(name, api_class)` | Register a custom `BaseLLMAPI` subclass under a string name |
 | `api.register_memory_provider(provider)` | Register a custom `MemoryProvider` descriptor |
