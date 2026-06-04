@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 
 class LLM:
+    """Wrapper around inference APIs with model/provider resolution and option merging."""
     _apis = LLMAPIRegistry.from_builtins()
     _models = ModelRegistry.from_llm_builtins()
     _providers = TextProviderRegistry.from_builtins()
@@ -34,6 +35,21 @@ class LLM:
         apis: Optional[LLMAPIRegistry] = None,
         auth_store: Optional[ProviderAuthManager] = None,
     ) -> None:
+        """Initialize an LLM by resolving model, provider, and API implementation.
+
+        Args:
+            model_id: The model identifier (e.g., 'claude-3-5-sonnet-latest').
+            provider: Optional provider name; if omitted, defaults from model definition.
+            options: Optional LLMOptions for API key, base_url, temperature, etc.
+            models: Optional custom ModelRegistry; defaults to global builtin registry.
+            providers: Optional custom TextProviderRegistry; defaults to global builtin registry.
+            apis: Optional custom LLMAPIRegistry; defaults to global builtin registry.
+            auth_store: Optional custom ProviderAuthManager; defaults to global builtin store.
+
+        Raises:
+            ValueError: If model_id or provider not found in registries.
+            RuntimeError: If OAuth provider requires credentials that are unavailable.
+        """
         _models = models if models is not None else type(self)._models
         _providers = providers if providers is not None else type(self)._providers
         _apis = apis if apis is not None else type(self)._apis
@@ -84,6 +100,15 @@ class LLM:
             self.api.options.max_tokens = model.max_tokens
 
     def _merge_options(self, base: LLMOptions, override: LLMOptions | None) -> LLMOptions:
+        """Merge base options with override options, preferring non-None override values.
+
+        Args:
+            base: The base LLMOptions configuration.
+            override: Optional override LLMOptions; fields override base when non-None.
+
+        Returns:
+            A new LLMOptions with merged values.
+        """
         if override is None:
             return base
         merged = LLMOptions(**{f.name: getattr(base, f.name) for f in fields(base)})
@@ -94,6 +119,14 @@ class LLM:
         return merged
 
     def _resolve_messages(self, context: LLMContext) -> list[LLMMessage]:
+        """Resolve messages for the LLM call, prepending system prompt if needed.
+
+        Args:
+            context: The LLMContext with messages and optional system prompt.
+
+        Returns:
+            A list of LLMMessages with system message injected if needed.
+        """
         messages = context.messages
         if context.system_prompt:
             if not messages or not isinstance(messages[0], SystemMessage):
@@ -101,6 +134,17 @@ class LLM:
         return messages
 
     async def stream(self, context: LLMContext) -> AsyncGenerator[LLMEvent, None]:
+        """Stream LLM events from the configured provider API.
+
+        Resolves messages, refreshes API credentials if needed, and yields events
+        (text deltas, tool calls, thinking blocks, stop reasons, and usage).
+
+        Args:
+            context: The LLMContext with messages, tools, and response format options.
+
+        Yields:
+            LLMEvent objects (TextDeltaEvent, ToolCallEndEvent, EndEvent, ErrorEvent, etc.).
+        """
         api_key = await self._auth_store.get_api_key(self.provider_id)
         if api_key:
             self.api.options.api_key = api_key
