@@ -248,6 +248,187 @@ IMAP polling (stdlib `imaplib`) + SMTP sending (stdlib `smtplib`). Polls `INBOX`
 
 `chat_id` = the thread root `Message-ID` (stable across the whole thread).
 
+## Practical Examples
+
+### Example 1: Multi-Channel Deployment
+
+**~/.operator/settings.json**
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true
+    },
+    "discord": {
+      "enabled": true
+    },
+    "slack": {
+      "enabled": true
+    },
+    "websocket": {
+      "enabled": true,
+      "host": "0.0.0.0",
+      "port": 8765
+    }
+  }
+}
+```
+
+**~/.operator/auth/channels.json**
+```json
+{
+  "telegram": {"bot_token": "123:ABC..."},
+  "discord": {"bot_token": "MTk4NjIyNDgzNTQ..."},
+  "slack": {
+    "bot_token": "xoxb-1234567...",
+    "app_token": "xapp-1-1234567..."
+  }
+}
+```
+
+Now the agent accepts messages on all channels simultaneously:
+- Telegram DMs and groups
+- Discord DMs and @mentions
+- Slack channels, DMs, and threads
+- WebSocket clients connecting to `ws://localhost:8765`
+
+### Example 2: Message Flow Walkthrough
+
+**Scenario:** User sends message on Telegram, Agent processes, responds.
+
+```
+1. User: "summarize this PDF"
+   └─ TelegramChannel.receive() emits IncomingMessage
+      {"channel": "telegram", "chat_id": "123456", "parts": [...]}
+
+2. Gateway._incoming_loop dequeues message
+   └─ Looks up or creates Agent for "telegram:123456"
+   └─ Spawns async task to run agent.invoke()
+
+3. Agent processes (Engine loop):
+   Stream of OutgoingMessage events:
+   ├─ StreamPhase.START (typing indicator on)
+   ├─ CHUNK text: "The PDF discusses..."
+   ├─ CHUNK tool_start: download PDF
+   ├─ CHUNK tool_update: "Downloaded 5 pages…"
+   ├─ CHUNK tool_end: success
+   ├─ CHUNK text: "Summary: ..."
+   ├─ StreamPhase.END
+   └─ StreamPhase.DONE (typing indicator off)
+
+4. Gateway._outgoing_loop consumes each OutgoingMessage
+   └─ Routes to TelegramChannel.send()
+   └─ TelegramChannel renders:
+      - START → edit_message(status_msg, "typing…")
+      - CHUNK text → buffer streaming text
+      - tool_start → post "⚙️ download…"
+      - tool_update → edit status in-place
+      - tool_end → edit to "✅ download"
+      - text chunk → delete status msg, start reply with text
+      - END → finalize reply
+      - DONE → cleanup
+```
+
+### Example 3: WebSocket Client Integration
+
+**Client-side JavaScript:**
+```javascript
+const ws = new WebSocket('ws://localhost:8765');
+
+ws.onopen = () => {
+  // Send a message
+  ws.send(JSON.stringify({
+    type: 'message',
+    text: 'Analyze this data: ...',
+    message_id: 'msg-1'
+  }));
+};
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  
+  if (msg.type === 'start') {
+    console.log('Agent starting...');
+  } else if (msg.type === 'chunk') {
+    if (msg.kind === 'text') {
+      console.log('Response:', msg.text);
+    } else if (msg.kind === 'tool_start') {
+      console.log(`Calling ${msg.name}...`);
+    }
+  } else if (msg.type === 'done') {
+    console.log('Turn complete');
+  }
+};
+```
+
+### Example 4: Custom Channel Extension
+
+```python
+# ~/.operator/profiles/custom/extensions/slack_handler.py
+from operator_use.gateway.types import (
+    IncomingMessage, OutgoingMessage, ContentPart, TextPart
+)
+
+async def _on_message_send(event, ctx):
+    """Inject a reaction emoji when turn completes."""
+    if event.stream_phase.name == 'DONE':
+        # Create out-of-band metadata message to add emoji reaction
+        return OutgoingMessage(
+            channel=event.channel,
+            chat_id=event.chat_id,
+            metadata={
+                'kind': 'react',
+                'message_id': event.original_message_id,
+                'emoji': '✅'
+            }
+        )
+
+def extension(api):
+    api.on('message:send', _on_message_send)
+```
+
+### Example 5: Rate Limiting & Session Control
+
+```python
+# ~/.operator/profiles/prod/extensions/rate_limit.py
+from operator_use.gateway.types import MessageReceiveEvent, MessageReceiveResult
+import time
+
+call_times = {}
+
+async def _check_rate(event, ctx):
+    """Allow 5 messages per user per minute."""
+    user_id = event.message.user_id
+    now = time.time()
+    
+    if user_id not in call_times:
+        call_times[user_id] = []
+    
+    # Remove old entries (>60s)
+    call_times[user_id] = [t for t in call_times[user_id] if now - t < 60]
+    
+    if len(call_times[user_id]) >= 5:
+        return MessageReceiveResult(
+            action='reject',
+            reason='Rate limit exceeded: 5 messages/minute'
+        )
+    
+    call_times[user_id].append(now)
+    return MessageReceiveResult(action='continue')
+
+def extension(api):
+    api.on('message:receive', _check_rate)
+```
+
+Enable in settings:
+```json
+{
+  "extension_list": [
+    {"name": "rate_limit", "enabled": true}
+  ]
+}
+```
+
 **Setup:** Set `EMAIL_USERNAME` + `EMAIL_PASSWORD` env vars or `auth/channels.json`. Configure `imap_host` and `smtp_host` in settings.
 
 ## Startup flags

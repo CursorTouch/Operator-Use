@@ -98,6 +98,250 @@ Team state is written atomically (via a `.tmp` file rename) to `teams/<name>/tea
 
 All teams are loaded from disk at `TeamManager.__init__`. Members that were `active` at shutdown have their status set to `"stopped"` on load (they need to be re-spawned).
 
+## Practical Examples
+
+### Example 1: Parallel Research Team
+
+**Setup:** Multiple researchers working on different aspects of a topic.
+
+```python
+# In a session, create and coordinate a research team
+{
+  "action": "create",
+  "team_name": "research-team",
+  "description": "Parallel research on climate policy"
+}
+
+# Spawn team members (each uses the 'researcher' profile)
+{
+  "action": "spawn",
+  "team_name": "research-team",
+  "member_name": "Alice",
+  "role": "researcher",
+  "task": "Research EU climate policy and carbon pricing mechanisms"
+}
+
+{
+  "action": "spawn",
+  "team_name": "research-team",
+  "member_name": "Bob",
+  "role": "researcher",
+  "task": "Research US climate policy and renewable subsidies"
+}
+
+{
+  "action": "spawn",
+  "team_name": "research-team",
+  "member_name": "Charlie",
+  "role": "researcher",
+  "task": "Research China climate policy and emissions targets"
+}
+```
+
+**Coordination:**
+
+```python
+# Check team status
+{
+  "action": "status",
+  "team_name": "research-team"
+}
+# Response:
+# {
+#   "name": "research-team",
+#   "status": "active",
+#   "members": [
+#     {"name": "Alice", "role": "researcher", "status": "active"},
+#     {"name": "Bob", "role": "researcher", "status": "active"},
+#     {"name": "Charlie", "role": "researcher", "status": "active"}
+#   ]
+# }
+
+# Send a message to Alice (update focus area)
+{
+  "action": "send",
+  "team_name": "research-team",
+  "agent_id": "alice-id",
+  "message": "Prioritize recent 2024 EU emissions data"
+}
+
+# Check Alice's inbox for completed research
+{
+  "action": "inbox",
+  "team_name": "research-team",
+  "agent_id": "alice-id"
+}
+# Returns pending messages in her inbox and clears them
+```
+
+### Example 2: Document Processing Pipeline
+
+**Setup:** Team with specialized roles for document analysis.
+
+```python
+# Create team
+{
+  "action": "create",
+  "team_name": "doc-pipeline",
+  "description": "Multi-role document processing"
+}
+
+# Spawn members with different profiles
+{
+  "action": "spawn",
+  "team_name": "doc-pipeline",
+  "member_name": "Extractor",
+  "role": "doc_extractor",  # Profile optimized for data extraction
+  "task": "Extract structured data from legal documents"
+}
+
+{
+  "action": "spawn",
+  "team_name": "doc-pipeline",
+  "member_name": "Analyst",
+  "role": "analyst",  # Profile for analysis
+  "task": "Analyze extracted data for risks and patterns"
+}
+
+{
+  "action": "spawn",
+  "team_name": "doc-pipeline",
+  "member_name": "Reporter",
+  "role": "report_writer",  # Profile for report generation
+  "task": "Compile analysis into executive reports"
+}
+```
+
+**Workflow:**
+
+```
+User Input
+  │
+  ├─ Send docs to Extractor
+  │   └─ "Extract all contract terms from these 5 PDFs"
+  │
+  ├─ Extractor completes, posts to inbox
+  │
+  ├─ Read Extractor's inbox
+  │   └─ Get structured data
+  │
+  ├─ Send to Analyst
+  │   └─ "Analyze these contracts for liability risks"
+  │
+  ├─ Analyst completes, posts to inbox
+  │
+  ├─ Read Analyst's inbox
+  │   └─ Get risk analysis
+  │
+  ├─ Send to Reporter
+  │   └─ "Generate executive summary with risk matrix"
+  │
+  └─ Reporter completes
+```
+
+### Example 3: Team Coordination Script
+
+```python
+# ~/.operator/profiles/manager/workflows/research_team.py
+
+meta = {
+    "name": "research_team_workflow",
+    "description": "Coordinate a research team to investigate a topic",
+}
+
+async def run():
+    topic = args.get("topic", "quantum computing")
+    team_name = f"research-{topic.replace(' ', '-')}"
+    
+    async with phase("setup"):
+        log(f"Creating research team for: {topic}")
+        # Create team
+        await agent(
+            f"{{action: create, team_name: {team_name}, "
+            f"description: 'Research on {topic}'}}"
+        )
+    
+    async with phase("spawn"):
+        log("Spawning team members...")
+        members = ["Alice", "Bob", "Charlie"]
+        for name in members:
+            await agent(
+                f"{{action: spawn, team_name: {team_name}, "
+                f"member_name: {name}, role: researcher, "
+                f"task: 'Research {topic} from different angles'}}"
+            )
+    
+    async with phase("coordinate"):
+        log("Coordinating research...")
+        # Get team status
+        status = await agent(
+            f"{{action: status, team_name: {team_name}}}"
+        )
+        
+        # Send follow-up messages
+        for member_id in status['member_ids']:
+            await agent(
+                f"{{action: send, team_name: {team_name}, "
+                f"agent_id: {member_id}, "
+                f"message: 'Focus on recent 2024 developments'}}"
+            )
+    
+    async with phase("collect"):
+        log("Collecting results from team members...")
+        results = []
+        for member_id in status['member_ids']:
+            inbox = await agent(
+                f"{{action: inbox, team_name: {team_name}, "
+                f"agent_id: {member_id}}}"
+            )
+            results.append(inbox)
+    
+    async with phase("report"):
+        log("Generating final report...")
+        final_report = await agent(
+            f"Write a comprehensive report synthesizing these "
+            f"research findings: {results}"
+        )
+    
+    return {
+        "team": team_name,
+        "topic": topic,
+        "members": len(members),
+        "report": final_report
+    }
+```
+
+### Example 4: Dynamic Team Growth
+
+```python
+async def expand_team_if_needed(team_name, topic):
+    """Add more researchers if initial team is overwhelmed."""
+    status = await agent(f"{{action: status, team_name: {team_name}}}")
+    
+    active_members = len([m for m in status['members'] if m['status'] == 'active'])
+    
+    if active_members < 3:  # Scale up if needed
+        await agent(
+            f"{{action: spawn, team_name: {team_name}, "
+            f"member_name: Dave, role: researcher, "
+            f"task: 'Research {topic}'}}"
+        )
+        log(f"Scaled team to {active_members + 1} members")
+```
+
+### Inbox Message Format
+
+```python
+# Messages in inbox (stored as JSON files)
+{
+  "id": "msg-1234",
+  "type": "message",  # "message" | "result" | "note"
+  "sender_id": "root-session",
+  "content": "Please research the latest developments",
+  "created_at": 1718000000
+}
+```
+
 ## TeamManager API
 
 | Method | Description |

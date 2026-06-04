@@ -72,6 +72,110 @@ def extension(api):
 
 The factory may also be `async def extension(api)` for startup work such as fetching remote config.
 
+### Practical Extension Examples
+
+**Example 1: Git Guard** — Block dangerous git operations
+```python
+# ~/.operator/profiles/dev/extensions/git_guard.py
+from operator_use.tool.types import ToolResult
+
+async def _on_tool_call(event, ctx):
+    # Event fired before tool execution
+    if event.tool_name == "terminal":
+        cmd = event.params.get("command", "")
+        if "git push --force" in cmd or "git reset --hard" in cmd:
+            # Reject with explanation
+            return ToolResult.error(event.invocation.id, 
+                "Force push/reset blocked by git_guard extension")
+    return None  # Allow other tools
+
+def extension(api):
+    strict = api.config.get("strict", False)
+    api.on("tool_call", _on_tool_call)
+```
+
+**Example 2: Session Tracker** — Log every turn to a file
+```python
+# ~/.operator/profiles/analyst/extensions/session_tracker.py
+from datetime import datetime
+
+async def _on_agent_end(event, ctx):
+    timestamp = datetime.now().isoformat()
+    # Access session from context
+    session_id = ctx._session_manager.current_session_id()
+    # Log to file
+    with open("/tmp/sessions.log", "a") as f:
+        f.write(f"{timestamp} | session {session_id}\n")
+
+def extension(api):
+    api.on("agent_end", _on_agent_end)
+```
+
+**Example 3: Custom Tool + Command** — Calculator with memoization
+```python
+# ~/.operator/profiles/math/extensions/calc_tool.py
+from pydantic import BaseModel
+from operator_use.tool.types import ToolResult
+from operator_use.extension.types import ToolDefinition
+
+cache = {}
+
+class CalcParams(BaseModel):
+    expression: str
+
+async def _execute(params, invocation, ctx):
+    expr = params.expression
+    if expr in cache:
+        return ToolResult.ok(invocation.id, f"{expr} = {cache[expr]} (cached)")
+    
+    try:
+        result = eval(expr)  # Simple eval for demo
+        cache[expr] = result
+        return ToolResult.ok(invocation.id, f"{expr} = {result}")
+    except Exception as e:
+        return ToolResult.error(invocation.id, str(e))
+
+async def _calc_command(params, ctx):
+    # Slash command handler
+    expr = params.get("expr", "2+2")
+    result = await _execute(CalcParams(expression=expr), None, ctx)
+    return f"Calc: {result.output}"
+
+def extension(api):
+    api.register_tool(ToolDefinition(
+        name="calc",
+        description="Evaluate a math expression",
+        parameters=CalcParams,
+        execute=_execute,
+    ))
+    api.register_command("calc", _calc_command, description="Quick calculation")
+```
+
+**Example 4: Async Startup** — Initialize on session start
+```python
+# ~/.operator/profiles/api/extensions/api_auth.py
+async def _init_auth(event, ctx):
+    api_key = api.config.get("api_key")
+    if api_key:
+        # Initialize external service
+        await ctx._resources.set("api_client", init_api_client(api_key))
+        print(f"API client ready")
+
+def extension(api):
+    api.on("session_start", _init_auth)
+```
+
+Configure in `~/.operator/settings.json`:
+```json
+{
+  "extension_list": [
+    {"name": "git_guard", "enabled": true, "settings": {"strict": true}},
+    {"name": "calc_tool", "enabled": true},
+    {"name": "api_auth", "enabled": true, "settings": {"api_key": "sk-..."}}
+  ]
+}
+```
+
 ## Extension API
 
 `ExtensionAPI` is passed to the factory. It provides:

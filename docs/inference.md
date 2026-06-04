@@ -530,6 +530,171 @@ OAuth flows are implemented per-provider in `operator_use/inference/provider/oau
 
 ---
 
+## Practical Examples
+
+### Example 1: Model Selection at Runtime
+
+```bash
+# Default model (from settings)
+operator
+
+# Override with specific model
+operator --model claude-opus-4-8
+
+# Override with model + provider
+operator --model gpt-4o --provider openai
+
+# Ollama (local)
+operator --model llama2 --provider ollama
+
+# Mistral
+operator --model mistral-large --provider mistral
+```
+
+### Example 2: Per-Profile Model Selection
+
+**~/.operator/profiles/coder/AGENT.md**
+```markdown
+---
+name: coder
+description: Software engineer
+model: claude-opus-4-8
+provider: anthropic
+---
+```
+
+**~/.operator/profiles/researcher/AGENT.md**
+```markdown
+---
+name: researcher
+description: Research specialist
+model: gpt-4o
+provider: openai
+---
+```
+
+```bash
+# Each profile uses its configured model
+operator --profile coder      # claude-opus-4-8
+operator --profile researcher # gpt-4o
+```
+
+### Example 3: Workflow with Model Switching
+
+```python
+# ~/.operator/profiles/multi/workflows/hybrid.py
+
+meta = {
+    "name": "hybrid_workflow",
+    "description": "Use different models for different tasks.",
+}
+
+async def run():
+    # Fast model for quick classification
+    async with phase("classify"):
+        classification = await classify(
+            "Is this email spam?",
+            options=["spam", "important", "regular"],
+            model="gpt-4o-mini",  # Cheaper/faster
+            provider="openai"
+        )
+    
+    # Powerful model for reasoning
+    async with phase("analyze"):
+        analysis = await agent(
+            "Analyze this in depth...",
+            model="claude-opus-4-8",  # More capable
+            provider="anthropic"
+        )
+    
+    # Specialized model for coding
+    async with phase("code"):
+        code = await agent(
+            "Write optimized Python code...",
+            model="claude-opus-4-8",  # Best for code
+            provider="anthropic"
+        )
+    
+    return {
+        "classification": classification,
+        "analysis": analysis,
+        "code": code
+    }
+```
+
+### Example 4: Multi-Provider Setup
+
+**~/.operator/auth/providers.json**
+```json
+{
+  "anthropic": {
+    "api_key": "sk-ant-..."
+  },
+  "openai": {
+    "api_key": "sk-proj-..."
+  },
+  "google": {
+    "access_token": "...",
+    "refresh_token": "...",
+    "expiry": 1234567890
+  },
+  "mistral": {
+    "api_key": "sk-..."
+  }
+}
+```
+
+Or use environment variables (no auth file needed):
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-proj-..."
+export MISTRAL_API_KEY="sk-..."
+operator
+```
+
+### Example 5: Image and Video Generation in Workflows
+
+```python
+# Generate images and video in parallel
+
+async def run():
+    async with phase("create_visual"):
+        # Generate image
+        image = await agent(
+            "Generate an image of a sunset over mountains",
+            # Note: use image generation tool from workflow
+        )
+        
+        # Generate video
+        video = await agent(
+            "Create a 5-second video of clouds moving",
+            # Note: use video generation tool
+        )
+    
+    return {
+        "image": image,
+        "video": video
+    }
+```
+
+### Example 6: Extended Thinking
+
+```python
+# Use Claude's extended thinking for complex reasoning
+
+async def run():
+    result = await agent(
+        "Solve this complex math problem step by step...",
+        model="claude-opus-4-8",
+        provider="anthropic",
+        thinking_level="high"  # Enable extended thinking
+    )
+    
+    return result
+```
+
+---
+
 ## Related documents
 
 - [engine.md](./engine.md) — How Engine calls `llm.stream()` and processes events

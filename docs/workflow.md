@@ -78,6 +78,214 @@ result: Summary = await agent("Summarise this document.", schema=Summary)
 print(result.title)
 ```
 
+## Practical Workflow Examples
+
+### Example 1: Multi-Phase Research
+
+```python
+# ~/.operator/profiles/researcher/workflows/deep_research.py
+
+from pydantic import BaseModel
+
+class ResearchResult(BaseModel):
+    topic: str
+    sources: list[str]
+    summary: str
+    questions: list[str]
+
+meta = {
+    "name": "deep_research",
+    "description": "Comprehensive research on a topic.",
+}
+
+async def run():
+    topic = args.get("topic", "quantum computing")
+    
+    async with phase("search"):
+        log(f"Searching for sources on: {topic}")
+        sources = await agent(
+            f"Find 5 authoritative sources on {topic}. "
+            f"Return them as a numbered list with URLs."
+        )
+    
+    async with phase("summarize"):
+        log("Summarizing each source...")
+        summary_parts = await parallel(
+            lambda: agent(f"Summarize: {s[:200]}", schema=str)
+            for s in sources.split("\n")[:5]
+        )
+        summary = "\n".join(summary_parts)
+    
+    async with phase("analyze"):
+        log("Analyzing findings...")
+        result: ResearchResult = await agent(
+            f"Analyze this research:\n{summary}\n"
+            f"Return topic, 2-3 open questions to explore further.",
+            schema=ResearchResult
+        )
+    
+    return result
+```
+
+**Invocation:**
+```python
+{ "action": "run", "name": "deep_research", "args": {"topic": "AI safety"} }
+```
+
+**Output:**
+```
+topic: "AI safety"
+sources: ["arxiv.org/...", "openai.com/...", ...]
+summary: "Key findings discuss alignment..."
+questions: ["How can we measure alignment?", "What are failure modes?"]
+```
+
+### Example 2: Parallel Processing Pipeline
+
+```python
+# ~/.operator/profiles/processor/workflows/batch_process.py
+
+meta = {
+    "name": "batch_process",
+    "description": "Process multiple items in parallel.",
+}
+
+async def process_item(item):
+    """Process a single item."""
+    return await agent(f"Analyze this: {item}")
+
+async def run():
+    items = args.get("items", [])
+    
+    async with phase("validate"):
+        log(f"Validating {len(items)} items...")
+        if not items:
+            return {"error": "No items provided"}
+    
+    async with phase("process"):
+        log(f"Processing {len(items)} items in parallel...")
+        results = await parallel(
+            lambda i=item: process_item(i)
+            for item in items,
+            concurrency=3  # Max 3 parallel calls
+        )
+    
+    async with phase("aggregate"):
+        log("Aggregating results...")
+        summary = await agent(
+            f"Summarize these results:\n" + 
+            "\n".join(f"- {r}" for r in results)
+        )
+    
+    return {
+        "item_count": len(items),
+        "results": results,
+        "summary": summary
+    }
+```
+
+**Invocation:**
+```python
+{
+  "action": "run",
+  "name": "batch_process",
+  "args": {
+    "items": ["Document 1", "Document 2", "Document 3"]
+  }
+}
+```
+
+### Example 3: Pipeline with Stateful Processing
+
+```python
+# ~/.operator/profiles/processor/workflows/document_pipeline.py
+
+meta = {
+    "name": "doc_pipeline",
+    "description": "Process documents through extraction → analysis → reporting.",
+}
+
+async def run():
+    files = args.get("files", [])
+    
+    async with phase("extract"):
+        log(f"Extracting data from {len(files)} files...")
+        extracted = await pipeline(
+            files,
+            lambda f: agent(f"Extract key information from: {f}"),
+            lambda e: agent(f"Validate extracted data: {e}"),
+        )
+    
+    async with phase("analyze"):
+        log("Analyzing extracted data...")
+        analysis = await agent(
+            f"Analyze these items:\n" + 
+            "\n".join(extracted)
+        )
+    
+    async with phase("report"):
+        log("Generating report...")
+        report = await agent(
+            f"Write a markdown report based on:\n{analysis}"
+        )
+    
+    return {
+        "extracted_count": len(extracted),
+        "analysis": analysis,
+        "report": report
+    }
+```
+
+### Example 4: Budget-Aware Loop
+
+```python
+# ~/.operator/profiles/researcher/workflows/careful_research.py
+
+meta = {
+    "name": "careful_research",
+    "description": "Research with budget constraints.",
+}
+
+async def run():
+    max_calls = args.get("max_calls", 10)
+    
+    async with phase("research"):
+        sources = []
+        attempt = 0
+        
+        while attempt < max_calls and not budget.exhausted():
+            log(f"Call {attempt + 1}/{max_calls}")
+            
+            source = await agent(
+                f"Find one unique source not in: {sources}"
+            )
+            sources.append(source)
+            attempt += 1
+        
+        log(f"Completed {attempt} calls, "
+            f"remaining budget: {budget.remaining()}")
+    
+    return {
+        "sources": sources,
+        "calls_used": attempt,
+        "budget_remaining": budget.remaining()
+    }
+```
+
+## Workflow Status & Management
+
+Check running workflows:
+```python
+{ "action": "list" }                    # List all workflows
+{ "action": "status", "run_id": "..." } # Check progress
+{ "action": "cancel", "run_id": "..." } # Cancel a run
+```
+
+View run logs:
+```
+~/.operator/profiles/<name>/workflows/runs/<run_id>/log.txt
+```
+
 ## Nested workflows
 
 A workflow can run another inline via `workflow()` and use its result:

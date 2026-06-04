@@ -1,59 +1,131 @@
 # Operator
 
-A stateful Python AI agent harness. Operator wraps a multi-provider LLM inference layer with session persistence, context compaction, an extension system, a package manager, sandbox enforcement, and a gateway that connects the agent to multiple messaging channels simultaneously.
+A stateful Python AI agent harness with multi-provider LLM support, session persistence, context compaction, extensible tool system, and a gateway that connects the agent to multiple messaging channels simultaneously.
+
+**Build autonomous, persistent agents that remember context, self-correct on errors, and integrate seamlessly with your tools and workflows.**
+
+## Features at a Glance
+
+| Feature | What it does |
+|---------|-------------|
+| **Multi-provider LLM** | Claude, GPT-4, Gemini, Mistral, Ollama, GitHub Copilot |
+| **Session persistence** | JSONL-based branching tree — resume, fork, replay |
+| **Context compaction** | Auto-summarize long conversations to fit token limits |
+| **Extensions & packages** | Hook into agent lifecycle, add tools, register commands |
+| **Skill injection** | Teach the agent strategies via markdown docs |
+| **Tool framework** | Parallel, streaming, async tool execution |
+| **Browser & desktop** | CDP automation + native OS control (macOS, Linux, Windows) |
+| **Multi-channel gateway** | Telegram, Discord, Slack, Email, Twitch, WebSocket, stdio |
+| **Workflows** | Multi-phase async DSL for orchestrating complex tasks |
+| **Teams** | Persistent multi-agent coordination via mailboxes |
+| **Sandbox** | Filesystem, network, and shell execution policies |
+| **Memory** | Long-term fact store (Mem0, SuperMemory) across sessions |
+| **MCP & ACP** | Model Context Protocol servers, Agent Communication Protocol |
 
 ## Architecture
 
 ```
-Runtime
-  ├── CommandRegistry        ← slash-command dispatch
-  ├── GatewayManager         ← channel lifecycle (Telegram, Discord, Slack, WebSocket, Email, Twitch, stdio)
-  ├── SubagentManager        ← ephemeral subagent task pool
-  ├── WorkflowManager        ← Python-based multi-phase workflow runner
-  ├── TeamManager            ← persistent multi-agent team coordination
-  ├── MCPManager             ← Model Context Protocol server connections
-  ├── CronScheduler          ← scheduled agent tasks
-  ├── ProcessManager         ← background shell and agent processes
-  └── Agent                  ← orchestration layer (implements ExtensionContext)
-        ├── Engine            ← LLM streaming loop, tool execution, queues, abort signal
-        ├── SessionManager    ← JSONL persistence, branching tree, context reconstruction
-        ├── ExtensionRuntime  ← event dispatch to extensions and Hooks
-        │     └── Hooks       ← typed event bus
-        ├── ResourceLoader    ← tools, skills, commands, hooks, extensions, context files
-        │     └── PackageLoader ← resolves installed packages → extension/skill dirs
-        ├── Compaction        ← token budget monitoring, LLM-driven summarization
-        ├── MemoryManager     ← long-term provider-agnostic memory (Mem0, etc.)
-        ├── Sandbox           ← SandboxPolicy enforcement before each tool call
-        └── Knowledge         ← markdown knowledge-base injected into system prompt
+Runtime (session lifecycle, slash commands, channels)
+  ├── GatewayManager         ← Telegram, Discord, Slack, Email, Twitch, WebSocket, stdio
+  ├── WorkflowManager        ← Multi-phase async task orchestration
+  ├── TeamManager            ← Persistent multi-agent coordination
+  ├── SubagentManager        ← Ephemeral parallel agents
+  ├── CronScheduler          ← Scheduled recurring tasks
+  ├── ProcessManager         ← Background shells and agents
+  └── Agent (orchestration)
+        ├── Engine            ← LLM streaming, tool execution, abort signals
+        ├── SessionManager    ← JSONL persistence, branching, context reconstruction
+        ├── ExtensionRuntime  ← Hook dispatch to extensions
+        ├── ResourceLoader    ← Tools, skills, commands, extensions
+        ├── Compaction        ← Token budget, auto-summarization
+        ├── MemoryManager     ← Long-term cross-session facts
+        ├── Sandbox           ← Policy enforcement
+        └── Knowledge         ← System prompt injection
 ```
 
-**Engine** drives the raw LLM loop. **Agent** adds session persistence, retry, compaction scheduling, and extension event fan-out. **Runtime** adds session lifecycle, slash-command dispatch, and channel connectivity.
+**Three-layer design:**
+- **Engine** — raw LLM loop, tool execution, no session knowledge
+- **Agent** — persistence, retry, events, compaction scheduling
+- **Runtime** — session lifecycle, channels, slash commands, teams
 
 ## Quick start
 
+### Python API
 ```python
 from operator_use.runtime.service import Runtime
 from operator_use.runtime.types import RuntimeConfig
 
+# Create and run an agent in your project
 config = RuntimeConfig(cwd="/my/project")
 runtime = await Runtime.create(config)
-await runtime.user_input("explain this codebase")
+response = await runtime.user_input("explain the architecture of this codebase")
+print(response)  # Agent's response
 ```
 
+### CLI
 ```bash
-# CLI
-operator --cwd /my/project
-operator --model claude-opus-4-7 --cwd /my/project
-operator --profile coder --cwd /my/project    # named agent profile
-operator set --model claude-opus-4-7 --provider anthropic
-operator unset --model --provider
-operator --repl   # interactive Python REPL
+# Start interactive agent in current project
+operator
 
-# ACP (Agent Communication Protocol)
-operator acp serve              # stdio ACP server
-operator acp serve-http         # HTTP ACP server
-operator acp serve-webrtc room  # WebRTC ACP server
-operator acp connect <target>   # interactive ACP client
+# Use a different model or provider
+operator --model claude-opus-4-8
+operator --model gpt-4o --provider openai
+
+# Start with a named profile (has its own settings, sessions, tools)
+operator --profile coder
+
+# Interactive Python REPL with an agent
+operator --repl
+
+# Configure defaults
+operator set --model claude-opus-4-8 --provider anthropic
+operator unset --model --provider  # reset to defaults
+```
+
+### Multi-Channel Deployment
+```bash
+# Serve as ACP (Agent Communication Protocol) server
+operator acp serve              # stdio (pipe to other processes)
+operator acp serve-http         # HTTP (port 8080 by default)
+operator acp serve-webrtc room  # WebRTC (peer-to-peer rooms)
+
+# Connect to a remote ACP agent
+operator acp connect stdio:remote-agent
+```
+
+### Example: Custom Extension
+
+**~/.operator/profiles/researcher/extensions/arxiv_fetch.py**
+```python
+from pydantic import BaseModel
+from operator_use.tool.types import ToolResult
+
+class PaperParams(BaseModel):
+    query: str
+    limit: int = 5
+
+async def fetch_papers(params, invocation, ctx):
+    # Integration: call arxiv API, return results
+    return ToolResult.ok(invocation.id, f"Found {params.limit} papers on {params.query}")
+
+def extension(api):
+    api.register_tool({
+        "name": "arxiv",
+        "description": "Search arXiv for papers",
+        "parameters": PaperParams,
+        "execute": fetch_papers,
+    })
+    # Hook into session events
+    api.on("session_start", lambda e, ctx: print("New research session"))
+```
+
+Then configure in **~/.operator/settings.json**:
+```json
+{
+  "extension_list": [
+    {"name": "arxiv_fetch", "enabled": true, "settings": {"api_key": "..."}}
+  ]
+}
 ```
 
 ## Agent Profiles

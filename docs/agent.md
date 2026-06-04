@@ -38,18 +38,56 @@ Calling either while the agent is busy raises `RuntimeError` immediately.
 
 `invoke()` follows this sequence:
 
-1. Assert `phase == "idle"`.
-2. Emit `input` event — extensions see the raw user text before processing.
-3. Rebuild the system prompt from resources (skills, context files, custom prompt).
-4. Emit `before_agent_start` — extensions may replace the system prompt.
-5. Reconstruct the message history from the persisted session via `build_session_context()`.
-6. Emit `context` — extensions may replace the message list sent to the LLM.
-7. Persist the user message (done exactly once, not on each retry attempt).
-8. Merge extension tools with base tools (base tool names take priority on conflict).
-9. Build the `AgentContext` snapshot and enter `_run_with_retry()`.
-10. After success: emit `save_point`, then `agent_end`.
-11. Check compaction: run if `_compact_requested` or context budget is exceeded.
-12. If no queued follow-up messages: emit `settled`.
+```
+1. Assert phase == "idle"
+   │
+2. Emit 'input' event
+   ├─ Extensions see raw user text
+   │
+3. Rebuild system prompt
+   ├─ Load skills, knowledge, context files
+   ├─ Apply AGENT.md + SYSTEM.md
+   │
+4. Emit 'before_agent_start'
+   ├─ Extensions may replace system prompt
+   │
+5. Reconstruct message history
+   ├─ Load session tree from disk
+   ├─ Compute leaf-to-root path
+   ├─ Apply any compaction summaries
+   │
+6. Emit 'context'
+   ├─ Extensions may replace/filter messages
+   │
+7. Persist user message
+   ├─ Appended once (not per retry)
+   │
+8. Merge tools
+   ├─ Builtin tools override extensions
+   │
+9. Enter _run_with_retry()
+   ├─ Loop: attempt Engine.run()
+   ├─      On error: rewind + exponential backoff
+   ├─      On success: break
+   │
+10. After success
+   ├─ Emit 'save_point'
+   ├─ Persist AssistantMessage to disk
+   ├─ Emit 'agent_end'
+   │
+11. Check compaction
+   ├─ If context_tokens > window - reserve_tokens
+   ├─    Run compaction, emit 'after_compaction'
+   │
+12. Check for queued follow-ups
+   └─ If none: emit 'settled'
+```
+
+**Key invariants:**
+- Session writes are deferred until `AssistantMessage` (turn succeeded)
+- Failed retries fully rewind before next attempt
+- User message is persisted once before retry loop (can be removed if all retries fail)
+- Compaction only runs after `save_point` (turn complete, session durable)
 
 ## Retry
 
@@ -72,12 +110,45 @@ for attempt in range(max_retries + 1):
     await asyncio.sleep(base_delay_s * 2 ** (attempt - 1))
 ```
 
-On each failed attempt:
-- `_rewind_session()` removes all `MessageEntry` and `ToolResultEntry` objects appended during that attempt, restoring `leaf_id` to the parent of the first removed entry.
-- The user message is left in the session — it was appended before the retry loop.
-- If all retries are exhausted, the user message entry is also removed and a `RuntimeError` is raised.
+**Example walkthrough:**
 
-Retry can be disabled by setting `config.retry_enabled = False`. The delay schedule is `base_delay_ms * 2^(attempt-1)` (pure exponential, no jitter currently).
+Session state (before invoke):
+```
+leaf_id = "msg-2"
+[msg-0] User: "fix the auth bug"
+[msg-1] Assistant: "I'll help..."
+[msg-2] Tool result: {...}
+```
+
+User input: "continue working"
+
+**Attempt 0:**
+- Persist user msg-3: `[..., msg-3-user]`
+- Engine runs, LLM returns assistant msg (pending)
+- Engine fails with timeout
+- Rewind: remove unpersisted messages (LLM response)
+- Reset Engine, wait 2s
+
+**Attempt 1:**
+- Engine runs again, succeeds
+- Persist assistant msg-4 to disk
+- Return to invoke()
+
+**Final session on disk:**
+```
+[msg-0] User: "fix the auth bug"
+[msg-1] Assistant: "I'll help..."
+[msg-2] Tool result: {...}
+[msg-3] User: "continue working"
+[msg-4] Assistant: "resuming..."
+```
+
+If all retries exhaust, the user message (msg-3) is also rewound and removed.
+
+**Configuration:**
+- Disable: `config.retry_enabled = False`
+- Max attempts: `config.retry_config.max_retries = 5` (default: 3)
+- Delay schedule: `base_delay_ms * 2^(attempt-1)` — pure exponential backoff, no jitter
 
 ## Session persistence
 
