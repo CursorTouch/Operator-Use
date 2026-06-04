@@ -29,10 +29,10 @@ Engine  ←  Agent  ←  Runtime  ←  Gateway
  │ (PTB)    │  │(discord  │  │(bolt+    │  │  Server  │  │ (REPL)   │  │  (IMAP/  │
  │ polling  │  │  .py)    │  │ socket)  │  │          │  │          │  │  SMTP)   │
  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘
-      │              │              │              │              │              │
-      └──────────────┴──────────────┴──────┬───────┴──────────────┴──────────────┘
-                                           │  BaseChannel.receive(IncomingMessage)
-                                           ▼
+      │             │             │             │             │             │
+      └─────────────┴─────────────┴─────────────┬─────────────┴─────────────┘
+                                                │  BaseChannel.receive(IncomingMessage)
+                                                ▼
 ```
 
 Every channel subclasses `BaseChannel` and calls `self.bus.publish_incoming(msg)`.
@@ -105,8 +105,8 @@ steered into the running agent via `engine.steer()` — not queued as a new turn
 
 ```
                           ┌──────────────────────────────┐
-                          │           Runtime             │
-                          │                               │
+                          │           Runtime            │
+                          │                              │
                           │  ┌──────────┐ ┌───────────┐  │
                           │  │  Slash   │ │   Cron    │  │
                           │  │ Commands │ │ Scheduler │  │
