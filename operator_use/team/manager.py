@@ -35,6 +35,20 @@ class TeamManager:
     # ── Team CRUD ─────────────────────────────────────────────────────────────
 
     def create(self, name: str, description: str, creator_id: str = "root") -> TeamRecord:
+        """Create a new team with the given metadata.
+
+        Args:
+            name: Unique team name.
+            description: Team description.
+            creator_id: ID of the agent creating the team (default "root").
+
+        Returns:
+            The created TeamRecord.
+
+        Raises:
+            RuntimeError: If no profile is active.
+            ValueError: If team name already exists.
+        """
         if self._base is None:
             raise RuntimeError(_NO_PROFILE_ERROR)
         if name in self._teams:
@@ -50,19 +64,49 @@ class TeamManager:
         return record
 
     def dissolve(self, name: str) -> None:
+        """Mark a team as dissolved (archived but preserved).
+
+        Args:
+            name: Team name.
+
+        Raises:
+            RuntimeError: If team not found or no profile is active.
+        """
         record = self._get_or_raise(name)
         record.status = "dissolved"
         self._save(record)
 
     def get(self, name: str) -> TeamRecord | None:
+        """Retrieve a team by name.
+
+        Args:
+            name: Team name.
+
+        Returns:
+            TeamRecord or None if not found.
+        """
         return self._teams.get(name)
 
     def list_teams(self) -> list[TeamRecord]:
+        """Return all teams.
+
+        Returns:
+            List of all TeamRecord instances.
+        """
         return list(self._teams.values())
 
     # ── Member management ─────────────────────────────────────────────────────
 
     def add_member(self, team_name: str, member: TeamMember) -> None:
+        """Add a member to the team.
+
+        Args:
+            team_name: Team name.
+            member: TeamMember to add.
+
+        Raises:
+            RuntimeError: If team not found or no profile is active.
+        """
         record = self._get_or_raise(team_name)
         record.members.append(member)
         self._save(record)
@@ -70,6 +114,13 @@ class TeamManager:
     def update_member_status(
         self, team_name: str, agent_id: str, status: TeamMemberStatus
     ) -> None:
+        """Update a team member's status.
+
+        Args:
+            team_name: Team name.
+            agent_id: Member's agent ID.
+            status: New TeamMemberStatus.
+        """
         record = self._teams.get(team_name)
         if record is None:
             return
@@ -80,12 +131,30 @@ class TeamManager:
                 return
 
     def get_member(self, team_name: str, agent_id: str) -> TeamMember | None:
+        """Retrieve a team member by agent ID.
+
+        Args:
+            team_name: Team name.
+            agent_id: Member's agent ID.
+
+        Returns:
+            TeamMember or None if not found.
+        """
         record = self._teams.get(team_name)
         if record is None:
             return None
         return next((m for m in record.members if m.agent_id == agent_id), None)
 
     def find_member_by_name(self, team_name: str, name: str) -> TeamMember | None:
+        """Retrieve a team member by display name (case-insensitive).
+
+        Args:
+            team_name: Team name.
+            name: Member's display name.
+
+        Returns:
+            TeamMember or None if not found.
+        """
         record = self._teams.get(team_name)
         if record is None:
             return None
@@ -94,6 +163,15 @@ class TeamManager:
     # ── Mailbox ───────────────────────────────────────────────────────────────
 
     def mailbox(self, team_name: str, agent_id: str) -> TeamMailbox:
+        """Get the inbox/mailbox for a team member.
+
+        Args:
+            team_name: Team name.
+            agent_id: Member's agent ID.
+
+        Returns:
+            TeamMailbox instance for the member's inbox.
+        """
         return TeamMailbox(self._base, team_name, agent_id)
 
     async def send_message(
