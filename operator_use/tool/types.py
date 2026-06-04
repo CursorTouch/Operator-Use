@@ -98,7 +98,16 @@ class ToolResult:
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ToolResult:
-        """Construct a successful outcome."""
+        """Construct a successful outcome.
+
+        Args:
+            id: The tool call ID this result corresponds to.
+            content: The result content (output of the tool).
+            metadata: Optional metadata dict (default empty).
+
+        Returns:
+            A ToolResult with is_error=False.
+        """
         return cls(id=id, content=content, is_error=False, metadata=metadata or {})
 
     @classmethod
@@ -108,7 +117,16 @@ class ToolResult:
         content: str,
         metadata: dict[str, Any] | None = None,
     ) -> ToolResult:
-        """Construct a failed outcome."""
+        """Construct a failed outcome.
+
+        Args:
+            id: The tool call ID this result corresponds to.
+            content: The error message or description.
+            metadata: Optional metadata dict (default empty).
+
+        Returns:
+            A ToolResult with is_error=True.
+        """
         return cls(id=id, content=content, is_error=True, metadata=metadata or {})
 
 ToolExecutionUpdateCallback = Callable[[ToolResult], Awaitable[None]]
@@ -168,15 +186,35 @@ class Tool(ABC):
         """Return a human-readable channel label based on call args; override for intent-specific messages.
 
         Falls back to display_name then name when not overridden.
+
+        Args:
+            args: Tool call parameters; may be used to generate context-specific labels.
+
+        Returns:
+            A human-readable label for the tool call.
         """
         return self.display_name or self.name
 
     def is_available(self, context: ToolContext) -> bool:
-        """Check if tool should be available given current service availability."""
+        """Check if tool should be available given current service availability.
+
+        Args:
+            context: ToolContext with available runtime services.
+
+        Returns:
+            True if the tool can be used, False if disabled or unavailable.
+        """
         return True
 
     def validate(self, params: dict[str, Any]) -> tuple[bool, list[str]]:
-        """Validate params against schema; return (success, error_list)."""
+        """Validate params against schema; return (success, error_list).
+
+        Args:
+            params: Tool call parameters to validate.
+
+        Returns:
+            A tuple of (success: bool, errors: list[str]).
+        """
         try:
             self.schema.model_validate(params)
             return True, []
@@ -193,7 +231,11 @@ class Tool(ABC):
             return False, errors
 
     def to_json(self) -> dict[str, Any]:
-        """Serialize to JSON schema with name, description, and input_schema."""
+        """Serialize to JSON schema with name, description, and input_schema.
+
+        Returns:
+            A dict with 'name', 'description', and 'input_schema' keys suitable for provider APIs.
+        """
         return {
             "name": self.name,
             "description": self.description,
@@ -201,7 +243,14 @@ class Tool(ABC):
         }
 
     def _is_cancelled(self, signal: Optional[AbortSignal]) -> bool:
-        """Check if abort signal has been set."""
+        """Check if abort signal has been set.
+
+        Args:
+            signal: Optional asyncio.Event abort signal.
+
+        Returns:
+            True if the signal has been set, indicating cancellation requested.
+        """
         return signal is not None and signal.is_set()
 
     @abstractmethod
@@ -212,5 +261,15 @@ class Tool(ABC):
         signal: Optional[AbortSignal] = None,
         context: Optional[ToolContext] = None,
     ) -> ToolResult:
-        """Execute the tool with params; subclasses must override."""
+        """Execute the tool with params; subclasses must override.
+
+        Args:
+            invocation: Complete tool call specification with resolved parameters.
+            tool_execution_update_callback: Optional callback for streaming updates.
+            signal: Optional abort signal to check for user-initiated cancellation.
+            context: Optional ToolContext with runtime services available to the tool.
+
+        Returns:
+            A ToolResult with the outcome, content, and optional error details.
+        """
         ...
