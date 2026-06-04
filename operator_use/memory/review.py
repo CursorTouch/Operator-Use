@@ -64,7 +64,7 @@ async def _run_review(
     memory_manager: MemoryManager,
 ) -> None:
     from operator_use.agent.types import AgentContext
-    from operator_use.hooks.types import AgentEndEvent
+    from operator_use.hooks.types import ToolExecutionEndEvent
     from operator_use.message.types import UserMessage, TextContent
 
     conversation_text = _format_messages_for_review(messages)
@@ -92,14 +92,10 @@ async def _run_review(
     saved: list[str] = []
 
     async def on_event(event: Any) -> None:
-        if isinstance(event, AgentEndEvent):
-            for msg in reversed(event.messages):
-                from operator_use.message.types import AssistantMessage
-                if isinstance(msg, AssistantMessage):
-                    text = msg.text_content()
-                    if text and text.strip().lower() != 'nothing to save.':
-                        saved.append(text.strip())
-                    break
+        # Track successful tool executions — each is an authoritative action record.
+        # Avoids fragile assistant-text parsing and "nothing to save." sentinel matching.
+        if isinstance(event, ToolExecutionEndEvent) and not event.tool_result.is_error:
+            saved.append(event.tool_result.content[:120])
 
     child._engine.options.on_event = on_event
 

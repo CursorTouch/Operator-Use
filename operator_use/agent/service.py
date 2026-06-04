@@ -5,6 +5,8 @@ import inspect
 import traceback
 from datetime import datetime
 from pathlib import Path
+from asyncio.locks import Event
+
 from typing import TYPE_CHECKING, Any, Callable
 
 from operator_use.agent.types import AgentConfig, AgentContext, AgentPhase, PromptOptions, RetryStartEvent, RetryEndEvent
@@ -29,6 +31,7 @@ from operator_use.agent.utils import classify_error, ErrorKind
 from operator_use.agent.goals import GoalManager, judge_goal_with_llm
 from operator_use.skill.review import SkillReviewTracker, spawn_skill_review
 from operator_use.memory.review import MemoryReviewTracker, spawn_memory_review
+from operator_use.inference.model.registry import ModelRegistry
 
 if TYPE_CHECKING:
     from operator_use.engine.service import Engine
@@ -213,7 +216,7 @@ class Agent(ExtensionContext):
         return self._config.cwd
 
     @property
-    def session_manager(self) -> Any:
+    def session_manager(self) -> SessionManager:
         """Underlying session manager; exposed so extensions can query history."""
         return self._session_manager
 
@@ -223,12 +226,12 @@ class Agent(ExtensionContext):
         return self._config.model
 
     @property
-    def model_registry(self) -> Any:
+    def model_registry(self) -> ModelRegistry:
         """Live model registry from the inference layer."""
         return self._engine.llm._models
 
     @property
-    def signal(self) -> Any:
+    def signal(self) -> Event:
         """Abort signal that extensions can observe or trigger."""
         return self._engine._signal
 
