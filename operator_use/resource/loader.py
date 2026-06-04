@@ -94,7 +94,11 @@ class ResourceLoader(BaseResourceLoader):
     # -------------------------------------------------------------------------
 
     def set_active_profile(self, profile: AgentProfile | None) -> None:
-        """Set or clear the active profile. Call reload() afterwards to apply."""
+        """Set or clear the active profile. Call reload() afterwards to apply.
+
+        Args:
+            profile: The AgentProfile to activate, or None to deactivate.
+        """
         self._active_profile = profile
 
     def _project_resource_dir(self, name: str) -> Path | None:
@@ -111,43 +115,59 @@ class ResourceLoader(BaseResourceLoader):
     # -------------------------------------------------------------------------
 
     def get_extensions(self) -> LoadExtensionsResult:
+        """Return the loaded extensions (tools, commands, hooks) and errors."""
         return self._extensions_result
 
     def get_skills(self) -> tuple[list[Skill], list[ResourceDiagnostic]]:
+        """Return discovered skills and any validation diagnostics."""
         return self._skills, self._skill_diagnostics
 
     def get_tools(self) -> list[Tool]:
+        """Return all available tools (built-in, project, profile, and packages)."""
         return self._tools
 
     def get_commands(self) -> list[SlashCommandInfo]:
+        """Return all registered slash commands (built-in and extension)."""
         return self._commands
 
     def get_hooks(self) -> list[HookRegistration]:
+        """Return all registered event hooks (built-in and extension)."""
         return self._hooks
 
     def get_context_files(self) -> list[ContextFile]:
+        """Return context files injected into the system prompt."""
         return self._context_files
 
     def get_system_prompt(self) -> str | None:
+        """Return the assembled system prompt for the agent."""
         return self._system_prompt
 
     def get_append_system_prompt(self) -> list[str]:
+        """Return additional system prompt lines to append."""
         return self._append_system_prompt
 
     def get_soul_prompt(self) -> str | None:
+        """Return the agent's persona/soul override from SOUL.md."""
         return self._soul_prompt
 
     def get_user_profile(self) -> str | None:
+        """Return the user profile information from USER.md."""
         return self._user_profile
 
     def get_agent_memory(self) -> str | None:
+        """Return the agent's memory context from MEMORY.md."""
         return self._agent_memory
 
     def get_tools_reference(self) -> str | None:
+        """Return the tools reference documentation."""
         return self._tools_reference
 
     def extend_resources(self, paths: ResourceExtensionPaths) -> None:
-        """Called after resources_discover to add extension-provided skill and workflow paths."""
+        """Called after resources_discover to add extension-provided skill and workflow paths.
+
+        Args:
+            paths: ResourceExtensionPaths with skill_paths and workflow_paths from extensions.
+        """
         new_skill_paths = [p for p in paths.skill_paths if p not in self._extension_skill_paths]
         if new_skill_paths:
             self._extension_skill_paths.extend(new_skill_paths)
@@ -169,17 +189,31 @@ class ResourceLoader(BaseResourceLoader):
         return dirs
 
     def get_subagent_profiles(self) -> list[SubagentProfile]:
+        """Return all discovered subagent profiles."""
         return self._subagent_profiles
 
     def get_agent_profiles(self) -> list[AgentProfile]:
+        """Return all discovered agent profiles."""
         return self._agent_profiles
 
     def get_diagnostics(self, runtime: ExtensionRuntime | None = None) -> list[ResourceDiagnostic]:
+        """Return all resource loading diagnostics (warnings and errors).
+
+        Args:
+            runtime: Optional ExtensionRuntime to include extension diagnostics.
+
+        Returns:
+            List of ResourceDiagnostic messages.
+        """
         from operator_use.skill.types import LoadSkillsResult
         skills_result = LoadSkillsResult(skills=self._skills, diagnostics=self._skill_diagnostics)
         return run_diagnostics(self._extensions_result, skills_result=skills_result, runtime=runtime)
 
     async def reload(self) -> None:
+        """Discover and reload all resources (extensions, skills, tools, commands, hooks, profiles).
+
+        Called on initialization and whenever settings or profile changes.
+        """
         await self._reload_extensions()
         self._reload_skills()
         self._reload_tools()
