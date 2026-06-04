@@ -36,6 +36,7 @@ Find detailed documentation before reading source:
 
 | Need to understand… | Read |
 |---|---|
+| Full system — channels → gateway → agent → engine → session | `docs/architecture.md` |
 | Turn flow, retry, compaction scheduling | `docs/agent.md` |
 | LLM loop, tool execution modes, queues | `docs/engine.md` |
 | Session JSONL, branching, reconstruction | `docs/session.md` |
