@@ -30,7 +30,7 @@ from operator_use.message.types import (
     TextContent, ToolCallContent, ToolResultContent,
     UserMessage, AssistantMessage, ToolMessage, Usage, Role,
 )
-from operator_use.resource.types import BaseResourceLoader, ResourceExtensionPaths, ContextFile
+from operator_use.resource.types import BaseResourceLoader, ResourceExtensionPaths
 from operator_use.session.manager import SessionManager
 from operator_use.session.types import MessageEntry, CompactionEntry
 from operator_use.skill.types import SourceInfo
@@ -121,9 +121,6 @@ class FakeResourceLoader(BaseResourceLoader):
         return []
 
     def get_hooks(self):
-        return []
-
-    def get_context_files(self):
         return []
 
     def get_system_prompt(self):

@@ -159,7 +159,6 @@ def make_retrying_agent(llm, max_retries: int):
         def get_tools(self): return []
         def get_commands(self): return []
         def get_hooks(self): return []
-        def get_context_files(self): return []
         def get_system_prompt(self): return None
         def get_append_system_prompt(self): return []
         def get_soul_prompt(self): return None

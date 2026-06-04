@@ -68,7 +68,6 @@ class RuntimeConfig(BaseModel):
     # Resource loader
     no_extensions: bool = False
     no_skills: bool = False
-    no_context_files: bool = False
     system_prompt: str | None = None
     append_system_prompt: list[str] = Field(default_factory=list)
 
@@ -170,7 +169,6 @@ class RuntimeContext:
             config_dir=config_dir,
             no_extensions=config.no_extensions or not settings_manager.is_extensions_enabled(),
             no_skills=config.no_skills,
-            no_context_files=config.no_context_files,
             system_prompt=config.system_prompt,
             append_system_prompt=config.append_system_prompt,
             disabled_extension_stems=disabled_stems,

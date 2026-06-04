@@ -8,8 +8,7 @@ from operator_use.diagnostics.service import run_diagnostics
 from operator_use.diagnostics.types import ResourceDiagnostic
 from operator_use.extension.loader import discover_and_load_extensions
 from operator_use.extension.types import LoadExtensionsResult
-from operator_use.resource.context import load_project_context_files
-from operator_use.resource.types import ContextFile, ResourceExtensionPaths, BaseResourceLoader, ResourceLoaderOptions
+from operator_use.resource.types import ResourceExtensionPaths, BaseResourceLoader, ResourceLoaderOptions
 from operator_use.tool.loader import load_tools
 from operator_use.tool.types import Tool
 from operator_use.commands.loader import load_commands
@@ -57,7 +56,6 @@ class ResourceLoader(BaseResourceLoader):
         self._additional_tool_dirs = options.additional_tool_dirs
         self._no_extensions = options.no_extensions
         self._no_skills = options.no_skills
-        self._no_context_files = options.no_context_files
         self._system_prompt_override = options.system_prompt
         self._append_system_prompt_override = options.append_system_prompt
         self._disabled_extension_stems = options.disabled_extension_stems
@@ -75,7 +73,6 @@ class ResourceLoader(BaseResourceLoader):
         self._tools: list[Tool] = []
         self._commands: list[SlashCommandInfo] = []
         self._hooks: list[HookRegistration] = []
-        self._context_files: list[ContextFile] = []
         self._system_prompt: str | None = None
         self._append_system_prompt: list[str] = []
         self._soul_prompt: str | None = None
@@ -133,10 +130,6 @@ class ResourceLoader(BaseResourceLoader):
     def get_hooks(self) -> list[HookRegistration]:
         """Return all registered event hooks (built-in and extension)."""
         return self._hooks
-
-    def get_context_files(self) -> list[ContextFile]:
-        """Return context files injected into the system prompt."""
-        return self._context_files
 
     def get_system_prompt(self) -> str | None:
         """Return the assembled system prompt for the agent."""
@@ -219,7 +212,6 @@ class ResourceLoader(BaseResourceLoader):
         self._reload_tools()
         self._reload_commands()
         self._reload_hooks()
-        self._reload_context_files()
         self._reload_system_prompt()
         self._reload_identity_files()
         self._reload_subagent_profiles()
@@ -336,15 +328,6 @@ class ResourceLoader(BaseResourceLoader):
             dirs.append(project_hooks)
 
         self._hooks = load_hooks(dirs).hooks
-
-    def _reload_context_files(self) -> None:
-        """Load context files (CLAUDE.md/AGENTS.md) from the active profile and ancestors."""
-        if self._no_context_files:
-            self._context_files = []
-            return
-        # Context files come from profile knowledge dir or global knowledge
-        if self._active_profile is not None:
-            self._context_files = load_project_context_files(self._cwd, self._active_profile.profile_dir)
 
     def _reload_subagent_profiles(self) -> None:
         """Load all subagent profile files from builtin, profile, package, and project directories."""
