@@ -105,12 +105,27 @@ async def _run_review(
 
     engine.options.on_event = on_event
 
-    try:
-        await asyncio.wait_for(engine.run(ctx), timeout=60.0)
-    except asyncio.TimeoutError:
-        logger.warning('memory review timed out after 60s')
-    except Exception as exc:
-        logger.warning('memory review error: %s', exc)
+    _MAX_RETRIES = 3
+    _BACKOFF = [2.0, 5.0, 15.0]  # seconds between attempts
+
+    for attempt in range(_MAX_RETRIES):
+        try:
+            await asyncio.wait_for(engine.run(ctx), timeout=60.0)
+            break
+        except asyncio.TimeoutError:
+            logger.warning('memory review timed out after 60s (attempt %d/%d)', attempt + 1, _MAX_RETRIES)
+            break  # timeout is not retryable — the review is too slow
+        except Exception as exc:
+            err = str(exc).lower()
+            retryable = any(k in err for k in ('rate limit', '429', '503', '500', 'overloaded', 'timeout'))
+            if retryable and attempt < _MAX_RETRIES - 1:
+                delay = _BACKOFF[attempt]
+                logger.warning('memory review error (attempt %d/%d), retrying in %.0fs: %s', attempt + 1, _MAX_RETRIES, delay, exc)
+                await asyncio.sleep(delay)
+                engine.reset()  # clear partial state before retry
+            else:
+                logger.warning('memory review failed: %s', exc)
+                break
 
     if saved:
         logger.info('memory review completed: %s', saved[0][:120])
@@ -124,6 +139,7 @@ def spawn_memory_review(
     memory_tool: Tool,
     memory_manager: MemoryManager,
     on_complete: Callable[[], None] | None = None,
+    on_done: Callable[[], None] | None = None,
 ) -> None:
     """Spawn a daemon thread that runs the memory review loop."""
 
@@ -145,6 +161,11 @@ def spawn_memory_review(
                     on_complete()
                 except Exception:
                     pass
+            if on_done is not None:
+                try:
+                    on_done()
+                except Exception:
+                    pass
 
     t = threading.Thread(target=_thread_target, daemon=True, name='memory-review')
     t.start()
@@ -157,13 +178,18 @@ class MemoryReviewTracker:
     def __init__(self, interval: int = MEMORY_NUDGE_INTERVAL) -> None:
         self._interval = interval
         self._count = 0
+        self._running = False  # prevents concurrent review threads
 
     def on_tool_call(self) -> None:
         if self._interval > 0:
             self._count += 1
 
     def should_review(self) -> bool:
-        return self._interval > 0 and self._count >= self._interval
+        return self._interval > 0 and self._count >= self._interval and not self._running
 
     def reset(self) -> None:
         self._count = 0
+        self._running = True
+
+    def on_review_done(self) -> None:
+        self._running = False

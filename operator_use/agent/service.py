@@ -24,7 +24,7 @@ from operator_use.tool.types import ToolInvocation, ToolResult
 
 from operator_use.prompt.builder import PromptTemplate
 from operator_use.compaction.strategy.utils import estimate_context_tokens, estimate_tokens
-from operator_use.agent.utils import is_permanent_error
+from operator_use.agent.utils import classify_error, ErrorKind
 from operator_use.agent.goals import GoalManager, judge_goal_with_llm
 from operator_use.skill.review import SkillReviewTracker, spawn_skill_review
 from operator_use.memory.review import MemoryReviewTracker, spawn_memory_review
@@ -557,6 +557,7 @@ class Agent(ExtensionContext):
             messages=messages,
             skill_manage_tool=skill_tool,
             skill_view_tool=skill_tool,
+            on_done=self._skill_review.on_review_done,
         )
 
     def _maybe_spawn_memory_review(self) -> None:
@@ -576,6 +577,7 @@ class Agent(ExtensionContext):
             memory_tool=memory_tool,
             memory_manager=self._memory_manager,
             on_complete=self._system_prompt_cache.clear,
+            on_done=self._memory_review.on_review_done,
         )
 
     def _active_todo_injection(self) -> str | None:
@@ -863,14 +865,14 @@ class Agent(ExtensionContext):
 
             self._engine.reset()
 
-            # Permanent errors (bad/missing API key, bad request, model not
-            # found) will fail identically on every retry — stop now instead
-            # of burning the remaining attempts. Transient errors (rate limit,
-            # overload, 5xx) are already auto-retried with the provider's
-            # Retry-After by the underlying SDK; this loop is the outer cushion.
-            permanent = is_permanent_error(error)
+            classified = classify_error(Exception(error))
 
-            if not permanent and attempt < max_retries:
+            # Context overflow — compact first, then retry (compaction changes
+            # the session so the next attempt sees a shorter context).
+            if classified.kind == ErrorKind.CONTEXT_OVERFLOW and classified.should_compact:
+                await self._run_compaction(None)
+
+            if classified.retryable and attempt < max_retries:
                 # Keep tool calls/results already persisted — the next attempt
                 # rebuilds ctx from the session so the LLM sees the work already
                 # done and continues from where it left off rather than replaying
@@ -888,15 +890,15 @@ class Agent(ExtensionContext):
                     RetryEndEvent(attempt=attempt, success=False, error=error),
                 )
             else:
-                # Permanent error, or retries exhausted — write the final error
-                # assistant message to the session so the record is complete and
-                # the user can see what went wrong. It is filtered from LLM
-                # context at turn-build time by strip_unusable_trailing_assistant.
+                # Non-retryable error or retries exhausted — write the final
+                # error assistant message to the session so the record is
+                # complete. It is filtered from LLM context at turn-build time
+                # by strip_unusable_trailing_assistant.
                 if error_holder:
                     self._session_manager.append_message(error_holder[0])
                 detail = (
-                    "permanent error, not retried"
-                    if permanent
+                    f"{classified.kind.value}, not retried"
+                    if not classified.retryable
                     else f"{attempt + 1} attempt(s)"
                 )
                 raise RuntimeError(
