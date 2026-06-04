@@ -35,7 +35,11 @@ class GatewayManager:
     """
 
     def __init__(self, runtime: Runtime) -> None:
-        """Wire the gateway to the runtime and attach resource-loader hooks (STT/TTS)."""
+        """Wire the gateway to the runtime and attach resource-loader hooks (STT/TTS).
+
+        Args:
+            runtime: The Runtime instance to connect the gateway to.
+        """
         self._runtime = runtime
         self._settings = runtime.settings_manager
         self.gateway = Gateway(runtime)
@@ -53,7 +57,11 @@ class GatewayManager:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        """Start gateway processing loops and all enabled channels as background asyncio tasks."""
+        """Start gateway processing loops and all enabled channels as background asyncio tasks.
+
+        Creates the main gateway event loop and launches profile-specific channels
+        asynchronously. Emits GatewayStartupEvent once all profiles are ready.
+        """
         if self._gateway_task is None or self._gateway_task.done():
             self._gateway_task = asyncio.create_task(
                 self.gateway.start(), name='gateway:main'
@@ -66,7 +74,11 @@ class GatewayManager:
 
 
     def _on_profile_startup_done(self, task: asyncio.Task) -> None:
-        """Log any exception raised during profile startup without surfacing it to the caller."""
+        """Log any exception raised during profile startup without surfacing it to the caller.
+
+        Args:
+            task: The completed profile startup task.
+        """
         if not task.cancelled() and task.exception() is not None:
             logger.error('Profile gateway startup failed: %s', task.exception(), exc_info=task.exception())
 
