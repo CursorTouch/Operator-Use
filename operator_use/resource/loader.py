@@ -11,6 +11,8 @@ from operator_use.extension.types import LoadExtensionsResult
 from operator_use.resource.types import ResourceExtensionPaths, BaseResourceLoader, ResourceLoaderOptions
 from operator_use.tool.loader import load_tools
 from operator_use.tool.types import Tool
+from operator_use.guardrail.loader import load_guardrails
+from operator_use.guardrail.types import Guardrail
 from operator_use.commands.loader import load_commands
 from operator_use.commands.types import SlashCommandInfo
 from operator_use.hooks.loader import load_hooks, HookRegistration
@@ -19,7 +21,7 @@ from operator_use.settings.paths import (
     CONFIG_DIR_NAME,
     get_builtins_commands_dir, get_builtins_tools_dir, get_builtins_skills_dir,
     get_builtins_extensions_dir, get_builtins_hooks_dir, get_builtins_subagents_dir,
-    get_profiles_dir,
+    get_builtins_guardrails_dir, get_profiles_dir,
 )
 from operator_use.skill.loader import load_skills
 from operator_use.skill.types import Skill, LoadSkillsOptions
@@ -68,6 +70,7 @@ class ResourceLoader(BaseResourceLoader):
 
         # Cached state (populated by reload)
         self._extensions_result: LoadExtensionsResult = LoadExtensionsResult()
+        self._guardrails: list[Guardrail] = []
         self._skills: list[Skill] = []
         self._skill_diagnostics: list[ResourceDiagnostic] = []
         self._tools: list[Tool] = []
@@ -118,6 +121,10 @@ class ResourceLoader(BaseResourceLoader):
     def get_skills(self) -> tuple[list[Skill], list[ResourceDiagnostic]]:
         """Return discovered skills and any validation diagnostics."""
         return self._skills, self._skill_diagnostics
+
+    def get_guardrails(self) -> list[Guardrail]:
+        """Return all loaded guardrails (builtin, profile, and project)."""
+        return self._guardrails
 
     def get_tools(self) -> list[Tool]:
         """Return all available tools (built-in, project, profile, and packages)."""
@@ -210,6 +217,7 @@ class ResourceLoader(BaseResourceLoader):
         await self._reload_extensions()
         self._reload_skills()
         self._reload_tools()
+        self._reload_guardrails()
         self._reload_commands()
         self._reload_hooks()
         self._reload_system_prompt()
@@ -285,6 +293,20 @@ class ResourceLoader(BaseResourceLoader):
         )
         self._skills = result.skills
         self._skill_diagnostics = result.diagnostics
+
+    def _reload_guardrails(self) -> None:
+        """Load all guardrail files from builtin, profile, and project directories."""
+        dirs = [get_builtins_guardrails_dir()]
+
+        if self._active_profile is not None:
+            profile_guards = self._active_profile.guardrails_dir
+            if profile_guards.is_dir():
+                dirs.append(profile_guards)
+
+        if project_guards := self._project_resource_dir('guardrails'):
+            dirs.append(project_guards)
+
+        self._guardrails = load_guardrails(dirs).guardrails
 
     def _reload_tools(self) -> None:
         """Load all tool files from builtin, profile, and project directories."""

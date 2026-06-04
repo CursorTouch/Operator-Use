@@ -186,6 +186,11 @@ class AgentProfile(BaseModel):
         return self.profile_dir / 'acp' / 'sessions'
 
     @property
+    def guardrails_dir(self) -> Path:
+        """Directory for per-profile custom guardrails."""
+        return self.profile_dir / 'guardrails'
+
+    @property
     def workflows_dir(self) -> Path:
         """Directory for per-profile Python workflows."""
         return self.profile_dir / 'workflows'

@@ -132,6 +132,8 @@ class FakeResourceLoader(BaseResourceLoader):
     def get_soul_prompt(self): return None
     def get_user_profile(self): return None
     def get_agent_memory(self): return None
+    def get_tools_reference(self): return None
+    def get_guardrails(self): return []
 
     def get_subagent_profiles(self):
         return []

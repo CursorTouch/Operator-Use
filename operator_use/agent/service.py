@@ -21,6 +21,7 @@ from operator_use.message.types import AssistantMessage, UserMessage, TextConten
 from operator_use.inference.types import StopReason
 from operator_use.message.utils import strip_unusable_trailing_assistant, filter_empty_assistant_messages
 from operator_use.tool.types import ToolInvocation, ToolResult
+from operator_use.guardrail.types import Guardrail
 
 from operator_use.prompt.builder import PromptTemplate
 from operator_use.compaction.strategy.utils import estimate_context_tokens, estimate_tokens
@@ -106,6 +107,7 @@ class Agent(ExtensionContext):
             judge=lambda goal, response, subgoals=None: judge_goal_with_llm(_get_judge_llm(), goal, response, subgoals),
         )
 
+        self._guardrails: list[Guardrail] = []
         self._phase: AgentPhase = AgentPhase.IDLE
         self._rebooting: bool = False
         self._last_assistant_entry_id: str | None = None
@@ -299,6 +301,17 @@ class Agent(ExtensionContext):
         """Reload all resources (tools, skills, prompts) and invalidate the system-prompt cache."""
         await self._resources.reload()
         self._system_prompt_cache.clear()
+        self._refresh_guardrails()
+
+    def _refresh_guardrails(self) -> None:
+        """Merge file-loaded and extension-registered guardrails; file-loaded names win."""
+        file_guardrails = self._resources.get_guardrails()
+        seen = {g.name for g in file_guardrails}
+        ext_guardrails = [
+            g for name, g in self._extensions.get_guardrails().items()
+            if name not in seen
+        ]
+        self._guardrails = file_guardrails + ext_guardrails
 
     async def wait_for_idle(self) -> None:
         """Block until the engine finishes any in-progress streaming turn."""
@@ -434,6 +447,26 @@ class Agent(ExtensionContext):
                         params=r.params,
                         cwd=invocation.cwd,
                     )
+
+        ctx = self._engine.tool_context
+        for g in self._guardrails:
+            decision = await g.before_call(invocation, ctx)
+            if decision.action == 'block':
+                return ToolResultContent(
+                    id=invocation.id,
+                    is_error=True,
+                    content=decision.reason or f'Tool call blocked by guardrail "{g.name}".',
+                    metadata={},
+                )
+            if decision.action == 'halt':
+                self._engine.abort()
+                return ToolResultContent(
+                    id=invocation.id,
+                    is_error=True,
+                    content=decision.reason or f'Turn halted by guardrail "{g.name}".',
+                    metadata={},
+                )
+
         return invocation
 
     async def _after_tool_call(
@@ -464,6 +497,22 @@ class Agent(ExtensionContext):
                         metadata=result.metadata,
                         terminate=r.terminate or result.terminate,
                     )
+
+        ctx = self._engine.tool_context
+        for g in self._guardrails:
+            decision = await g.after_call(invocation, modified, ctx)
+            if decision.action == 'warn':
+                modified = ToolResult(
+                    id=modified.id,
+                    content=modified.content + f'\n\n[Guardrail warning ({g.name}): {decision.reason}]',
+                    is_error=modified.is_error,
+                    metadata=modified.metadata,
+                    terminate=modified.terminate,
+                )
+            elif decision.should_halt:
+                self._engine.abort()
+                break
+
         return modified
 
     # -------------------------------------------------------------------------
@@ -676,6 +725,10 @@ class Agent(ExtensionContext):
 
         opts = options or PromptOptions()
 
+        # Fire turn-start lifecycle on every guardrail (resets per-turn state)
+        for g in self._guardrails:
+            g.on_turn_start()
+
         # Notify extensions of incoming input
         await self._extensions.emit('input', InputEvent(text=user_input, source=opts.source))
 
@@ -806,6 +859,8 @@ class Agent(ExtensionContext):
             await self._run_with_retry(ctx, user_entry_id)
         finally:
             self._phase = AgentPhase.IDLE
+            for g in self._guardrails:
+                g.on_turn_end()
 
         # Persist the completed exchange to the memory provider
         if self._memory_manager:

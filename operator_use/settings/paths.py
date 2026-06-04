@@ -124,3 +124,8 @@ def get_builtins_subagents_dir() -> Path:
 def get_builtins_workflows_dir() -> Path:
     """Return the directory containing builtin workflow scripts."""
     return _BUILTINS_ROOT / 'workflows'
+
+
+def get_builtins_guardrails_dir() -> Path:
+    """Return the directory containing builtin guardrail modules."""
+    return _BUILTINS_ROOT / 'guardrails'

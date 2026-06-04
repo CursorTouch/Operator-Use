@@ -81,6 +81,9 @@ class BaseResourceLoader(ABC):
     def set_active_profile(self, profile: 'AgentProfile | None') -> None: ...
 
     @abstractmethod
+    def get_guardrails(self) -> list: ...
+
+    @abstractmethod
     def get_diagnostics(self, runtime: 'ExtensionRuntime | None' = None) -> list['ResourceDiagnostic']:
         """Return all diagnostics: extension errors, collisions, and skill warnings."""
         ...

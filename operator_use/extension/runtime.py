@@ -132,6 +132,13 @@ class ExtensionRuntime:
             tools.update(ext.tools)
         return tools
 
+    def get_guardrails(self) -> dict[str, Any]:
+        """Collect all registered guardrails from all extensions (last-writer-wins on name)."""
+        guardrails = {}
+        for ext in self._extensions:
+            guardrails.update(ext.guardrails)
+        return guardrails
+
     def get_commands(self) -> dict[str, Any]:
         """Collect all registered commands from all extensions."""
         commands = {}

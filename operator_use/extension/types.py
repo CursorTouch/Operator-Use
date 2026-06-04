@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable, TYPE_CHECKING
 from pydantic import BaseModel
 
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolInvocation, ToolExecutionMode, ToolResult, ToolExecutionUpdateCallback, AbortSignal
+from operator_use.guardrail.types import Guardrail
 from operator_use.skill.types import SourceInfo, ResourceDiagnostic
 from operator_use.bus.service import EventBus
 
@@ -373,6 +374,7 @@ class Extension:
     source_info: SourceInfo
     handlers: dict[str, list[EventHandler]] = field(default_factory=dict)
     tools: dict[str, RegisteredTool] = field(default_factory=dict)
+    guardrails: dict[str, Guardrail] = field(default_factory=dict)
     commands: dict[str, RegisteredCommand] = field(default_factory=dict)
     config: dict = field(default_factory=dict)
     inference_providers: list[RegisteredInferenceProvider] = field(default_factory=list)
@@ -424,6 +426,10 @@ class ExtensionAPI:
         """Expose a tool to the engine; overwrites a previous registration with the same name."""
         source_info = SourceInfo(path=self._extension.path, source='extension')
         self._extension.tools[tool.name] = RegisteredTool(definition=tool, source_info=source_info)
+
+    def register_guardrail(self, guardrail: Guardrail) -> None:
+        """Register a guardrail; overwrites a previous registration with the same name."""
+        self._extension.guardrails[guardrail.name] = guardrail
 
     def register_command(
         self,
