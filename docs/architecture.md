@@ -45,27 +45,27 @@ optional `user_id` / `message_id` for threading and reactions.
 
 ```
                                ┌──────────────────────┐
-                               │      GatewayManager   │
-                               │  ┌──────────────────┐ │
-                               │  │       Bus        │ │
-                               │  │ incoming_queue   │ │
-                               │  │ outgoing_queue   │ │
-                               │  └────────┬─────────┘ │
-                               │           │            │
-                               │  ┌────────▼─────────┐ │
-                               │  │     Gateway      │ │
-                               │  │                  │ │
-                               │  │ _incoming_loop   │ │◄── hook: message:receive
-                               │  │  ├ lookup/create │ │    (STT transform, reject)
-                               │  │  │  Agent by     │ │
-                               │  │  │  channel:     │ │
-                               │  │  │  chat_id      │ │
-                               │  │  └─► spawn Task  │ │
-                               │  │                  │ │
-                               │  │ _outgoing_loop   │ │──► BaseChannel.send()
-                               │  │  └ route to      │ │    (stream phases: START/
-                               │  │    channel.send  │ │     CHUNK/END/DONE/ERROR)
-                               │  └──────────────────┘ │
+                               │      GatewayManager  │
+                               │ ┌──────────────────┐ │
+                               │ │       Bus        │ │
+                               │ │ incoming_queue   │ │
+                               │ │ outgoing_queue   │ │
+                               │ └────────┬─────────┘ │
+                               │          │           │
+                               │ ┌────────▼─────────┐ │
+                               │ │     Gateway      │ │
+                               │ │                  │ │
+                               │ │ _incoming_loop   │ │◄── hook: message:receive
+                               │ ├ lookup/create    │ │    (STT transform, reject)
+                               │ │  │  Agent by     │ │
+                               │ │  │  channel:     │ │
+                               │ │  │  chat_id      │ │
+                               │ │  └─► spawn Task  │ │
+                               │ │                  │ │
+                               │ │ _outgoing_loop   │ │──► BaseChannel.send()
+                               │ │  └ route to      │ │    (stream phases: START/
+                               │ │    channel.send  │ │     CHUNK/END/DONE/ERROR)
+                               │ └──────────────────┘ │
                                └──────────────────────┘
                                  ▲ hook: message:send
                                    (TTS inject audio)
@@ -176,7 +176,7 @@ the Agent.
        │  for attempt in 0..max_retries:         │
        │    register message handler             │
        │    ──────────────────────────────────►  │
-       │          engine.run(AgentContext)        │
+       │         engine.run(AgentContext)        │
        │    ◄──────────────────────────────────  │
        │    if error:                            │
        │      classify_error(exc) → ErrorKind    │
@@ -200,35 +200,35 @@ persisted once before the loop; if all retries exhaust it is also removed.
        ┌───────────────────────────────────────────────────────────────┐
        │              After Engine Completes (post-turn)               │
        │                                                               │
-       │  emit 'save_point' ──────────────────────► extensions        │
+       │  emit 'save_point' ──────────────────────► extensions         │
        │  persist AssistantMessage to JSONL                            │
-       │  emit 'agent_end' ───────────────────────► extensions        │
+       │  emit 'agent_end' ───────────────────────► extensions         │
        │                                                               │
-       │  ┌──────────────────────────────────────────────────────┐    │
-       │  │  Background Reviewers (daemon threads)               │    │
-       │  │                                                       │    │
-       │  │  if skill_review.should_review() (every 10 calls):   │    │
-       │  │    spawn_skill_review()                               │    │
-       │  │    └─ Thread: skill-review                           │    │
-       │  │       └─ child = agent.spawn_child(tools=['skill'])   │    │
-       │  │          ├─ same system prompt (cache hit)           │    │
-       │  │          ├─ same full tool list in request body      │    │
-       │  │          ├─ whitelist: skill only at dispatch        │    │
-       │  │          └─ engine.run(review_task) timeout=120s     │    │
-       │  │                                                       │    │
-       │  │  if memory_review.should_review() (every 10 calls):  │    │
-       │  │    spawn_memory_review()                              │    │
-       │  │    └─ Thread: memory-review                          │    │
-       │  │       └─ child = agent.spawn_child(tools=['memory'])  │    │
-       │  │          ├─ same system prompt (cache hit)           │    │
-       │  │          ├─ on_complete → clear system_prompt_cache  │    │
-       │  │          └─ engine.run(review_task) timeout=60s      │    │
-       │  └──────────────────────────────────────────────────────┘    │
+       │  ┌──────────────────────────────────────────────────────┐     │
+       │  │  Background Reviewers (daemon threads)               │     │
+       │  │                                                      │     │
+       │  │  if skill_review.should_review() (every 10 calls):   │     │
+       │  │    spawn_skill_review()                              │     │
+       │  │    └─ Thread: skill-review                           │     │
+       │  │       └─ child = agent.spawn_child(tools=['skill'])  │     │
+       │  │          ├─ same system prompt (cache hit)           │     │
+       │  │          ├─ same full tool list in request body      │     │
+       │  │          ├─ whitelist: skill only at dispatch        │     │
+       │  │          └─ engine.run(review_task) timeout=120s     │     │
+       │  │                                                      │     │
+       │  │  if memory_review.should_review() (every 10 calls):  │     │
+       │  │    spawn_memory_review()                             │     │
+       │  │    └─ Thread: memory-review                          │     │
+       │  │       └─ child = agent.spawn_child(tools=['memory']) │     │
+       │  │          ├─ same system prompt (cache hit)           │     │
+       │  │          ├─ on_complete → clear system_prompt_cache  │     │
+       │  │          └─ engine.run(review_task) timeout=60s      │     │
+       │  └──────────────────────────────────────────────────────┘     │
        │                                                               │
-       │  if compact_requested or tokens > window - reserve:          │
+       │  if compact_requested or tokens > window - reserve:           │
        │    run_compaction()                                           │
        │                                                               │
-       │  if no queued turns: emit 'settled'                          │
+       │  if no queued turns: emit 'settled'                           │
        └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -244,42 +244,43 @@ in the request, so the cache key stays identical to the parent turn.
 
 ```
        ┌──────────────────────────────────────────────────────────────┐
-       │                    Engine.run(AgentContext)                   │
-       │                                                               │
-       │  emit agent_start                                             │
-       │                                                               │
+       │                    Engine.run(AgentContext)                  │
+       │                                                              │
+       │  emit agent_start                                            │
+       │                                                              │
        │  ┌────────────── TURN LOOP ─────────────────────────────┐    │
-       │  │                                                       │    │
-       │  │  emit turn_start                                      │    │
-       │  │  emit message_start                                   │    │
-       │  │                                                       │    │
+       │  │                                                      │    │
+       │  │  emit turn_start                                     │    │
+       │  │  emit message_start                                  │    │
+       │  │                                                      │    │
        │  │  ┌────── LLM STREAMING ──────────────────────────┐   │    │
-       │  │  │  llm.stream(LLMContext)                        │   │    │
-       │  │  │                                                │   │    │
-       │  │  │  TextDeltaEvent  → emit message_update (text)  │   │    │
-       │  │  │  ThinkingDelta   → emit message_update (think) │   │    │
-       │  │  │  ToolCallEnd     → collect tool call           │   │    │
-       │  │  │  ErrorEvent      → set stop_reason=Error       │   │    │
-       │  │  │  EndEvent        → set stop_reason + tokens    │   │    │
-       │  │  └────────────────────────────────────────────────┘   │    │
-       │  │                                                       │    │
-       │  │  emit message_end                                     │    │
-       │  │                                                       │    │
-       │  │  ┌── stop_reason ──────────────────────────────────┐  │    │
-       │  │  │                                                  │  │    │
-       │  │  │  Error / Abort ──► emit agent_error, turn_end   │  │    │
-       │  │  │                    break                         │  │    │
-       │  │  │                                                  │  │    │
-       │  │  │  Stop ──────────► drain follow_up_queue         │  │    │
-       │  │  │                   if empty: emit turn_end, break │  │    │
-       │  │  │                                                  │  │    │
-       │  │  │  ToolCalls ─────► _execute_tool_calls()         │  │    │
-       │  │  │                   drain steering_queue           │  │    │
-       │  │  │                   loop again                     │  │    │
-       │  │  └──────────────────────────────────────────────────┘  │    │
-       │  └───────────────────────────────────────────────────────┘    │
-       │                                                               │
-       │  emit agent_end                                               │
+       │  │  │  llm.stream(LLMContext)                       │   │    │
+       │  │  │                                               │   │    │
+       │  │  │  TextDeltaEvent  → emit message_update (text) │   │    │
+       │  │  │  ThinkingDelta   → emit message_update (think)│   │    │
+       │  │  │  ToolCallEnd     → collect tool call          │   │    │
+       │  │  │  ErrorEvent      → set stop_reason=Error      │   │    │
+       │  │  │  EndEvent        → set stop_reason + tokens   │   │    │
+       │  │  └───────────────────────────────────────────────┘   │    │
+       │  │                                                      │    │
+       │  │  emit message_end                                    │    │
+       │  │                                                      │    │
+       │  │  ┌── stop_reason ─────────────────────────────────┐  │    │
+       │  │  │                                                │  │    │
+       │  │  │  Error / Abort ──► emit agent_error, turn_end  │  │    │
+       │  │  │                    break                       │  │    │
+       │  │  │                                                │  │    │
+       │  │  │  Stop ──────────► drain follow_up_queue        │  │    │
+       │  │  │                   if empty: emit turn_end,     │  │    │
+       │  │  │                   break                        │  │    │
+       │  │  │                                                │  │    │
+       │  │  │  ToolCalls ─────► _execute_tool_calls()        │  │    │
+       │  │  │                   drain steering_queue         │  │    │
+       │  │  │                   loop again                   │  │    │
+       │  │  └────────────────────────────────────────────────┘  │    │
+       │  └──────────────────────────────────────────────────────┘    │
+       │                                                              │
+       │  emit agent_end                                              │
        └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -301,8 +302,8 @@ queue a follow-up prompt that fires immediately after the current response finis
        ┌─────────────────────────────────────────────────────────────┐
        │                  _execute_tool_calls()                      │
        │                                                             │
-       │  Mode: Sequential | Parallel | Batch (default)             │
-       │  (individual tools may override their own execution mode)  │
+       │  Mode: Sequential | Parallel | Batch (default)              │
+       │  (individual tools may override their own execution mode)   │
        │                                                             │
        │  For each tool call:                                        │
        │                                                             │
@@ -314,44 +315,44 @@ queue a follow-up prompt that fires immediately after the current response finis
        │         byte-identical → provider cache hit preserved)      │
        │                                                             │
        │  3. BEFORE HOOKS                                            │
-       │     ┌───────────────────────────────────────────────┐      │
-       │     │  Agent._before_tool_call()                    │      │
-       │     │   emit 'tool_call' → extensions               │      │
-       │     │   if any handler blocks → return error result │      │
-       │     └───────────────────────────────────────────────┘      │
-       │     ┌───────────────────────────────────────────────┐      │
-       │     │  Guardrails.before_call() (all, in order)     │      │
-       │     │   allow / warn → continue to execution        │      │
-       │     │   block → return synthetic error result       │      │
-       │     │   halt  → engine.abort(), return error        │      │
-       │     └───────────────────────────────────────────────┘      │
+       │     ┌───────────────────────────────────────────────┐       │
+       │     │  Agent._before_tool_call()                    │       │
+       │     │   emit 'tool_call' → extensions               │       │
+       │     │   if any handler blocks → return error result │       │
+       │     └───────────────────────────────────────────────┘       │
+       │     ┌───────────────────────────────────────────────┐       │
+       │     │  Guardrails.before_call() (all, in order)     │       │
+       │     │   allow / warn → continue to execution        │       │
+       │     │   block → return synthetic error result       │       │
+       │     │   halt  → engine.abort(), return error        │       │
+       │     └───────────────────────────────────────────────┘       │
        │                                                             │
        │  4. emit tool_execution_start                               │
        │                                                             │
        │  5. tool.execute(id, params, signal, on_update)             │
-       │     ┌──────────────────────────────────────────────────┐   │
-       │     │  BUILTIN TOOLS (selection):                       │   │
-       │     │  read, edit, write, terminal, browser, computer  │   │
-       │     │  web_search, web_fetch, memory, skill            │   │
-       │     │  subagent, team, peer_agent, send, cron          │   │
-       │     │  todo, knowledge, workflow, sandbox, …           │   │
-       │     └──────────────────────────────────────────────────┘   │
+       │     ┌──────────────────────────────────────────────────┐    │
+       │     │  BUILTIN TOOLS (selection):                      │    │
+       │     │  read, edit, write, terminal, browser, computer  │    │
+       │     │  web_search, web_fetch, memory, skill            │    │
+       │     │  subagent, team, peer_agent, send, cron          │    │
+       │     │  todo, knowledge, workflow, sandbox, …           │    │
+       │     └──────────────────────────────────────────────────┘    │
        │                                                             │
        │  6. emit tool_execution_update (streaming progress)         │
        │  7. emit tool_execution_end                                 │
        │                                                             │
        │  8. AFTER HOOKS                                             │
-       │     ┌───────────────────────────────────────────────┐      │
-       │     │  Agent._after_tool_call()                     │      │
-       │     │   emit 'tool_result' → extensions             │      │
-       │     │   handlers may patch content / is_error       │      │
-       │     │   handlers may set terminate=True             │      │
-       │     └───────────────────────────────────────────────┘      │
-       │     ┌───────────────────────────────────────────────┐      │
-       │     │  Guardrails.after_call() (all, in order)      │      │
-       │     │   warn  → append reason to result content     │      │
-       │     │   halt  → engine.abort()                      │      │
-       │     └───────────────────────────────────────────────┘      │
+       │     ┌───────────────────────────────────────────────┐       │
+       │     │  Agent._after_tool_call()                     │       │
+       │     │   emit 'tool_result' → extensions             │       │
+       │     │   handlers may patch content / is_error       │       │
+       │     │   handlers may set terminate=True             │       │
+       │     └───────────────────────────────────────────────┘       │
+       │     ┌───────────────────────────────────────────────┐       │
+       │     │  Guardrails.after_call() (all, in order)      │       │
+       │     │   warn  → append reason to result content     │       │
+       │     │   halt  → engine.abort()                      │       │
+       │     └───────────────────────────────────────────────┘       │
        │                                                             │
        │  9. increment SkillReviewTracker + MemoryReviewTracker      │
        └─────────────────────────────────────────────────────────────┘
@@ -368,10 +369,10 @@ without making another LLM call.
        ┌─────────────────────────────────────────────────────────────┐
        │                         LLM / Providers                     │
        │                                                             │
-       │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐  │
-       │  │  Anthropic   │  │   OpenAI     │  │  OpenRouter /   │  │
-       │  │  (claude-*)  │  │  (gpt-*/o*)  │  │  Ollama / etc.  │  │
-       │  └──────────────┘  └──────────────┘  └─────────────────┘  │
+       │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐    │
+       │  │  Anthropic   │  │   OpenAI     │  │  OpenRouter /   │    │
+       │  │  (claude-*)  │  │  (gpt-*/o*)  │  │  Ollama / etc.  │    │
+       │  └──────────────┘  └──────────────┘  └─────────────────┘    │
        │                                                             │
        │  Prefix caching:                                            │
        │   • system prompt + full tool list cached after first turn  │
@@ -394,7 +395,7 @@ without making another LLM call.
        │  Line N:  SessionEntry  (id, parent_id, timestamp, payload) │
        │                                                             │
        │  Entry types:                                               │
-       │   MessageEntry       → one AgentMessage (user/assistant/tool)│
+       │   MessageEntry       → one AgentMessage(user/assistant/tool)│
        │   CompactionEntry    → summary + first_kept_entry_id        │
        │   LeafEntry          → durable navigation pointer           │
        │   BranchEntry        → branch-point with old-branch summary │
