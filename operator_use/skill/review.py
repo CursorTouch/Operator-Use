@@ -101,9 +101,13 @@ async def _run_review(
     review_task = (
         f"<conversation>\n{conversation_text}\n</conversation>\n\n"
         + _SKILL_REVIEW_PROMPT
+        + "\n\nOnly the `skill` tool is available to you. "
+        "All other tools will be denied at runtime — do not attempt them."
     )
 
-    # Fork sharing parent's LLM and system prompt for provider prefix cache hit
+    # Fork sharing parent's LLM and system prompt for provider prefix cache hit.
+    # All parent tools stay in the request body (byte-identical → cache hit);
+    # the whitelist blocks dispatch of non-skill tools at runtime.
     child = agent.spawn_child(tools=['skill'])
 
     ctx = AgentContext(

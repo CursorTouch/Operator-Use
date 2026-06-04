@@ -71,10 +71,15 @@ async def _run_review(
     review_task = (
         f"<conversation>\n{conversation_text}\n</conversation>\n\n"
         + _MEMORY_REVIEW_PROMPT
+        + "\n\nOnly the `memory` tool is available to you. "
+        "All other tools will be denied at runtime — do not attempt them."
     )
 
     # Fork a child agent sharing the parent's LLM and system prompt so the
     # provider's prefix cache is reused — only the review task is uncached.
+    # All parent tools stay in the request body (byte-identical → cache hit);
+    # the whitelist blocks dispatch of non-memory tools at runtime.
+    # spawn_child forwards memory_manager when 'memory' is in the whitelist.
     child = agent.spawn_child(tools=['memory'])
     child._engine.tool_context.memory_manager = memory_manager
 

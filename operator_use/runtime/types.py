@@ -499,6 +499,7 @@ class RuntimeContext:
 
         real_runtime = ExtensionRuntime(load_result, agent, hooks=hooks)
         agent._extensions = real_runtime
+        agent._refresh_guardrails()
 
         return cls(
             agent=agent,

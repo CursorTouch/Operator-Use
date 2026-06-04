@@ -347,6 +347,10 @@ class Runtime:
         engine.tools = new_tools
         engine._tools = {t.name: t for t in new_tools}
 
+        # Refresh guardrails from reloaded resources + new extension runtime.
+        if self._context.agent is not None:
+            self._context.agent._refresh_guardrails()
+
         # Rebuild the command registry with the reloaded commands.
         self.commands = CommandRegistry(
             runtime=self,
@@ -756,6 +760,7 @@ class Runtime:
         self._wire_agent_extensions(agent, load_result, hooks)
         real_ext = agent._extensions  # type: ignore[assignment]
         agent._active_profile = profile
+        agent._refresh_guardrails()
 
         # Per-profile subagent/workflow managers so profile-level settings (and the
         # profile's own tools) take effect, instead of the shared global managers.
