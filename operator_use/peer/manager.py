@@ -46,7 +46,14 @@ class PeerSessionManager:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def get(self, profile_name: str) -> dict | None:
-        """Return the bookmark dict for a peer, or None if none exists."""
+        """Return the bookmark dict for a peer, or None if none exists.
+
+        Args:
+            profile_name: Name of the peer profile.
+
+        Returns:
+            Dict with session_id and timestamps, or None if no bookmark.
+        """
         p = self._path(profile_name)
         if p is None or not p.exists():
             return None
@@ -56,11 +63,24 @@ class PeerSessionManager:
             return None
 
     def get_session_id(self, profile_name: str) -> str | None:
+        """Get the session ID for resuming a peer conversation.
+
+        Args:
+            profile_name: Name of the peer profile.
+
+        Returns:
+            Session ID string, or None if no bookmark exists.
+        """
         entry = self.get(profile_name)
         return entry.get('session_id') if entry else None
 
     def save(self, profile_name: str, session_id: str) -> None:
-        """Create or update the bookmark for a peer.  No-op when no peer dir is set."""
+        """Create or update the bookmark for a peer. No-op when no peer dir is set.
+
+        Args:
+            profile_name: Name of the peer profile.
+            session_id: Session ID to bookmark.
+        """
         p = self._path(profile_name)
         if p is None:
             return
@@ -76,7 +96,14 @@ class PeerSessionManager:
         p.chmod(0o600)
 
     def delete(self, profile_name: str) -> bool:
-        """Delete the bookmark and return True if it existed."""
+        """Delete the bookmark and return True if it existed.
+
+        Args:
+            profile_name: Name of the peer profile.
+
+        Returns:
+            True if bookmark was deleted, False if it didn't exist.
+        """
         p = self._path(profile_name)
         if p is None:
             return False
@@ -87,7 +114,11 @@ class PeerSessionManager:
         return False
 
     def list(self) -> list[dict]:
-        """Return all stored bookmarks."""
+        """Return all stored peer bookmarks.
+
+        Returns:
+            List of all bookmark dicts with profile names and session IDs.
+        """
         if self._dir is None:
             return []
         result = []
