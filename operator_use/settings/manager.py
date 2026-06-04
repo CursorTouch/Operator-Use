@@ -56,12 +56,20 @@ class SettingsManager:
 
     @classmethod
     def get_instance(cls) -> Optional["SettingsManager"]:
-        """Return the process-wide singleton, or None if not yet registered."""
+        """Return the process-wide singleton, or None if not yet registered.
+
+        Returns:
+            The SettingsManager singleton, or None if not yet initialized.
+        """
         return cls._instance
 
     @classmethod
     def set_instance(cls, manager: "SettingsManager") -> None:
-        """Register the process-wide singleton (called once at runtime startup)."""
+        """Register the process-wide singleton (called once at runtime startup).
+
+        Args:
+            manager: The SettingsManager instance to register as singleton.
+        """
         cls._instance = manager
 
     def __init__(
@@ -89,13 +97,28 @@ class SettingsManager:
 
     @staticmethod
     def create(cwd: Path, config_dir: Optional[Path] = None) -> SettingsManager:
-        """Create a SettingsManager backed by files in cwd (and optional config_dir for global settings)."""
+        """Create a SettingsManager backed by files in cwd (and optional config_dir for global settings).
+
+        Args:
+            cwd: The project working directory for project settings.
+            config_dir: Optional global config directory; defaults to ~/.operator if not provided.
+
+        Returns:
+            A new SettingsManager instance.
+        """
         storage = FileSettingsStorage(cwd, config_dir)
         return SettingsManager.from_storage(storage)
 
     @staticmethod
     def from_storage(storage: SettingsStorage) -> SettingsManager:
-        """Create a SettingsManager from an arbitrary storage backend."""
+        """Create a SettingsManager from an arbitrary storage backend.
+
+        Args:
+            storage: A SettingsStorage implementation (file, in-memory, custom).
+
+        Returns:
+            A new SettingsManager instance with loaded settings.
+        """
         global_settings, global_error = SettingsManager._try_load_from_storage(storage, SCOPE.GLOBAL)
         project_settings, project_error = SettingsManager._try_load_from_storage(storage, SCOPE.PROJECT)
         initial_errors = []
