@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 from typing import Any
 
 from operator_use.memory.api.base import BaseMemoryAPI
@@ -32,6 +33,8 @@ class HindsightMemoryAPI(BaseMemoryAPI):
         self._budget = cfg.get("budget") or os.environ.get("HINDSIGHT_RECALL_BUDGET") or "mid"
         self._prefetch_method = cfg.get("prefetch_method", "recall")
         self._recall_max_tokens = cfg.get("recall_max_tokens")
+        self._prefetch_cache: dict[str, str] = {}
+        self._prefetch_lock = threading.Lock()
 
     def initialize(self, context: MemoryContext) -> None:
         super().initialize(context)
@@ -43,6 +46,10 @@ class HindsightMemoryAPI(BaseMemoryAPI):
     async def prefetch(self, query: str, *, session_id: str = "") -> str:
         if not self.options.prefetch:
             return ""
+        with self._prefetch_lock:
+            cached = self._prefetch_cache.pop(session_id, None)
+        if cached is not None:
+            return cached
         if self._prefetch_method == "reflect":
             text = await self.reflect(query, session_id=session_id)
             if not text.strip():
@@ -55,6 +62,29 @@ class HindsightMemoryAPI(BaseMemoryAPI):
         for result in results:
             lines.append(f"- {result.content}")
         return "\n".join(lines)
+
+    def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
+        if not self.options.prefetch:
+            return
+
+        def _run() -> None:
+            if self._prefetch_method == "reflect":
+                text = self._reflect(query)
+                if not text.strip():
+                    return
+                result = "\n".join(["## Recalled Memory", "", "Hindsight synthesis for the current turn:", "", text])
+            else:
+                results = self.search(query, limit=5)
+                if not results:
+                    return
+                lines = ["## Recalled Memory", "", "Relevant Hindsight memories for the current turn:"]
+                for r in results:
+                    lines.append(f"- {r.content}")
+                result = "\n".join(lines)
+            with self._prefetch_lock:
+                self._prefetch_cache[session_id] = result
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def search(self, query: str, *, limit: int = 5) -> list[MemorySearchResult]:
         if self._client is None:

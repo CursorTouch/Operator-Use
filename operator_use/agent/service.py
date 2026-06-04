@@ -719,6 +719,11 @@ class Agent(ExtensionContext):
                 "without markdown formatting (no **bold**, no bullet lists, no headers, "
                 "no code fences) so the response sounds natural when spoken.\n\n"
             )
+        else:
+            prefix += (
+                "Note: Text-to-speech is disabled. You may use markdown formatting **bold**, "
+                "*italics*, ## headers, and ```code fences``` if it helps clarity.\n\n"
+            )
 
         ctx_contents: list = [TextContent(content=f"{prefix}{user_input}")]
         for img_path in opts.images:

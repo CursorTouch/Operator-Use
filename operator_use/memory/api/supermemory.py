@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 from typing import Any
 
 from operator_use.memory.api.base import BaseMemoryAPI
@@ -16,6 +17,8 @@ class SupermemoryAPI(BaseMemoryAPI):
         self.context = MemoryContext()
         self._client = client
         self._container_tag = self.options.user_id or "operator-user"
+        self._prefetch_cache: dict[str, str] = {}
+        self._prefetch_lock = threading.Lock()
 
     def initialize(self, context: MemoryContext) -> None:
         super().initialize(context)
@@ -26,6 +29,10 @@ class SupermemoryAPI(BaseMemoryAPI):
     async def prefetch(self, query: str, *, session_id: str = "") -> str:
         if not self.options.prefetch:
             return ""
+        with self._prefetch_lock:
+            cached = self._prefetch_cache.pop(session_id, None)
+        if cached is not None:
+            return cached
         results = await asyncio.to_thread(self.search, query, limit=5)
         if not results:
             return ""
@@ -33,6 +40,22 @@ class SupermemoryAPI(BaseMemoryAPI):
         for result in results:
             lines.append(f"- {result.content}")
         return "\n".join(lines)
+
+    def queue_prefetch(self, query: str, *, session_id: str = "") -> None:
+        if not self.options.prefetch:
+            return
+
+        def _run() -> None:
+            results = self.search(query, limit=5)
+            if not results:
+                return
+            lines = ["## Recalled Memory", "", "Relevant Supermemory memories for the current turn:"]
+            for result in results:
+                lines.append(f"- {result.content}")
+            with self._prefetch_lock:
+                self._prefetch_cache[session_id] = "\n".join(lines)
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def search(self, query: str, *, limit: int = 5) -> list[MemorySearchResult]:
         if self._client is None:
