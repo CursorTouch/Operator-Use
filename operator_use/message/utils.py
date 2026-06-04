@@ -26,7 +26,14 @@ _AUDIO_MIME: dict[bytes, str] = {
 
 
 def detect_image_mime(data: bytes) -> str:
-    """Detect image MIME type from magic bytes; default to PNG if unknown."""
+    """Detect image MIME type from magic bytes; default to PNG if unknown.
+
+    Args:
+        data: Binary image data to detect.
+
+    Returns:
+        The MIME type string (e.g., 'image/jpeg', 'image/png').
+    """
     if data[:3] == b"\xff\xd8\xff":
         return "image/jpeg"
     if data[:8] == b"\x89PNG\r\n\x1a\n":
@@ -39,7 +46,14 @@ def detect_image_mime(data: bytes) -> str:
 
 
 def detect_audio_mime(data: bytes) -> str:
-    """Detect audio MIME type from magic bytes; default to MP3 if unknown."""
+    """Detect audio MIME type from magic bytes; default to MP3 if unknown.
+
+    Args:
+        data: Binary audio data to detect.
+
+    Returns:
+        The MIME type string (e.g., 'audio/mpeg', 'audio/wav', 'audio/ogg').
+    """
     for magic, mime in _AUDIO_MIME.items():
         if data[:len(magic)] == magic:
             # WAV files use RIFF container with WAVE format code
@@ -51,7 +65,14 @@ def detect_audio_mime(data: bytes) -> str:
 
 
 def image_to_base64(img: str | Image.Image | bytes) -> tuple[str, str]:
-    """Convert image to (base64_data, mime_type); URL strings passed through with empty mime."""
+    """Convert image to (base64_data, mime_type); URL strings passed through with empty mime.
+
+    Args:
+        img: A PIL Image, base64 string, raw bytes, or URL.
+
+    Returns:
+        A tuple of (base64_string, mime_type_string).
+    """
     if isinstance(img, str):
         # URLs are passed through as-is
         if img.startswith("http"):
@@ -75,7 +96,14 @@ def image_to_base64(img: str | Image.Image | bytes) -> tuple[str, str]:
 
 
 def audio_to_base64(item: bytes | str) -> tuple[str, str]:
-    """Convert audio to (base64_data, mime_type); accepts bytes, base64, or 'file:' paths."""
+    """Convert audio to (base64_data, mime_type); accepts bytes, base64, or 'file:' paths.
+
+    Args:
+        item: Raw audio bytes, base64-encoded string, or 'file:/path/to/audio'.
+
+    Returns:
+        A tuple of (base64_string, mime_type_string).
+    """
     if isinstance(item, bytes):
         # Raw bytes: detect MIME from magic bytes
         mime = detect_audio_mime(item)
@@ -97,7 +125,14 @@ def filter_empty_assistant_messages(messages: list) -> list:
     """Remove assistant messages with no usable content (prevents provider 400 errors).
 
     Empty assistant messages (e.g. from persisted API errors) produce invalid {"role": "assistant"}
-    with no content or tool_calls, causing all providers to reject the request."""
+    with no content or tool_calls, causing all providers to reject the request.
+
+    Args:
+        messages: List of LLM messages.
+
+    Returns:
+        Filtered list with empty assistant messages removed.
+    """
     from operator_use.message.types import Role, TextContent, ToolCallContent, ThinkingContent
     result = []
     for msg in messages:
@@ -123,6 +158,12 @@ def strip_unusable_trailing_assistant(messages: list) -> list:
     - unanswered tool calls (no tool result follows)
 
     Keeps trailing assistant with real text and successful stop (legitimately completed turn).
+
+    Args:
+        messages: List of LLM messages.
+
+    Returns:
+        Filtered list with unusable trailing assistant messages removed.
     """
     from operator_use.message.types import Role, TextContent, ToolCallContent
     from operator_use.inference.types import StopReason
