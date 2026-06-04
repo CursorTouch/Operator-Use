@@ -108,6 +108,7 @@ class Agent(ExtensionContext):
         )
 
         self._guardrails: list[Guardrail] = []
+        self._tool_whitelist: frozenset[str] | None = None
         self._phase: AgentPhase = AgentPhase.IDLE
         self._rebooting: bool = False
         self._last_assistant_entry_id: str | None = None
@@ -129,8 +130,15 @@ class Agent(ExtensionContext):
         and NullCompaction. The shared system prompt means the provider's
         prefix cache is reused — no extra token cost for the common prefix.
 
+        All parent tools are kept in the child's tool list so the request body
+        is byte-identical to the parent's (same provider cache key). When a
+        whitelist is provided it is enforced at dispatch time — non-whitelisted
+        tools return an error result without executing, preserving the cache hit.
+
         Args:
-            tools: Whitelist of tool names to expose. None means all tools.
+            tools: Whitelist of tool names the child may actually call.
+                   None means all tools are allowed. The full tool list is
+                   always sent to the provider regardless of this setting.
         """
         from operator_use.engine.service import Engine
         from operator_use.engine.types import Options
@@ -139,10 +147,9 @@ class Agent(ExtensionContext):
         from operator_use.extension.runtime import ExtensionRuntime
         from operator_use.compaction.strategy.base import NullCompaction
 
+        # Keep ALL parent tools — preserves byte-identical tools[] in the
+        # request body so the provider's prefix cache is hit, not missed.
         all_tools = list(self._engine.tools)
-        if tools is not None:
-            allowed = set(tools)
-            all_tools = [t for t in all_tools if t.name in allowed]
 
         child_engine = Engine(llm=self._engine.llm, tools=all_tools, options=Options())
         child_session = SessionManager(cwd=self._config.cwd, persist=False)
@@ -163,13 +170,27 @@ class Agent(ExtensionContext):
         child._system_prompt_cache.update(self._system_prompt_cache)
         child._active_profile = self._active_profile
 
+        # Pin the parent's session_id so any cache miss that forces a prompt
+        # rebuild still produces byte-identical output (session_id is baked
+        # into the system prompt via PromptTemplate).
+        child._session_manager.session_id = self._session_manager.session_id
+
+        # Enforce the tool whitelist at dispatch time (not by filtering the list).
+        if tools is not None:
+            child._tool_whitelist = frozenset(tools)
+
         # Forward safe tool_context fields — services the child's tools may need.
         # Desktop and browser are intentionally excluded: ephemeral children
         # should not control automation sessions owned by the parent.
         parent_ctx = self._engine.tool_context
-        child_engine.tool_context.memory_manager = parent_ctx.memory_manager
         child_engine.tool_context.mcp_manager = parent_ctx.mcp_manager
         child_engine.tool_context.settings_manager = parent_ctx.settings_manager
+
+        # Only forward the memory manager if the child is allowed to call the
+        # memory tool — otherwise the review prompt leaks into the user's
+        # memory store as a spurious (harness-prompt, review-output) turn pair.
+        if tools is None or 'memory' in tools:
+            child_engine.tool_context.memory_manager = parent_ctx.memory_manager
 
         return child
 
@@ -418,6 +439,14 @@ class Agent(ExtensionContext):
         signal: object,
     ) -> ToolInvocation | ToolResultContent | None:
         """Fan out the tool_call event; returning ToolResultContent short-circuits execution."""
+        if self._tool_whitelist is not None and invocation.name not in self._tool_whitelist:
+            return ToolResultContent(
+                id=invocation.id,
+                is_error=True,
+                content=f'Tool "{invocation.name}" is not available in this context.',
+                metadata={},
+            )
+
         if invocation.name != 'skill':
             self._skill_review.on_tool_call()
         if invocation.name != 'memory':
