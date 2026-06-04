@@ -202,12 +202,26 @@ class Agent(ExtensionContext):
         return self._goal_manager
 
     def compact(self, options: CompactOptions | None = None) -> None:
-        """Request compaction after the current (or next) turn completes."""
+        """Request compaction after the current (or next) turn completes.
+
+        Args:
+            options: Optional CompactOptions to customize compaction behavior.
+        """
         self._compact_requested = True
         self._compact_options = options
 
     async def run_compaction(self, custom_instructions: str | None = None) -> bool:
-        """Run compaction immediately and emit save_point/settled events; raises if the agent is busy."""
+        """Run compaction immediately and emit save_point/settled events.
+
+        Args:
+            custom_instructions: Optional custom instructions for the compaction strategy.
+
+        Returns:
+            True if compaction was performed, False if no compaction was needed.
+
+        Raises:
+            RuntimeError: If the agent is currently busy (not idle).
+        """
         if self._phase != "idle":
             raise RuntimeError(f"Agent is busy (phase={self._phase!r}). Wait for the current operation to finish.")
 
@@ -235,12 +249,20 @@ class Agent(ExtensionContext):
             await self._runtime.new_session()
 
     async def fork(self, entry_id: str) -> None:
-        """Delegate session forking from a specific history entry to the runtime."""
+        """Delegate session forking from a specific history entry to the runtime.
+
+        Args:
+            entry_id: The session entry ID to fork from.
+        """
         if self._runtime is not None:
             await self._runtime.fork_session(entry_id)
 
     async def switch_session(self, session_file: Path) -> None:
-        """Delegate session switching to the runtime."""
+        """Delegate session switching to the runtime.
+
+        Args:
+            session_file: Path to the session file to switch to.
+        """
         if self._runtime is not None:
             await self._runtime.resume_session(session_file)
 
@@ -392,7 +414,11 @@ class Agent(ExtensionContext):
     # -------------------------------------------------------------------------
 
     async def apply_profile(self, profile: AgentProfile) -> None:
-        """Switch to a named agent profile: reload resources from profile dirs, update LLM."""
+        """Switch to a named agent profile: reload resources from profile dirs, update LLM.
+
+        Args:
+            profile: The AgentProfile to apply.
+        """
         self._active_profile = profile
         self._resources.set_active_profile(profile)
         await self._resources.reload()
@@ -574,7 +600,19 @@ class Agent(ExtensionContext):
     # -------------------------------------------------------------------------
 
     async def invoke(self, user_input: str, options: PromptOptions | None = None) -> None:
-        """Run one user turn with retry on transient errors."""
+        """Run one user turn with retry on transient errors.
+
+        Persists the user message to session history, reconstructs context with
+        memory recall and current time, then streams the LLM and executes tools.
+        Failed turns are rewound before retry; compaction runs at save points.
+
+        Args:
+            user_input: The user's text input for this turn.
+            options: Optional PromptOptions for metadata, channel, or behavior overrides.
+
+        Raises:
+            RuntimeError: If the agent is already busy or is rebooting.
+        """
         if self._phase != "idle":
             if self._rebooting:
                 raise RuntimeError("Rebooting — please send your message again in a moment.")

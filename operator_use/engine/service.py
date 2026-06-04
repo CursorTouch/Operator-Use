@@ -76,8 +76,15 @@ class Engine:
         # _run_with_retry() returns — never called mid-turn.
         self._deferred_fn: Callable[[], Coroutine] | None = None
 
-    async def subscribe(self, handler):
-        """Register an event handler (sync or async). Returns an unsubscribe callable."""
+    async def subscribe(self, handler) -> Callable[[], None]:
+        """Register an event handler (sync or async).
+
+        Args:
+            handler: A callable that receives AgentEvent objects.
+
+        Returns:
+            An unsubscribe callable that removes the handler when invoked.
+        """
         self._subscribers.append(handler)
 
         def unsubscribe() -> None:
@@ -87,7 +94,11 @@ class Engine:
         return unsubscribe
 
     async def steer(self, message: LLMMessage) -> None:
-        """Enqueue a steering message to be injected after the next tool-call round-trip."""
+        """Enqueue a steering message to be injected after the next tool-call round-trip.
+
+        Args:
+            message: An LLM message to inject into the context.
+        """
         if self.state.steering_queue:
             await self.state.steering_queue.enqueue(message)
             if self._hooks:
@@ -98,7 +109,11 @@ class Engine:
                 ))
 
     async def follow_up(self, message: LLMMessage) -> None:
-        """Enqueue a follow-up message to be injected after the current stop-reason=Stop turn."""
+        """Enqueue a follow-up message to be injected after the current stop-reason=Stop turn.
+
+        Args:
+            message: An LLM message to inject after the agent finishes naturally.
+        """
         if self.state.follow_up_queue:
             await self.state.follow_up_queue.enqueue(message)
             if self._hooks:
@@ -142,12 +157,20 @@ class Engine:
         self.state.is_streaming = False
 
     def add_tool(self, tool: Tool) -> None:
-        """Dynamically register a tool (e.g. from a connected MCP server)."""
+        """Dynamically register a tool at runtime (e.g. from a connected MCP server).
+
+        Args:
+            tool: The Tool instance to register.
+        """
         self.tools.append(tool)
         self._tools[tool.name] = tool
 
     def remove_tool(self, name: str) -> None:
-        """Dynamically unregister a tool by name."""
+        """Dynamically unregister a tool by name.
+
+        Args:
+            name: The tool name to unregister.
+        """
         self.tools = [t for t in self.tools if t.name != name]
         self._tools.pop(name, None)
 
@@ -166,7 +189,11 @@ class Engine:
             await asyncio.sleep(0.05)
 
     async def process_events(self, event: AgentEvent) -> None:
-        """Update engine state from an event and broadcast it to hooks and subscribers."""
+        """Update engine state from an event and broadcast it to hooks and subscribers.
+
+        Args:
+            event: An AgentEvent to process and emit.
+        """
         match event:
             case MessageStartEvent(message=message):
                 self.state.streaming_message = message
@@ -202,7 +229,16 @@ class Engine:
         emit: EmitEvent,
         signal: Optional[AbortSignal],
     ) -> ToolResultContent:
-        """Validate, run before/after hooks, and execute a single tool call; returns a ToolResultContent."""
+        """Validate, run before/after hooks, and execute a single tool call.
+
+        Args:
+            tool_call: The tool call to execute.
+            emit: Callback to emit execution events.
+            signal: Abort signal to check for cancellation.
+
+        Returns:
+            A ToolResultContent with the tool's result or an error message.
+        """
         if self.options.should_skip_tool_calls is not None:
             return self.options.should_skip_tool_calls(tool_call)
 
@@ -272,7 +308,16 @@ class Engine:
         emit: EmitEvent,
         signal: Optional[AbortSignal],
     ) -> list[ToolResultContent]:
-        """Execute tool calls one at a time, preserving invocation order."""
+        """Execute tool calls one at a time, preserving invocation order.
+
+        Args:
+            tool_calls: List of tool calls to execute sequentially.
+            emit: Callback to emit execution events.
+            signal: Abort signal to check for cancellation.
+
+        Returns:
+            List of ToolResultContent in the same order as tool_calls.
+        """
         results = []
         for tc in tool_calls:
             results.append(await self._execute(tc, emit, signal))
@@ -284,7 +329,16 @@ class Engine:
         emit: EmitEvent,
         signal: Optional[AbortSignal],
     ) -> list[ToolResultContent]:
-        """Execute all tool calls concurrently via asyncio.gather."""
+        """Execute all tool calls concurrently via asyncio.gather.
+
+        Args:
+            tool_calls: List of tool calls to execute in parallel.
+            emit: Callback to emit execution events.
+            signal: Abort signal to check for cancellation.
+
+        Returns:
+            List of ToolResultContent (order may differ from input).
+        """
         return list(await asyncio.gather(
             *[self._execute(tc, emit, signal) for tc in tool_calls]
         ))
@@ -295,7 +349,16 @@ class Engine:
         emit: EmitEvent,
         signal: Optional[AbortSignal] = None,
     ) -> list[ToolResultContent]:
-        """Dispatch a batch of tool calls according to the configured execution mode."""
+        """Dispatch a batch of tool calls according to the configured execution mode.
+
+        Args:
+            tool_calls: List of tool calls to execute.
+            emit: Callback to emit execution events.
+            signal: Abort signal to check for cancellation.
+
+        Returns:
+            List of ToolResultContent with execution results.
+        """
         match self.options.execution_mode:
             case ToolExecutionMode.Parallel:
                 return await self._parallel_execute(tool_calls, emit, signal)
@@ -327,8 +390,14 @@ class Engine:
     # Main loop
     # -------------------------------------------------------------------------
 
-    async def _loop(self, messages: list[LLMMessage], emit: EmitEvent, signal: AbortSignal):
-        """Core agentic loop: stream LLM → execute tools → inject steering/follow-ups → repeat until done."""
+    async def _loop(self, messages: list[LLMMessage], emit: EmitEvent, signal: AbortSignal) -> None:
+        """Core agentic loop: stream LLM → execute tools → inject steering/follow-ups → repeat until done.
+
+        Args:
+            messages: Conversation history to pass to the LLM.
+            emit: Callback to emit engine events.
+            signal: Abort signal to check for user-initiated cancellation.
+        """
         await emit(AgentStartEvent())
 
         tool_calls: list[ToolCallContent] = []
@@ -531,7 +600,11 @@ class Engine:
         await emit(AgentEndEvent(messages=messages, reason=end_reason))
 
     async def run(self, ctx: AgentContext) -> None:
-        """Reset the abort signal, apply context, and start a fresh loop from the given context."""
+        """Reset the abort signal, apply context, and start a fresh loop from the given context.
+
+        Args:
+            ctx: AgentContext or list of LLMMessages to initialize the loop with.
+        """
         if isinstance(ctx, list):
             from operator_use.agent.types import AgentContext as _AgentContext
             ctx = _AgentContext(
@@ -550,7 +623,11 @@ class Engine:
             self.state.is_streaming = False
 
     async def run_continue(self) -> None:
-        """Resume an idle engine from its current message history, draining queued steering/follow-up first."""
+        """Resume an idle engine from its current message history, draining queued steering/follow-up first.
+
+        Raises:
+            RuntimeError: If the engine is currently streaming or has no messages.
+        """
         if self.state.is_streaming:
             raise RuntimeError("Agent is already processing. Wait for completion before continuing.")
 
