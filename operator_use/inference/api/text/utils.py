@@ -8,8 +8,46 @@ from typing import Any
 __all__ = [
     "parse_tool_args",
     "openai_user_content", "openai_assistant_content", "openai_messages_to_chat", "openai_response_format",
-    "anthropic_messages_to_list", "anthropic_output_config",
+    "anthropic_messages_to_list", "anthropic_output_config", "anthropic_apply_message_cache",
 ]
+
+
+_CACHE_MARKER = {"type": "ephemeral"}
+
+
+def anthropic_apply_message_cache(
+    messages: list[dict[str, Any]],
+    n: int = 2,
+    skip_tail: int = 0,
+) -> list[dict[str, Any]]:
+    """Inject cache_control breakpoints into the last n stable messages.
+
+    Implements the Anthropic 'system_and_3' caching strategy — the system
+    prompt is already marked by the caller; this adds up to 2 more breakpoints
+    on the tail of the stable session history so the bulk of the conversation
+    is served from cache on subsequent turns.
+
+    skip_tail: number of ephemeral messages at the end of the list to skip
+    (desktop/browser screenshots that change every turn and must not be cached).
+
+    Returns a new list; the original is not mutated.
+    """
+    import copy
+    messages = copy.deepcopy(messages)
+    total = len(messages)
+    stable_end = total - skip_tail  # index just past the last stable message
+    stable_start = max(0, stable_end - n)
+    for msg in messages[stable_start:stable_end]:
+        content = msg.get("content")
+        if content is None or content == "":
+            msg["cache_control"] = _CACHE_MARKER
+        elif isinstance(content, str):
+            msg["content"] = [{"type": "text", "text": content, "cache_control": _CACHE_MARKER}]
+        elif isinstance(content, list) and content:
+            last = content[-1]
+            if isinstance(last, dict):
+                last["cache_control"] = _CACHE_MARKER
+    return messages
 
 
 def parse_tool_args(value: Any) -> dict:

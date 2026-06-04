@@ -11,8 +11,7 @@ import threading
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
-    from operator_use.inference.api.text.service import LLM
-    from operator_use.tool.types import Tool
+    from operator_use.agent.service import Agent
 
 logger = logging.getLogger(__name__)
 
@@ -90,15 +89,11 @@ def _format_messages_for_review(messages: list[Any]) -> str:
 
 
 async def _run_review(
-    llm: LLM,
+    agent: Agent,
     messages: list[Any],
-    skill_manage_tool: Tool,
-    skill_view_tool: Tool | None,
 ) -> None:
-    """Run the review engine: LLM reads the conversation and calls skill_manage."""
+    """Run the review engine: LLM reads the conversation and calls skill tool."""
     from operator_use.agent.types import AgentContext
-    from operator_use.engine.service import Engine
-    from operator_use.engine.types import Options
     from operator_use.hooks.types import AgentEndEvent
     from operator_use.message.types import UserMessage, TextContent
 
@@ -108,20 +103,13 @@ async def _run_review(
         + _SKILL_REVIEW_PROMPT
     )
 
-    tools: list[Tool] = [skill_manage_tool]
-    if skill_view_tool is not None:
-        tools.append(skill_view_tool)
-
-    engine = Engine(llm=llm, tools=tools, options=Options())
+    # Fork sharing parent's LLM and system prompt for provider prefix cache hit
+    child = agent.spawn_child(tools=['skill'])
 
     ctx = AgentContext(
-        system_prompt=(
-            "You are a background skill curator. You review conversations and "
-            "maintain a library of reusable skills. You have access to the skill tool "
-            "to view, create, edit, and patch skills."
-        ),
+        system_prompt=agent._system_prompt,
         messages=[UserMessage(contents=[TextContent(content=review_task)])],
-        tools=tools,
+        tools=child._engine.tools,
     )
 
     actions: list[str] = []
@@ -136,18 +124,18 @@ async def _run_review(
                         actions.append(text.strip())
                     break
 
-    engine.options.on_event = on_event
+    child._engine.options.on_event = on_event
 
     _MAX_RETRIES = 3
     _BACKOFF = [2.0, 5.0, 15.0]
 
     for attempt in range(_MAX_RETRIES):
         try:
-            await asyncio.wait_for(engine.run(ctx), timeout=120.0)
+            await asyncio.wait_for(child._engine.run(ctx), timeout=120.0)
             break
         except asyncio.TimeoutError:
             logger.warning('skill review timed out after 120s (attempt %d/%d)', attempt + 1, _MAX_RETRIES)
-            break  # timeout is not retryable
+            break
         except Exception as exc:
             err = str(exc).lower()
             retryable = any(k in err for k in ('rate limit', '429', '503', '500', 'overloaded', 'timeout'))
@@ -155,7 +143,7 @@ async def _run_review(
                 delay = _BACKOFF[attempt]
                 logger.warning('skill review error (attempt %d/%d), retrying in %.0fs: %s', attempt + 1, _MAX_RETRIES, delay, exc)
                 await asyncio.sleep(delay)
-                engine.reset()
+                child._engine.reset()
             else:
                 logger.warning('skill review failed: %s', exc)
                 break
@@ -167,10 +155,8 @@ async def _run_review(
 
 
 def spawn_skill_review(
-    llm: LLM,
+    agent: Agent,
     messages: list[Any],
-    skill_manage_tool: Tool,
-    skill_view_tool: Tool | None = None,
     on_done: Callable[[], None] | None = None,
 ) -> None:
     """Spawn a daemon thread that runs the skill review loop."""
@@ -179,7 +165,7 @@ def spawn_skill_review(
         loop = asyncio.new_event_loop()
         try:
             loop.run_until_complete(
-                _run_review(llm, messages, skill_manage_tool, skill_view_tool)
+                _run_review(agent, messages)
             )
         except Exception as exc:
             logger.warning('skill review thread error: %s', exc)

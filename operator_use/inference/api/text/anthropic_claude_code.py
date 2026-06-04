@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from operator_use.inference.api.text.utils import parse_tool_args, anthropic_messages_to_list, anthropic_output_config
+from operator_use.inference.api.text.utils import parse_tool_args, anthropic_messages_to_list, anthropic_output_config, anthropic_apply_message_cache
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Any
 from anthropic import AsyncAnthropic
@@ -65,11 +65,12 @@ class AnthropicClaudeCodeAPI(BaseAPI):
         system: str | None,
         messages: list[dict[str, Any]],
         tools: Optional[list[Tool]] = None,
+        num_ephemeral: int = 0,
     ) -> dict[str, Any]:
         """Assemble the Anthropic API request payload, including thinking and tool configs."""
         params: dict[str, Any] = {
             "model": model.id,
-            "messages": messages,
+            "messages": anthropic_apply_message_cache(messages, skip_tail=num_ephemeral),
             "max_tokens": self.options.max_tokens or _DEFAULT_MAX_TOKENS,
             "temperature": self.options.temperature,
         }
@@ -112,7 +113,7 @@ class AnthropicClaudeCodeAPI(BaseAPI):
         system, anthropic_messages = anthropic_messages_to_list(context.messages)
         if context.system_prompt:
             system = context.system_prompt
-        params = self._build_params(model, system, anthropic_messages, tools=context.tools or None)
+        params = self._build_params(model, system, anthropic_messages, tools=context.tools or None, num_ephemeral=context.num_ephemeral)
         output_config = anthropic_output_config(context.response_format)
         if output_config is not None:
             params["output_config"] = output_config

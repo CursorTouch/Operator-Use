@@ -168,6 +168,7 @@ class LLMContext:
     tools: list["Tool"] = field(default_factory=list)
     system_prompt: Optional[str] = None
     response_format: Optional[StructuredResponseInput] = None
+    num_ephemeral: int = 0  # how many tail messages are ephemeral (screenshots etc.) — skip when placing cache markers
 
 
 def _default_text_event_data():

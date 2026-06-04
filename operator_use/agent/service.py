@@ -111,6 +111,49 @@ class Agent(ExtensionContext):
         self._engine.options.get_ephemeral_messages = self._get_ephemeral_messages
 
     # -------------------------------------------------------------------------
+    # Fork
+    # -------------------------------------------------------------------------
+
+    def spawn_child(self, *, tools: list[str] | None = None) -> Agent:
+        """Create an ephemeral child agent sharing this agent's LLM and system prompt.
+
+        The child runs with persist=False (no session writes), no extensions,
+        and NullCompaction. The shared system prompt means the provider's
+        prefix cache is reused — no extra token cost for the common prefix.
+
+        Args:
+            tools: Whitelist of tool names to expose. None means all tools.
+        """
+        from operator_use.engine.service import Engine
+        from operator_use.engine.types import Options
+        from operator_use.session.manager import SessionManager
+        from operator_use.extension.types import LoadExtensionsResult
+        from operator_use.extension.runtime import ExtensionRuntime
+        from operator_use.compaction.strategy.base import NullCompaction
+
+        all_tools = list(self._engine.tools)
+        if tools is not None:
+            allowed = set(tools)
+            all_tools = [t for t in all_tools if t.name in allowed]
+
+        child_engine = Engine(llm=self._engine.llm, tools=all_tools, options=Options())
+        child_session = SessionManager(cwd=self._config.cwd, persist=False)
+        child_extensions = ExtensionRuntime(LoadExtensionsResult(), self)
+
+        child = Agent(
+            engine=child_engine,
+            session_manager=child_session,
+            resource_loader=self._resources,
+            extension_runtime=child_extensions,
+            compaction=NullCompaction(),
+            config=self._config,
+        )
+        # Inherit the live system prompt so the provider's prefix cache is hit
+        child._system_prompt = self._system_prompt
+        child._active_profile = self._active_profile
+        return child
+
+    # -------------------------------------------------------------------------
     # Hooks
     # -------------------------------------------------------------------------
 
@@ -545,18 +588,14 @@ class Agent(ExtensionContext):
 
     def _maybe_spawn_skill_review(self) -> None:
         """Spawn a background thread to review the conversation and update skills."""
-        tools_by_name = {t.name: t for t in self._engine.state.tools}
-        skill_tool = tools_by_name.get('skill')
-        if skill_tool is None:
+        if not any(t.name == 'skill' for t in self._engine.state.tools):
             return
         messages = list(self._engine.state.messages)
         if not messages:
             return
         spawn_skill_review(
-            llm=self._engine.llm,
+            agent=self,
             messages=messages,
-            skill_manage_tool=skill_tool,
-            skill_view_tool=skill_tool,
             on_done=self._skill_review.on_review_done,
         )
 
@@ -564,17 +603,14 @@ class Agent(ExtensionContext):
         """Spawn a background thread to review the conversation and save memory facts."""
         if self._memory_manager is None or self._memory_manager.api is None:
             return
-        tools_by_name = {t.name: t for t in self._engine.state.tools}
-        memory_tool = tools_by_name.get('memory')
-        if memory_tool is None:
+        if not any(t.name == 'memory' for t in self._engine.state.tools):
             return
         messages = list(self._engine.state.messages)
         if not messages:
             return
         spawn_memory_review(
-            llm=self._engine.llm,
+            agent=self,
             messages=messages,
-            memory_tool=memory_tool,
             memory_manager=self._memory_manager,
             on_complete=self._system_prompt_cache.clear,
             on_done=self._memory_review.on_review_done,

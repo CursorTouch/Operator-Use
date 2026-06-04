@@ -411,13 +411,16 @@ class Engine:
                 tool_calls.clear()
 
                 ctx_messages = list(messages)
+                num_ephemeral = 0
 
                 if self.options.get_ephemeral_messages is not None:
                     try:
                         ephemeral = await self.options.get_ephemeral_messages()
                         # Ephemeral messages (e.g. injected context or reminders) are
                         # appended to a copy of the history — they are never persisted.
-                        ctx_messages = ctx_messages + ephemeral
+                        if ephemeral:
+                            num_ephemeral = len(ephemeral)
+                            ctx_messages = ctx_messages + ephemeral
                     except Exception:
                         pass  # Ephemeral failures must not abort the turn
 
@@ -451,6 +454,7 @@ class Engine:
                     messages=ctx_messages,
                     tools=self.state.tools,
                     system_prompt=self.state.system_prompt,
+                    num_ephemeral=num_ephemeral,
                 ))) as stream:
                     async for event in stream:
                         match event:

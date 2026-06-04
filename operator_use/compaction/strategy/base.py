@@ -35,3 +35,21 @@ class Compaction(ABC):
         thinking_level: ThinkingLevel | None = None,
     ) -> CompactionResult:
         """Execute compaction and return the result to be persisted."""
+
+
+class NullCompaction(Compaction):
+    """No-op compaction for ephemeral agents (forked reviewers, subagents) that never compact."""
+
+    def should_compact(self, context_tokens: int, context_window: int) -> bool:
+        return False
+
+    def prepare(self, path_entries: list[SessionEntry]) -> None:
+        return None
+
+    async def compact(
+        self,
+        preparation: CompactionPreparation,
+        custom_instructions: str | None = None,
+        thinking_level: ThinkingLevel | None = None,
+    ) -> CompactionResult:
+        raise NotImplementedError("NullCompaction does not compact")

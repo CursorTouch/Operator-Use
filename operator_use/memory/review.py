@@ -12,8 +12,7 @@ import threading
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
-    from operator_use.inference.api.text.service import LLM
-    from operator_use.tool.types import Tool
+    from operator_use.agent.service import Agent
     from operator_use.memory.manager import MemoryManager
 
 logger = logging.getLogger(__name__)
@@ -60,14 +59,11 @@ def _format_messages_for_review(messages: list[Any]) -> str:
 
 
 async def _run_review(
-    llm: LLM,
+    agent: Agent,
     messages: list[Any],
-    memory_tool: Tool,
     memory_manager: MemoryManager,
 ) -> None:
     from operator_use.agent.types import AgentContext
-    from operator_use.engine.service import Engine
-    from operator_use.engine.types import Options
     from operator_use.hooks.types import AgentEndEvent
     from operator_use.message.types import UserMessage, TextContent
 
@@ -77,18 +73,15 @@ async def _run_review(
         + _MEMORY_REVIEW_PROMPT
     )
 
-    tools: list[Tool] = [memory_tool]
-    engine = Engine(llm=llm, tools=tools, options=Options())
-    engine.tool_context.memory_manager = memory_manager
+    # Fork a child agent sharing the parent's LLM and system prompt so the
+    # provider's prefix cache is reused — only the review task is uncached.
+    child = agent.spawn_child(tools=['memory'])
+    child._engine.tool_context.memory_manager = memory_manager
 
     ctx = AgentContext(
-        system_prompt=(
-            "You are a background memory curator. You review conversations and "
-            "save durable facts about the user and project to long-term memory. "
-            "You have access to the memory tool to store facts."
-        ),
+        system_prompt=agent._system_prompt,
         messages=[UserMessage(contents=[TextContent(content=review_task)])],
-        tools=tools,
+        tools=child._engine.tools,
     )
 
     saved: list[str] = []
@@ -103,18 +96,18 @@ async def _run_review(
                         saved.append(text.strip())
                     break
 
-    engine.options.on_event = on_event
+    child._engine.options.on_event = on_event
 
     _MAX_RETRIES = 3
-    _BACKOFF = [2.0, 5.0, 15.0]  # seconds between attempts
+    _BACKOFF = [2.0, 5.0, 15.0]
 
     for attempt in range(_MAX_RETRIES):
         try:
-            await asyncio.wait_for(engine.run(ctx), timeout=60.0)
+            await asyncio.wait_for(child._engine.run(ctx), timeout=60.0)
             break
         except asyncio.TimeoutError:
             logger.warning('memory review timed out after 60s (attempt %d/%d)', attempt + 1, _MAX_RETRIES)
-            break  # timeout is not retryable — the review is too slow
+            break
         except Exception as exc:
             err = str(exc).lower()
             retryable = any(k in err for k in ('rate limit', '429', '503', '500', 'overloaded', 'timeout'))
@@ -122,7 +115,7 @@ async def _run_review(
                 delay = _BACKOFF[attempt]
                 logger.warning('memory review error (attempt %d/%d), retrying in %.0fs: %s', attempt + 1, _MAX_RETRIES, delay, exc)
                 await asyncio.sleep(delay)
-                engine.reset()  # clear partial state before retry
+                child._engine.reset()
             else:
                 logger.warning('memory review failed: %s', exc)
                 break
@@ -134,9 +127,8 @@ async def _run_review(
 
 
 def spawn_memory_review(
-    llm: LLM,
+    agent: Agent,
     messages: list[Any],
-    memory_tool: Tool,
     memory_manager: MemoryManager,
     on_complete: Callable[[], None] | None = None,
     on_done: Callable[[], None] | None = None,
@@ -147,7 +139,7 @@ def spawn_memory_review(
         loop = asyncio.new_event_loop()
         try:
             loop.run_until_complete(
-                _run_review(llm, messages, memory_tool, memory_manager)
+                _run_review(agent, messages, memory_manager)
             )
         except Exception as exc:
             logger.warning('memory review thread error: %s', exc)
