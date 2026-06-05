@@ -77,6 +77,7 @@ class DiscordChannel(BaseChannel):
         self._prev_tool_messages: dict[str, discord.Message] = {}  # chat_id → tool-status msg from previous failed attempt
         self._thinking_buffers: dict[str, str] = {}                # chat_id → accumulated thinking text
         self._thinking_tasks: dict[str, asyncio.Task] = {}         # chat_id → debounced thinking-stream task
+        self._intermediate_messages: dict[str, list] = {}          # chat_id → non-streaming intermediate messages to delete on final answer
 
     @property
     def channel_id(self) -> str:
@@ -342,6 +343,7 @@ class DiscordChannel(BaseChannel):
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
             self._thinking_buffers.pop(chat_id, None)
+            self._intermediate_messages.pop(chat_id, None)
             self._stop_thinking_stream(chat_id)
             # Save the stale tool-status handle so retry_success can delete it.
             stale = self._tool_messages.pop(chat_id, None)
@@ -428,6 +430,14 @@ class DiscordChannel(BaseChannel):
                         await existing.delete()
                     except Exception:
                         pass
+                # First text chunk after tool calls: delete non-streaming intermediate
+                # messages. In streaming mode the live loop reuses the same message slot
+                # so no deletion is needed there.
+                for im in self._intermediate_messages.pop(chat_id, []):
+                    try:
+                        await im.delete()
+                    except Exception:
+                        pass
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
@@ -441,7 +451,10 @@ class DiscordChannel(BaseChannel):
             suppress_text = metadata.get('suppress_text', False)
 
             # TTS will deliver audio — discard buffered text and do cleanup only.
-            if suppress_text and not keep_typing:
+            # keep_typing=True means TTS is still generating; stop typing only at DONE.
+            if suppress_text:
+                if not keep_typing:
+                    self._stop_typing(chat_id)
                 leftover = self._tool_messages.pop(chat_id, None)
                 if leftover is not None:
                     try:
@@ -482,7 +495,11 @@ class DiscordChannel(BaseChannel):
                 if not keep_typing:
                     self._stop_live_streaming(chat_id)
                     self._stop_typing(chat_id)
-                live_msg = self._live_messages.pop(chat_id, None)
+                    live_msg = self._live_messages.pop(chat_id, None)
+                else:
+                    # keep_typing: don't pop — live loop reuses the same message for the
+                    # final answer, replacing intermediate text in-place.
+                    live_msg = self._live_messages.get(chat_id)
                 if buffered.strip() and discord_ch is not None:
                     if live_msg is not None:
                         try:
@@ -507,13 +524,18 @@ class DiscordChannel(BaseChannel):
                     for i, chunk in enumerate(split_message(buffered)):
                         try:
                             if i == 0 and reference is not None:
-                                await discord_ch.send(chunk, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
+                                sent = await discord_ch.send(chunk, reference=reference)  # type: ignore[reportCallIssue,reportArgumentType]
                             else:
-                                await discord_ch.send(chunk)
+                                sent = await discord_ch.send(chunk)
+                            if keep_typing:
+                                self._intermediate_messages.setdefault(chat_id, []).append(sent)
                         except Exception:
                             logger.exception("DiscordChannel: send failed (end)")
                 if keep_typing:
                     self._buffers[chat_id] = ""
+
+        elif phase == StreamPhase.DONE:
+            self._stop_typing(chat_id)
 
         elif phase == StreamPhase.ERROR:
             self._stop_typing(chat_id)

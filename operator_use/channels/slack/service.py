@@ -85,6 +85,7 @@ class SlackChannel(BaseChannel):
         self._prev_tool_ts: dict[str, str] = {}     # chat_id → tool-status ts from previous failed attempt
         self._thinking_buffers: dict[str, str] = {} # chat_id → accumulated thinking text
         self._thinking_tasks: dict[str, asyncio.Task] = {}  # chat_id → debounced thinking-stream task
+        self._intermediate_ts: dict[str, list[str]] = {}    # chat_id → non-streaming intermediate message timestamps to delete on final answer
 
     @property
     def channel_id(self) -> str:
@@ -342,6 +343,7 @@ class SlackChannel(BaseChannel):
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
             self._thinking_buffers.pop(chat_id, None)
+            self._intermediate_ts.pop(chat_id, None)
             self._stop_thinking_stream(chat_id)
             stale = self._tool_ts_map.pop(chat_id, None)
             if stale is not None:
@@ -414,6 +416,14 @@ class SlackChannel(BaseChannel):
                         await client.chat_delete(channel=slack_channel_id, ts=existing_ts)
                     except Exception:
                         pass
+                # First text chunk after tool calls: delete non-streaming intermediate
+                # messages. In streaming mode the live loop reuses the same message slot.
+                for ts in self._intermediate_ts.pop(chat_id, []):
+                    if client is not None:
+                        try:
+                            await client.chat_delete(channel=slack_channel_id, ts=ts)
+                        except Exception:
+                            pass
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
@@ -425,7 +435,8 @@ class SlackChannel(BaseChannel):
             suppress_text = metadata.get('suppress_text', False)
 
             # TTS will deliver audio — discard buffered text and do cleanup only.
-            if suppress_text and not keep_typing:
+            # keep_typing=True means TTS is still generating; only clean up, don't short-exit.
+            if suppress_text:
                 leftover = self._tool_ts_map.pop(chat_id, None)
                 if leftover is not None and client is not None:
                     try:
@@ -453,7 +464,11 @@ class SlackChannel(BaseChannel):
             if self._streaming:
                 if not keep_typing:
                     self._stop_live_streaming(chat_id)
-                live_ts = self._live_ts_map.pop(chat_id, None)
+                    live_ts = self._live_ts_map.pop(chat_id, None)
+                else:
+                    # keep_typing: don't pop — live loop reuses the same message for the
+                    # final answer, replacing intermediate text in-place.
+                    live_ts = self._live_ts_map.get(chat_id)
                 if buffered.strip():
                     if live_ts is not None and client is not None:
                         try:
@@ -472,7 +487,20 @@ class SlackChannel(BaseChannel):
             else:
                 if buffered.strip():
                     for chunk in split_message(buffered):
-                        await _post(markdown_to_slack_mrkdwn(chunk))
+                        if client is not None:
+                            try:
+                                resp = await client.chat_postMessage(
+                                    channel=slack_channel_id,
+                                    text=markdown_to_slack_mrkdwn(chunk),
+                                    thread_ts=thread_ts,
+                                )
+                                if keep_typing and resp.get('ok') and resp.get('ts'):
+                                    self._intermediate_ts.setdefault(chat_id, []).append(resp['ts'])
+                            except Exception:
+                                logger.exception("SlackChannel: chat_postMessage failed (end)")
+
+        elif phase == StreamPhase.DONE:
+            pass  # Slack has no persistent typing indicator; reserved for future cleanup
 
         elif phase == StreamPhase.ERROR:
             retry_flag = metadata.get('retry', False)

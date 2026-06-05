@@ -8,7 +8,7 @@ from operator_use.channels.shutdown import quiet_library_logging
 from operator_use.channels.shared import build_retry_label, format_thinking_label
 from operator_use.gateway.types import BaseChannel
 from operator_use.bus.types import IncomingMessage, OutgoingMessage, StreamPhase, TextPart, AudioPart, FilePart, ImagePart, text_from_parts
-from operator_use.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, markdown_to_telegram_html, split_message
+from operator_use.channels.telegram.utils import _MEDIA_DIR, audio_mime_ext, markdown_to_telegram_html, split_message, to_ogg_voice
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,7 @@ class TelegramChannel(BaseChannel):
         self._thinking_tasks: dict[str, asyncio.Task] = {}  # chat_id → debounced thinking-stream task
         self._live_send_tasks: dict[str, asyncio.Task] = {}  # chat_id → in-flight first send_message task
         self._committed_text: dict[str, str] = {}  # chat_id → text committed before a tool call (keep_typing END)
+        self._intermediate_msg_ids: dict[str, list[int]] = {}  # chat_id → non-streaming intermediate message IDs to delete on final answer
 
     @property
     def channel_id(self) -> str:
@@ -345,6 +346,7 @@ class TelegramChannel(BaseChannel):
         if phase == StreamPhase.START:
             self._buffers[chat_id] = ""
             self._committed_text.pop(chat_id, None)
+            self._intermediate_msg_ids.pop(chat_id, None)
             self._thinking_buffers.pop(chat_id, None)
             self._stop_thinking_stream(chat_id)
             self._live_send_tasks.pop(chat_id, None)
@@ -442,6 +444,17 @@ class TelegramChannel(BaseChannel):
                         await bot.delete_message(int(chat_id), existing_id)
                     except Exception:
                         pass
+                # First text chunk after tool calls: discard pre-tool narration so the
+                # final answer stands alone. In streaming mode clearing _committed_text
+                # causes the live loop to rewrite the message with only the new text.
+                # In non-streaming mode, delete the intermediate messages already sent.
+                if chat_id in self._committed_text:
+                    self._committed_text.pop(chat_id)
+                for mid in self._intermediate_msg_ids.pop(chat_id, []):
+                    try:
+                        await bot.delete_message(int(chat_id), mid)
+                    except Exception:
+                        pass
                 text = text_from_parts(msg.parts)
                 self._buffers[chat_id] = self._buffers.get(chat_id, "") + text
 
@@ -455,8 +468,10 @@ class TelegramChannel(BaseChannel):
             suppress_text = metadata.get('suppress_text', False)
 
             # TTS will deliver audio — discard the buffered text and do cleanup only.
-            if suppress_text and not keep_typing:
-                self._stop_typing(chat_id)
+            # keep_typing=True means TTS is still generating; stop typing only at DONE.
+            if suppress_text:
+                if not keep_typing:
+                    self._stop_typing(chat_id)
                 leftover = self._tool_msg_ids.pop(chat_id, None)
                 if leftover is not None:
                     try:
@@ -555,11 +570,15 @@ class TelegramChannel(BaseChannel):
                 if buffered.strip():
                     for chunk in split_message(buffered):
                         try:
-                            await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
+                            sent = await bot.send_message(int(chat_id), markdown_to_telegram_html(chunk), parse_mode="HTML", reply_parameters=reply_params)
+                            if keep_typing:
+                                self._intermediate_msg_ids.setdefault(chat_id, []).append(sent.message_id)
                         except Exception:
                             logger.exception("TelegramChannel: send_message failed (end)")
                             try:
-                                await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
+                                sent = await bot.send_message(int(chat_id), chunk, reply_parameters=reply_params)
+                                if keep_typing:
+                                    self._intermediate_msg_ids.setdefault(chat_id, []).append(sent.message_id)
                             except Exception:
                                 logger.exception("TelegramChannel: send_message fallback failed (end)")
                 if keep_typing:
@@ -624,6 +643,9 @@ class TelegramChannel(BaseChannel):
                 except Exception:
                     logger.exception("TelegramChannel: send_message failed (error)")
 
+        elif phase == StreamPhase.DONE:
+            self._stop_typing(chat_id)
+
         elif phase is None:
             kind = metadata.get('kind')
             if kind == 'react':
@@ -664,12 +686,9 @@ class TelegramChannel(BaseChannel):
                 match p:
                     case AudioPart(audio=audio):
                         try:
-                            audio_path = Path(audio)
+                            audio_path = to_ogg_voice(Path(audio))
                             with open(audio_path, 'rb') as f:
-                                if audio_path.suffix.lower() == '.ogg':
-                                    await bot.send_voice(int(chat_id), InputFile(f, filename='voice.ogg'), reply_parameters=reply_params)
-                                else:
-                                    await bot.send_audio(int(chat_id), InputFile(f, filename=audio_path.name), reply_parameters=reply_params)
+                                await bot.send_voice(int(chat_id), InputFile(f, filename='voice.ogg'), reply_parameters=reply_params)
                         except Exception:
                             logger.exception("TelegramChannel: send audio failed for %r", audio)
                     case FilePart(path=fp):

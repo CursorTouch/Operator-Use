@@ -77,8 +77,11 @@ async def _on_message_receive(event) -> object:
             any_failed = True
             continue
         try:
-            audio_bytes = audio_path.read_bytes()
-            fmt = _mime_to_format(p.mime_type)
+            from operator_use.inference.api.audio.utils import to_wav_stt
+            import asyncio
+            wav_path = await asyncio.get_event_loop().run_in_executor(None, to_wav_stt, audio_path)
+            audio_bytes = wav_path.read_bytes()
+            fmt = AudioFormat.WAV if wav_path.suffix.lower() == '.wav' else _mime_to_format(p.mime_type)
             llm = AudioLLM(model_id, provider=provider)
             context = STTContext(audio=audio_bytes, format=fmt, language=language)
             result = await llm.transcribe(context)

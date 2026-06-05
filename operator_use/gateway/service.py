@@ -634,11 +634,14 @@ class Gateway:
                                     stream_phase=StreamPhase.CHUNK,
                                     metadata={'kind': 'text'},
                                 ))
+                    if m.stop_reason == StopReason.ToolCalls:
+                        response_parts.clear()
                     meta: dict = {'origin_message_id': message_id} if message_id else {}
                     if m.stop_reason not in (None, StopReason.Stop):
                         meta['keep_typing'] = True
                     if tts_will_fire and m.stop_reason == StopReason.Stop:
                         meta['suppress_text'] = True
+                        meta['keep_typing'] = True  # hold indicator through TTS generation
                     out = OutgoingMessage(
                         channel=channel_id,
                         chat_id=chat_id,

@@ -7,6 +7,35 @@ _TELEGRAM_MSG_LIMIT = 4096
 _MEDIA_DIR = Path.home() / '.operator' / 'media'
 
 
+def to_ogg_voice(src: Path) -> Path:
+    """Convert audio to OGG/Opus so Telegram shows a waveform (send_voice requires it).
+
+    Uses PyAV (bundled ffmpeg libs) — no system ffmpeg needed. Falls back to
+    the original file on any failure so audio is still delivered, just without
+    the spectrogram visualisation.
+    """
+    if src.suffix.lower() == '.ogg':
+        return src
+    dst = src.with_suffix('.ogg')
+    try:
+        import av  # type: ignore[import-untyped]
+        with av.open(str(src)) as inp:
+            with av.open(str(dst), 'w', format='ogg') as out:
+                out_stream = out.add_stream('libopus', rate=48000)
+                out_stream.bit_rate = 64_000
+                for frame in inp.decode(audio=0):
+                    frame.pts = None
+                    for packet in out_stream.encode(frame):
+                        out.mux(packet)
+                for packet in out_stream.encode(None):
+                    out.mux(packet)
+        if dst.exists() and dst.stat().st_size > 0:
+            return dst
+    except Exception:
+        pass
+    return src
+
+
 def audio_mime_ext(mime_type: str | None) -> str:
     """Map audio MIME type to a file extension."""
     if not mime_type:
