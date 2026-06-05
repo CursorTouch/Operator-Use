@@ -127,7 +127,7 @@ def _settle_frame(fh: int, label: str, answer: str) -> None:
     """Replace the interactive frame with a settled answered line."""
     _up(fh)
     _clrln()
-    _out(f"  {_SC}◇{_RST} {_PC}{_BOLD}{label}{_RST}  {_MC}{answer}{_RST}\n")
+    _out(f"{_SC}◇{_RST} {_PC}{_BOLD}{label}{_RST}  {_MC}{answer}{_RST}\n")
     for _ in range(fh - 1):
         _clrln()
         _out("\n")
@@ -165,21 +165,21 @@ def select(label: str, choices: list[str]) -> str:
         if not first:
             _up(fh)
         _clrln()
-        _out(f"  {_SC}{_BOLD}◆{_RST} {_PC}{_BOLD}{label}{_RST}\n")
+        _out(f"{_SC}{_BOLD}◆{_RST} {_PC}{_BOLD}{label}{_RST}\n")
         for i in range(visible):
             idx = offset + i
             _clrln()
             if idx == cursor:
-                _out(f"  {_SC}{_BOLD}◉ {choices[idx]}{_RST}\n")
+                _out(f"{_SC}{_BOLD}◉ {choices[idx]}{_RST}\n")
             else:
-                _out(f"  {_DIM}○{_RST} {_MC}{choices[idx]}{_RST}\n")
+                _out(f"{_DIM}○{_RST} {_MC}{choices[idx]}{_RST}\n")
         if scrollable:
             _clrln()
             above, below = offset, n - offset - visible
             parts: list[str] = []
             if above: parts.append(f"↑{above}")
             if below: parts.append(f"↓{below}")
-            _out(f"  {_DIM}{'  '.join(parts)}{_RST}\n")
+            _out(f"{_DIM}{'  '.join(parts)}{_RST}\n")
 
     try:
         _draw(first=True)
@@ -229,7 +229,7 @@ def text_input(label: str, is_password: bool = False, default: str = "") -> str:
         if not first:
             _up(fh)
         _clrln()
-        _out(f"  {_SC}{_BOLD}◆{_RST} {_PC}{_BOLD}{label}{_RST}\n")
+        _out(f"{_SC}{_BOLD}◆{_RST} {_PC}{_BOLD}{label}{_RST}\n")
         _clrln()
         raw = "".join(chars)
         disp = "*" * len(raw) if is_password else raw
@@ -237,7 +237,7 @@ def text_input(label: str, is_password: bool = False, default: str = "") -> str:
             d = disp[:pos] + f"{_REV}{disp[pos]}{_RST}" + disp[pos + 1:]
         else:
             d = disp + f"{_REV} {_RST}"
-        _out(f"  {_MC}›{_RST} {d}\n")
+        _out(f"› {d}\n")
 
     try:
         _draw(first=True)
@@ -283,11 +283,11 @@ def confirm(label: str, default: bool = True) -> bool:
         if not first:
             _up(fh)
         _clrln()
-        _out(f"  {_SC}{_BOLD}◆{_RST} {_PC}{_BOLD}{label}{_RST}\n")
+        _out(f"{_SC}{_BOLD}◆{_RST} {_PC}{_BOLD}{label}{_RST}\n")
         _clrln()
         yes = f"{_SC}{_BOLD}Yes{_RST}" if value else f"{_DIM}Yes{_RST}"
         no  = f"{_SC}{_BOLD}No{_RST}"  if not value else f"{_DIM}No{_RST}"
-        _out(f"  {yes}  {no}  {_DIM}(← → or y/n · Enter to confirm){_RST}\n")
+        _out(f"{yes}  {no}  {_DIM}(← → or y/n · Enter to confirm){_RST}\n")
 
     try:
         _draw(first=True)
@@ -870,7 +870,7 @@ def run_onboard() -> None:
             prov_hint  = front.get("provider") or "not set"
             model_hint = front.get("model")    or "not set"
             console.print("│")
-            console.print(f"  [bold {SECONDARY}]◇[/bold {SECONDARY}] [bold {PRIMARY}]{name}[/bold {PRIMARY}]  "
+            console.print(f"[bold {SECONDARY}]◇[/bold {SECONDARY}] [bold {PRIMARY}]{name}[/bold {PRIMARY}]  "
                           f"[dim]{prov_hint} / {model_hint}[/dim]")
 
             done = False
@@ -924,7 +924,7 @@ def run_onboard() -> None:
             try:
                 if step == 0:
                     console.print("│")
-                    console.print(f"  [bold {SECONDARY}]◆[/bold {SECONDARY}]  [bold {PRIMARY}]Name[/bold {PRIMARY}]")
+                    console.print(f"[bold {SECONDARY}]◆[/bold {SECONDARY}]  [bold {PRIMARY}]Name[/bold {PRIMARY}]")
                     console.print(f"│  [dim]Short identifier, e.g. coder, assistant, work.[/dim]")
                     raw = _slugify(text_input("Agent name:", default=na_name))
                     if raw in _RESERVED_NAMES or raw.startswith("ephemeral-"):
@@ -938,14 +938,14 @@ def run_onboard() -> None:
 
                 elif step == 1:
                     console.print("│")
-                    console.print(f"  [bold {SECONDARY}]◆[/bold {SECONDARY}]  [bold {PRIMARY}]Description[/bold {PRIMARY}]")
+                    console.print(f"[bold {SECONDARY}]◆[/bold {SECONDARY}]  [bold {PRIMARY}]Description[/bold {PRIMARY}]")
                     console.print(f"│  [dim]One sentence describing this agent's role (optional).[/dim]")
                     na_desc = text_input("Description:", default=na_desc)
                     step += 1
 
                 elif step == 2:
                     console.print("│")
-                    console.print(f"  [bold {SECONDARY}]◆[/bold {SECONDARY}]  [bold {PRIMARY}]Language model[/bold {PRIMARY}]")
+                    console.print(f"[bold {SECONDARY}]◆[/bold {SECONDARY}]  [bold {PRIMARY}]Language model[/bold {PRIMARY}]")
                     console.print(f"│  [dim]Pick the AI provider you have access to.[/dim]")
                     na_chosen_name = select("Provider:", [p[1] for p in _PROVIDERS])
                     na_prov_id, _, na_needs_key, na_oauth_cmd = next(
@@ -962,7 +962,7 @@ def run_onboard() -> None:
 
                 elif step == 4:
                     console.print("│")
-                    console.print(f"  [bold {SECONDARY}]◆[/bold {SECONDARY}]  [bold {PRIMARY}]Credentials[/bold {PRIMARY}]")
+                    console.print(f"[bold {SECONDARY}]◆[/bold {SECONDARY}]  [bold {PRIMARY}]Credentials[/bold {PRIMARY}]")
                     if na_needs_key:
                         ep = _load_json(providers_path)
                         if ep.get(na_prov_id, {}).get("api_key"):
@@ -982,7 +982,7 @@ def run_onboard() -> None:
                 elif step == 5:
                     profile_dir = profiles_dir / na_name  # noqa: F841
                     console.print("│")
-                    console.print(f"  [bold {SECONDARY}]◇[/bold {SECONDARY}] [bold {PRIMARY}]Review[/bold {PRIMARY}]")
+                    console.print(f"[bold {SECONDARY}]◇[/bold {SECONDARY}] [bold {PRIMARY}]Review[/bold {PRIMARY}]")
                     console.print("│")
                     console.print(f"│  [dim]name    [/dim]  [{SECONDARY}]{na_name}[/{SECONDARY}]")
                     if na_desc:
