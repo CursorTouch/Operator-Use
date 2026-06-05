@@ -8,9 +8,18 @@ from pathlib import Path
 
 from operator_use.inference.provider.registry import TextProviderRegistry
 from operator_use.inference.provider.oauth import OAuthLoginCallbacks
+from operator_use.inference.provider.oauth.anthropic_claude_code import read_cc_keychain_credential
+from operator_use.inference.provider.oauth.openai_codex import read_codex_file_credential
+from operator_use.inference.provider.oauth.google_antigravity import read_antigravity_file_credential
 from operator_use.settings.paths import get_providers_auth_path
 from operator_use.auth.types import AuthCredential, AuthStatus, OAuthCredential, APICredential, AuthType, LockResult
 from operator_use.auth.storage import AuthStorage, FileAuthStorage, InMemoryAuthStorage
+
+_NATIVE_READERS: dict[str, object] = {
+    "anthropic-claude-code": read_cc_keychain_credential,
+    "openai-codex": read_codex_file_credential,
+    "google-antigravity": read_antigravity_file_credential,
+}
 
 
 _cmd_cache: dict[str, str] = {}
@@ -219,26 +228,50 @@ class ProviderAuthManager:
         self._errors.clear()
         return drained
 
+    def _try_native_import(self, provider: str) -> OAuthCredential | None:
+        reader = _NATIVE_READERS.get(provider)
+        if reader is None:
+            return None
+        try:
+            return reader()  # type: ignore[call-arg]
+        except Exception:
+            return None
+
     async def get_api_key(self, provider: str) -> str | None:
         if provider in self.runtime_overrides:
             return self.runtime_overrides[provider]
 
-        credential = self.get(provider)
+        credential: AuthCredential | None = self.get(provider)
+        oauth_provider = self.registry.get_oauth_provider(provider=provider)
 
-        match credential:
-            case APICredential():
-                return _resolve_key(credential.key)
-            case OAuthCredential():
-                oauth_provider = self.registry.get_oauth_provider(provider=provider)
-                if not oauth_provider:
-                    return None
-                if oauth_provider.is_expired(credential=credential):
-                    refreshed = await self._refresh_oauth_token_with_lock(provider=provider)
-                    if refreshed:
-                        credential = refreshed
-                    else:
-                        return None
-                return oauth_provider.get_api_key(credential=credential)
+        # Fast path: providers.json has a valid non-expired credential.
+        if credential is not None:
+            match credential:
+                case APICredential():
+                    return _resolve_key(credential.key)
+                case OAuthCredential() if oauth_provider and not oauth_provider.is_expired(credential):
+                    return oauth_provider.get_api_key(credential)
+
+        # providers.json is empty or expired — try native store as rescue.
+        native = self._try_native_import(provider)
+        if isinstance(native, OAuthCredential) and oauth_provider:
+            if not oauth_provider.is_expired(native):
+                # Native has a fresh token: write to providers.json and use it.
+                self.set(provider, native)
+                return oauth_provider.get_api_key(native)
+            elif credential is None:
+                # Nothing stored at all; seed providers.json with native so
+                # the refresh cycle has a refresh token to work with.
+                self.set(provider, native)
+                credential = native
+
+        # credential (from providers.json or seeded from native) may be
+        # expired but holds a refresh token — try to refresh it.
+        if isinstance(credential, OAuthCredential) and oauth_provider:
+            refreshed = await self._refresh_oauth_token_with_lock(provider=provider)
+            if refreshed:
+                return oauth_provider.get_api_key(refreshed)
+            return None
 
         return _get_env_api_key(provider)
 

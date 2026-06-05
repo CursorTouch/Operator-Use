@@ -13,6 +13,7 @@ import ssl
 import time
 import urllib.error
 import urllib.parse
+from pathlib import Path
 import urllib.request
 from typing import Optional
 
@@ -128,8 +129,38 @@ def _parse_token_response(data: dict) -> tuple[str, str, int]:
 
 
 
+_ANTIGRAVITY_AUTH_FILE = Path.home() / ".config" / "operator" / "antigravity_auth.json"
+
+
+def read_antigravity_file_credential() -> OAuthCredential | None:
+    """Read the Antigravity credential from ~/.config/operator/antigravity_auth.json, if available."""
+    try:
+        data = json.loads(_ANTIGRAVITY_AUTH_FILE.read_text(encoding="utf-8"))
+        access = data.get("access_token", "")
+        refresh = data.get("refresh_token", "")
+        expires_at = data.get("expires_at", 0)
+        if not refresh:
+            return None
+        # expires_at is Unix seconds (float); OAuthCredential.expires is ms
+        expires_ms = int(float(expires_at) * 1000)
+        extra = {}
+        if project_id := data.get("project_id"):
+            extra["project_id"] = project_id
+        return OAuthCredential(access=access, refresh=refresh, expires=expires_ms, extra=extra)
+    except Exception:
+        return None
+
+
 async def login_antigravity(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
-    """Run the full Google Antigravity OAuth login flow and return a fresh OAuthCredential."""
+    """Run the full Google Antigravity OAuth login flow and return a fresh OAuthCredential.
+
+    If a credential exists at ~/.config/operator/antigravity_auth.json it is
+    returned directly without opening a browser.
+    """
+    file_cred = read_antigravity_file_credential()
+    if file_cred is not None:
+        return file_cred
+
     state = secrets.token_urlsafe(32)
     url = _build_authorization_url(state)
 

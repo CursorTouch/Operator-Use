@@ -9,12 +9,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import secrets
 import ssl
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Optional
 
 import certifi
@@ -175,11 +177,49 @@ def _parse_token_response(data: dict) -> tuple[str, str, int]:
 
 
 
+def read_codex_file_credential() -> OAuthCredential | None:
+    """Read the OpenAI Codex CLI credential from ~/.codex/auth.json, if available."""
+    auth_path = Path.home() / ".codex" / "auth.json"
+    try:
+        data = json.loads(auth_path.read_text(encoding="utf-8"))
+        if data.get("auth_mode") != "chatgpt":
+            return None
+        tokens = data.get("tokens")
+        if not isinstance(tokens, dict):
+            return None
+        access = tokens.get("access_token", "")
+        refresh = tokens.get("refresh_token", "")
+        account_id = tokens.get("account_id", "")
+        if not refresh:
+            return None
+        expires_ms = 0
+        if access:
+            payload = _decode_jwt(access)
+            if isinstance(payload, dict) and "exp" in payload:
+                expires_ms = int(payload["exp"]) * 1000
+        return OAuthCredential(
+            access=access,
+            refresh=refresh,
+            expires=expires_ms,
+            extra={"account_id": account_id} if account_id else {},
+        )
+    except Exception:
+        return None
+
+
 async def login_openai_codex(
     callbacks: OAuthLoginCallbacks,
     originator: str = "program",
 ) -> OAuthCredential:
-    """Run the full OpenAI PKCE login flow and return a fresh OAuthCredential."""
+    """Run the full OpenAI PKCE login flow and return a fresh OAuthCredential.
+
+    If a valid Codex CLI credential exists at ~/.codex/auth.json it is returned
+    directly without opening a browser.
+    """
+    file_cred = read_codex_file_credential()
+    if file_cred is not None:
+        return file_cred
+
     verifier, challenge = generate_pkce()
     state = _create_state()
     url = _build_authorization_url(challenge, state, originator)

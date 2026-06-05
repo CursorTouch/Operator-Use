@@ -10,6 +10,8 @@ import asyncio
 import base64
 import json
 import ssl
+import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -130,8 +132,71 @@ def _parse_token_response(data: dict) -> tuple[str, str, int]:
 
 
 
+def _read_cc_raw_secret() -> str | None:
+    """Return the raw JSON string from the OS credential store, or None if unavailable."""
+    try:
+        if sys.platform == "darwin":
+            r = subprocess.run(
+                ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+                capture_output=True, text=True, timeout=5,
+            )
+            return r.stdout.strip() if r.returncode == 0 else None
+
+        if sys.platform == "linux":
+            r = subprocess.run(
+                ["secret-tool", "lookup", "service", "Claude Code-credentials"],
+                capture_output=True, text=True, timeout=5,
+            )
+            return r.stdout.strip() if r.returncode == 0 else None
+
+        if sys.platform == "win32":
+            # PowerShell reads from Windows Credential Manager
+            ps = (
+                "[void][Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime];"
+                "$v=New-Object Windows.Security.Credentials.PasswordVault;"
+                "$c=$v.FindAllByResource('Claude Code-credentials')|Select-Object -First 1;"
+                "$c.RetrievePassword(); $c.Password"
+            )
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+                capture_output=True, text=True, timeout=10,
+            )
+            return r.stdout.strip() if r.returncode == 0 else None
+    except Exception:
+        pass
+    return None
+
+
+def read_cc_keychain_credential() -> OAuthCredential | None:
+    """Read Claude Code's stored OAuth credential from the OS credential store."""
+    raw = _read_cc_raw_secret()
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        oauth = data.get("claudeAiOauth")
+        if not isinstance(oauth, dict):
+            return None
+        access = oauth.get("accessToken", "")
+        refresh = oauth.get("refreshToken", "")
+        expires = oauth.get("expiresAt", 0)
+        if not refresh:
+            return None
+        return OAuthCredential(access=access, refresh=refresh, expires=int(expires))
+    except Exception:
+        return None
+
+
 async def login_anthropic(callbacks: OAuthLoginCallbacks) -> OAuthCredential:
-    """Run the full Anthropic PKCE login flow and return a fresh OAuthCredential."""
+    """Run the full Anthropic PKCE login flow and return a fresh OAuthCredential.
+
+    On macOS, if a valid Claude Code credential is already stored in the system
+    Keychain, it is returned directly without opening a browser.
+    """
+    keychain_cred = read_cc_keychain_credential()
+    if keychain_cred is not None:
+        return keychain_cred
+
     verifier, challenge = generate_pkce()
     # The state is the verifier itself (matches the TS implementation)
     state = verifier
