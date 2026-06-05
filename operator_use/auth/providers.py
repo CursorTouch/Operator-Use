@@ -1,7 +1,9 @@
 from __future__ import annotations
 import builtins
 import os
+import re
 import json
+import subprocess
 from pathlib import Path
 
 from operator_use.inference.provider.registry import TextProviderRegistry
@@ -9,6 +11,46 @@ from operator_use.inference.provider.oauth import OAuthLoginCallbacks
 from operator_use.settings.paths import get_providers_auth_path
 from operator_use.auth.types import AuthCredential, AuthStatus, OAuthCredential, APICredential, AuthType, LockResult
 from operator_use.auth.storage import AuthStorage, FileAuthStorage, InMemoryAuthStorage
+
+
+_cmd_cache: dict[str, str] = {}
+
+_VAR_RE = re.compile(r'\$(\$|!|\{([^}]+)\}|([A-Za-z_][A-Za-z0-9_]*))')
+
+
+def _resolve_key(key: str) -> str | None:
+    """Resolve an API key value supporting !cmd execution and $VAR interpolation."""
+    if key.startswith("!"):
+        cmd = key[1:]
+        if cmd not in _cmd_cache:
+            try:
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+                _cmd_cache[cmd] = result.stdout.strip()
+            except Exception:
+                return None
+        val = _cmd_cache[cmd]
+        return val or None
+
+    if "$" not in key:
+        return key
+
+    unresolved = False
+
+    def _replace(m: re.Match) -> str:
+        nonlocal unresolved
+        if m.group(1) == "$":
+            return "$"
+        if m.group(1) == "!":
+            return "!"
+        var_name = m.group(2) or m.group(3)
+        val = os.environ.get(var_name)
+        if val is None:
+            unresolved = True
+            return ""
+        return val
+
+    resolved = _VAR_RE.sub(_replace, key)
+    return None if unresolved else resolved
 
 
 def _env_api_key_names(provider: str) -> list[str]:
@@ -185,7 +227,7 @@ class ProviderAuthManager:
 
         match credential:
             case APICredential():
-                return credential.key
+                return _resolve_key(credential.key)
             case OAuthCredential():
                 oauth_provider = self.registry.get_oauth_provider(provider=provider)
                 if not oauth_provider:
