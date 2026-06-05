@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from operator_use.engine.service import Engine
     from operator_use.agent.service import Agent
     from operator_use.session.manager import SessionManager
+    from operator_use.session.registry import SessionRegistry
     from operator_use.resource.loader import ResourceLoader
     from operator_use.extension.runtime import ExtensionRuntime
     from operator_use.hooks.service import Hooks
@@ -160,6 +161,7 @@ class ToolContext:
     peer_session_manager: PeerSessionManager | None = None
     peer_agents: dict[str, Agent] | None = None
     team_manager: TeamManager | None = None
+    session_registry: SessionRegistry | None = None
     spawn_depth: int = 0
 
 

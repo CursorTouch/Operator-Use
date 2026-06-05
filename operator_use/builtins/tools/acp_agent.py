@@ -323,6 +323,10 @@ class ACPAgentTool(Tool):
         try:
             result_text, new_session_id = await run_task
             self._session_manager.save(config.name, new_session_id)
+            self._register_acp_session(
+                caller_agent, config, new_session_id,
+                task=task, status='done', result=result_text,
+            )
             return ToolResult.ok(inv_id, result_text)
         except asyncio.CancelledError:
             return ToolResult.error(inv_id, f"Agent '{config.name}' run cancelled.")
@@ -351,10 +355,15 @@ class ACPAgentTool(Tool):
                 bus=bus, channel=channel, chat_id=chat_id,
             )
             self._session_manager.save(config.name, session_id)
+            self._register_acp_session(
+                caller_agent, config, session_id,
+                task=initial_task or '', status='running', result=None,
+            )
             body = (
                 f"Session '{session_id}' started with agent '{config.name}'.\n\n"
                 + (f"{result_text}\n\n" if result_text else "")
-                + f"Use action='send', agent='{config.name}', session_id='{session_id}' to continue."
+                + f"Use action='send', agent='{config.name}', session_id='{session_id}' to continue.\n"
+                + f"Or use sessions_send(session_key='{session_id}', message=...) to follow up."
             )
             return ToolResult.ok(inv_id, body)
         except Exception as exc:
@@ -396,6 +405,10 @@ class ACPAgentTool(Tool):
                 self._session_manager.save(config.name, new_session_id)
                 record['status'] = 'done'
                 record['result'] = result_text
+                self._register_acp_session(
+                    caller_agent, config, new_session_id,
+                    task=task, status='done', result=result_text,
+                )
             except asyncio.CancelledError:
                 record['status'] = 'cancelled'
                 record['finished_at'] = datetime.now()
@@ -497,6 +510,41 @@ class ACPAgentTool(Tool):
         elif caller_agent is not None:
             from operator_use.message.types import UserMessage
             await caller_agent._engine.follow_up(UserMessage.text(content))
+
+    # ── Sub-session registry helpers ──────────────────────────────────────────
+
+    def _register_acp_session(
+        self,
+        caller_agent: Agent | None,
+        config: ACPAgentConfig,
+        session_id: str,
+        task: str,
+        status: str,
+        result: str | None,
+    ) -> None:
+        """Register or update an ACP session in the caller's sub-session registry."""
+        if caller_agent is None:
+            return
+        registry = getattr(caller_agent._engine.tool_context, 'session_registry', None)
+        if registry is None:
+            return
+        from operator_use.session.registry import SessionRecord
+        existing = registry.get(session_id)
+        if existing is None:
+            registry.register(SessionRecord(
+                key=session_id,
+                kind='acp',
+                agent=config.name,
+                label=config.name,
+                task=task,
+                status=status,
+                spawned_at=datetime.now(),
+                result=result,
+                _acp_config=config,
+            ))
+        else:
+            registry.update(session_id, status=status, result=result,
+                            finished_at=datetime.now() if status != 'running' else None)
 
     # ── List helpers ──────────────────────────────────────────────────────────
 

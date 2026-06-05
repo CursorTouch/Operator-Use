@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from operator_use.subagent.types import SubagentStatus
+from operator_use.subagent.types import SubagentStatus, SubagentRecord
 from operator_use.tool.types import Tool, ToolContext, ToolKind, ToolExecutionMode, ToolInvocation, ToolResult
 
 if TYPE_CHECKING:
@@ -204,6 +204,34 @@ class SubagentTool(Tool):
                 if depends_on:
                     msg += f"\nWaiting on: {', '.join(depends_on)}"
                 msg += '\nRunning in background — result will be injected automatically when done.'
+
+                # Register in sub-session registry for context injection and
+                # wire a completion listener to update status when done.
+                if context is not None:
+                    registry = getattr(context, 'session_registry', None)
+                    if registry is not None:
+                        from datetime import datetime
+                        from operator_use.session.registry import SessionRecord
+                        registry.register(SessionRecord(
+                            key=task_id,
+                            kind='subagent',
+                            agent=profile or 'fork',
+                            label=display,
+                            task=task,
+                            status='running',
+                            spawned_at=datetime.now(),
+                        ))
+
+                        async def _on_done(record: SubagentRecord, _reg=registry) -> None:
+                            _reg.update(
+                                record.task_id,
+                                status=record.status.value,
+                                result=record.result,
+                                finished_at=record.finished_at or datetime.now(),
+                            )
+
+                        manager.on_complete(task_id, _on_done)
+
                 return ToolResult(id=invocation.id, content=msg, terminate=True)
 
             case 'list':

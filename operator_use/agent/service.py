@@ -112,6 +112,14 @@ class Agent(ExtensionContext):
 
         self._guardrails: list[Guardrail] = []
         self._tool_whitelist: frozenset[str] | None = None
+
+        from operator_use.session.registry import SessionRegistry, ContextFrame
+        self._session_registry = SessionRegistry()
+        self._engine.tool_context.session_registry = self._session_registry
+        # Context stack for agent-driven session switching.
+        # _active_frame == None means the agent is in its own main session.
+        self._context_stack: list[ContextFrame] = []
+        self._active_frame: ContextFrame | None = None
         self._phase: AgentPhase = AgentPhase.IDLE
         self._rebooting: bool = False
         self._last_assistant_entry_id: str | None = None
@@ -194,6 +202,10 @@ class Agent(ExtensionContext):
         # memory store as a spurious (harness-prompt, review-output) turn pair.
         if tools is None or 'memory' in tools:
             child_engine.tool_context.memory_manager = parent_ctx.memory_manager
+
+        # Share the sub-session registry so child agents (e.g. background
+        # reviewers) can read it, though they should not register new sessions.
+        child_engine.tool_context.session_registry = parent_ctx.session_registry
 
         return child
 
@@ -685,6 +697,55 @@ class Agent(ExtensionContext):
         self._session_manager.leaf_id = parent_of_first
         persisted_ids.clear()
 
+    def _build_switched_context(self, frame) -> list[Any]:
+        """Build a synthetic message list from a registry record for a switched context."""
+        registry = self._engine.tool_context.session_registry
+        if registry is None or frame.registry_key is None:
+            return []
+        record = registry.get(frame.registry_key)
+        if record is None:
+            return []
+        msgs: list[Any] = []
+        if record.task:
+            msgs.append(UserMessage.text(f"[Delegated task — {record.kind}:{record.agent}]\n{record.task}"))
+        if record.result:
+            from operator_use.message.types import AssistantMessage
+            msgs.append(AssistantMessage.text(record.result))
+        return msgs
+
+    def _build_sub_session_context(self) -> str:
+        """Build the <sessions> prefix block — includes stack state and recent session list."""
+        registry = self._engine.tool_context.session_registry
+        lines: list[str] = []
+
+        # Show active context and stack when the agent has switched away from main.
+        if self._active_frame is not None:
+            lines.append(f"[ACTIVE CONTEXT: {self._active_frame.label}  key={self._active_frame.registry_key}]")
+            lines.append(f"You are operating inside a switched session context (stack depth: {len(self._context_stack)}).")
+            lines.append("Call session(action='back') to return to the previous context.")
+            if self._context_stack:
+                prev = self._context_stack[-1]
+                lines.append(f"Previous context: {prev.label}")
+            lines.append('')
+
+        if registry is None:
+            return '\n'.join(lines) if lines else ""
+
+        records = registry.list_recent(limit=8)
+        if not records and not lines:
+            return ""
+
+        if records:
+            _icon = {'running': '⏳', 'done': '✅', 'failed': '❌', 'cancelled': '🚫'}
+            for r in records:
+                icon = _icon.get(r.status, '?')
+                lines.append(f"{icon} [{r.kind}:{r.agent}]  key={r.key}  label={r.label!r}")
+                lines.append(f"   task: {r.task[:120]}")
+                if r.result:
+                    lines.append(f"   result: {r.result[:200]}")
+
+        return '\n'.join(lines)
+
     def _maybe_spawn_skill_review(self) -> None:
         """Spawn a background thread to review the conversation and update skills."""
         if not any(t.name == 'skill' for t in self._engine.state.tools):
@@ -795,10 +856,14 @@ class Agent(ExtensionContext):
             if isinstance(result, BeforeAgentStartEventResult) and result.system_prompt:
                 self._system_prompt = result.system_prompt
 
-        # Reconstruct message history from persisted session
-        session_ctx = self._session_manager.build_session_context()
-        base_messages = list(session_ctx.messages)
-        self._hydrate_todo_store(base_messages)
+        # Reconstruct message history — either from the main session or from a
+        # registry record when the agent has switched context via session(action='switch').
+        if self._active_frame is not None and self._active_frame.kind == 'registry':
+            base_messages = self._build_switched_context(self._active_frame)
+        else:
+            session_ctx = self._session_manager.build_session_context()
+            base_messages = list(session_ctx.messages)
+            self._hydrate_todo_store(base_messages)
 
         # context hook — extensions can replace the messages sent to the LLM
         context_results = await self._extensions.emit(
@@ -827,6 +892,9 @@ class Agent(ExtensionContext):
         now = datetime.now().astimezone()
         time_str = now.strftime("%A, %-d %B %Y at %-I:%M %p %Z")
         prefix = f"<memory>\n{memory_context}\n</memory>\n\n" if memory_context else ""
+        sub_session_ctx = self._build_sub_session_context()
+        if sub_session_ctx:
+            prefix += f"<sessions>\n{sub_session_ctx}\n</sessions>\n\n"
         prefix += f"Current time: {time_str}\n\n"
 
         # Runtime context — model, TTS/STT state
