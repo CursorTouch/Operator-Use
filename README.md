@@ -43,10 +43,11 @@ Runtime (session lifecycle, slash commands, channels)
         └── Knowledge         ← System prompt injection
 ```
 
-**Three-layer design:**
+**Four-layer design:**
 - **Engine** — raw LLM loop, tool execution, no session knowledge
-- **Agent** — persistence, retry, events, compaction scheduling
-- **Runtime** — session lifecycle, channels, slash commands, teams
+- **Agent** — turn orchestration, retry, compaction scheduling, extension event fan-out
+- **Runtime** — session lifecycle, slash-command dispatch, gateway/cron/subagent wiring
+- **Gateway** — channel adapters, async message bus, per-session agent routing
 
 ## Quick start
 
@@ -309,7 +310,7 @@ The `computer` tool controls the local desktop with platform-native accessibilit
 
 Platform support:
 - **macOS** — Accessibility API
-- **Linux** — AT-SPI / xdotool
+- **Linux** — not yet supported
 - **Windows** — UI Automation
 
 Like the browser tool, the computer tool injects a compact live state description into the LLM context each turn (focused app, window layout, etc.).
