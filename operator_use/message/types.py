@@ -251,6 +251,11 @@ class AssistantMessage(BaseMessage):
     stop_reason: StopReason = StopReason.Stop
     error: str = ""
 
+    @classmethod
+    def text(cls, content: str) -> 'AssistantMessage':
+        """Create an AssistantMessage with a single TextContent block."""
+        return cls(contents=[TextContent(content=content)])
+
     def text_content(self) -> str:
         """Concatenate all TextContent items.
 
