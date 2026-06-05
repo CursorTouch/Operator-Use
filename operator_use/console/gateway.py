@@ -36,19 +36,28 @@ class GatewayOptions:
     system_prompt: str | None = None
     prompt: str | None = None          # inject as first user message on startup
     session_file: Path | None = None   # open a specific session file (internal, used by reboot)
+    profile: object = None             # AgentProfile | None
 
 
 async def run_gateway_foreground(options: GatewayOptions) -> None:
     from operator_use.gateway.manager import GatewayManager
     from operator_use.runtime import Runtime, RuntimeConfig
+    from operator_use.agent.profile import AgentProfile
+
+    profile: AgentProfile | None = options.profile if isinstance(options.profile, AgentProfile) else None
+
+    # CLI --model/--provider override the profile; profile overrides the global default.
+    effective_model = options.model or (profile.model_id if profile else None) or "claude-sonnet-4-6"
+    effective_provider = options.provider or (profile.provider if profile else None)
 
     config = RuntimeConfig(
         cwd=options.cwd,
-        model_id=options.model or "claude-sonnet-4-6",
-        provider=options.provider,
+        model_id=effective_model,
+        provider=effective_provider,
         resume=options.resume,
         system_prompt=options.system_prompt,
         session_file=options.session_file,
+        profile=profile,
     )
     runtime = await Runtime.create(config)
     gateway_manager = GatewayManager(runtime)
