@@ -50,7 +50,7 @@ def cli(ctx: click.Context, cwd: str | None, profile: str | None, model: str | N
         cwd_path = Path(cwd).resolve() if cwd else Path.cwd()
         agent_profile = _load_profile(profile) if profile else None
         if use_repl:
-            ctx.invoke(repl, cwd=cwd, model=model, provider=provider, system_prompt=system_prompt, prompt=prompt, session_file=session_file)
+            ctx.invoke(repl, cwd=cwd, model=model, provider=provider, agent=profile, system_prompt=system_prompt, prompt=prompt, session_file=session_file)
         else:
             try:
                 asyncio.run(run_gateway_foreground(GatewayOptions(

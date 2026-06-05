@@ -362,10 +362,12 @@ _MODELS: dict[str, list[str]] = {
 }
 
 _CHANNEL_NOTES: dict[str, str] = {
-    "Telegram": "Create a bot via @BotFather on Telegram, then copy the token.",
-    "Discord":  "Create a bot at discord.com/developers and enable Message Content Intent.",
-    "Slack":    "Create a Slack app at api.slack.com (bot token starts xoxb-, app token xapp-).",
-    "Twitch":   "Provide a valid Twitch OAuth token, your bot's nick, and the channel to join.",
+    "Telegram":  "Create a bot via @BotFather on Telegram, then copy the token.",
+    "Discord":   "Create a bot at discord.com/developers and enable Message Content Intent.",
+    "Slack":     "Create a Slack app at api.slack.com (bot token starts xoxb-, app token xapp-).",
+    "Twitch":    "Provide a valid Twitch OAuth token, your bot's nick, and the channel to join.",
+    "Email":     "Use an app password (not your login password) for Gmail/Outlook IMAP+SMTP.",
+    "WebSocket": "Listens for WebSocket clients at the configured host:port (default 127.0.0.1:8765).",
 }
 
 _STT_PROVIDERS: dict[str, list[str]] = {
@@ -638,16 +640,23 @@ def _cfg_stt(profile_dir: Path) -> None:
 def _cfg_channels(profile_dir: Path) -> None:
     settings_path  = profile_dir / "settings.json"
     auth_path      = profile_dir / "auth" / "channels.json"
-    _CH_NAMES      = ["Telegram", "Discord", "Slack", "Twitch"]
+    _CH_NAMES      = ["Telegram", "Discord", "Slack", "Twitch", "Email", "WebSocket"]
 
     while True:
         s    = _load_json(settings_path).get("channels", {})
         auth = _load_json(auth_path)
 
         def _ch_state(ch: str) -> str:
-            configured = bool(auth.get(ch.lower()))
-            enabled    = s.get(ch.lower(), {}).get("enabled", False)
-            if not configured: return "not configured"
+            ch_id = ch.lower()
+            enabled = s.get(ch_id, {}).get("enabled", False)
+            if ch == "WebSocket":
+                return "on" if enabled else "off"
+            if ch == "Email":
+                configured = bool(auth.get(ch_id, {}).get("username") or s.get(ch_id, {}).get("imap_host"))
+                if not configured: return "not configured"
+            else:
+                configured = bool(auth.get(ch_id))
+                if not configured: return "not configured"
             return "on" if enabled else "off"
 
         choices = [f"{ch}  ({_ch_state(ch)})" for ch in _CH_NAMES] + [_DONE_LABEL]
@@ -668,23 +677,60 @@ def _cfg_channels(profile_dir: Path) -> None:
 
         # Per-channel settings menu
         while True:
-            cur_auth    = _load_json(auth_path).get(ch_id, {})
-            configured  = bool(cur_auth)
-            cur_enabled = _load_json(settings_path).get("channels", {}).get(ch_id, {}).get("enabled", False)
+            cs       = _load_json(settings_path).get("channels", {}).get(ch_id, {})
+            cur_auth = _load_json(auth_path).get(ch_id, {})
+            cur_enabled = cs.get("enabled", False)
 
-            ch_choices = [
-                f"Token     ({'stored' if configured else 'not set'})",
-                f"Enabled   ({_val(cur_enabled)})",
-                _DONE_LABEL,
-            ]
-            if ch_name == "Twitch":
-                cur_nick = _load_json(settings_path).get("channels", {}).get("twitch", {}).get("nick", "")
-                cur_chan = _load_json(settings_path).get("channels", {}).get("twitch", {}).get("channel_name", "")
+            if ch_name in ("Telegram", "Discord", "Slack"):
+                cur_thinking  = cs.get("show_thinking", False)
+                cur_allowfrom = ", ".join(cs.get("allow_from", []))
                 ch_choices = [
-                    f"Token     ({'stored' if configured else 'not set'})",
-                    f"Enabled   ({_val(cur_enabled)})",
-                    f"Nick      ({_val(cur_nick)})",
-                    f"Channel   ({_val(cur_chan)})",
+                    f"Token         ({'stored' if cur_auth else 'not set'})",
+                    f"Enabled       ({_val(cur_enabled)})",
+                    f"Show thinking ({_val(cur_thinking)})",
+                    f"Allow from    ({cur_allowfrom or 'all'})",
+                    _DONE_LABEL,
+                ]
+            elif ch_name == "Twitch":
+                cur_nick      = cs.get("nick", "")
+                cur_chan      = cs.get("channel_name", "")
+                cur_prefix    = cs.get("prefix", "!")
+                cur_allowfrom = ", ".join(cs.get("allow_from", []))
+                ch_choices = [
+                    f"Token         ({'stored' if cur_auth else 'not set'})",
+                    f"Enabled       ({_val(cur_enabled)})",
+                    f"Nick          ({_val(cur_nick)})",
+                    f"Channel       ({_val(cur_chan)})",
+                    f"Prefix        ({_val(cur_prefix)})",
+                    f"Allow from    ({cur_allowfrom or 'all'})",
+                    _DONE_LABEL,
+                ]
+            elif ch_name == "Email":
+                cur_imap_host = cs.get("imap_host", "")
+                cur_imap_port = cs.get("imap_port", 993)
+                cur_smtp_host = cs.get("smtp_host", "")
+                cur_smtp_port = cs.get("smtp_port", 587)
+                cur_interval  = cs.get("poll_interval", 30)
+                cur_allowfrom = ", ".join(cs.get("allow_from", []))
+                has_creds     = bool(cur_auth.get("username"))
+                ch_choices = [
+                    f"Credentials   ({'stored' if has_creds else 'not set'})",
+                    f"Enabled       ({_val(cur_enabled)})",
+                    f"IMAP host     ({_val(cur_imap_host)})",
+                    f"IMAP port     ({_val(cur_imap_port)})",
+                    f"SMTP host     ({_val(cur_smtp_host)})",
+                    f"SMTP port     ({_val(cur_smtp_port)})",
+                    f"Poll interval ({_val(cur_interval)}s)",
+                    f"Allow from    ({cur_allowfrom or 'all'})",
+                    _DONE_LABEL,
+                ]
+            else:  # WebSocket
+                cur_host = cs.get("host", "127.0.0.1")
+                cur_port = cs.get("port", 8765)
+                ch_choices = [
+                    f"Enabled  ({_val(cur_enabled)})",
+                    f"Host     ({_val(cur_host)})",
+                    f"Port     ({_val(cur_port)})",
                     _DONE_LABEL,
                 ]
 
@@ -699,43 +745,98 @@ def _cfg_channels(profile_dir: Path) -> None:
 
             ch_idx = ch_choices.index(ch_picked)
             try:
-                if ch_idx == 0:  # Token
-                    if ch_name == "Telegram":
-                        token = text_input("Bot token:", is_password=True)
-                        if token:
-                            a = _load_json(auth_path)
-                            a[ch_id] = {**a.get(ch_id, {}), "bot_token": token}
-                            _save_json(auth_path, a)
-                    elif ch_name == "Discord":
-                        token = text_input("Bot token:", is_password=True)
-                        if token:
-                            a = _load_json(auth_path)
-                            a[ch_id] = {**a.get(ch_id, {}), "bot_token": token}
-                            _save_json(auth_path, a)
-                    elif ch_name == "Slack":
-                        bt = text_input("Bot token (xoxb-...):", is_password=True)
-                        at = text_input("App token (xapp-...):", is_password=True)
-                        if bt or at:
-                            a = _load_json(auth_path)
-                            a[ch_id] = {**a.get(ch_id, {}), **({"bot_token": bt} if bt else {}), **({"app_token": at} if at else {})}
-                            _save_json(auth_path, a)
+                if ch_name == "Telegram" and ch_idx == 0:
+                    token = text_input("Bot token:", is_password=True)
+                    if token:
+                        a = _load_json(auth_path); a[ch_id] = {**a.get(ch_id, {}), "bot_token": token}; _save_json(auth_path, a)
+                elif ch_name == "Discord" and ch_idx == 0:
+                    token = text_input("Bot token:", is_password=True)
+                    if token:
+                        a = _load_json(auth_path); a[ch_id] = {**a.get(ch_id, {}), "bot_token": token}; _save_json(auth_path, a)
+                elif ch_name == "Slack" and ch_idx == 0:
+                    bt = text_input("Bot token (xoxb-...):", is_password=True)
+                    at = text_input("App token (xapp-...):", is_password=True)
+                    if bt or at:
+                        a = _load_json(auth_path)
+                        a[ch_id] = {**a.get(ch_id, {}), **({"bot_token": bt} if bt else {}), **({"app_token": at} if at else {})}
+                        _save_json(auth_path, a)
+                elif ch_name == "Twitch" and ch_idx == 0:
+                    token = text_input("OAuth token:", is_password=True)
+                    if token:
+                        a = _load_json(auth_path); a[ch_id] = {**a.get(ch_id, {}), "token": token}; _save_json(auth_path, a)
+                elif ch_name == "Email" and ch_idx == 0:
+                    user = text_input("Email address (username):")
+                    pw   = text_input("Password / app password:", is_password=True)
+                    if user or pw:
+                        a = _load_json(auth_path)
+                        a[ch_id] = {**a.get(ch_id, {}), **({"username": user} if user else {}), **({"password": pw} if pw else {})}
+                        _save_json(auth_path, a)
+
+                elif ch_name == "WebSocket":
+                    if ch_idx == 0:
+                        _patch_settings(settings_path, {"channels": {ch_id: {"enabled": confirm("Enable WebSocket?", default=cur_enabled)}}})
+                    elif ch_idx == 1:
+                        host = text_input("Host:", default=cur_host)
+                        if host.strip():
+                            _patch_settings(settings_path, {"channels": {ch_id: {"host": host.strip()}}})
+                    elif ch_idx == 2:
+                        raw = text_input("Port:", default=str(cur_port))
+                        try: _patch_settings(settings_path, {"channels": {ch_id: {"port": int(raw)}}})
+                        except ValueError: pass
+
+                elif ch_name == "Email":
+                    if ch_idx == 1:
+                        _patch_settings(settings_path, {"channels": {ch_id: {"enabled": confirm("Enable Email?", default=cur_enabled)}}})
+                    elif ch_idx == 2:
+                        h = text_input("IMAP host (e.g. imap.gmail.com):", default=cur_imap_host)
+                        if h.strip(): _patch_settings(settings_path, {"channels": {ch_id: {"imap_host": h.strip()}}})
+                    elif ch_idx == 3:
+                        raw = text_input("IMAP port:", default=str(cur_imap_port))
+                        try: _patch_settings(settings_path, {"channels": {ch_id: {"imap_port": int(raw)}}})
+                        except ValueError: pass
+                    elif ch_idx == 4:
+                        h = text_input("SMTP host (e.g. smtp.gmail.com):", default=cur_smtp_host)
+                        if h.strip(): _patch_settings(settings_path, {"channels": {ch_id: {"smtp_host": h.strip()}}})
+                    elif ch_idx == 5:
+                        raw = text_input("SMTP port:", default=str(cur_smtp_port))
+                        try: _patch_settings(settings_path, {"channels": {ch_id: {"smtp_port": int(raw)}}})
+                        except ValueError: pass
+                    elif ch_idx == 6:
+                        raw = text_input("Poll interval (seconds):", default=str(cur_interval))
+                        try: _patch_settings(settings_path, {"channels": {ch_id: {"poll_interval": int(raw)}}})
+                        except ValueError: pass
+                    elif ch_idx == 7:
+                        raw = text_input("Allow from (comma-separated emails, blank = all):", default=cur_allowfrom)
+                        addrs = [a.strip() for a in raw.split(",") if a.strip()]
+                        _patch_settings(settings_path, {"channels": {ch_id: {"allow_from": addrs}}})
+
+                else:  # Telegram / Discord / Slack / Twitch — enabled + extra fields
+                    if ch_name in ("Telegram", "Discord", "Slack"):
+                        if ch_idx == 1:
+                            _patch_settings(settings_path, {"channels": {ch_id: {"enabled": confirm(f"Enable {ch_name}?", default=cur_enabled)}}})
+                        elif ch_idx == 2:
+                            _patch_settings(settings_path, {"channels": {ch_id: {"show_thinking": confirm("Show model thinking in channel?", default=cur_thinking)}}})
+                        elif ch_idx == 3:
+                            raw = text_input("Allow from (comma-separated user IDs, blank = all):", default=cur_allowfrom)
+                            ids = [x.strip() for x in raw.split(",") if x.strip()]
+                            _patch_settings(settings_path, {"channels": {ch_id: {"allow_from": ids}}})
                     elif ch_name == "Twitch":
-                        token = text_input("OAuth token:", is_password=True)
-                        if token:
-                            a = _load_json(auth_path)
-                            a[ch_id] = {**a.get(ch_id, {}), "token": token}
-                            _save_json(auth_path, a)
-                elif ch_idx == 1:  # Enabled
-                    new_en = confirm(f"Enable {ch_name}?", default=cur_enabled)
-                    _patch_settings(settings_path, {"channels": {ch_id: {"enabled": new_en}}})
-                elif ch_name == "Twitch" and ch_idx == 2:  # Nick
-                    nick = text_input("Bot nickname:", default=cur_nick)
-                    if nick:
-                        _patch_settings(settings_path, {"channels": {"twitch": {"nick": nick}}})
-                elif ch_name == "Twitch" and ch_idx == 3:  # Channel
-                    chan = text_input("Channel to join (without #):", default=cur_chan)
-                    if chan:
-                        _patch_settings(settings_path, {"channels": {"twitch": {"channel_name": chan}}})
+                        if ch_idx == 1:
+                            _patch_settings(settings_path, {"channels": {ch_id: {"enabled": confirm("Enable Twitch?", default=cur_enabled)}}})
+                        elif ch_idx == 2:
+                            nick = text_input("Bot nickname:", default=cur_nick)
+                            if nick: _patch_settings(settings_path, {"channels": {ch_id: {"nick": nick}}})
+                        elif ch_idx == 3:
+                            chan = text_input("Channel to join (without #):", default=cur_chan)
+                            if chan: _patch_settings(settings_path, {"channels": {ch_id: {"channel_name": chan}}})
+                        elif ch_idx == 4:
+                            pfx = text_input("Command prefix:", default=cur_prefix)
+                            if pfx: _patch_settings(settings_path, {"channels": {ch_id: {"prefix": pfx}}})
+                        elif ch_idx == 5:
+                            raw = text_input("Allow from (comma-separated usernames, blank = all):", default=cur_allowfrom)
+                            names = [x.strip() for x in raw.split(",") if x.strip()]
+                            _patch_settings(settings_path, {"channels": {ch_id: {"allow_from": names}}})
+
             except GoBack:
                 continue  # back to per-channel settings menu
 
@@ -795,6 +896,363 @@ def _cfg_computer(profile_dir: Path) -> None:
             continue
 
 
+def _cfg_compaction(profile_dir: Path) -> None:
+    settings_path = profile_dir / "settings.json"
+    _STRATEGIES = ["summarization", "sliding_window", "lcm"]
+    while True:
+        cur = _load_json(settings_path).get("compaction", {})
+        choices = [
+            f"Enable    ({_val(cur.get('enabled', True))})",
+            f"Strategy  ({_val(cur.get('strategy', 'summarization'))})",
+            _DONE_LABEL,
+        ]
+        console.print("│")
+        try:
+            picked = select("Compaction:", choices)
+        except GoBack:
+            return
+
+        if picked == _DONE_LABEL:
+            return
+
+        idx = choices.index(picked)
+        try:
+            if idx == 0:
+                _patch_settings(settings_path, {"compaction": {"enabled": confirm("Enable compaction?", default=bool(cur.get("enabled", True)))}})
+            elif idx == 1:
+                strategy = select("Strategy:", _STRATEGIES)
+                _patch_settings(settings_path, {"compaction": {"strategy": strategy}})
+        except GoBack:
+            continue
+
+
+def _cfg_subagents(profile_dir: Path) -> None:
+    settings_path = profile_dir / "settings.json"
+    while True:
+        cur = _load_json(settings_path).get("subagent", {})
+        choices = [
+            f"Enable          ({_val(cur.get('enabled', True))})",
+            f"Max concurrent  ({_val(cur.get('max_concurrent', 10))})",
+            f"Max iterations  ({_val(cur.get('max_iterations', 20))})",
+            f"Max depth       ({_val(cur.get('max_spawn_depth', 3))})",
+            f"Timeout (s)     ({_val(cur.get('timeout', 300.0))})",
+            _DONE_LABEL,
+        ]
+        console.print("│")
+        try:
+            picked = select("Subagents:", choices)
+        except GoBack:
+            return
+
+        if picked == _DONE_LABEL:
+            return
+
+        idx = choices.index(picked)
+        try:
+            if idx == 0:
+                _patch_settings(settings_path, {"subagent": {"enabled": confirm("Enable subagents?", default=bool(cur.get("enabled", True)))}})
+            elif idx == 1:
+                raw = text_input("Max concurrent subagents:", default=str(cur.get("max_concurrent", 10)))
+                try:
+                    _patch_settings(settings_path, {"subagent": {"max_concurrent": int(raw)}})
+                except ValueError:
+                    pass
+            elif idx == 2:
+                raw = text_input("Max iterations per subagent:", default=str(cur.get("max_iterations", 20)))
+                try:
+                    _patch_settings(settings_path, {"subagent": {"max_iterations": int(raw)}})
+                except ValueError:
+                    pass
+            elif idx == 3:
+                raw = text_input("Max spawn depth:", default=str(cur.get("max_spawn_depth", 3)))
+                try:
+                    _patch_settings(settings_path, {"subagent": {"max_spawn_depth": int(raw)}})
+                except ValueError:
+                    pass
+            elif idx == 4:
+                raw = text_input("Timeout in seconds:", default=str(cur.get("timeout", 300.0)))
+                try:
+                    _patch_settings(settings_path, {"subagent": {"timeout": float(raw)}})
+                except ValueError:
+                    pass
+        except GoBack:
+            continue
+
+
+def _cfg_acp(profile_dir: Path) -> None:
+    from operator_use.settings.paths import get_config_dir
+    settings_path = profile_dir / "settings.json"
+    global_settings_path = get_config_dir() / "settings.json"
+    _ADD  = "+ Add agent"
+    _TRANSPORTS = ["stdio", "http", "webrtc"]
+
+    def _effective_agents(profile_s: dict) -> list[dict]:
+        """Merge global bootstrap agents with profile overrides (profile name wins)."""
+        global_agents: list[dict] = _load_json(global_settings_path).get("acp", {}).get("agents", [])
+        profile_agents: list[dict] = profile_s.get("acp", {}).get("agents", [])
+        merged: dict[str, dict] = {a["name"]: dict(a) for a in global_agents}
+        for a in profile_agents:
+            merged[a["name"]] = dict(a)
+        return list(merged.values())
+
+    while True:
+        s     = _load_json(settings_path)
+        acp   = s.get("acp", {})
+        agents: list[dict] = _effective_agents(s)
+        enabled = acp.get("enabled", True)
+
+        agent_labels = [
+            f"{a.get('name', '?')}  ({a.get('transport', 'stdio')}{'  off' if not a.get('enabled', True) else ''})"
+            for a in agents
+        ]
+        choices = [
+            f"Enable  ({_val(enabled)})",
+            *agent_labels,
+            _ADD,
+            _DONE_LABEL,
+        ]
+        console.print("│")
+        try:
+            picked = select("ACP agents:", choices)
+        except GoBack:
+            return
+
+        if picked == _DONE_LABEL:
+            return
+
+        try:
+            if picked == choices[0]:  # Enable toggle
+                _patch_settings(settings_path, {"acp": {"enabled": confirm("Enable ACP?", default=enabled)}})
+
+            elif picked == _ADD:
+                name = text_input("Agent name (identifier):")
+                if not name:
+                    continue
+                transport = select("Transport:", _TRANSPORTS)
+                entry: dict = {"name": name, "transport": transport, "enabled": True}
+                if transport == "stdio":
+                    cmd = text_input("Command (executable):")
+                    if cmd:
+                        entry["command"] = cmd
+                    args_raw = text_input("Args (space-separated, optional):")
+                    if args_raw.strip():
+                        entry["args"] = args_raw.split()
+                else:
+                    url = text_input("URL:")
+                    if url:
+                        entry["url"] = url
+                cur_s = _load_json(settings_path)
+                cur_agents = cur_s.get("acp", {}).get("agents", [])
+                cur_agents.append(entry)
+                _patch_settings(settings_path, {"acp": {"agents": cur_agents}})
+
+            elif picked in agent_labels:
+                agent_idx = agent_labels.index(picked)
+                agent = agents[agent_idx]
+                a_choices = [
+                    f"Enabled    ({_val(agent.get('enabled', True))})",
+                    "Remove",
+                    _DONE_LABEL,
+                ]
+                console.print("│")
+                try:
+                    a_picked = select(f"{agent.get('name')}:", a_choices)
+                except GoBack:
+                    continue
+                if a_picked == _DONE_LABEL:
+                    continue
+                a_idx = a_choices.index(a_picked)
+                try:
+                    if a_idx == 0:
+                        agents[agent_idx]["enabled"] = confirm(
+                            f"Enable {agent.get('name')}?",
+                            default=bool(agent.get("enabled", True)),
+                        )
+                        _patch_settings(settings_path, {"acp": {"agents": agents}})
+                    elif a_idx == 1:
+                        if confirm(f"Remove {agent.get('name')}?", default=False):
+                            agents.pop(agent_idx)
+                            _patch_settings(settings_path, {"acp": {"agents": agents}})
+                except GoBack:
+                    pass
+        except GoBack:
+            continue
+
+
+def _cfg_extensions(profile_dir: Path) -> None:
+    settings_path = profile_dir / "settings.json"
+    ext_dir = profile_dir / "extensions"
+    _ADD = "+ Register extension path"
+
+    def _discover() -> list[str]:
+        if not ext_dir.exists():
+            return []
+        return sorted(str(p) for p in ext_dir.glob("*.py"))
+
+    def _get_list(s: dict) -> list[dict]:
+        return s.get("extensions", {}).get("list", [])
+
+    def _find(ext_list: list[dict], path: str) -> dict | None:
+        return next((e for e in ext_list if e.get("path") == path), None)
+
+    def _entry_label(path: str, ext_list: list[dict]) -> str:
+        entry = _find(ext_list, path)
+        name = Path(path).stem
+        enabled = entry.get("enabled", True) if entry else True
+        has_cfg = bool(entry and entry.get("settings"))
+        return f"{name}{'  off' if not enabled else ''}{'  [cfg]' if has_cfg else ''}"
+
+    while True:
+        s = _load_json(settings_path)
+        global_enabled = s.get("extensions", {}).get("enabled", True)
+        ext_list = _get_list(s)
+
+        discovered = _discover()
+        registered = [e.get("path", "") for e in ext_list]
+        all_paths = list(dict.fromkeys(discovered + [p for p in registered if p not in discovered]))
+
+        entry_labels = [_entry_label(p, ext_list) for p in all_paths]
+        choices = [
+            f"Enable all  ({_val(global_enabled)})",
+            *entry_labels,
+            _ADD,
+            _DONE_LABEL,
+        ]
+        console.print("│")
+        try:
+            picked = select("Extensions:", choices)
+        except GoBack:
+            return
+
+        if picked == _DONE_LABEL:
+            return
+
+        try:
+            if picked == choices[0]:  # global toggle
+                _patch_settings(settings_path, {"extensions": {
+                    "enabled": confirm("Enable extensions globally?", default=bool(global_enabled))
+                }})
+
+            elif picked == _ADD:
+                raw_path = text_input("Extension file path (.py):")
+                if raw_path.strip():
+                    cur_s = _load_json(settings_path)
+                    cur_list = _get_list(cur_s)
+                    if not _find(cur_list, raw_path.strip()):
+                        cur_list.append({"path": raw_path.strip(), "enabled": True})
+                        _patch_settings(settings_path, {"extensions": {"list": cur_list}})
+
+            elif picked in entry_labels:
+                path = all_paths[entry_labels.index(picked)]
+                entry = _find(ext_list, path)
+                cur_enabled = entry.get("enabled", True) if entry else True
+                cur_settings: dict = (entry.get("settings") or {}) if entry else {}
+                ext_name = Path(path).stem
+
+                e_choices = [
+                    f"Enabled   ({_val(cur_enabled)})",
+                    f"Settings  ({'configured' if cur_settings else 'none'})",
+                    "Remove",
+                    _DONE_LABEL,
+                ]
+                console.print("│")
+                try:
+                    e_picked = select(f"{ext_name}:", e_choices)
+                except GoBack:
+                    continue
+
+                if e_picked == _DONE_LABEL:
+                    continue
+
+                e_idx = e_choices.index(e_picked)
+                try:
+                    if e_idx == 0:  # toggle enabled
+                        new_en = confirm(f"Enable {ext_name}?", default=cur_enabled)
+                        cur_s = _load_json(settings_path)
+                        cur_list = _get_list(cur_s)
+                        ex = _find(cur_list, path)
+                        if ex:
+                            ex["enabled"] = new_en
+                        else:
+                            cur_list.append({"path": path, "enabled": new_en})
+                        _patch_settings(settings_path, {"extensions": {"list": cur_list}})
+
+                    elif e_idx == 1:  # edit settings dict
+                        while True:
+                            rs = _load_json(settings_path)
+                            rl = _get_list(rs)
+                            rex = _find(rl, path)
+                            csettings: dict = (rex.get("settings") or {}) if rex else {}
+                            kv_labels = [f"{k} = {_val(v)}" for k, v in csettings.items()]
+                            _ADD_KEY = "+ Add setting"
+                            sk_choices = [*kv_labels, _ADD_KEY, _DONE_LABEL]
+                            console.print("│")
+                            try:
+                                sk_picked = select(f"{ext_name} settings:", sk_choices)
+                            except GoBack:
+                                break
+
+                            if sk_picked == _DONE_LABEL:
+                                break
+
+                            if sk_picked == _ADD_KEY:
+                                key = text_input("Setting key:")
+                                if not key.strip():
+                                    continue
+                                raw_val = text_input(f"Value for '{key.strip()}':")
+                                try:
+                                    val: object = json.loads(raw_val)
+                                except Exception:
+                                    val = raw_val
+                                new_cfg = {**csettings, key.strip(): val}
+                                rs2 = _load_json(settings_path)
+                                rl2 = _get_list(rs2)
+                                rex2 = _find(rl2, path)
+                                if rex2:
+                                    rex2["settings"] = new_cfg
+                                else:
+                                    rl2.append({"path": path, "enabled": True, "settings": new_cfg})
+                                _patch_settings(settings_path, {"extensions": {"list": rl2}})
+
+                            elif sk_picked in kv_labels:
+                                kv_idx = kv_labels.index(sk_picked)
+                                key_name = list(csettings.keys())[kv_idx]
+                                old_val = csettings[key_name]
+                                try:
+                                    action = select(f"'{key_name}':", ["Edit value", "Remove", _DONE_LABEL])
+                                except GoBack:
+                                    continue
+                                if action == "Edit value":
+                                    raw_val = text_input(f"Value for '{key_name}':", default=str(old_val))
+                                    try:
+                                        val = json.loads(raw_val)
+                                    except Exception:
+                                        val = raw_val
+                                    new_cfg = {**csettings, key_name: val}
+                                elif action == "Remove":
+                                    new_cfg = {k: v for k, v in csettings.items() if k != key_name}
+                                else:
+                                    continue
+                                rs2 = _load_json(settings_path)
+                                rl2 = _get_list(rs2)
+                                rex2 = _find(rl2, path)
+                                if rex2:
+                                    rex2["settings"] = new_cfg
+                                    _patch_settings(settings_path, {"extensions": {"list": rl2}})
+
+                    elif e_idx == 2:  # Remove from config
+                        if confirm(f"Remove {ext_name} from config?", default=False):
+                            cur_s = _load_json(settings_path)
+                            cur_list = [e for e in _get_list(cur_s) if e.get("path") != path]
+                            _patch_settings(settings_path, {"extensions": {"list": cur_list}})
+
+                except GoBack:
+                    pass
+
+        except GoBack:
+            continue
+
+
 def _cfg_description(profile_dir: Path) -> None:
     front, body = _parse_agent_md(profile_dir / "AGENT.md")
     console.print("│")
@@ -832,7 +1290,9 @@ def run_onboard() -> None:
     _SEP  = "  —  "
     _CATEGORIES = [
         "Language model", "Text-to-speech", "Speech-to-text",
-        "Channels", "Browser use", "Computer use", "Description", _DONE,
+        "Channels", "Browser use", "Computer use",
+        "Compaction", "Subagents", "ACP agents", "Extensions",
+        "Description", _DONE,
     ]
 
     def _build_choices() -> tuple[list[str], dict[str, str]]:
@@ -891,6 +1351,10 @@ def run_onboard() -> None:
                         elif cat == "Channels":        _cfg_channels(profile_dir)
                         elif cat == "Browser use":     _cfg_browser(profile_dir)
                         elif cat == "Computer use":    _cfg_computer(profile_dir)
+                        elif cat == "Compaction":      _cfg_compaction(profile_dir)
+                        elif cat == "Subagents":       _cfg_subagents(profile_dir)
+                        elif cat == "ACP agents":      _cfg_acp(profile_dir)
+                        elif cat == "Extensions":      _cfg_extensions(profile_dir)
                         elif cat == "Description":     _cfg_description(profile_dir)
                     except GoBack:
                         pass  # Esc inside a configurator → back to category menu

@@ -232,8 +232,8 @@ async def _run_repl(cwd: Path, model_id: str | None, provider: str | None, sandb
 
     config = RuntimeConfig(
         cwd=cwd,
-        model_id=model_id or 'claude-sonnet-4-6',
-        provider=provider,
+        model_id=model_id or (profile.model_id if profile else None) or 'claude-sonnet-4-6',
+        provider=provider or (profile.provider if profile else None),
         sandbox=sandbox if sandbox != 'off' else None,
         persist_session=False,
         system_prompt=system_prompt,
