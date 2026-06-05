@@ -80,3 +80,13 @@ class RetryEndEvent:
     attempt: int = 0
     success: bool = True
     error: str | None = None
+
+
+@dataclass
+class GoalUpdateEvent:
+    """Emitted after each turn's goal judge runs; carries the user-visible status message."""
+    type: Literal['goal_update'] = field(default='goal_update', init=False)
+    verdict: Literal['done', 'continue', 'paused', 'inactive'] = 'inactive'
+    message: str = ''
+    turns_used: int = 0
+    max_turns: int = 0

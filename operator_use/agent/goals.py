@@ -243,6 +243,26 @@ class GoalManager:
         self._save()
         return self._state
 
+    def remove_subgoal(self, index_1based: int) -> str:
+        """Remove a subgoal by 1-based index. Returns the removed text. Raises RuntimeError if no goal, IndexError if out of range."""
+        if self._state is None or self._state.status not in {"active", "paused"}:
+            raise RuntimeError("no active goal")
+        idx = int(index_1based) - 1
+        if idx < 0 or idx >= len(self._state.subgoals):
+            raise IndexError(f"index out of range (1..{len(self._state.subgoals)})")
+        removed = self._state.subgoals.pop(idx)
+        self._save()
+        return removed
+
+    def clear_subgoals(self) -> int:
+        """Remove all subgoals. Returns the previous count. Raises RuntimeError if no goal."""
+        if self._state is None or self._state.status not in {"active", "paused"}:
+            raise RuntimeError("no active goal")
+        count = len(self._state.subgoals)
+        self._state.subgoals = []
+        self._save()
+        return count
+
     def set(self, goal: str, *, max_turns: int | None = None) -> GoalState:
         goal = goal.strip()
         if not goal:

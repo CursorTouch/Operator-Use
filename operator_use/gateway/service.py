@@ -26,7 +26,7 @@ from operator_use.commands.types import parse_command
 from operator_use.gateway.types import BaseChannel
 from operator_use.hooks.service import Hooks
 from operator_use.subagent.manager import _session_channel, _session_chat_id, _session_message_id
-from operator_use.agent.types import RetryStartEvent, RetryEndEvent
+from operator_use.agent.types import RetryStartEvent, RetryEndEvent, GoalUpdateEvent
 from operator_use.hooks.types import (
     AgentErrorEvent, MessageStartEvent, MessageEndEvent, MessageUpdateEvent,
     ToolExecutionEndEvent, ToolExecutionStartEvent, ToolExecutionUpdateEvent,
@@ -730,6 +730,15 @@ class Gateway:
                             'retry_attempt': att + 1,
                             'retry_max': _retry_max[0],
                         },
+                    ))
+
+                case GoalUpdateEvent(message=msg) if msg:
+                    await self._bus.publish_outgoing(OutgoingMessage(
+                        channel=channel_id,
+                        chat_id=chat_id,
+                        parts=[TextPart(msg)],
+                        stream_phase=StreamPhase.DONE,
+                        metadata={'goal_update': True},
                     ))
 
         # Publish START

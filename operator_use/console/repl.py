@@ -23,6 +23,7 @@ from operator_use.hooks.types import (
     ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolExecutionEndEvent, AgentErrorEvent,
     AgentStartEvent, SessionBeforeCompactEvent, SessionCompactEvent,
 )
+from operator_use.agent.types import GoalUpdateEvent
 from operator_use.message.types import Role
 
 
@@ -130,6 +131,14 @@ def _render_event(event) -> None:
 
         case AgentErrorEvent(error=err):
             _out(f"{_red('[Error]')} {err}")
+
+        case GoalUpdateEvent(verdict=v, message=msg) if msg:
+            if v == "done":
+                _out(f"\n{_green('[Goal]')} {msg}")
+            elif v == "paused":
+                _out(f"\n{_yellow('[Goal]')} {msg}")
+            else:
+                _out(f"\n{_grey('[Goal]')} {msg}")
 
 
 # ── Session ───────────────────────────────────────────────────────────────────

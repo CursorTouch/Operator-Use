@@ -9,7 +9,7 @@ from asyncio.locks import Event
 
 from typing import TYPE_CHECKING, Any, Callable
 
-from operator_use.agent.types import AgentConfig, AgentContext, AgentPhase, PromptOptions, RetryStartEvent, RetryEndEvent
+from operator_use.agent.types import AgentConfig, AgentContext, AgentPhase, PromptOptions, RetryStartEvent, RetryEndEvent, GoalUpdateEvent
 from operator_use.extension.types import (
     ExtensionContext, ExtensionError, ExtensionTool, ContextUsage, CompactOptions,
     InputEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult,
@@ -1031,6 +1031,16 @@ class Agent(ExtensionContext):
             return False
 
         decision = await self._goal_manager.evaluate_after_turn(self._last_assistant_text)
+        state = self._goal_manager.state
+        await self._extensions.emit(
+            'goal_update',
+            GoalUpdateEvent(
+                verdict=decision.get("verdict", "inactive"),
+                message=decision.get("message", ""),
+                turns_used=state.turns_used if state else 0,
+                max_turns=state.max_turns if state else 0,
+            ),
+        )
         continuation = decision.get("continuation_prompt")
         if decision.get("should_continue") and isinstance(continuation, str) and continuation.strip():
             await self.invoke(continuation, PromptOptions(source='goal'))
