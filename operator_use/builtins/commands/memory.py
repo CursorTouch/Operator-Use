@@ -12,8 +12,10 @@ if TYPE_CHECKING:
 
 _USAGE = (
     "Usage:\n"
-    "  /memory dream    — consolidate long-term memory: merge duplicates, "
-    "resolve contradictions, drop superseded facts (sleep-time consolidation)"
+    "  /memory dream       — consolidate long-term memory: merge duplicates, "
+    "resolve contradictions, drop superseded facts (sleep-time consolidation)\n"
+    "  /memory obs         — show observational memory status and token clock progress\n"
+    "  /memory obs full    — view full observation and reflection ledger"
 )
 
 
@@ -74,17 +76,86 @@ async def _dream(registry: CommandRegistry) -> None:
         print(f"(note: could not rebuild the vector index: {e})")
 
 
+async def _obs_status(registry: CommandRegistry) -> None:
+    runtime = registry.runtime
+    if runtime is None or runtime.current_session is None:
+        print("No active session.")
+        return
+    agent = getattr(runtime.current_session, "agent", None)
+    pipeline = getattr(getattr(agent, "_compaction", None), "obs_pipeline", None)
+    if pipeline is None:
+        print("Observational memory is not active (strategy is not 'observational').")
+        return
+    session_manager = getattr(agent, "_session_manager", None)
+    if session_manager is None:
+        return
+    s = pipeline.status_dict(session_manager.get_branch())
+    print(f"Observational memory: {'enabled' if s['enabled'] else 'disabled'}")
+    print(f"  Pipeline:         {'running' if s['in_flight'] else 'idle'}")
+    if s["last_error"]:
+        print(f"  Last error:       {s['last_error']}")
+    print(f"  Observations:     {s['observations']} ({s['pool_tokens']} tokens)")
+    print(f"  Reflections:      {s['reflections']} ({s['reflection_tokens']} tokens)")
+    print(f"  Observer clock:   {s['tokens_since_obs_coverage']} / {s['observe_threshold']} tokens")
+    print(f"  Reflector clock:  {s['tokens_since_ref_coverage']} / {s['reflect_threshold']} tokens")
+    if s["latest_obs_coverage_id"]:
+        print(f"  Obs coverage:     up to {s['latest_obs_coverage_id']}")
+    if s["latest_ref_coverage_id"]:
+        print(f"  Ref coverage:     up to {s['latest_ref_coverage_id']}")
+
+
+async def _obs_view(registry: CommandRegistry, full: bool) -> None:
+    from operator_use.compaction.strategy.observational.ledger import fold_ledger, render_summary
+    runtime = registry.runtime
+    if runtime is None or runtime.current_session is None:
+        print("No active session.")
+        return
+    agent = getattr(runtime.current_session, "agent", None)
+    pipeline = getattr(getattr(agent, "_compaction", None), "obs_pipeline", None)
+    if pipeline is None:
+        print("Observational memory is not active (strategy is not 'observational').")
+        return
+    session_manager = getattr(agent, "_session_manager", None)
+    if session_manager is None:
+        return
+    fold = fold_ledger(session_manager.get_branch())
+    if not fold.active_observations and not fold.reflections:
+        print("No observational memory recorded yet.")
+        return
+    if full:
+        print(render_summary(fold.active_observations, fold.reflections))
+    else:
+        print(f"Observations: {len(fold.active_observations)}  Reflections: {len(fold.reflections)}")
+        if fold.reflections:
+            print("\n--- Reflections ---")
+            for r in fold.reflections:
+                print(f"[{r.id}] {r.content}")
+        if fold.active_observations:
+            recent = fold.active_observations[-5:]
+            print(f"\n--- Latest observations ({len(recent)} of {len(fold.active_observations)}) ---")
+            for o in recent:
+                print(f"[{o.id}] {o.timestamp} [{o.relevance}] {o.content}")
+        if len(fold.active_observations) > 5:
+            print("\nUse '/memory obs full' to see all observations.")
+
+
 async def _handle_memory(registry: CommandRegistry, args: list[str]) -> None:
-    """Execute the command with parsed arguments."""
     subcommand = args[0].lower() if args else ''
     if subcommand == 'dream':
         await _dream(registry)
+        return
+    if subcommand == 'obs':
+        sub2 = args[1].lower() if len(args) > 1 else ''
+        if sub2 == 'full':
+            await _obs_view(registry, full=True)
+        else:
+            await _obs_status(registry)
         return
     print(_USAGE)
 
 
 command = SlashCommandInfo(
     name='memory',
-    description='Manage long-term memory. Subcommand: dream (consolidate the store).',
+    description='Manage memory. Subcommands: dream (consolidate long-term store), obs (observational memory status/view).',
     handler=_handle_memory,
 )

@@ -340,6 +340,35 @@ class RuntimeContext:
                         db_path=_Path(_ls["db_path"]) if _ls["db_path"] else None,
                     ),
                 )
+            elif _strategy == "observational":
+                from operator_use.compaction.strategy.observational.service import ObservationalCompaction
+                from operator_use.compaction.strategy.observational.pipeline import ObservationPipelineConfig
+                _os = settings_manager.get_compaction_observational_settings()
+                _aux_obs = settings_manager.get_auxiliary_task("obs_memory_worker")
+                _obs_llm = LLM(
+                    model_id=_aux_obs.model or compaction_llm.model.id,
+                    provider=_aux_obs.provider,
+                    models=text_models,
+                    providers=text_providers,
+                    apis=text_apis,
+                    auth_store=text_auth,
+                ) if (_aux_obs.model or _aux_obs.provider) else compaction_llm
+                compaction = ObservationalCompaction(
+                    llm=compaction_llm,
+                    settings=CompactionSettings(
+                        enabled=_global_enabled and _os["enabled"],
+                        reserve_tokens=_os["reserve_tokens"],
+                        keep_recent_tokens=_os["keep_recent_tokens"],
+                        trigger_percent=_os["trigger_percent"],
+                    ),
+                    obs_config=ObservationPipelineConfig(
+                        observe_after_tokens=_os["observe_after_tokens"],
+                        reflect_after_tokens=_os["reflect_after_tokens"],
+                        pool_target_tokens=_os["pool_target_tokens"],
+                        pool_max_tokens=_os["pool_max_tokens"],
+                    ),
+                    obs_llm=_obs_llm,
+                )
             else:
                 compaction = SummarizationCompaction(
                     llm=compaction_llm,

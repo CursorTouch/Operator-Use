@@ -592,6 +592,20 @@ class SettingsManager:
             "trigger_percent": raw.get("trigger_percent", None),
         }
 
+    def get_compaction_observational_settings(self) -> dict:
+        """Return ObservationalCompaction settings merged with defaults."""
+        raw = self._get_strategy_raw("observational")
+        return {
+            "enabled": raw.get("enabled", True),
+            "reserve_tokens": raw.get("reserve_tokens", 16384),
+            "keep_recent_tokens": raw.get("keep_recent_tokens", 20_000),
+            "trigger_percent": raw.get("trigger_percent", None),
+            "observe_after_tokens": int(raw.get("observe_after_tokens", 10_000)),
+            "reflect_after_tokens": int(raw.get("reflect_after_tokens", 20_000)),
+            "pool_target_tokens": int(raw.get("pool_target_tokens", 10_000)),
+            "pool_max_tokens": int(raw.get("pool_max_tokens", 20_000)),
+        }
+
     def get_compaction_sliding_window_settings(self) -> dict:
         """Return SlidingWindowCompaction settings merged with defaults."""
         raw = self._get_strategy_raw("sliding_window")

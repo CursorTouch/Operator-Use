@@ -1012,6 +1012,10 @@ class Agent(ExtensionContext):
             self._memory_review.reset()
             self._maybe_spawn_memory_review()
 
+        # Trigger observational memory pipeline if clock is due (non-blocking)
+        if hasattr(self._compaction, 'after_turn'):
+            self._compaction.after_turn(self._session_manager)
+
         # Trigger compaction if requested or context budget exceeded
         if self._compact_requested or self._compaction.should_compact(
             self._context_tokens, self._context_window

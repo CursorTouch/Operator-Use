@@ -731,17 +731,44 @@ class Runtime:
             profile_settings = self._context.settings_manager.settings_with_profile_overlay(profile.settings_path)
 
         compaction_settings = CmpSettings(enabled=False)
+        _profile_strategy = "summarization"
         if profile_settings is not None:
             s = profile_settings
             if s.compaction and s.compaction.enabled is not None:
                 compaction_settings = CmpSettings(
                     enabled=s.compaction.enabled,
-                    strategy=s.compaction.strategy,
                 )
-        compaction = SummarizationCompaction(
-            llm=llm,
-            settings=compaction_settings,
-        )
+                if s.compaction.strategy:
+                    _profile_strategy = s.compaction.strategy
+        if _profile_strategy == "observational":
+            from operator_use.compaction.strategy.observational.service import ObservationalCompaction
+            from operator_use.compaction.strategy.observational.pipeline import ObservationPipelineConfig
+            _sm = self._context.settings_manager
+            _os = _sm.get_compaction_observational_settings() if _sm else {}
+            _aux_obs = _sm.get_auxiliary_task("obs_memory_worker") if _sm else None
+            _obs_llm = None
+            if _aux_obs and (_aux_obs.model or _aux_obs.provider):
+                try:
+                    from operator_use.inference.api.text.service import LLM as _LLM
+                    _obs_llm = _LLM(model_id=_aux_obs.model or llm.model.id, provider=_aux_obs.provider)
+                except Exception:
+                    pass
+            compaction = ObservationalCompaction(
+                llm=llm,
+                settings=compaction_settings,
+                obs_config=ObservationPipelineConfig(
+                    observe_after_tokens=int(_os.get("observe_after_tokens", 10_000)),
+                    reflect_after_tokens=int(_os.get("reflect_after_tokens", 20_000)),
+                    pool_target_tokens=int(_os.get("pool_target_tokens", 10_000)),
+                    pool_max_tokens=int(_os.get("pool_max_tokens", 20_000)),
+                ),
+                obs_llm=_obs_llm,
+            )
+        else:
+            compaction = SummarizationCompaction(
+                llm=llm,
+                settings=compaction_settings,
+            )
 
         config = self._context.agent._config if self._context.agent else AgentConfig(
             cwd=sessions_dir,
