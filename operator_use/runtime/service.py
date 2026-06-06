@@ -523,6 +523,7 @@ class Runtime:
             extension_runtime=deferred,  # type: ignore[arg-type]
             compaction=self._context.compaction,
             config=self._context.agent._config,
+            memory_manager=self._context.memory_manager,
         )
 
         self._wire_agent_extensions(agent, load_result, hooks)
@@ -609,6 +610,7 @@ class Runtime:
             extension_runtime=deferred,  # type: ignore[arg-type]
             compaction=self._context.compaction,
             config=self._context.agent._config,
+            memory_manager=self._context.memory_manager,
         )
 
         self._wire_agent_extensions(agent, load_result, hooks)
@@ -782,6 +784,7 @@ class Runtime:
             extension_runtime=deferred,  # type: ignore[arg-type]
             compaction=compaction,
             config=config,
+            memory_manager=self._context.memory_manager,
         )
 
         self._wire_agent_extensions(agent, load_result, hooks)
