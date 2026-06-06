@@ -38,6 +38,9 @@ _CHANNEL_HINTS: dict[str, str] = {
         "Platform: Twitch chat. Plain text only — no markdown, no formatting. "
         "Max 500 characters per message. Be very concise."
     ),
+    "websocket": (
+        "Platform: WebSocket. Full markdown is supported. No message-length limit."
+    ),
 }
 
 
@@ -46,7 +49,12 @@ def channel_hint(channel_id: str | None) -> str:
     if not channel_id:
         return ""
     # WebSocket sessions use dynamic IDs like "ws:connid" — normalise to "websocket"
-    key = "websocket" if channel_id.startswith("ws:") else channel_id.lower()
+    if channel_id.startswith("ws:"):
+        key = "websocket"
+    else:
+        # Profile-namespaced IDs like "jarvis:telegram" — extract the channel type suffix
+        raw = channel_id.lower()
+        key = raw.split(":", 1)[-1] if ":" in raw else raw
     hint = _CHANNEL_HINTS.get(key, "")
     if not hint:
         return ""
