@@ -206,6 +206,46 @@ class SessionManager:
         self._rewrite_file()
         return True
 
+    def remove_message(self, entry_id: str) -> bool:
+        """Remove a message entry from the session (used when a turn fails and is rolled back).
+
+        This is used to clean up tentative user messages when all retries fail.
+        The message is removed from both the in-memory index and the persisted session file.
+
+        Args:
+            entry_id: The ID of the message entry to remove.
+
+        Returns:
+            True if the entry was found and removed, False otherwise.
+        """
+        if entry_id not in self.by_id:
+            return False
+
+        entry = self.by_id[entry_id]
+        if not isinstance(entry, MessageEntry):
+            return False
+
+        # Remove from in-memory structures
+        self.by_id.pop(entry_id, None)
+        self.labels_by_id.pop(entry_id, None)
+        self.label_timestamps_by_id.pop(entry_id, None)
+
+        # Remove from entries list
+        self.entries = [e for e in self.entries if e.id != entry_id]
+
+        # Update leaf_id if we removed the leaf
+        if self.leaf_id == entry_id:
+            # Find the new leaf (the last remaining message entry)
+            self.leaf_id = None
+            for e in reversed(self.entries):
+                if isinstance(e, MessageEntry):
+                    self.leaf_id = e.id
+                    break
+
+        # Persist the change
+        self._rewrite_file()
+        return True
+
     def add_reaction(self, channel_message_id: str, emoji: str) -> bool:
         """Append an emoji reaction to the MessageEntry matching the given channel-side message ID.
 

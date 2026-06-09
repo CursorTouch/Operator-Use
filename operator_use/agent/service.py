@@ -837,16 +837,30 @@ class Agent(ExtensionContext):
 
         prefetch_task = asyncio.ensure_future(_prefetch())
 
+        # Await prefetch before building system prompt to avoid caching stale memory.
+        # Memory facts are loaded fresh from the provider each turn and must be
+        # synchronized with the system prompt to prevent hallucination from contradictory facts.
+        memory_context = await prefetch_task
+
         # System prompt is cached per channel; only rebuilt after a resource
         # reload or when the memory review background thread updates MEMORY.md.
-        cached_prompt = self._system_prompt_cache.get(opts.channel)
+        # Skip cache if memory is active to keep system prompt in sync with prefetched facts.
+        has_dynamic_memory = (
+            self._memory_manager is not None
+            and self._memory_manager.api is not None
+        )
+        cached_prompt = (
+            self._system_prompt_cache.get(opts.channel)
+            if not has_dynamic_memory
+            else None
+        )
         if cached_prompt is not None:
             self._system_prompt = cached_prompt
         else:
             self._system_prompt = self._rebuild_system_prompt(channel=opts.channel)
-            self._system_prompt_cache[opts.channel] = self._system_prompt
-
-        memory_context = await prefetch_task
+            # Only cache if memory is not dynamic; dynamic memory requires fresh rebuilds
+            if not has_dynamic_memory:
+                self._system_prompt_cache[opts.channel] = self._system_prompt
 
         before_results = await self._extensions.emit(
             'before_agent_start',
@@ -855,6 +869,9 @@ class Agent(ExtensionContext):
         for result in before_results:
             if isinstance(result, BeforeAgentStartEventResult) and result.system_prompt:
                 self._system_prompt = result.system_prompt
+                # Update cache with extension-modified system prompt so subsequent turns
+                # on this channel see the same modifications (consistency across turns)
+                self._system_prompt_cache[opts.channel] = self._system_prompt
 
         # Reconstruct message history — either from the main session or from a
         # registry record when the agent has switched context via session(action='switch').
@@ -957,6 +974,15 @@ class Agent(ExtensionContext):
         self._phase = AgentPhase.TURN
         try:
             await self._run_with_retry(ctx, user_entry_id)
+        except Exception as retry_error:
+            # All retries failed. The user message was persisted before the retry loop,
+            # but since the turn failed entirely, remove it to keep the session clean.
+            # The exception will be raised to the caller for proper error handling.
+            try:
+                self._session_manager.remove_message(user_entry_id)
+            except Exception:
+                pass  # If removal fails, let the retry error take precedence
+            raise retry_error
         finally:
             self._phase = AgentPhase.IDLE
             for g in self._guardrails:
@@ -1183,6 +1209,11 @@ class Agent(ExtensionContext):
                 details=compaction_result.details,
             )
             self._refresh_context_tokens_from_session()
+
+            # Clear system prompt cache after compaction so next turn rebuilds with
+            # current session state. Compaction removes messages that system prompt
+            # may reference (e.g., in MEMORY.md facts), creating dangling references.
+            self._system_prompt_cache.clear()
 
             compact_entry = self._session_manager.get_leaf_entry()
             await self._extensions.emit(

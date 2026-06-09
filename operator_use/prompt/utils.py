@@ -8,6 +8,9 @@ if TYPE_CHECKING:
 
 # Per-channel formatting and behaviour hints injected into the system prompt
 # so the agent adapts its output to what each platform can actually render.
+# IMPORTANT: These describe RENDERING CONSTRAINTS (applied after generation completes),
+# not GENERATION CONSTRAINTS. Do not self-limit your analysis, thinking, or tool calls
+# based on these limits — the platform handles chunking/splitting.
 _CHANNEL_HINTS: dict[str, str] = {
     "stdio": (
         "Platform: terminal / CLI. Full markdown is supported — use headers, "
@@ -15,28 +18,32 @@ _CHANNEL_HINTS: dict[str, str] = {
     ),
     "telegram": (
         "Platform: Telegram. Use MarkdownV2 or plain text only — no HTML. "
-        "Avoid tables (they do not render). Max 4096 characters per message; "
-        "split long responses into multiple messages if needed. "
-        "Inline images and files are sent via the bot API, not markdown syntax."
+        "Avoid tables (they do not render). Inline images and files are sent via the bot API, not markdown syntax. "
+        "RENDERING CONSTRAINT: Messages longer than 4096 characters are automatically split by the platform. "
+        "Generate your complete response without artificial length limits — the platform handles chunking."
     ),
     "discord": (
         "Platform: Discord. Standard markdown is supported: **bold**, *italic*, "
         "`inline code`, ```fenced code blocks```. No native table support. "
-        "Max 2000 characters per message — split if needed."
+        "RENDERING CONSTRAINT: Messages longer than 2000 characters are automatically split by the platform. "
+        "Generate your complete response without artificial length limits — the platform handles chunking."
     ),
     "slack": (
         "Platform: Slack. Uses mrkdwn, NOT standard markdown. "
         "Bold: *text*, italic: _text_, code: `code`, code block: ```code```. "
-        "Avoid standard markdown headers (#) and HTML. Max 40 000 chars per message."
+        "Avoid standard markdown headers (#) and HTML. "
+        "RENDERING CONSTRAINT: Messages longer than 40000 characters are automatically split by the platform. "
+        "Generate your complete response without artificial length limits — the platform handles chunking."
     ),
     "email": (
         "Platform: Email. Use plain prose with clear paragraph breaks. "
         "Avoid markdown syntax — it will appear as raw characters. "
-        "Keep responses concise; the user will see this as an email reply."
+        "Keep responses concise for readability; the user will see this as an email reply."
     ),
     "twitch": (
         "Platform: Twitch chat. Plain text only — no markdown, no formatting. "
-        "Max 500 characters per message. Be very concise."
+        "RENDERING CONSTRAINT: Messages longer than 500 characters are automatically split by the platform. "
+        "Be reasonably concise, but generate your full response — the platform handles chunking."
     ),
     "websocket": (
         "Platform: WebSocket. Full markdown is supported. No message-length limit."
